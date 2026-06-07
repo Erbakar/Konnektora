@@ -33,7 +33,7 @@ export const eventSchema = z.object({
   endsAt: z.string().datetime().nullable(),
   timezone: z.string().min(2).max(80),
   format: eventFormatSchema,
-  visibility: eventVisibilitySchema.default("open"),
+  visibility: eventVisibilitySchema,
   city: z.string().max(120).nullable(),
   country: z.string().max(120).nullable(),
   language: z.string().min(2).max(16),

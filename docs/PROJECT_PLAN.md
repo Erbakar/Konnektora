@@ -40,26 +40,31 @@ Birincil user story'ler:
 
 ### MVP 0.2: Events
 
-Amaç: ana etkinlik keşfi ve etkinlik detay deneyimini sağlamak.
+Amaç: kapalı community içindeki aktif kullanıcıların etkinlik keşfetmesini, oluşturmasını ve kendi katılımcı/kayıt süreçlerini yönetmesini sağlamak.
 
 Temel yetenekler:
 
 - Etkinlik listeleme sayfası.
 - Etkinlik detay sayfası.
-- Admin tarafından etkinlik oluşturma/düzenleme.
+- Aktif kullanıcı tarafından etkinlik oluşturma/düzenleme.
+- Event owner/organizer yönetimi.
 - Etkinlik durum yaşam döngüsü: draft, published, cancelled, archived.
-- Etkinlik tarih/saat, zaman dilimi, lokasyon, dil, organizatör, kapasite ve harici kayıt URL'si.
+- Event katılım tipi: open, approval required, invite only.
+- Etkinlik tarih/saat, zaman dilimi, lokasyon, dil, organizatör, kapasite, medya ve dahili katılım yönetimi.
+- Guest list, invite, approval/decline ve attendance state yönetimi.
 - Tag bazlı etkinlik filtreleme.
 - Temel etkinlik araması.
+- Harita görünümü ve lokasyon/distance filtreleri.
 - Öne çıkan/yaklaşan etkinlik alanları.
 
 Birincil user story'ler:
 
-- Ziyaretçi olarak, yaklaşan etkinlikleri görebilmek istiyorum.
-- Ziyaretçi olarak, etkinlikleri tag, tarih, dil ve formata göre filtreleyebilmek istiyorum.
-- Ziyaretçi olarak, etkinlik detay sayfasını açıp kayıt linkini kullanabilmek istiyorum.
-- Admin olarak, etkinlik oluşturup yayınlayabilmek istiyorum.
-- Admin olarak, etkinliği güncelleyebilmek veya iptal edebilmek istiyorum.
+- Aktif kullanıcı olarak, yaklaşan etkinlikleri görebilmek istiyorum.
+- Aktif kullanıcı olarak, etkinlikleri tag, tarih, dil, format ve lokasyona göre filtreleyebilmek istiyorum.
+- Aktif kullanıcı olarak, etkinlik detay sayfasını açıp attend/invite aksiyonlarını kullanabilmek istiyorum.
+- Aktif kullanıcı olarak, etkinlik oluşturup yayınlayabilmek veya taslakta tutabilmek istiyorum.
+- Organizer olarak, davetlileri ve katılımcıları kabul/ret/ban/check-in durumlarıyla yönetebilmek istiyorum.
+- Admin olarak, etkinlikleri ve kullanıcı üretimi içeriği modere edebilmek istiyorum.
 
 ### Admin
 
@@ -188,10 +193,13 @@ Ortak tipler ve koordineli deployment ilk günden önemliyse monorepo kullan. De
 - ends_at
 - timezone
 - format: online, offline, hybrid
+- visibility: open, approval_required, invite_only
 - location_name
 - location_address
 - city
 - country
+- latitude
+- longitude
 - language
 - organizer_name
 - external_registration_url
@@ -207,12 +215,34 @@ Ortak tipler ve koordineli deployment ilk günden önemliyse monorepo kullan. De
 - event_id
 - tag_id
 
+### EventParticipant
+
+- id
+- event_id
+- user_id
+- status: invited, requested, accepted, declined, banned, attended
+- role: attendee, organizer, manager
+- checked_in_at
+- created_at
+- updated_at
+
+### EventMedia
+
+- id
+- event_id
+- url
+- type
+- sort_order
+- created_at
+
 ## API Yüzeyi
 
 Public:
 
+- `POST /auth/login`
 - `GET /events`
 - `GET /events/:slug`
+- `POST /events`
 - `GET /tags`
 - `GET /tag-categories`
 
@@ -234,10 +264,13 @@ Admin:
 
 Public uygulama:
 
-- Ana sayfa/yaklaşan etkinlikler.
+- Kapalı community ana sayfası/yaklaşan etkinlikler.
 - Filtreli etkinlik listeleme.
+- Harita görünümü ve lokasyon/distance filtreleri.
 - Etkinlik detayı.
-- Kayıt MVP'ye dahilse opsiyonel kullanıcı ilgi alanı seçimi.
+- Etkinlik oluşturma çok adımlı akış: temel bilgi, adres, medya, organizer.
+- Guest list, invite, attend/request ve organizer yönetimi.
+- Kullanıcı ilgi alanı/tag seçimi.
 
 Admin uygulaması:
 
@@ -258,8 +291,8 @@ Teslimatlar:
 
 - Figma USM board'larını user story'lere dönüştürme.
 - MVP kabul kriterlerini netleştirme.
-- Hedef dilleri, ülkeleri, rolleri ve etkinlik kaynaklarını netleştirme.
-- Public kullanıcı kaydının MVP'de olup olmadığını netleştirme.
+- Kapalı community davet/erişim modelini netleştirme.
+- İngilizce içerik ve tüm dünya lokasyon kapsamını netleştirme.
 - Marka/design system temelini netleştirme.
 
 ### Faz 1: Temel Kurulum, 3-5 gün
@@ -297,7 +330,9 @@ Kabul kriterleri:
 Teslimatlar:
 
 - Event şeması ve event-tag ilişkisi.
-- Admin event CRUD.
+- Aktif kullanıcı event CRUD.
+- Organizer/owner event management.
+- Guest list ve attendance state modeli.
 - Etkinlik listeleme sayfası.
 - Etkinlik detay sayfası.
 - Tarih/status/tag filtreleri.
@@ -306,10 +341,10 @@ Teslimatlar:
 
 Kabul kriterleri:
 
-- Admin zorunlu alanlarla etkinlik yayınlayabilir.
-- Public kullanıcılar yalnızca yayınlanmış etkinlikleri görür.
+- Aktif kullanıcı zorunlu alanlarla etkinlik oluşturabilir.
+- Kapalı community dışındaki kullanıcılar uygulama içeriğine erişemez.
 - Etkinlik listesi tag/tarih/dil/format filtrelerine göre doğru çalışır.
-- Etkinlik detayı kayıt linkini ve temel metadata'yı gösterir.
+- Etkinlik detayı attend/invite/guest list temel akışlarını destekler.
 
 ### Faz 4: Admin Sağlamlaştırma, 4-6 gün
 
@@ -377,25 +412,35 @@ Hafta 4:
 ## Ana Riskler
 
 - Figma/Slides user story'leri bu ilk planda yer almayan akışlar içerebilir.
-- Public kullanıcı kaydı kapsamı belirgin şekilde büyütebilir.
-- Çok dilli içerik veri modelini, routing'i, SEO'yu ve admin iş akışlarını etkileyebilir.
-- Etkinlikler manuel girilmeyecekse etkinlik kaynakları/import süreçleri entegrasyon gerektirebilir.
+- Kapalı community ve kullanıcı event oluşturma modeli auth, moderation ve permission kapsamını büyütür.
+- Guest list, invite, approval ve check-in akışları event modülünü basit CRUD'dan operasyonel yönetime taşır.
+- Çok dilli içerik ilerleyen faza bırakıldı; ileride veri modelini, routing'i, SEO'yu ve admin iş akışlarını etkileyebilir.
 - GDPR gereklilikleri auth, kullanıcı profilleri, analytics ve veri saklama politikalarını etkileyebilir.
 
-## Karar Verilmesi Gereken Konular
+## Karara Bağlanan Konular
 
-- Public kullanıcılar MVP'de hesap oluşturacak mı, yoksa ilk versiyon yalnızca ziyaretçi deneyimi mi olacak?
-- Konnektora etkinlik verisi adminler tarafından manuel mi girilecek, import mu edilecek, yoksa organizatörler tarafından mı gönderilecek?
-- İlk EU launch'ta hangi ülkeler ve diller olacak?
-- Admin panel aynı React uygulamasının içinde mi olacak, yoksa ayrı route/app olarak mı konumlanacak?
-- Public etkinlik sayfaları için SEO MVP'de önemli mi?
-- Etkinlik kayıtları harici sistemde mi yapılacak, yoksa Konnektora içinde mi yönetilecek?
-- Backend yalnızca REST mi sunacak, yoksa GraphQL tercih ediliyor mu?
+- İlk versiyon açık public site değil, kapalı community olarak ilerleyecek.
+- Başlangıçta community kontrollü tutulacak; bug ve improvement'lar kapalı kullanıcı grubuyla giderilecek.
+- Tüm aktif kullanıcılar etkinlik oluşturabilecek.
+- İlk launch dili İngilizce olacak.
+- Lokasyon kapsamı EU ile sınırlı değil, tüm dünya olacak.
+- SEO MVP'de öncelikli değil; web app ve multi-language modülü ilerleyen fazlarda ele alınacak.
+- Etkinlik kayıt/katılımcı yönetimi Konnektora içinde kullanıcı/organizer tarafından yönetilecek.
+- Wireframe kapsamı events yanında tags, profiles, messages, notifications, QR/check-in, places ve settings modüllerini de gösteriyor; MVP kesimi bu modüllerin tamamını değil, events/tags/auth/guest-list çekirdeğini kapsayacak.
+
+## Açık Kalan Konular
+
+- Kapalı community üyeliği invite-only mi, admin approval mı, yoksa ikisi birlikte mi olacak?
+- Facebook/Google login MVP'ye dahil mi, yoksa email/phone ile mi başlayacağız?
+- Phone/GSM verification MVP'de gerçek SMS sağlayıcıyla mı çalışacak, yoksa mock/manual approval yeterli mi?
+- Places modülü MVP kapsamına dahil mi, yoksa events sonrasındaki faz mı?
+- Check-in QR akışı MVP'de gerekli mi, yoksa guest-list yönetiminden sonraki faz mı?
+- Backend REST ile devam edecek mi, yoksa ileride GraphQL ihtimali korunacak mı?
 
 ## Hemen Sonraki Adımlar
 
 1. Figma board'larını ve Slides içeriğini export et veya ekran görüntüsü al.
 2. Her USM maddesini kabul kriterleri olan backlog issue'larına dönüştür.
-3. Yukarıdaki karar konularını netleştir.
-4. Monorepo iskeletini kur.
-5. Önce veritabanı şemasını ve tags modülünü implemente et.
+3. Kapalı community üyelik modelini netleştir.
+4. Kullanıcı auth + event owner/organizer permissions modelini tamamla.
+5. Guest list ve internal attendance akışlarını uygulamaya al.

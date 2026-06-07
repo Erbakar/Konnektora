@@ -73,6 +73,8 @@ Varsayılan adresler:
 
 - Public event listeleme: `GET /events`
 - Public event detay: `GET /events/:slug`
+- Aktif kullanıcı login: `POST /auth/login`
+- Aktif kullanıcı event oluşturma: `POST /events`
 - Public tag listeleme: `GET /tags`
 - Public tag category listeleme: `GET /tag-categories`
 - Admin event CRUD endpoint iskeleti
@@ -83,13 +85,15 @@ Varsayılan adresler:
 - Admin tag ve event düzenleme UI başlangıcı
 - Admin işlemlerinde `created_by` / `updated_by` audit bağlantısı
 - Event status hızlı güncelleme: draft, published, cancelled, archived
+- Event katılım tipi: open, approval required, invite only
+- Event participant ve media veri modeli başlangıcı
 - Event-tag değişikliklerinde tag kullanım sayısı güncelleme
 - Prisma veri modeli ve seed data
 
 ## Sonraki Teknik Adımlar
 
-1. Admin formlarına daha ayrıntılı hata mesajları ve loading state'leri ekle.
-2. Admin route'larında daha ayrıntılı role guard ekle.
-3. Event slug çakışmaları için otomatik benzersiz slug üretim stratejisi ekle.
-4. API testlerini ve frontend smoke testlerini yaz.
-5. Figma USM içerikleri erişilebilir olunca backlog'u kabul kriterleriyle netleştir.
+1. Kapalı community invite/approval modelini kesinleştir.
+2. Guest list endpointlerini ekle: request, invite, accept, decline, ban, check-in.
+3. Event owner/organizer permission kontrollerini detaylandır.
+4. Admin formlarına daha ayrıntılı hata mesajları ve loading state'leri ekle.
+5. API testlerini ve frontend smoke testlerini genişlet.
