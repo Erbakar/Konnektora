@@ -1,0 +1,29 @@
+{
+  "name": "konnektora",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "npm run db:generate -w apps/api",
+    "db:migrate": "npm run db:migrate -w apps/api",
+    "db:seed": "npm run db:seed -w apps/api"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.28.0",
+    "@types/node": "^22.15.29",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

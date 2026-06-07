@@ -1,0 +1,197 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  user
+  admin
+  super_admin
+}
+
+enum UserStatus {
+  invited
+  pending
+  active
+  disabled
+}
+
+enum TagStatus {
+  active
+  hidden
+  archived
+}
+
+enum EventStatus {
+  draft
+  published
+  cancelled
+  archived
+}
+
+enum EventFormat {
+  online
+  offline
+  hybrid
+}
+
+enum EventVisibility {
+  open
+  approval_required
+  invite_only
+}
+
+enum EventParticipantStatus {
+  invited
+  requested
+  accepted
+  declined
+  banned
+  attended
+}
+
+enum EventParticipantRole {
+  attendee
+  organizer
+  manager
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  name         String
+  passwordHash String     @map("password_hash")
+  role         UserRole   @default(user)
+  status       UserStatus @default(active)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  createdTags  Tag[]   @relation("TagCreatedBy")
+  updatedTags  Tag[]   @relation("TagUpdatedBy")
+  createdEvents Event[] @relation("EventCreatedBy")
+  updatedEvents Event[] @relation("EventUpdatedBy")
+  eventParticipations EventParticipant[]
+
+  @@map("users")
+}
+
+model TagCategory {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tags Tag[]
+
+  @@map("tag_categories")
+}
+
+model Tag {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  description String?
+  status      TagStatus @default(active)
+  usageCount  Int       @default(0) @map("usage_count")
+  categoryId  String?   @map("category_id")
+  createdById String?   @map("created_by")
+  updatedById String?   @map("updated_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  category  TagCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdBy User?        @relation("TagCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?        @relation("TagUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  events    EventTag[]
+
+  @@index([status])
+  @@map("tags")
+}
+
+model Event {
+  id                      String      @id @default(uuid())
+  title                   String
+  slug                    String      @unique
+  summary                 String
+  description             String
+  status                  EventStatus @default(draft)
+  startsAt                DateTime    @map("starts_at")
+  endsAt                  DateTime?   @map("ends_at")
+  timezone                String
+  format                  EventFormat
+  visibility              EventVisibility @default(open)
+  locationName            String?     @map("location_name")
+  locationAddress         String?     @map("location_address")
+  city                    String?
+  country                 String?
+  latitude                Decimal?    @db.Decimal(10, 7)
+  longitude               Decimal?    @db.Decimal(10, 7)
+  language                String
+  organizerName           String?     @map("organizer_name")
+  externalRegistrationUrl String?     @map("external_registration_url")
+  coverImageUrl           String?     @map("cover_image_url")
+  capacity                Int?
+  createdById             String?     @map("created_by")
+  updatedById             String?     @map("updated_by")
+  createdAt               DateTime    @default(now()) @map("created_at")
+  updatedAt               DateTime    @updatedAt @map("updated_at")
+
+  createdBy User?      @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?      @relation("EventUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  tags      EventTag[]
+  participants EventParticipant[]
+  media EventMedia[]
+
+  @@index([status, startsAt])
+  @@map("events")
+}
+
+model EventParticipant {
+  id        String                 @id @default(uuid())
+  eventId   String                 @map("event_id")
+  userId    String                 @map("user_id")
+  status    EventParticipantStatus @default(requested)
+  role      EventParticipantRole   @default(attendee)
+  checkedInAt DateTime?            @map("checked_in_at")
+  createdAt DateTime               @default(now()) @map("created_at")
+  updatedAt DateTime               @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId, status])
+  @@map("event_participants")
+}
+
+model EventMedia {
+  id        String   @id @default(uuid())
+  eventId   String   @map("event_id")
+  url       String
+  type      String
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("event_media")
+}
+
+model EventTag {
+  eventId String @map("event_id")
+  tagId   String @map("tag_id")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, tagId])
+  @@map("event_tags")
+}
