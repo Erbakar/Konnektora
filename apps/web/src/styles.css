@@ -212,7 +212,34 @@ select {
   gap: 18px;
   justify-content: space-between;
   min-height: 270px;
-  padding: 20px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.event-card > div:not(.event-card-media),
+.event-card > .event-details,
+.event-card > .tag-row {
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.event-card > .tag-row {
+  padding-bottom: 20px;
+}
+
+.event-card-media {
+  aspect-ratio: 16 / 9;
+  background: #e7eee5;
+  display: block;
+  overflow: hidden;
+}
+
+.event-card-media img,
+.detail-media img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
 }
 
 .event-card h3 {
@@ -298,6 +325,28 @@ select {
 
 .detail-page {
   max-width: 900px;
+}
+
+.detail-media {
+  aspect-ratio: 16 / 7;
+  background: #e7eee5;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.detail-meta span {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+}
+
+.detail-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
 }
 
 .detail-copy {

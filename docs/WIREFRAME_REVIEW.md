@@ -81,6 +81,8 @@ Mevcut MVP planı şu şekilde güncellendi:
 - Event media modeli gerekli.
 - Internal attendance guest-list modeli, harici registration URL'den daha öncelikli.
 - Kapalı community için auth ve user status modeli gerekli: invited, pending, active, disabled.
+- İlk backend karşılığı eklendi: attendance request, invite, participant status update ve check-in endpointleri.
+- Seed datasına Startup, Networking, Yatırım ve Founder tag'leri için 16 mock event eklendi; mevcut event list/detail ekranları bu eventlerin detay sayfalarını dinamik gösterir.
 
 ## MVP Dışına Alınabilecekler
 

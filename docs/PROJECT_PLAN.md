@@ -345,6 +345,7 @@ Kabul kriterleri:
 - Kapalı community dışındaki kullanıcılar uygulama içeriğine erişemez.
 - Etkinlik listesi tag/tarih/dil/format filtrelerine göre doğru çalışır.
 - Etkinlik detayı attend/invite/guest list temel akışlarını destekler.
+- Seed ortamında her ana tag için 3-4 mock etkinlik ve detay datası bulunur.
 
 ### Faz 4: Admin Sağlamlaştırma, 4-6 gün
 

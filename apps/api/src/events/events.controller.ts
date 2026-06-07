@@ -3,7 +3,7 @@ import { User } from "@prisma/client";
 import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { CreateEventDto, EventQueryDto } from "./events.dto";
+import { CreateEventDto, EventQueryDto, InviteParticipantDto, UpdateParticipantDto } from "./events.dto";
 import { EventsService } from "./events.service";
 
 @Controller()
@@ -24,6 +24,41 @@ export class EventsController {
   @UseGuards(JwtAuthGuard)
   createUserEvent(@Body() body: CreateEventDto, @CurrentUser() user: User) {
     return this.eventsService.createEvent(body, user.id);
+  }
+
+  @Get("events/:id/participants")
+  @UseGuards(JwtAuthGuard)
+  listParticipants(@Param("id") id: string, @CurrentUser() user: User) {
+    return this.eventsService.listParticipants(id, user);
+  }
+
+  @Post("events/:id/attend")
+  @UseGuards(JwtAuthGuard)
+  requestAttendance(@Param("id") id: string, @CurrentUser() user: User) {
+    return this.eventsService.requestAttendance(id, user.id);
+  }
+
+  @Post("events/:id/invite")
+  @UseGuards(JwtAuthGuard)
+  inviteParticipant(@Param("id") id: string, @Body() body: InviteParticipantDto, @CurrentUser() user: User) {
+    return this.eventsService.inviteParticipant(id, body, user);
+  }
+
+  @Patch("events/:id/participants/:userId")
+  @UseGuards(JwtAuthGuard)
+  updateParticipant(
+    @Param("id") id: string,
+    @Param("userId") participantUserId: string,
+    @Body() body: UpdateParticipantDto,
+    @CurrentUser() user: User
+  ) {
+    return this.eventsService.updateParticipantStatus(id, participantUserId, body.status, user);
+  }
+
+  @Post("events/:id/participants/:userId/check-in")
+  @UseGuards(JwtAuthGuard)
+  checkInParticipant(@Param("id") id: string, @Param("userId") participantUserId: string, @CurrentUser() user: User) {
+    return this.eventsService.checkInParticipant(id, participantUserId, user);
   }
 
   @Get("admin/events")

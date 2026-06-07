@@ -1,8 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { EventStatus, Prisma } from "@prisma/client";
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { EventParticipantRole, EventParticipantStatus, EventStatus, Prisma, User } from "@prisma/client";
 import { toSlug } from "../common/slug";
 import { PrismaService } from "../prisma/prisma.service";
-import { CreateEventDto, EventQueryDto } from "./events.dto";
+import { CreateEventDto, EventQueryDto, InviteParticipantDto } from "./events.dto";
 
 @Injectable()
 export class EventsService {
@@ -84,7 +84,16 @@ export class EventsService {
         updatedBy: userId ? { connect: { id: userId } } : undefined,
         tags: {
           create: input.tagIds?.map((tagId) => ({ tagId })) ?? []
-        }
+        },
+        participants: userId
+          ? {
+              create: {
+                userId,
+                role: EventParticipantRole.organizer,
+                status: EventParticipantStatus.accepted
+              }
+            }
+          : undefined
       },
       include: { tags: { include: { tag: true } } }
     });
@@ -92,6 +101,106 @@ export class EventsService {
     await this.refreshTagUsageCounts(input.tagIds ?? []);
 
     return this.mapEvent(event);
+  }
+
+  async listParticipants(eventId: string, user: User) {
+    await this.ensureCanManageParticipants(eventId, user);
+
+    return this.prisma.eventParticipant.findMany({
+      where: { eventId },
+      orderBy: [{ role: "desc" }, { status: "asc" }, { createdAt: "asc" }],
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            status: true
+          }
+        }
+      }
+    });
+  }
+
+  async requestAttendance(eventId: string, userId: string) {
+    const event = await this.prisma.event.findUnique({ where: { id: eventId } });
+
+    if (!event || event.status !== EventStatus.published) {
+      throw new NotFoundException("Etkinlik bulunamadı.");
+    }
+
+    const status =
+      event.visibility === "open" ? EventParticipantStatus.accepted : EventParticipantStatus.requested;
+
+    return this.prisma.eventParticipant.upsert({
+      where: { eventId_userId: { eventId, userId } },
+      update: { status },
+      create: {
+        eventId,
+        userId,
+        status,
+        role: EventParticipantRole.attendee
+      }
+    });
+  }
+
+  async inviteParticipant(eventId: string, input: InviteParticipantDto, actor: User) {
+    await this.ensureCanManageParticipants(eventId, actor);
+
+    return this.prisma.eventParticipant.upsert({
+      where: { eventId_userId: { eventId, userId: input.userId } },
+      update: {
+        status: EventParticipantStatus.invited,
+        role: input.role ?? EventParticipantRole.attendee
+      },
+      create: {
+        eventId,
+        userId: input.userId,
+        status: EventParticipantStatus.invited,
+        role: input.role ?? EventParticipantRole.attendee
+      }
+    });
+  }
+
+  async updateParticipantStatus(eventId: string, userId: string, status: EventParticipantStatus, actor: User) {
+    await this.ensureCanManageParticipants(eventId, actor);
+
+    const participant = await this.prisma.eventParticipant.findUnique({
+      where: { eventId_userId: { eventId, userId } }
+    });
+
+    if (!participant) {
+      throw new NotFoundException("Katılımcı bulunamadı.");
+    }
+
+    return this.prisma.eventParticipant.update({
+      where: { eventId_userId: { eventId, userId } },
+      data: { status }
+    });
+  }
+
+  async checkInParticipant(eventId: string, userId: string, actor: User) {
+    await this.ensureCanManageParticipants(eventId, actor);
+
+    const participant = await this.prisma.eventParticipant.findUnique({
+      where: { eventId_userId: { eventId, userId } }
+    });
+
+    if (
+      !participant ||
+      (participant.status !== EventParticipantStatus.accepted && participant.status !== EventParticipantStatus.invited)
+    ) {
+      throw new NotFoundException("Check-in için uygun katılımcı bulunamadı.");
+    }
+
+    return this.prisma.eventParticipant.update({
+      where: { eventId_userId: { eventId, userId } },
+      data: {
+        status: EventParticipantStatus.attended,
+        checkedInAt: new Date()
+      }
+    });
   }
 
   async updateEvent(id: string, input: Partial<CreateEventDto>, userId?: string) {
@@ -199,5 +308,38 @@ export class EventsService {
         await this.prisma.tag.update({ where: { id: tagId }, data: { usageCount } });
       })
     );
+  }
+
+  private async ensureCanManageParticipants(eventId: string, user: User) {
+    if (["admin", "super_admin"].includes(user.role)) {
+      return;
+    }
+
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { createdById: true }
+    });
+
+    if (!event) {
+      throw new NotFoundException("Etkinlik bulunamadı.");
+    }
+
+    if (event.createdById === user.id) {
+      return;
+    }
+
+    const participant = await this.prisma.eventParticipant.findUnique({
+      where: { eventId_userId: { eventId, userId: user.id } },
+      select: { role: true, status: true }
+    });
+
+    if (
+      participant?.status === EventParticipantStatus.accepted &&
+      (participant.role === EventParticipantRole.organizer || participant.role === EventParticipantRole.manager)
+    ) {
+      return;
+    }
+
+    throw new ForbiddenException("Bu etkinliğin katılımcılarını yönetme yetkiniz yok.");
   }
 }

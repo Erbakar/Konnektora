@@ -5,6 +5,16 @@ export const eventFormatSchema = z.enum(["online", "offline", "hybrid"]);
 export const eventVisibilitySchema = z.enum(["open", "approval_required", "invite_only"]);
 export const tagStatusSchema = z.enum(["active", "hidden", "archived"]);
 export const userRoleSchema = z.enum(["user", "admin", "super_admin"]);
+export const userStatusSchema = z.enum(["invited", "pending", "active", "disabled"]);
+export const eventParticipantStatusSchema = z.enum([
+  "invited",
+  "requested",
+  "accepted",
+  "declined",
+  "banned",
+  "attended"
+]);
+export const eventParticipantRoleSchema = z.enum(["attendee", "organizer", "manager"]);
 
 export const slugSchema = z
   .string()
@@ -55,7 +65,20 @@ export const adminUserSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
   name: z.string(),
-  role: userRoleSchema
+  role: userRoleSchema,
+  status: userStatusSchema.optional()
+});
+
+export const eventParticipantSchema = z.object({
+  id: z.string().uuid(),
+  eventId: z.string().uuid(),
+  userId: z.string().uuid(),
+  status: eventParticipantStatusSchema,
+  role: eventParticipantRoleSchema,
+  checkedInAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional(),
+  user: adminUserSchema.optional()
 });
 
 export const loginResponseSchema = z.object({
@@ -67,7 +90,11 @@ export type EventStatus = z.infer<typeof eventStatusSchema>;
 export type EventFormat = z.infer<typeof eventFormatSchema>;
 export type TagStatus = z.infer<typeof tagStatusSchema>;
 export type UserRole = z.infer<typeof userRoleSchema>;
+export type UserStatus = z.infer<typeof userStatusSchema>;
+export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema>;
+export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;
 export type Tag = z.infer<typeof tagSchema>;
 export type Event = z.infer<typeof eventSchema>;
 export type AdminDashboard = z.infer<typeof adminDashboardSchema>;
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
+export type EventParticipant = z.infer<typeof eventParticipantSchema>;

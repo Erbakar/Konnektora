@@ -75,6 +75,11 @@ Varsayılan adresler:
 - Public event detay: `GET /events/:slug`
 - Aktif kullanıcı login: `POST /auth/login`
 - Aktif kullanıcı event oluşturma: `POST /events`
+- Event katılımcı listesi: `GET /events/:id/participants`
+- Event attendance request: `POST /events/:id/attend`
+- Event invite: `POST /events/:id/invite`
+- Participant status update: `PATCH /events/:id/participants/:userId`
+- Participant check-in: `POST /events/:id/participants/:userId/check-in`
 - Public tag listeleme: `GET /tags`
 - Public tag category listeleme: `GET /tag-categories`
 - Admin event CRUD endpoint iskeleti
@@ -88,12 +93,13 @@ Varsayılan adresler:
 - Event katılım tipi: open, approval required, invite only
 - Event participant ve media veri modeli başlangıcı
 - Event-tag değişikliklerinde tag kullanım sayısı güncelleme
+- Seed içinde her ana tag için 4 mock event ve detay sayfası datası
 - Prisma veri modeli ve seed data
 
 ## Sonraki Teknik Adımlar
 
 1. Kapalı community invite/approval modelini kesinleştir.
-2. Guest list endpointlerini ekle: request, invite, accept, decline, ban, check-in.
-3. Event owner/organizer permission kontrollerini detaylandır.
+2. Guest list UI ekranını bağla.
+3. Event owner/organizer permission kontrollerini daha ayrıntılı test et.
 4. Admin formlarına daha ayrıntılı hata mesajları ve loading state'leri ekle.
 5. API testlerini ve frontend smoke testlerini genişlet.

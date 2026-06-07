@@ -1,4 +1,4 @@
-import { EventFormat, EventStatus, EventVisibility } from "@prisma/client";
+import { EventFormat, EventParticipantRole, EventParticipantStatus, EventStatus, EventVisibility } from "@prisma/client";
 import {
   IsArray,
   IsDateString,
@@ -112,4 +112,18 @@ export class CreateEventDto {
   @IsArray()
   @IsUUID("4", { each: true })
   tagIds?: string[];
+}
+
+export class InviteParticipantDto {
+  @IsUUID()
+  userId!: string;
+
+  @IsOptional()
+  @IsEnum(EventParticipantRole)
+  role?: EventParticipantRole;
+}
+
+export class UpdateParticipantDto {
+  @IsEnum(EventParticipantStatus)
+  status!: EventParticipantStatus;
 }

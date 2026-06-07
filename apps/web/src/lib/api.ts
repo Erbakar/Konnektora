@@ -1,10 +1,12 @@
 import {
   adminDashboardSchema,
   eventSchema,
+  eventParticipantSchema,
   loginResponseSchema,
   tagSchema,
   type AdminDashboard,
   type Event,
+  type EventParticipant,
   type LoginResponse,
   type Tag
 } from "@konnektora/shared";
@@ -148,5 +150,54 @@ export function createAdminEvent(input: AdminEventInput): Promise<Event> {
     auth: true,
     method: "POST",
     body: JSON.stringify(input)
+  });
+}
+
+export function createUserEvent(input: AdminEventInput): Promise<Event> {
+  return requestJson("/events", eventSchema, {
+    auth: true,
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function listEventParticipants(eventId: string): Promise<EventParticipant[]> {
+  return requestJson(`/events/${eventId}/participants`, z.array(eventParticipantSchema), { auth: true });
+}
+
+export function requestEventAttendance(eventId: string): Promise<EventParticipant> {
+  return requestJson(`/events/${eventId}/attend`, eventParticipantSchema, {
+    auth: true,
+    method: "POST"
+  });
+}
+
+export function inviteEventParticipant(
+  eventId: string,
+  input: { userId: string; role?: string }
+): Promise<EventParticipant> {
+  return requestJson(`/events/${eventId}/invite`, eventParticipantSchema, {
+    auth: true,
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function updateEventParticipantStatus(
+  eventId: string,
+  userId: string,
+  status: string
+): Promise<EventParticipant> {
+  return requestJson(`/events/${eventId}/participants/${userId}`, eventParticipantSchema, {
+    auth: true,
+    method: "PATCH",
+    body: JSON.stringify({ status })
+  });
+}
+
+export function checkInEventParticipant(eventId: string, userId: string): Promise<EventParticipant> {
+  return requestJson(`/events/${eventId}/participants/${userId}/check-in`, eventParticipantSchema, {
+    auth: true,
+    method: "POST"
   });
 }
