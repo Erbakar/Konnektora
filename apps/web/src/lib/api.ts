@@ -17,6 +17,9 @@ const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 const USE_MOCK_FALLBACK =
   import.meta.env.PROD && (API_URL.includes("localhost") || API_URL.includes("127.0.0.1"));
 const TOKEN_KEY = "konnektora_admin_token";
+const MOCK_EVENTS_KEY = "konnektora_mock_events";
+const MOCK_TAGS_KEY = "konnektora_mock_tags";
+const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
@@ -73,35 +76,290 @@ async function requestJson<T>(path: string, schema: z.ZodType<T>, options: Reque
 }
 
 function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: RequestOptions): T | undefined {
-  if (!USE_MOCK_FALLBACK || options.method || options.auth) {
+  if (!USE_MOCK_FALLBACK) {
     return undefined;
   }
 
+  const method = options.method?.toUpperCase() ?? "GET";
   const [rawPathname, queryString = ""] = path.split("?");
   const pathname = rawPathname ?? "";
 
+  if (pathname === "/admin/auth/login" && method === "POST") {
+    return schema.parse({
+      accessToken: MOCK_ADMIN_TOKEN,
+      user: {
+        id: "99999999-9999-4999-8999-999999999999",
+        email: "admin@konnektora.local",
+        name: "Konnektora Admin",
+        role: "super_admin",
+        status: "active"
+      }
+    });
+  }
+
+  if (pathname === "/admin/dashboard" && method === "GET") {
+    return schema.parse(getMockDashboard());
+  }
+
+  if (pathname === "/admin/tags" && method === "GET") {
+    return schema.parse(getStoredTags());
+  }
+
+  if (pathname === "/admin/tags" && method === "POST") {
+    return schema.parse(createMockTag(parseBody<{ name: string; description?: string }>(options)));
+  }
+
+  if (pathname.startsWith("/admin/tags/") && method === "PATCH") {
+    return schema.parse(updateMockTag(pathname.slice("/admin/tags/".length), parseBody(options)));
+  }
+
+  if (pathname.startsWith("/admin/tags/") && method === "DELETE") {
+    return schema.parse(updateMockTag(pathname.slice("/admin/tags/".length), { status: "archived" }));
+  }
+
+  if (pathname === "/admin/events" && method === "GET") {
+    return schema.parse(getStoredEvents());
+  }
+
+  if (pathname === "/admin/events" && method === "POST") {
+    return schema.parse(createMockEvent(parseBody<AdminEventInput>(options)));
+  }
+
+  if (pathname.startsWith("/admin/events/") && method === "PATCH") {
+    return schema.parse(updateMockEvent(pathname.slice("/admin/events/".length), parseBody(options)));
+  }
+
+  if (pathname.startsWith("/admin/events/") && method === "DELETE") {
+    return schema.parse(updateMockEvent(pathname.slice("/admin/events/".length), { status: "archived" }));
+  }
+
+  if (method !== "GET" || options.auth) {
+    return undefined;
+  }
+
   if (pathname === "/tags") {
-    return schema.parse(mockTags);
+    return schema.parse(getStoredTags().filter((tag) => tag.status === "active"));
   }
 
   if (pathname === "/events") {
     const params = new URLSearchParams(queryString);
     const selectedTag = params.get("tag");
+    const publicEvents = getStoredEvents().filter((eventItem) => eventItem.status === "published");
     const events = selectedTag
-      ? mockEvents.filter((eventItem) => eventItem.tags.some((tagItem) => tagItem.slug === selectedTag))
-      : mockEvents;
+      ? publicEvents.filter((eventItem) => eventItem.tags.some((tagItem) => tagItem.slug === selectedTag))
+      : publicEvents;
 
     return schema.parse(events);
   }
 
   if (pathname.startsWith("/events/")) {
     const slug = decodeURIComponent(pathname.slice("/events/".length));
-    const event = mockEvents.find((eventItem) => eventItem.slug === slug);
+    const event = getStoredEvents().find((eventItem) => eventItem.status === "published" && eventItem.slug === slug);
 
     return event ? schema.parse(event) : undefined;
   }
 
   return undefined;
+}
+
+function parseBody<T>(options: RequestOptions): T {
+  return options.body ? (JSON.parse(String(options.body)) as T) : ({} as T);
+}
+
+function getStoredEvents(): Event[] {
+  const storedEvents = readStorage<Event[]>(MOCK_EVENTS_KEY, []);
+  return [...storedEvents, ...mockEvents];
+}
+
+function getStoredTags(): Tag[] {
+  const storedTags = readStorage<Tag[]>(MOCK_TAGS_KEY, []);
+  const storedSlugs = new Set(storedTags.map((tag) => tag.slug));
+  return [...storedTags, ...mockTags.filter((tag) => !storedSlugs.has(tag.slug))];
+}
+
+function setStoredEvents(events: Event[]) {
+  const mockEventIds = new Set(mockEvents.map((event) => event.id));
+  writeStorage(
+    MOCK_EVENTS_KEY,
+    events.filter((event) => !mockEventIds.has(event.id))
+  );
+}
+
+function setStoredTags(tags: Tag[]) {
+  const mockTagIds = new Set(mockTags.map((tag) => tag.id));
+  writeStorage(
+    MOCK_TAGS_KEY,
+    tags.filter((tag) => !mockTagIds.has(tag.id))
+  );
+}
+
+function readStorage<T>(key: string, fallback: T): T {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? (JSON.parse(value) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStorage<T>(key: string, value: T) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function getMockDashboard(): AdminDashboard {
+  const now = Date.now();
+  const events = getStoredEvents();
+
+  return {
+    publishedEvents: events.filter((event) => event.status === "published").length,
+    draftEvents: events.filter((event) => event.status === "draft").length,
+    activeTags: getStoredTags().filter((tag) => tag.status === "active").length,
+    upcomingEvents: events.filter((event) => event.status === "published" && new Date(event.startsAt).getTime() >= now)
+      .length
+  };
+}
+
+function createMockTag(input: { name: string; description?: string }): Tag {
+  const tags = getStoredTags();
+  const tag: Tag = {
+    id: createId(),
+    name: input.name,
+    slug: uniqueSlug(input.name, tags.map((item) => item.slug)),
+    description: input.description || null,
+    categoryId: null,
+    status: "active",
+    usageCount: 0
+  };
+
+  setStoredTags([tag, ...tags]);
+  return tag;
+}
+
+function updateMockTag(id: string, input: Partial<Tag>): Tag {
+  const tags = getStoredTags();
+  const updatedTags = tags.map((tag) => (tag.id === id ? { ...tag, ...input } : tag));
+  const updatedTag = updatedTags.find((tag) => tag.id === id);
+
+  if (!updatedTag) {
+    throw new Error("Mock tag not found");
+  }
+
+  setStoredTags(updatedTags);
+  return updatedTag;
+}
+
+function createMockEvent(input: AdminEventInput): Event {
+  const events = getStoredEvents();
+  const event: Event = {
+    id: createId(),
+    title: input.title,
+    slug: uniqueSlug(input.title, events.map((item) => item.slug)),
+    summary: input.summary,
+    description: input.description,
+    status: parseEventStatus(input.status),
+    startsAt: input.startsAt,
+    endsAt: new Date(new Date(input.startsAt).getTime() + 1000 * 60 * 60 * 2).toISOString(),
+    timezone: input.timezone,
+    format: parseEventFormat(input.format),
+    visibility: parseEventVisibility(input.visibility),
+    city: input.city || null,
+    country: input.country || null,
+    language: input.language,
+    organizerName: "Konnektora Admin",
+    externalRegistrationUrl: input.externalRegistrationUrl || null,
+    coverImageUrl: null,
+    capacity: null,
+    tags: getTagsByIds(input.tagIds ?? [])
+  };
+
+  setStoredEvents([event, ...events]);
+  return event;
+}
+
+function updateMockEvent(id: string, input: Partial<AdminEventInput>): Event {
+  const events = getStoredEvents();
+  const updatedEvents = events.map((event) => {
+    if (event.id !== id) {
+      return event;
+    }
+
+    return {
+      ...event,
+      title: input.title ?? event.title,
+      summary: input.summary ?? event.summary,
+      description: input.description ?? event.description,
+      status: input.status ? parseEventStatus(input.status) : event.status,
+      startsAt: input.startsAt ?? event.startsAt,
+      endsAt: input.startsAt
+        ? new Date(new Date(input.startsAt).getTime() + 1000 * 60 * 60 * 2).toISOString()
+        : event.endsAt,
+      timezone: input.timezone ?? event.timezone,
+      format: input.format ? parseEventFormat(input.format) : event.format,
+      visibility: input.visibility ? parseEventVisibility(input.visibility) : event.visibility,
+      city: input.city === undefined ? event.city : input.city || null,
+      country: input.country === undefined ? event.country : input.country || null,
+      language: input.language ?? event.language,
+      externalRegistrationUrl:
+        input.externalRegistrationUrl === undefined ? event.externalRegistrationUrl : input.externalRegistrationUrl || null,
+      tags: input.tagIds ? getTagsByIds(input.tagIds) : event.tags
+    };
+  });
+  const updatedEvent = updatedEvents.find((event) => event.id === id);
+
+  if (!updatedEvent) {
+    throw new Error("Mock event not found");
+  }
+
+  setStoredEvents(updatedEvents);
+  return updatedEvent;
+}
+
+function getTagsByIds(tagIds: string[]): Tag[] {
+  const ids = new Set(tagIds);
+  return getStoredTags().filter((tag) => ids.has(tag.id));
+}
+
+function createId() {
+  if (crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+
+  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (char) =>
+    (Number(char) ^ ((crypto.getRandomValues(new Uint8Array(1))[0] ?? 0) & (15 >> (Number(char) / 4)))).toString(16)
+  );
+}
+
+function uniqueSlug(value: string, usedSlugs: string[]) {
+  const baseSlug =
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/ı/g, "i")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "event";
+  const used = new Set(usedSlugs);
+  let slug = baseSlug;
+  let index = 2;
+
+  while (used.has(slug)) {
+    slug = `${baseSlug}-${index}`;
+    index += 1;
+  }
+
+  return slug;
+}
+
+function parseEventStatus(value?: string): Event["status"] {
+  return value === "published" || value === "cancelled" || value === "archived" ? value : "draft";
+}
+
+function parseEventFormat(value?: string): Event["format"] {
+  return value === "offline" || value === "hybrid" ? value : "online";
+}
+
+function parseEventVisibility(value?: string): Event["visibility"] {
+  return value === "approval_required" || value === "invite_only" ? value : "open";
 }
 
 export function listEvents(params?: URLSearchParams): Promise<Event[]> {

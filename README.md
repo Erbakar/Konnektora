@@ -71,7 +71,16 @@ Varsayılan adresler:
 
 Netlify sadece React/Vite frontend'i host eder. Node/NestJS API ayrıca Render, Railway, Fly.io veya benzeri bir servise deploy edilmelidir.
 
-Frontend canlı ortamda `VITE_API_URL` verilmezse public event listeleme, event detay ve tag filtreleri mock data ile çalışır. Bu sadece demo/preview içindir; admin login, admin panel ve event oluşturma için gerçek backend gerekir.
+Frontend canlı ortamda `VITE_API_URL` verilmezse public event listeleme, event detay, tag filtreleri ve admin event oluşturma mock data ile çalışır. Admin demo modunda veriler tarayıcı `localStorage` alanına yazılır; aynı cihaz/tarayıcıda görünür, başka kullanıcılara ortak database gibi yansımaz.
+
+Demo modunda `/admin` ekranına aşağıdaki bilgilerle veya herhangi bir email/şifreyle girilebilir:
+
+```text
+email: admin@konnektora.local
+password: ChangeMe123!
+```
+
+Admin formunda `Published` durumuyla kaydedilen etkinlikler public event listesinde görünür. `Draft` kayıtlar sadece admin listesinde kalır.
 
 Gerçek backend deploy edildikten sonra Netlify Environment variables içine şunu ekle:
 

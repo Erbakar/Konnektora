@@ -838,6 +838,97 @@ select {
   color: #1f5f46;
 }
 
+.corp-menu-toggle {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dce7df;
+  border-radius: 999px;
+  color: #10231f;
+  cursor: pointer;
+  display: none;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+
+.corp-menu-toggle:hover {
+  background: #f4f7f5;
+}
+
+.corp-mobile-menu {
+  display: none;
+}
+
+.corp-mobile-menu.is-open {
+  display: block;
+}
+
+.corp-mobile-menu:not(.is-open) .corp-mobile-menu-backdrop,
+.corp-mobile-menu:not(.is-open) .corp-mobile-menu-panel {
+  display: none;
+}
+
+.corp-mobile-menu-backdrop {
+  background: rgba(16, 35, 31, 0.42);
+  border: 0;
+  cursor: pointer;
+  height: 100%;
+  inset: 72px 0 0;
+  position: fixed;
+  width: 100%;
+  z-index: 18;
+}
+
+.corp-mobile-menu-panel {
+  background: #ffffff;
+  border-bottom: 1px solid #e4ebe6;
+  box-shadow: 0 18px 40px rgba(16, 35, 31, 0.12);
+  display: grid;
+  gap: 6px;
+  left: 0;
+  padding: 14px 16px 18px;
+  position: fixed;
+  right: 0;
+  top: 72px;
+  z-index: 19;
+}
+
+.corp-mobile-menu-panel a {
+  align-items: center;
+  border-radius: 12px;
+  color: #2d2d2d;
+  display: flex;
+  font-size: 16px;
+  font-weight: 600;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+}
+
+.corp-mobile-menu-panel a.active,
+.corp-mobile-menu-panel a:hover {
+  background: #f4f7f5;
+  color: #10231f;
+}
+
+.corp-mobile-menu-cta {
+  background: #1f5f46 !important;
+  color: #ffffff !important;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.corp-mobile-menu-cta:hover,
+.corp-mobile-menu-cta.active {
+  background: #174936 !important;
+  color: #ffffff !important;
+}
+
+.corp-mobile-menu-admin {
+  border: 1px solid #dce7df;
+  justify-content: center;
+}
+
 .corp-home {
   background: #ffffff;
 }
@@ -1308,11 +1399,17 @@ select {
 
 @media (max-width: 960px) {
   .corp-topbar {
+    gap: 12px;
     grid-template-columns: 1fr auto;
   }
 
-  .corp-nav {
+  .corp-nav,
+  .corp-topbar-actions {
     display: none;
+  }
+
+  .corp-menu-toggle {
+    display: inline-flex;
   }
 
   .corp-category-grid,
@@ -1331,8 +1428,7 @@ select {
 }
 
 @media (max-width: 760px) {
-  .topbar,
-  .corp-topbar {
+  .topbar {
     align-items: flex-start;
     flex-direction: column;
     gap: 12px;
@@ -1340,12 +1436,26 @@ select {
   }
 
   .corp-topbar {
-    display: flex;
+    align-items: center;
+    display: grid;
+    min-height: 64px;
+    padding: 0 16px;
   }
 
-  .corp-topbar-actions {
-    flex-wrap: wrap;
-    width: 100%;
+  .brand {
+    min-width: 0;
+  }
+
+  .brand img {
+    height: 34px;
+  }
+
+  .corp-mobile-menu-backdrop {
+    inset: 64px 0 0;
+  }
+
+  .corp-mobile-menu-panel {
+    top: 64px;
   }
 
   .nav {
