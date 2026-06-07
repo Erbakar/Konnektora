@@ -67,6 +67,24 @@ Varsayılan adresler:
 - API: `http://localhost:3000`
 - PostgreSQL: `localhost:5432`
 
+## Netlify Test Deploy
+
+Netlify sadece React/Vite frontend'i host eder. Node/NestJS API ayrıca Render, Railway, Fly.io veya benzeri bir servise deploy edilmelidir.
+
+Frontend canlı ortamda `VITE_API_URL` verilmezse public event listeleme, event detay ve tag filtreleri mock data ile çalışır. Bu sadece demo/preview içindir; admin login, admin panel ve event oluşturma için gerçek backend gerekir.
+
+Gerçek backend deploy edildikten sonra Netlify Environment variables içine şunu ekle:
+
+```text
+VITE_API_URL=https://api-domainin.com
+```
+
+Sonra Netlify deploy'unu yeniden çalıştır. Backend CORS ayarında da Netlify domain'i izinli olmalıdır:
+
+```text
+WEB_ORIGIN=https://konnektora.netlify.app
+```
+
 ## MVP Akışları
 
 İlk sürümde eklenenler:

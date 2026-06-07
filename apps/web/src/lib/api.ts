@@ -11,8 +11,11 @@ import {
   type Tag
 } from "@konnektora/shared";
 import { z } from "zod";
+import { mockEvents, mockTags } from "./mockData";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+const USE_MOCK_FALLBACK =
+  import.meta.env.PROD && (API_URL.includes("localhost") || API_URL.includes("127.0.0.1"));
 const TOKEN_KEY = "konnektora_admin_token";
 
 type RequestOptions = RequestInit & {
@@ -46,17 +49,59 @@ async function requestJson<T>(path: string, schema: z.ZodType<T>, options: Reque
     }
   }
 
-  const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+  try {
+    const response = await fetch(`${API_URL}${path}`, { ...options, headers });
 
-  if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`);
+    }
+
+    if (response.status === 204) {
+      return schema.parse(null);
+    }
+
+    return schema.parse(await response.json());
+  } catch (error) {
+    const fallback = getMockResponse(path, schema, options);
+
+    if (fallback !== undefined) {
+      return fallback;
+    }
+
+    throw error;
+  }
+}
+
+function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: RequestOptions): T | undefined {
+  if (!USE_MOCK_FALLBACK || options.method || options.auth) {
+    return undefined;
   }
 
-  if (response.status === 204) {
-    return schema.parse(null);
+  const [rawPathname, queryString = ""] = path.split("?");
+  const pathname = rawPathname ?? "";
+
+  if (pathname === "/tags") {
+    return schema.parse(mockTags);
   }
 
-  return schema.parse(await response.json());
+  if (pathname === "/events") {
+    const params = new URLSearchParams(queryString);
+    const selectedTag = params.get("tag");
+    const events = selectedTag
+      ? mockEvents.filter((eventItem) => eventItem.tags.some((tagItem) => tagItem.slug === selectedTag))
+      : mockEvents;
+
+    return schema.parse(events);
+  }
+
+  if (pathname.startsWith("/events/")) {
+    const slug = decodeURIComponent(pathname.slice("/events/".length));
+    const event = mockEvents.find((eventItem) => eventItem.slug === slug);
+
+    return event ? schema.parse(event) : undefined;
+  }
+
+  return undefined;
 }
 
 export function listEvents(params?: URLSearchParams): Promise<Event[]> {
