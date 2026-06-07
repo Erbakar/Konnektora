@@ -6,7 +6,7 @@ export function AppLayout() {
     <div className="app-shell">
       <header className="topbar">
         <NavLink to="/" className="brand" aria-label="Konnektora ana sayfa">
-          Konnektora
+          <img alt="Konnektora" src="/brand/konnektora-logo.svg" />
         </NavLink>
         <nav className="nav">
           <NavLink to="/events">
@@ -29,4 +29,3 @@ export function AppLayout() {
     </div>
   );
 }
-
