@@ -11,10 +11,30 @@ export class EventsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async listPublicEvents(query: EventQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 24;
     const where: Prisma.EventWhereInput = {
       status: "published",
-      startsAt: { gte: new Date(Date.now() - 1000 * 60 * 60 * 24) }
+      startsAt: {
+        gte: query.dateFrom ? new Date(query.dateFrom) : new Date(Date.now() - 1000 * 60 * 60 * 24)
+      }
     };
+
+    if (query.dateTo) {
+      where.startsAt = {
+        ...(typeof where.startsAt === "object" ? where.startsAt : {}),
+        lte: new Date(query.dateTo)
+      };
+    }
+
+    if (query.q) {
+      where.OR = [
+        { title: { contains: query.q, mode: "insensitive" } },
+        { summary: { contains: query.q, mode: "insensitive" } },
+        { description: { contains: query.q, mode: "insensitive" } },
+        { organizerName: { contains: query.q, mode: "insensitive" } }
+      ];
+    }
 
     if (query.language) {
       where.language = query.language;
@@ -28,11 +48,32 @@ export class EventsService {
       where.tags = { some: { tag: { slug: query.tag, status: "active" } } };
     }
 
-    return this.prisma.event.findMany({
-      where,
-      orderBy: { startsAt: "asc" },
-      include: { tags: { include: { tag: true } } }
-    }).then((events) => events.map(this.mapEvent));
+    if (query.city) {
+      where.city = { equals: query.city, mode: "insensitive" };
+    }
+
+    if (query.country) {
+      where.country = { equals: query.country, mode: "insensitive" };
+    }
+
+    const [total, events] = await Promise.all([
+      this.prisma.event.count({ where }),
+      this.prisma.event.findMany({
+        where,
+        orderBy: { startsAt: "asc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { tags: { include: { tag: true } } }
+      })
+    ]);
+
+    return {
+      items: events.map(this.mapEvent),
+      total,
+      page,
+      pageSize,
+      hasNextPage: page * pageSize < total
+    };
   }
 
   async getPublicEvent(slug: string) {

@@ -11,10 +11,17 @@ import {
   IsUUID,
   MaxLength,
   Min,
+  Max,
   MinLength
 } from "class-validator";
+import { Type } from "class-transformer";
 
 export class EventQueryDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  q?: string;
+
   @IsOptional()
   @IsString()
   tag?: string;
@@ -26,6 +33,37 @@ export class EventQueryDto {
   @IsOptional()
   @IsEnum(EventFormat)
   format?: EventFormat;
+
+  @IsOptional()
+  @IsDateString()
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dateTo?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  country?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  pageSize?: number;
 }
 
 export class CreateEventDto {

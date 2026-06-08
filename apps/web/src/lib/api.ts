@@ -1,11 +1,13 @@
 import {
   adminDashboardSchema,
+  eventListSchema,
   eventSchema,
   eventParticipantSchema,
   loginResponseSchema,
   tagSchema,
   type AdminDashboard,
   type Event,
+  type EventList,
   type EventParticipant,
   type LoginResponse,
   type Tag
@@ -238,15 +240,38 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     const selectedTag = params.get("tag");
     const selectedFormat = params.get("format");
     const selectedLanguage = params.get("language");
+    const search = params.get("q")?.toLowerCase().trim();
+    const dateFrom = params.get("dateFrom");
+    const dateTo = params.get("dateTo");
+    const city = params.get("city")?.toLowerCase().trim();
+    const country = params.get("country")?.toLowerCase().trim();
+    const page = Math.max(Number(params.get("page") || "1"), 1);
+    const pageSize = Math.min(Math.max(Number(params.get("pageSize") || "24"), 1), 50);
     const events = getStoredEvents().filter(
       (eventItem) =>
         eventItem.status === "published" &&
         (!selectedTag || eventItem.tags.some((tagItem) => tagItem.slug === selectedTag)) &&
         (!selectedFormat || eventItem.format === selectedFormat) &&
-        (!selectedLanguage || eventItem.language === selectedLanguage)
+        (!selectedLanguage || eventItem.language === selectedLanguage) &&
+        (!search ||
+          [eventItem.title, eventItem.summary, eventItem.description, eventItem.organizerName ?? ""]
+            .join(" ")
+            .toLowerCase()
+            .includes(search)) &&
+        (!dateFrom || new Date(eventItem.startsAt) >= new Date(dateFrom)) &&
+        (!dateTo || new Date(eventItem.startsAt) <= new Date(dateTo)) &&
+        (!city || eventItem.city?.toLowerCase() === city) &&
+        (!country || eventItem.country?.toLowerCase() === country)
     );
+    const start = (page - 1) * pageSize;
 
-    return schema.parse(events);
+    return schema.parse({
+      items: events.slice(start, start + pageSize),
+      total: events.length,
+      page,
+      pageSize,
+      hasNextPage: start + pageSize < events.length
+    });
   }
 
   if (pathname.startsWith("/events/")) {
@@ -633,9 +658,9 @@ function parseParticipantStatus(value?: string): EventParticipant["status"] {
     : "requested";
 }
 
-export function listEvents(params?: URLSearchParams): Promise<Event[]> {
+export function listEvents(params?: URLSearchParams): Promise<EventList> {
   const query = params?.toString();
-  return requestJson(`/events${query ? `?${query}` : ""}`, z.array(eventSchema));
+  return requestJson(`/events${query ? `?${query}` : ""}`, eventListSchema);
 }
 
 export function getEvent(slug: string): Promise<Event> {

@@ -8,12 +8,19 @@ export function EventsPage() {
   const selectedTag = searchParams.get("tag");
   const selectedFormat = searchParams.get("format") ?? "";
   const selectedLanguage = searchParams.get("language") ?? "";
+  const selectedQuery = searchParams.get("q") ?? "";
+  const selectedDateFrom = searchParams.get("dateFrom") ?? "";
+  const selectedDateTo = searchParams.get("dateTo") ?? "";
+  const selectedCity = searchParams.get("city") ?? "";
+  const selectedCountry = searchParams.get("country") ?? "";
+  const selectedPage = Number(searchParams.get("page") ?? "1");
 
   const { data: tags = [] } = useQuery({ queryKey: ["tags"], queryFn: listTags });
-  const { data: events = [], isLoading } = useQuery({
-    queryKey: ["events", selectedTag],
+  const { data: eventList, isLoading } = useQuery({
+    queryKey: ["events", searchParams.toString()],
     queryFn: () => listEvents(searchParams)
   });
+  const events = eventList?.items ?? [];
 
   function updateFilter(key: string, value: string) {
     const nextParams = new URLSearchParams(searchParams);
@@ -22,6 +29,10 @@ export function EventsPage() {
       nextParams.set(key, value);
     } else {
       nextParams.delete(key);
+    }
+
+    if (key !== "page") {
+      nextParams.delete("page");
     }
 
     setSearchParams(nextParams);
@@ -44,6 +55,14 @@ export function EventsPage() {
           </button>
         ))}
         <label>
+          Arama
+          <input
+            placeholder="Founder, SaaS, investor..."
+            value={selectedQuery}
+            onChange={(event) => updateFilter("q", event.target.value)}
+          />
+        </label>
+        <label>
           Format
           <select value={selectedFormat} onChange={(event) => updateFilter("format", event.target.value)}>
             <option value="">Tümü</option>
@@ -60,17 +79,57 @@ export function EventsPage() {
             <option value="tr">Türkçe</option>
           </select>
         </label>
+        <label>
+          Başlangıç
+          <input type="date" value={selectedDateFrom} onChange={(event) => updateFilter("dateFrom", event.target.value)} />
+        </label>
+        <label>
+          Bitiş
+          <input type="date" value={selectedDateTo} onChange={(event) => updateFilter("dateTo", event.target.value)} />
+        </label>
+        <label>
+          Şehir
+          <input placeholder="Istanbul" value={selectedCity} onChange={(event) => updateFilter("city", event.target.value)} />
+        </label>
+        <label>
+          Ülke
+          <input placeholder="Turkey" value={selectedCountry} onChange={(event) => updateFilter("country", event.target.value)} />
+        </label>
       </aside>
       <div>
         <div className="section-header">
           <h1>Etkinlikler</h1>
-          <span>{isLoading ? "Yükleniyor" : `${events.length} sonuç`}</span>
+          <span>{isLoading ? "Yükleniyor" : `${eventList?.total ?? 0} sonuç`}</span>
         </div>
         <div className="event-grid">
           {events.map((event) => (
             <EventCard event={event} key={event.id} />
           ))}
         </div>
+        {!isLoading && events.length === 0 ? <p className="empty-state">Bu filtrelerle etkinlik bulunamadı.</p> : null}
+        {eventList ? (
+          <div className="pagination-row">
+            <button
+              className="secondary-action"
+              disabled={selectedPage <= 1}
+              onClick={() => updateFilter("page", String(Math.max(selectedPage - 1, 1)))}
+              type="button"
+            >
+              Önceki
+            </button>
+            <span>
+              Sayfa {eventList.page} · {eventList.pageSize} kayıt/sayfa
+            </span>
+            <button
+              className="secondary-action"
+              disabled={!eventList.hasNextPage}
+              onClick={() => updateFilter("page", String(selectedPage + 1))}
+              type="button"
+            >
+              Sonraki
+            </button>
+          </div>
+        ) : null}
       </div>
     </section>
   );

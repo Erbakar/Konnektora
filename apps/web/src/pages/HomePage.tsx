@@ -45,7 +45,7 @@ const popularCities = [
 ];
 
 export function HomePage() {
-  const { data: events = [], isLoading: eventsLoading } = useQuery({
+  const { data: eventList, isLoading: eventsLoading } = useQuery({
     queryKey: ["events", "home"],
     queryFn: () => listEvents()
   });
@@ -53,6 +53,7 @@ export function HomePage() {
     queryKey: ["tags", "home"],
     queryFn: listTags
   });
+  const events = eventList?.items ?? [];
 
   const localEvents = events.filter((event) => event.city).slice(0, 8);
   const onlineEvents = events.filter((event) => event.format === "online").slice(0, 8);

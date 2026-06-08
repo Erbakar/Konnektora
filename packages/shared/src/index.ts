@@ -54,6 +54,14 @@ export const eventSchema = z.object({
   tags: z.array(tagSchema)
 });
 
+export const eventListSchema = z.object({
+  items: z.array(eventSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+  hasNextPage: z.boolean()
+});
+
 export const adminDashboardSchema = z.object({
   publishedEvents: z.number().int().nonnegative(),
   draftEvents: z.number().int().nonnegative(),
@@ -95,6 +103,7 @@ export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;
 export type Tag = z.infer<typeof tagSchema>;
 export type Event = z.infer<typeof eventSchema>;
+export type EventList = z.infer<typeof eventListSchema>;
 export type AdminDashboard = z.infer<typeof adminDashboardSchema>;
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
 export type EventParticipant = z.infer<typeof eventParticipantSchema>;

@@ -127,6 +127,7 @@ WEB_ORIGIN=https://konnektora.netlify.app
 - Admin/organizer guest list görüntüleme, kabul/ret, ban ve check-in UI
 - Organizer email ile kullanıcı davet etme ve invited kullanıcı oluşturma akışı
 - Event listelemede tag, format ve dil filtreleri
+- Event discovery API'de arama, tarih, şehir/ülke ve sayfalama
 - Event-tag değişikliklerinde tag kullanım sayısı güncelleme
 - Seed içinde her ana tag için 4 mock event ve detay sayfası datası
 - Prisma veri modeli ve seed data
@@ -134,7 +135,7 @@ WEB_ORIGIN=https://konnektora.netlify.app
 ## Sonraki Teknik Adımlar
 
 1. Event owner/organizer permission kontrollerini daha ayrıntılı test et.
-2. Arama, tarih ve lokasyon filtrelerini genişlet.
-3. Profil ve event akışları için API testlerini genişlet.
-4. Frontend smoke testlerini ekle.
-5. Production email gönderimi ve davet kabul ekranını ekle.
+2. Profil ve event akışları için API testlerini genişlet.
+3. Frontend smoke testlerini ekle.
+4. Production email gönderimi ve davet kabul ekranını ekle.
+5. Harita/distance filtrelerini veri modelindeki koordinatlarla bağla.

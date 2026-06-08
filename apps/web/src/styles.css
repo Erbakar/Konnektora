@@ -566,13 +566,36 @@ select {
   margin-top: 10px;
 }
 
-.filters select {
+.filters select,
+.filters input {
   background: #fbfcfa;
   border: 1px solid #ccd6ca;
   border-radius: 6px;
   color: #19201d;
   min-height: 40px;
   padding: 8px 10px;
+}
+
+.empty-state {
+  background: #ffffff;
+  border: 1px solid #dfe5dc;
+  border-radius: 8px;
+  color: #4a554f;
+  margin: 0;
+  padding: 18px;
+}
+
+.pagination-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.pagination-row span {
+  color: #68746d;
+  font-size: 14px;
 }
 
 .filters button:hover,
