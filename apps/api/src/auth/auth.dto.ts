@@ -9,3 +9,8 @@ export class LoginDto {
   password!: string;
 }
 
+export class RegisterDto extends LoginDto {
+  @IsString()
+  @MinLength(2)
+  name!: string;
+}

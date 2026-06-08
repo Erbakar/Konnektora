@@ -17,14 +17,19 @@ const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 const USE_MOCK_FALLBACK =
   import.meta.env.PROD && (API_URL.includes("localhost") || API_URL.includes("127.0.0.1"));
 const TOKEN_KEY = "konnektora_admin_token";
+const USER_TOKEN_KEY = "konnektora_user_token";
+const USER_KEY = "konnektora_user";
 const MOCK_EVENTS_KEY = "konnektora_mock_events";
 const MOCK_TAGS_KEY = "konnektora_mock_tags";
+const MOCK_USERS_KEY = "konnektora_mock_users";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
 
+type AuthMode = boolean | "admin" | "user";
+
 type RequestOptions = RequestInit & {
-  auth?: boolean;
+  auth?: AuthMode;
 };
 
 export function getAdminToken() {
@@ -39,6 +44,24 @@ export function clearAdminToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+export function getUserToken() {
+  return localStorage.getItem(USER_TOKEN_KEY);
+}
+
+export function setUserSession(response: LoginResponse) {
+  localStorage.setItem(USER_TOKEN_KEY, response.accessToken);
+  localStorage.setItem(USER_KEY, JSON.stringify(response.user));
+}
+
+export function getUserSession() {
+  return readStorage<LoginResponse["user"] | null>(USER_KEY, null);
+}
+
+export function clearUserSession() {
+  localStorage.removeItem(USER_TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+}
+
 async function requestJson<T>(path: string, schema: z.ZodType<T>, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
 
@@ -47,7 +70,7 @@ async function requestJson<T>(path: string, schema: z.ZodType<T>, options: Reque
   }
 
   if (options.auth) {
-    const token = getAdminToken();
+    const token = options.auth === "user" ? getUserToken() : getAdminToken();
 
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
@@ -99,6 +122,14 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     });
   }
 
+  if (pathname === "/auth/register" && method === "POST") {
+    return schema.parse(registerMockUser(parseBody<{ name: string; email: string; password: string }>(options)));
+  }
+
+  if (pathname === "/auth/login" && method === "POST") {
+    return schema.parse(loginMockUser(parseBody<{ email: string; password: string }>(options)));
+  }
+
   if (pathname === "/admin/dashboard" && method === "GET") {
     return schema.parse(getMockDashboard());
   }
@@ -125,6 +156,10 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname === "/admin/events" && method === "POST") {
     return schema.parse(createMockEvent(parseBody<AdminEventInput>(options)));
+  }
+
+  if (pathname === "/events" && method === "POST" && options.auth === "user") {
+    return schema.parse(createMockEvent(parseBody<AdminEventInput>(options), getUserSession()?.name ?? "Konnektora User"));
   }
 
   if (pathname.startsWith("/admin/events/") && method === "PATCH") {
@@ -201,6 +236,52 @@ function writeStorage<T>(key: string, value: T) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function registerMockUser(input: { name: string; email: string; password: string }): LoginResponse {
+  const users = readStorage<Array<{ id: string; name: string; email: string; password: string }>>(MOCK_USERS_KEY, []);
+  const email = input.email.toLowerCase().trim();
+  const existing = users.find((user) => user.email === email);
+
+  if (existing) {
+    return createMockLoginResponse(existing);
+  }
+
+  const user = {
+    id: createId(),
+    name: input.name.trim(),
+    email,
+    password: input.password
+  };
+
+  writeStorage(MOCK_USERS_KEY, [user, ...users]);
+  return createMockLoginResponse(user);
+}
+
+function loginMockUser(input: { email: string; password: string }): LoginResponse {
+  const email = input.email.toLowerCase().trim();
+  const users = readStorage<Array<{ id: string; name: string; email: string; password: string }>>(MOCK_USERS_KEY, []);
+  const user = users.find((item) => item.email === email && item.password === input.password) ?? {
+    id: "88888888-8888-4888-8888-888888888888",
+    name: "Konnektora User",
+    email,
+    password: input.password
+  };
+
+  return createMockLoginResponse(user);
+}
+
+function createMockLoginResponse(user: { id: string; name: string; email: string }): LoginResponse {
+  return {
+    accessToken: `mock-user-token-${user.id}`,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: "user",
+      status: "active"
+    }
+  };
+}
+
 function getMockDashboard(): AdminDashboard {
   const now = Date.now();
   const events = getStoredEvents();
@@ -243,7 +324,7 @@ function updateMockTag(id: string, input: Partial<Tag>): Tag {
   return updatedTag;
 }
 
-function createMockEvent(input: AdminEventInput): Event {
+function createMockEvent(input: AdminEventInput, fallbackOrganizerName = "Konnektora Admin"): Event {
   const events = getStoredEvents();
   const event: Event = {
     id: createId(),
@@ -260,7 +341,7 @@ function createMockEvent(input: AdminEventInput): Event {
     city: input.city || null,
     country: input.country || null,
     language: input.language,
-    organizerName: input.organizerName || "Konnektora Admin",
+    organizerName: input.organizerName || fallbackOrganizerName,
     externalRegistrationUrl: input.externalRegistrationUrl || null,
     coverImageUrl: input.coverImageUrl || null,
     capacity: input.capacity ?? null,
@@ -380,6 +461,20 @@ export function adminLogin(email: string, password: string): Promise<LoginRespon
   });
 }
 
+export function userLogin(email: string, password: string): Promise<LoginResponse> {
+  return requestJson("/auth/login", loginResponseSchema, {
+    method: "POST",
+    body: JSON.stringify({ email, password })
+  });
+}
+
+export function registerUser(input: { name: string; email: string; password: string }): Promise<LoginResponse> {
+  return requestJson("/auth/register", loginResponseSchema, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
 export function getAdminDashboard(): Promise<AdminDashboard> {
   return requestJson("/admin/dashboard", adminDashboardSchema, { auth: true });
 }
@@ -460,7 +555,7 @@ export function createAdminEvent(input: AdminEventInput): Promise<Event> {
 
 export function createUserEvent(input: AdminEventInput): Promise<Event> {
   return requestJson("/events", eventSchema, {
-    auth: true,
+    auth: "user",
     method: "POST",
     body: JSON.stringify(input)
   });

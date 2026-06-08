@@ -620,6 +620,58 @@ select {
   grid-template-columns: minmax(0, 1fr) 380px;
 }
 
+.account-grid {
+  align-items: start;
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(260px, 0.7fr) minmax(420px, 1.3fr);
+}
+
+.account-summary {
+  background: #ffffff;
+  border: 1px solid #dfe5dc;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 20px;
+}
+
+.account-summary svg {
+  color: #1f5f46;
+}
+
+.account-summary strong {
+  font-size: 22px;
+}
+
+.account-summary span {
+  color: #68746d;
+}
+
+.segmented-control {
+  background: #eef4ec;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 4px;
+}
+
+.segmented-control button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #4a554f;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 10px 12px;
+}
+
+.segmented-control button.active {
+  background: #ffffff;
+  color: #10231f;
+}
+
 .admin-grid {
   align-items: start;
   display: grid;
@@ -1488,6 +1540,7 @@ select {
   .hero,
   .two-column,
   .admin-login-page,
+  .account-grid,
   .admin-grid,
   .form-grid {
     grid-template-columns: 1fr;
