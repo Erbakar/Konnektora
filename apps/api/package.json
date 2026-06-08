@@ -12,6 +12,7 @@
     "test": "jest --passWithNoTests",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
@@ -47,4 +48,3 @@
     "seed": "tsx prisma/seed.ts"
   }
 }
-

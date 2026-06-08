@@ -21,6 +21,8 @@ const MOCK_EVENTS_KEY = "konnektora_mock_events";
 const MOCK_TAGS_KEY = "konnektora_mock_tags";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
+export const isMockApiMode = USE_MOCK_FALLBACK;
+
 type RequestOptions = RequestInit & {
   auth?: boolean;
 };
@@ -168,7 +170,8 @@ function parseBody<T>(options: RequestOptions): T {
 
 function getStoredEvents(): Event[] {
   const storedEvents = readStorage<Event[]>(MOCK_EVENTS_KEY, []);
-  return [...storedEvents, ...mockEvents];
+  const storedIds = new Set(storedEvents.map((event) => event.id));
+  return [...storedEvents, ...mockEvents.filter((event) => !storedIds.has(event.id))];
 }
 
 function getStoredTags(): Tag[] {
@@ -178,19 +181,11 @@ function getStoredTags(): Tag[] {
 }
 
 function setStoredEvents(events: Event[]) {
-  const mockEventIds = new Set(mockEvents.map((event) => event.id));
-  writeStorage(
-    MOCK_EVENTS_KEY,
-    events.filter((event) => !mockEventIds.has(event.id))
-  );
+  writeStorage(MOCK_EVENTS_KEY, events);
 }
 
 function setStoredTags(tags: Tag[]) {
-  const mockTagIds = new Set(mockTags.map((tag) => tag.id));
-  writeStorage(
-    MOCK_TAGS_KEY,
-    tags.filter((tag) => !mockTagIds.has(tag.id))
-  );
+  writeStorage(MOCK_TAGS_KEY, tags);
 }
 
 function readStorage<T>(key: string, fallback: T): T {
@@ -258,17 +253,17 @@ function createMockEvent(input: AdminEventInput): Event {
     description: input.description,
     status: parseEventStatus(input.status),
     startsAt: input.startsAt,
-    endsAt: new Date(new Date(input.startsAt).getTime() + 1000 * 60 * 60 * 2).toISOString(),
+    endsAt: input.endsAt ?? new Date(new Date(input.startsAt).getTime() + 1000 * 60 * 60 * 2).toISOString(),
     timezone: input.timezone,
     format: parseEventFormat(input.format),
     visibility: parseEventVisibility(input.visibility),
     city: input.city || null,
     country: input.country || null,
     language: input.language,
-    organizerName: "Konnektora Admin",
+    organizerName: input.organizerName || "Konnektora Admin",
     externalRegistrationUrl: input.externalRegistrationUrl || null,
-    coverImageUrl: null,
-    capacity: null,
+    coverImageUrl: input.coverImageUrl || null,
+    capacity: input.capacity ?? null,
     tags: getTagsByIds(input.tagIds ?? [])
   };
 
@@ -290,17 +285,20 @@ function updateMockEvent(id: string, input: Partial<AdminEventInput>): Event {
       description: input.description ?? event.description,
       status: input.status ? parseEventStatus(input.status) : event.status,
       startsAt: input.startsAt ?? event.startsAt,
-      endsAt: input.startsAt
-        ? new Date(new Date(input.startsAt).getTime() + 1000 * 60 * 60 * 2).toISOString()
-        : event.endsAt,
+      endsAt:
+        input.endsAt ??
+        (input.startsAt ? new Date(new Date(input.startsAt).getTime() + 1000 * 60 * 60 * 2).toISOString() : event.endsAt),
       timezone: input.timezone ?? event.timezone,
       format: input.format ? parseEventFormat(input.format) : event.format,
       visibility: input.visibility ? parseEventVisibility(input.visibility) : event.visibility,
       city: input.city === undefined ? event.city : input.city || null,
       country: input.country === undefined ? event.country : input.country || null,
       language: input.language ?? event.language,
+      organizerName: input.organizerName === undefined ? event.organizerName : input.organizerName || "Konnektora Admin",
       externalRegistrationUrl:
         input.externalRegistrationUrl === undefined ? event.externalRegistrationUrl : input.externalRegistrationUrl || null,
+      coverImageUrl: input.coverImageUrl === undefined ? event.coverImageUrl : input.coverImageUrl || null,
+      capacity: input.capacity === undefined ? event.capacity : input.capacity ?? null,
       tags: input.tagIds ? getTagsByIds(input.tagIds) : event.tags
     };
   });
@@ -429,13 +427,17 @@ export type AdminEventInput = {
   summary: string;
   description: string;
   startsAt: string;
+  endsAt?: string;
   timezone: string;
   format: string;
   visibility?: string;
   city?: string;
   country?: string;
   language: string;
+  organizerName?: string;
   externalRegistrationUrl?: string;
+  coverImageUrl?: string;
+  capacity?: number;
   status?: string;
   tagIds?: string[];
 };

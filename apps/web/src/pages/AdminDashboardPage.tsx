@@ -11,6 +11,7 @@ import {
   createAdminTag,
   getAdminDashboard,
   getAdminToken,
+  isMockApiMode,
   listAdminEvents,
   listAdminTags,
   setAdminToken,
@@ -23,6 +24,7 @@ export function AdminDashboardPage() {
   const queryClient = useQueryClient();
   const [token, setToken] = useState(() => getAdminToken());
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [eventNotice, setEventNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
 
   const dashboardQuery = useQuery({
     queryKey: ["admin-dashboard"],
@@ -84,29 +86,38 @@ export function AdminDashboardPage() {
   const archiveEventMutation = useMutation({
     mutationFn: archiveAdminEvent,
     onSuccess: () => {
+      setEventNotice({ tone: "success", message: "Etkinlik arşivlendi." });
       void queryClient.invalidateQueries({ queryKey: ["admin-events"] });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
-    }
+    },
+    onError: () => setEventNotice({ tone: "error", message: "Etkinlik arşivlenemedi. Lütfen tekrar dene." })
   });
 
   const updateEventMutation = useMutation({
     mutationFn: (input: { id: string; status: string }) => updateAdminEvent(input.id, { status: input.status }),
     onSuccess: () => {
+      setEventNotice({ tone: "success", message: "Etkinlik durumu güncellendi." });
       void queryClient.invalidateQueries({ queryKey: ["admin-events"] });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
-    }
+    },
+    onError: () => setEventNotice({ tone: "error", message: "Etkinlik durumu güncellenemedi. Lütfen tekrar dene." })
   });
 
   const saveEventMutation = useMutation({
     mutationFn: (input: { id?: string; data: AdminEventInput }) =>
       input.id ? updateAdminEvent(input.id, input.data) : createAdminEvent(input.data),
     onSuccess: () => {
+      setEventNotice({
+        tone: "success",
+        message: "Etkinlik kaydedildi. Durumu Published ise public etkinlik listesinde görünür."
+      });
       void queryClient.invalidateQueries({ queryKey: ["admin-events"] });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
-    }
+    },
+    onError: () => setEventNotice({ tone: "error", message: "Etkinlik kaydedilemedi. Zorunlu alanları kontrol edip tekrar dene." })
   });
 
   function handleLogout() {
@@ -185,7 +196,9 @@ export function AdminDashboardPage() {
         />
         <EventAdminPanel
           events={events}
+          isDemoMode={isMockApiMode}
           isPending={saveEventMutation.isPending}
+          notice={eventNotice}
           onArchive={(id) => archiveEventMutation.mutate(id)}
           onSave={(id, data) => saveEventMutation.mutate({ id, data })}
           onStatusChange={(id, status) => updateEventMutation.mutate({ id, status })}
@@ -290,14 +303,18 @@ function TagAdminPanel({
 
 function EventAdminPanel({
   events,
+  isDemoMode,
   isPending,
+  notice,
   onArchive,
   onSave,
   onStatusChange,
   tags
 }: {
   events: Event[];
+  isDemoMode: boolean;
   isPending: boolean;
+  notice: { tone: "success" | "error"; message: string } | null;
   onArchive: (id: string) => void;
   onSave: (id: string | undefined, input: AdminEventInput) => void;
   onStatusChange: (id: string, status: string) => void;
@@ -311,7 +328,10 @@ function EventAdminPanel({
     const form = new FormData(event.currentTarget);
     const tagIds = form.getAll("tagIds").map(String);
     const startsAt = String(form.get("startsAt"));
+    const endsAt = String(form.get("endsAt") || "");
     const registrationUrl = String(form.get("externalRegistrationUrl") || "");
+    const coverImageUrl = String(form.get("coverImageUrl") || "");
+    const capacity = Number(form.get("capacity") || 0);
 
     const input: AdminEventInput = {
       title: String(form.get("title")),
@@ -321,15 +341,28 @@ function EventAdminPanel({
       timezone: String(form.get("timezone") || "Europe/Istanbul"),
       format: String(form.get("format") || "online"),
       visibility: String(form.get("visibility") || "open"),
-      status: String(form.get("status") || "draft"),
+      status: String(form.get("status") || "published"),
       city: String(form.get("city") || ""),
       country: String(form.get("country") || ""),
-      language: String(form.get("language") || "tr"),
+      language: String(form.get("language") || "en"),
+      organizerName: String(form.get("organizerName") || "Konnektora Admin"),
       tagIds
     };
 
+    if (endsAt) {
+      input.endsAt = new Date(endsAt).toISOString();
+    }
+
     if (registrationUrl) {
       input.externalRegistrationUrl = registrationUrl;
+    }
+
+    if (coverImageUrl) {
+      input.coverImageUrl = coverImageUrl;
+    }
+
+    if (capacity > 0) {
+      input.capacity = capacity;
     }
 
     onSave(editingEvent?.id, input);
@@ -342,6 +375,13 @@ function EventAdminPanel({
       <div className="section-header compact">
         <h2>Etkinlik yönetimi</h2>
       </div>
+      {isDemoMode ? (
+        <p className="form-help">
+          Demo modunda kayıtlar bu tarayıcıya kaydedilir. Canlı database için backend deploy edip Netlify'da
+          VITE_API_URL tanımlanmalı.
+        </p>
+      ) : null}
+      {notice ? <p className={notice.tone === "success" ? "form-success" : "form-error"}>{notice.message}</p> : null}
       <form className="admin-form" onSubmit={handleSubmit}>
         <label>
           Başlık
@@ -361,6 +401,10 @@ function EventAdminPanel({
             <input key={`${editingEvent?.id ?? "new"}-starts-at`} name="startsAt" required type="datetime-local" defaultValue={editingEvent ? toDateTimeLocalValue(editingEvent.startsAt) : ""} />
           </label>
           <label>
+            Bitiş
+            <input key={`${editingEvent?.id ?? "new"}-ends-at`} name="endsAt" type="datetime-local" defaultValue={editingEvent?.endsAt ? toDateTimeLocalValue(editingEvent.endsAt) : ""} />
+          </label>
+          <label>
             Zaman dilimi
             <input key={`${editingEvent?.id ?? "new"}-timezone`} name="timezone" defaultValue={editingEvent?.timezone ?? "Europe/Istanbul"} />
           </label>
@@ -374,7 +418,7 @@ function EventAdminPanel({
           </label>
           <label>
             Durum
-            <select key={`${editingEvent?.id ?? "new"}-status`} name="status" defaultValue={editingEvent?.status ?? "draft"}>
+            <select key={`${editingEvent?.id ?? "new"}-status`} name="status" defaultValue={editingEvent?.status ?? "published"}>
               <option value="draft">Draft</option>
               <option value="published">Published</option>
               <option value="cancelled">Cancelled</option>
@@ -390,7 +434,15 @@ function EventAdminPanel({
           </label>
           <label>
             Dil
-            <input key={`${editingEvent?.id ?? "new"}-language`} name="language" defaultValue={editingEvent?.language ?? "tr"} />
+            <input key={`${editingEvent?.id ?? "new"}-language`} name="language" defaultValue={editingEvent?.language ?? "en"} />
+          </label>
+          <label>
+            Organizatör
+            <input key={`${editingEvent?.id ?? "new"}-organizer`} name="organizerName" defaultValue={editingEvent?.organizerName ?? "Konnektora Admin"} />
+          </label>
+          <label>
+            Kapasite
+            <input key={`${editingEvent?.id ?? "new"}-capacity`} min={1} name="capacity" type="number" defaultValue={editingEvent?.capacity ?? ""} />
           </label>
           <label>
             Şehir
@@ -405,6 +457,11 @@ function EventAdminPanel({
           Kayıt URL'si
           <input key={`${editingEvent?.id ?? "new"}-url`} name="externalRegistrationUrl" placeholder="https://..." type="url" defaultValue={editingEvent?.externalRegistrationUrl ?? ""} />
         </label>
+        <label>
+          Kapak görseli URL'si
+          <input key={`${editingEvent?.id ?? "new"}-cover`} name="coverImageUrl" placeholder="https://images.unsplash.com/..." type="url" defaultValue={editingEvent?.coverImageUrl ?? ""} />
+        </label>
+        <p className="form-help">Public listede görünmesi için etkinlik durumu Published olmalı.</p>
         <fieldset className="tag-fieldset">
           <legend>Tag'ler</legend>
           {tags.map((tag) => (

@@ -683,6 +683,22 @@ select {
   margin: 0;
 }
 
+.form-success {
+  color: #1f5f46;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.form-help {
+  background: #f4f8f3;
+  border: 1px solid #dfe9dc;
+  border-radius: 6px;
+  color: #4a554f;
+  font-size: 14px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+}
+
 .tag-fieldset {
   border: 1px solid #dfe5dc;
   border-radius: 8px;
