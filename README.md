@@ -101,6 +101,7 @@ WEB_ORIGIN=https://konnektora.netlify.app
 - Public event listeleme: `GET /events`
 - Public event detay: `GET /events/:slug`
 - Aktif kullanıcı login: `POST /auth/login`
+- Aktif kullanıcı kayıt: `POST /auth/register`
 - Aktif kullanıcı event oluşturma: `POST /events`
 - Event katılımcı listesi: `GET /events/:id/participants`
 - Event attendance request: `POST /events/:id/attend`
@@ -119,14 +120,17 @@ WEB_ORIGIN=https://konnektora.netlify.app
 - Event status hızlı güncelleme: draft, published, cancelled, archived
 - Event katılım tipi: open, approval required, invite only
 - Event participant ve media veri modeli başlangıcı
+- Kullanıcı üyelik/giriş ve event oluşturma UI
+- Event detayında kullanıcı Attend akışı
+- Event listelemede tag, format ve dil filtreleri
 - Event-tag değişikliklerinde tag kullanım sayısı güncelleme
 - Seed içinde her ana tag için 4 mock event ve detay sayfası datası
 - Prisma veri modeli ve seed data
 
 ## Sonraki Teknik Adımlar
 
-1. Kapalı community invite/approval modelini kesinleştir.
-2. Guest list UI ekranını bağla.
+1. Guest list organizer yönetim ekranını genişlet.
+2. User profile içinde ilgi alanı/tag seçimini bağla.
 3. Event owner/organizer permission kontrollerini daha ayrıntılı test et.
-4. Admin formlarına daha ayrıntılı hata mesajları ve loading state'leri ekle.
+4. Arama, tarih ve lokasyon filtrelerini genişlet.
 5. API testlerini ve frontend smoke testlerini genişlet.

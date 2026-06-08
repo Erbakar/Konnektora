@@ -557,6 +557,24 @@ select {
   text-align: left;
 }
 
+.filters label {
+  color: #4a554f;
+  display: grid;
+  font-size: 14px;
+  font-weight: 800;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.filters select {
+  background: #fbfcfa;
+  border: 1px solid #ccd6ca;
+  border-radius: 6px;
+  color: #19201d;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
 .filters button:hover,
 .filters .active-filter {
   background: #e7eee5;

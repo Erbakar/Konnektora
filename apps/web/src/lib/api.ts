@@ -22,6 +22,7 @@ const USER_KEY = "konnektora_user";
 const MOCK_EVENTS_KEY = "konnektora_mock_events";
 const MOCK_TAGS_KEY = "konnektora_mock_tags";
 const MOCK_USERS_KEY = "konnektora_mock_users";
+const MOCK_PARTICIPANTS_KEY = "konnektora_mock_participants";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -162,6 +163,10 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(createMockEvent(parseBody<AdminEventInput>(options), getUserSession()?.name ?? "Konnektora User"));
   }
 
+  if (pathname.startsWith("/events/") && pathname.endsWith("/attend") && method === "POST") {
+    return schema.parse(requestMockAttendance(pathname.slice("/events/".length, -"/attend".length)));
+  }
+
   if (pathname.startsWith("/admin/events/") && method === "PATCH") {
     return schema.parse(updateMockEvent(pathname.slice("/admin/events/".length), parseBody(options)));
   }
@@ -181,10 +186,15 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   if (pathname === "/events") {
     const params = new URLSearchParams(queryString);
     const selectedTag = params.get("tag");
-    const publicEvents = getStoredEvents().filter((eventItem) => eventItem.status === "published");
-    const events = selectedTag
-      ? publicEvents.filter((eventItem) => eventItem.tags.some((tagItem) => tagItem.slug === selectedTag))
-      : publicEvents;
+    const selectedFormat = params.get("format");
+    const selectedLanguage = params.get("language");
+    const events = getStoredEvents().filter(
+      (eventItem) =>
+        eventItem.status === "published" &&
+        (!selectedTag || eventItem.tags.some((tagItem) => tagItem.slug === selectedTag)) &&
+        (!selectedFormat || eventItem.format === selectedFormat) &&
+        (!selectedLanguage || eventItem.language === selectedLanguage)
+    );
 
     return schema.parse(events);
   }
@@ -234,6 +244,40 @@ function readStorage<T>(key: string, fallback: T): T {
 
 function writeStorage<T>(key: string, value: T) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function requestMockAttendance(eventId: string): EventParticipant {
+  const user = getUserSession();
+
+  if (!user) {
+    throw new Error("Mock user session not found");
+  }
+
+  const event = getStoredEvents().find((item) => item.id === eventId);
+
+  if (!event) {
+    throw new Error("Mock event not found");
+  }
+
+  const participants = readStorage<EventParticipant[]>(MOCK_PARTICIPANTS_KEY, []);
+  const status = event.visibility === "open" ? "accepted" : "requested";
+  const existing = participants.find((participant) => participant.eventId === eventId && participant.userId === user.id);
+  const participant: EventParticipant = {
+    id: existing?.id ?? createId(),
+    eventId,
+    userId: user.id,
+    status,
+    role: "attendee",
+    checkedInAt: null,
+    user
+  };
+
+  writeStorage(MOCK_PARTICIPANTS_KEY, [
+    participant,
+    ...participants.filter((item) => !(item.eventId === eventId && item.userId === user.id))
+  ]);
+
+  return participant;
 }
 
 function registerMockUser(input: { name: string; email: string; password: string }): LoginResponse {
@@ -567,7 +611,7 @@ export function listEventParticipants(eventId: string): Promise<EventParticipant
 
 export function requestEventAttendance(eventId: string): Promise<EventParticipant> {
   return requestJson(`/events/${eventId}/attend`, eventParticipantSchema, {
-    auth: true,
+    auth: "user",
     method: "POST"
   });
 }

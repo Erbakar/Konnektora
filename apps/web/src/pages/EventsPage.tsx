@@ -6,12 +6,26 @@ import { listEvents, listTags } from "../lib/api";
 export function EventsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedTag = searchParams.get("tag");
+  const selectedFormat = searchParams.get("format") ?? "";
+  const selectedLanguage = searchParams.get("language") ?? "";
 
   const { data: tags = [] } = useQuery({ queryKey: ["tags"], queryFn: listTags });
   const { data: events = [], isLoading } = useQuery({
     queryKey: ["events", selectedTag],
     queryFn: () => listEvents(searchParams)
   });
+
+  function updateFilter(key: string, value: string) {
+    const nextParams = new URLSearchParams(searchParams);
+
+    if (value) {
+      nextParams.set(key, value);
+    } else {
+      nextParams.delete(key);
+    }
+
+    setSearchParams(nextParams);
+  }
 
   return (
     <section className="page two-column">
@@ -29,6 +43,23 @@ export function EventsPage() {
             {tag.name}
           </button>
         ))}
+        <label>
+          Format
+          <select value={selectedFormat} onChange={(event) => updateFilter("format", event.target.value)}>
+            <option value="">Tümü</option>
+            <option value="online">Online</option>
+            <option value="offline">Offline</option>
+            <option value="hybrid">Hybrid</option>
+          </select>
+        </label>
+        <label>
+          Dil
+          <select value={selectedLanguage} onChange={(event) => updateFilter("language", event.target.value)}>
+            <option value="">Tümü</option>
+            <option value="en">English</option>
+            <option value="tr">Türkçe</option>
+          </select>
+        </label>
       </aside>
       <div>
         <div className="section-header">
@@ -44,4 +75,3 @@ export function EventsPage() {
     </section>
   );
 }
-

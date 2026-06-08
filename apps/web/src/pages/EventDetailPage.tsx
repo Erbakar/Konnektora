@@ -1,14 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { CalendarDays, ExternalLink, MapPin, ShieldCheck, UserPlus, Users } from "lucide-react";
-import { useParams } from "react-router-dom";
-import { getEvent } from "../lib/api";
+import { Link, useParams } from "react-router-dom";
+import { getEvent, getUserSession, requestEventAttendance } from "../lib/api";
 
 export function EventDetailPage() {
   const { slug = "" } = useParams();
+  const user = getUserSession();
   const { data: event, isLoading } = useQuery({
     queryKey: ["event", slug],
     queryFn: () => getEvent(slug),
     enabled: Boolean(slug)
+  });
+  const attendMutation = useMutation({
+    mutationFn: requestEventAttendance
   });
 
   if (isLoading) {
@@ -52,15 +56,40 @@ export function EventDetailPage() {
         ))}
       </div>
       <div className="detail-actions">
-        <button className="primary-action" type="button">
-          <Users size={18} />
-          Attend
-        </button>
-        <button className="secondary-action" type="button">
+        {user ? (
+          <button
+            className="primary-action"
+            disabled={attendMutation.isPending}
+            onClick={() => attendMutation.mutate(event.id)}
+            type="button"
+          >
+            <Users size={18} />
+            {attendMutation.isPending ? "Sending" : "Attend"}
+          </button>
+        ) : (
+          <Link className="primary-action" to="/account">
+            <Users size={18} />
+            Log in to attend
+          </Link>
+        )}
+        <a
+          className="secondary-action"
+          href={`mailto:?subject=${encodeURIComponent(event.title)}&body=${encodeURIComponent(
+            `${event.title}\n\n${event.summary}\n\n${window.location.href}`
+          )}`}
+        >
           <UserPlus size={18} />
           Invite
-        </button>
+        </a>
       </div>
+      {attendMutation.data ? (
+        <p className="form-success">
+          {attendMutation.data.status === "accepted"
+            ? "Katılımın onaylandı."
+            : "Katılım talebin organizatöre gönderildi."}
+        </p>
+      ) : null}
+      {attendMutation.isError ? <p className="form-error">Katılım talebi gönderilemedi. Lütfen tekrar dene.</p> : null}
       <p className="detail-copy">{event.description}</p>
       {event.externalRegistrationUrl ? (
         <a className="primary-action" href={event.externalRegistrationUrl} rel="noreferrer" target="_blank">
