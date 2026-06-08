@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarCheck, LogOut, Plus, Tags } from "lucide-react";
+import { CalendarCheck, Check, ClipboardCheck, LogOut, Plus, Tags, Users, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import {
   type AdminEventInput,
@@ -12,13 +12,16 @@ import {
   getAdminDashboard,
   getAdminToken,
   isMockApiMode,
+  checkInEventParticipant,
   listAdminEvents,
   listAdminTags,
+  listEventParticipants,
   setAdminToken,
   updateAdminEvent,
+  updateEventParticipantStatus,
   updateAdminTag
 } from "../lib/api";
-import type { Event, Tag } from "@konnektora/shared";
+import type { Event, EventParticipant, Tag } from "@konnektora/shared";
 
 export function AdminDashboardPage() {
   const queryClient = useQueryClient();
@@ -321,6 +324,7 @@ function EventAdminPanel({
   tags: Tag[];
 }) {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [guestListEventId, setGuestListEventId] = useState<string | null>(null);
   const editingEvent = events.find((event) => event.id === editingEventId);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -489,43 +493,147 @@ function EventAdminPanel({
       </form>
       <div className="admin-list">
         {events.map((event) => (
-          <div className="admin-list-row" key={event.id}>
-            <div>
-              <strong>{event.title}</strong>
-              <span>
-                {event.status} · {new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date(event.startsAt))}
-              </span>
+          <div className="admin-list-item" key={event.id}>
+            <div className="admin-list-row">
+              <div>
+                <strong>{event.title}</strong>
+                <span>
+                  {event.status} · {new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date(event.startsAt))}
+                </span>
+              </div>
+              <span className="muted">{event.tags.map((tag) => tag.name).join(", ")}</span>
+              <div className="row-actions">
+                <button className="secondary-action" onClick={() => setEditingEventId(event.id)} type="button">
+                  Düzenle
+                </button>
+                <button
+                  className="secondary-action"
+                  onClick={() => setGuestListEventId((currentId) => (currentId === event.id ? null : event.id))}
+                  type="button"
+                >
+                  <Users size={16} />
+                  Guest list
+                </button>
+                {event.status !== "published" && event.status !== "archived" ? (
+                  <button className="secondary-action" onClick={() => onStatusChange(event.id, "published")} type="button">
+                    Yayınla
+                  </button>
+                ) : null}
+                {event.status !== "draft" && event.status !== "archived" ? (
+                  <button className="secondary-action" onClick={() => onStatusChange(event.id, "draft")} type="button">
+                    Taslak
+                  </button>
+                ) : null}
+                {event.status !== "cancelled" && event.status !== "archived" ? (
+                  <button className="secondary-action" onClick={() => onStatusChange(event.id, "cancelled")} type="button">
+                    İptal
+                  </button>
+                ) : null}
+              </div>
+              {event.status !== "archived" ? (
+                <button className="danger-action" onClick={() => onArchive(event.id)} type="button">
+                  Arşivle
+                </button>
+              ) : null}
             </div>
-            <span className="muted">{event.tags.map((tag) => tag.name).join(", ")}</span>
-            <div className="row-actions">
-              <button className="secondary-action" onClick={() => setEditingEventId(event.id)} type="button">
-                Düzenle
-              </button>
-              {event.status !== "published" && event.status !== "archived" ? (
-                <button className="secondary-action" onClick={() => onStatusChange(event.id, "published")} type="button">
-                  Yayınla
-                </button>
-              ) : null}
-              {event.status !== "draft" && event.status !== "archived" ? (
-                <button className="secondary-action" onClick={() => onStatusChange(event.id, "draft")} type="button">
-                  Taslak
-                </button>
-              ) : null}
-              {event.status !== "cancelled" && event.status !== "archived" ? (
-                <button className="secondary-action" onClick={() => onStatusChange(event.id, "cancelled")} type="button">
-                  İptal
-                </button>
-              ) : null}
-            </div>
-            {event.status !== "archived" ? (
-              <button className="danger-action" onClick={() => onArchive(event.id)} type="button">
-                Arşivle
-              </button>
-            ) : null}
+            {guestListEventId === event.id ? <GuestListPanel eventId={event.id} /> : null}
           </div>
         ))}
       </div>
     </section>
+  );
+}
+
+function GuestListPanel({ eventId }: { eventId: string }) {
+  const queryClient = useQueryClient();
+  const participantsQuery = useQuery({
+    queryKey: ["event-participants", eventId],
+    queryFn: () => listEventParticipants(eventId)
+  });
+  const statusMutation = useMutation({
+    mutationFn: (input: { userId: string; status: string }) =>
+      updateEventParticipantStatus(eventId, input.userId, input.status),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["event-participants", eventId] });
+    }
+  });
+  const checkInMutation = useMutation({
+    mutationFn: (userId: string) => checkInEventParticipant(eventId, userId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["event-participants", eventId] });
+    }
+  });
+  const participants = participantsQuery.data ?? [];
+
+  return (
+    <div className="guest-list-panel">
+      <div className="guest-list-header">
+        <strong>Guest list</strong>
+        <span>{participantsQuery.isLoading ? "Yükleniyor" : `${participants.length} kişi`}</span>
+      </div>
+      {participants.length === 0 && !participantsQuery.isLoading ? (
+        <p className="muted">Henüz katılım talebi yok.</p>
+      ) : null}
+      <div className="guest-list">
+        {participants.map((participant) => (
+          <GuestListRow
+            isPending={statusMutation.isPending || checkInMutation.isPending}
+            key={participant.id}
+            onCheckIn={() => checkInMutation.mutate(participant.userId)}
+            onStatusChange={(status) => statusMutation.mutate({ userId: participant.userId, status })}
+            participant={participant}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GuestListRow({
+  isPending,
+  onCheckIn,
+  onStatusChange,
+  participant
+}: {
+  isPending: boolean;
+  onCheckIn: () => void;
+  onStatusChange: (status: string) => void;
+  participant: EventParticipant;
+}) {
+  return (
+    <div className="guest-list-row">
+      <div>
+        <strong>{participant.user?.name ?? "Community member"}</strong>
+        <span>{participant.user?.email ?? participant.userId}</span>
+      </div>
+      <span className={`status-pill status-${participant.status}`}>{participant.status}</span>
+      <span className="muted">{participant.role}</span>
+      <div className="row-actions">
+        {participant.status === "requested" ? (
+          <>
+            <button className="secondary-action" disabled={isPending} onClick={() => onStatusChange("accepted")} type="button">
+              <Check size={16} />
+              Kabul
+            </button>
+            <button className="danger-action" disabled={isPending} onClick={() => onStatusChange("declined")} type="button">
+              <X size={16} />
+              Ret
+            </button>
+          </>
+        ) : null}
+        {(participant.status === "accepted" || participant.status === "invited") && !participant.checkedInAt ? (
+          <button className="secondary-action" disabled={isPending} onClick={onCheckIn} type="button">
+            <ClipboardCheck size={16} />
+            Check-in
+          </button>
+        ) : null}
+        {participant.status !== "banned" && participant.status !== "attended" ? (
+          <button className="ghost-action" disabled={isPending} onClick={() => onStatusChange("banned")} type="button">
+            Ban
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

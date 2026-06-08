@@ -122,6 +122,7 @@ WEB_ORIGIN=https://konnektora.netlify.app
 - Event participant ve media veri modeli başlangıcı
 - Kullanıcı üyelik/giriş ve event oluşturma UI
 - Event detayında kullanıcı Attend akışı
+- Admin/organizer guest list görüntüleme, kabul/ret, ban ve check-in UI
 - Event listelemede tag, format ve dil filtreleri
 - Event-tag değişikliklerinde tag kullanım sayısı güncelleme
 - Seed içinde her ana tag için 4 mock event ve detay sayfası datası
@@ -129,8 +130,8 @@ WEB_ORIGIN=https://konnektora.netlify.app
 
 ## Sonraki Teknik Adımlar
 
-1. Guest list organizer yönetim ekranını genişlet.
-2. User profile içinde ilgi alanı/tag seçimini bağla.
-3. Event owner/organizer permission kontrollerini daha ayrıntılı test et.
-4. Arama, tarih ve lokasyon filtrelerini genişlet.
+1. User profile içinde ilgi alanı/tag seçimini bağla.
+2. Event owner/organizer permission kontrollerini daha ayrıntılı test et.
+3. Arama, tarih ve lokasyon filtrelerini genişlet.
+4. Organizer için email/user seçerek invite akışını genişlet.
 5. API testlerini ve frontend smoke testlerini genişlet.

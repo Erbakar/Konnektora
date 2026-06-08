@@ -167,6 +167,20 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(requestMockAttendance(pathname.slice("/events/".length, -"/attend".length)));
   }
 
+  if (pathname.startsWith("/events/") && pathname.endsWith("/participants") && method === "GET") {
+    return schema.parse(listMockParticipants(pathname.slice("/events/".length, -"/participants".length)));
+  }
+
+  if (pathname.startsWith("/events/") && pathname.includes("/participants/") && method === "PATCH") {
+    const { eventId, userId } = parseParticipantPath(pathname, "/participants/");
+    return schema.parse(updateMockParticipantStatus(eventId, userId, parseBody<{ status: string }>(options).status));
+  }
+
+  if (pathname.startsWith("/events/") && pathname.endsWith("/check-in") && method === "POST") {
+    const { eventId, userId } = parseParticipantPath(pathname.slice(0, -"/check-in".length), "/participants/");
+    return schema.parse(updateMockParticipantStatus(eventId, userId, "attended", new Date().toISOString()));
+  }
+
   if (pathname.startsWith("/admin/events/") && method === "PATCH") {
     return schema.parse(updateMockEvent(pathname.slice("/admin/events/".length), parseBody(options)));
   }
@@ -278,6 +292,47 @@ function requestMockAttendance(eventId: string): EventParticipant {
   ]);
 
   return participant;
+}
+
+function listMockParticipants(eventId: string): EventParticipant[] {
+  return readStorage<EventParticipant[]>(MOCK_PARTICIPANTS_KEY, []).filter((participant) => participant.eventId === eventId);
+}
+
+function updateMockParticipantStatus(
+  eventId: string,
+  userId: string,
+  status: string,
+  checkedInAt: string | null = null
+): EventParticipant {
+  const participants = readStorage<EventParticipant[]>(MOCK_PARTICIPANTS_KEY, []);
+  const participant = participants.find((item) => item.eventId === eventId && item.userId === userId);
+
+  if (!participant) {
+    throw new Error("Mock participant not found");
+  }
+
+  const updatedParticipant: EventParticipant = {
+    ...participant,
+    status: parseParticipantStatus(status),
+    checkedInAt
+  };
+
+  writeStorage(MOCK_PARTICIPANTS_KEY, [
+    updatedParticipant,
+    ...participants.filter((item) => !(item.eventId === eventId && item.userId === userId))
+  ]);
+
+  return updatedParticipant;
+}
+
+function parseParticipantPath(pathname: string, marker: string) {
+  const [eventId, userId] = pathname.slice("/events/".length).split(marker);
+
+  if (!eventId || !userId) {
+    throw new Error("Invalid participant path");
+  }
+
+  return { eventId, userId };
 }
 
 function registerMockUser(input: { name: string; email: string; password: string }): LoginResponse {
@@ -483,6 +538,17 @@ function parseEventFormat(value?: string): Event["format"] {
 
 function parseEventVisibility(value?: string): Event["visibility"] {
   return value === "approval_required" || value === "invite_only" ? value : "open";
+}
+
+function parseParticipantStatus(value?: string): EventParticipant["status"] {
+  return value === "invited" ||
+    value === "requested" ||
+    value === "accepted" ||
+    value === "declined" ||
+    value === "banned" ||
+    value === "attended"
+    ? value
+    : "requested";
 }
 
 export function listEvents(params?: URLSearchParams): Promise<Event[]> {

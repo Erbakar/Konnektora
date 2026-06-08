@@ -803,11 +803,15 @@ select {
   gap: 10px;
 }
 
-.admin-list-row {
-  align-items: center;
+.admin-list-item {
   background: #fbfcfa;
   border: 1px solid #e4eae1;
   border-radius: 8px;
+  overflow: hidden;
+}
+
+.admin-list-row {
+  align-items: center;
   display: flex;
   gap: 12px;
   justify-content: space-between;
@@ -834,6 +838,78 @@ select {
 .admin-list-row span {
   color: #68746d;
   font-size: 14px;
+}
+
+.guest-list-panel {
+  background: #ffffff;
+  border-top: 1px solid #e4eae1;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.guest-list-header,
+.guest-list-row {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 1fr) auto auto minmax(180px, auto);
+}
+
+.guest-list-header {
+  color: #4a554f;
+}
+
+.guest-list {
+  display: grid;
+  gap: 8px;
+}
+
+.guest-list-row {
+  background: #fbfcfa;
+  border: 1px solid #e4eae1;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.guest-list-row > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.guest-list-row span {
+  color: #68746d;
+  font-size: 14px;
+}
+
+.status-pill {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 8px;
+  text-transform: capitalize;
+}
+
+.status-requested {
+  background: #fff4d6;
+  color: #7a4b00;
+}
+
+.status-accepted,
+.status-attended {
+  background: #e4f4ea;
+  color: #1f5f46;
+}
+
+.status-declined,
+.status-banned {
+  background: #f8e4e4;
+  color: #8c1d1d;
+}
+
+.status-invited {
+  background: #e8f1fb;
+  color: #255784;
 }
 
 /* Corporate homepage (Meetup-inspired) */
@@ -1560,7 +1636,9 @@ select {
   .admin-login-page,
   .account-grid,
   .admin-grid,
-  .form-grid {
+  .form-grid,
+  .guest-list-header,
+  .guest-list-row {
     grid-template-columns: 1fr;
   }
 
