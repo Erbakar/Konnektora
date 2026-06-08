@@ -2,6 +2,7 @@ import { EventFormat, EventParticipantRole, EventParticipantStatus, EventStatus,
 import {
   IsArray,
   IsDateString,
+  IsEmail,
   IsEnum,
   IsInt,
   IsOptional,
@@ -115,8 +116,19 @@ export class CreateEventDto {
 }
 
 export class InviteParticipantDto {
+  @IsOptional()
   @IsUUID()
-  userId!: string;
+  userId?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(160)
+  name?: string;
 
   @IsOptional()
   @IsEnum(EventParticipantRole)

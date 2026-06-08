@@ -75,6 +75,7 @@ model User {
   createdEvents Event[] @relation("EventCreatedBy")
   updatedEvents Event[] @relation("EventUpdatedBy")
   eventParticipations EventParticipant[]
+  interestTags UserInterestTag[]
 
   @@map("users")
 }
@@ -110,6 +111,7 @@ model Tag {
   createdBy User?        @relation("TagCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy User?        @relation("TagUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   events    EventTag[]
+  interestedUsers UserInterestTag[]
 
   @@index([status])
   @@map("tags")
@@ -194,4 +196,17 @@ model EventTag {
 
   @@id([eventId, tagId])
   @@map("event_tags")
+}
+
+model UserInterestTag {
+  userId    String   @map("user_id")
+  tagId     String   @map("tag_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([userId, tagId])
+  @@index([tagId])
+  @@map("user_interest_tags")
 }

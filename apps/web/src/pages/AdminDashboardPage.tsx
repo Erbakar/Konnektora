@@ -13,6 +13,7 @@ import {
   getAdminToken,
   isMockApiMode,
   checkInEventParticipant,
+  inviteEventParticipant,
   listAdminEvents,
   listAdminTags,
   listEventParticipants,
@@ -546,6 +547,7 @@ function EventAdminPanel({
 
 function GuestListPanel({ eventId }: { eventId: string }) {
   const queryClient = useQueryClient();
+  const [inviteNotice, setInviteNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const participantsQuery = useQuery({
     queryKey: ["event-participants", eventId],
     queryFn: () => listEventParticipants(eventId)
@@ -563,7 +565,26 @@ function GuestListPanel({ eventId }: { eventId: string }) {
       void queryClient.invalidateQueries({ queryKey: ["event-participants", eventId] });
     }
   });
+  const inviteMutation = useMutation({
+    mutationFn: (input: { email: string; name?: string; role?: string }) => inviteEventParticipant(eventId, input),
+    onSuccess: () => {
+      setInviteNotice({ tone: "success", message: "Davet guest list'e eklendi." });
+      void queryClient.invalidateQueries({ queryKey: ["event-participants", eventId] });
+    },
+    onError: () => setInviteNotice({ tone: "error", message: "Davet gönderilemedi. Email adresini kontrol et." })
+  });
   const participants = participantsQuery.data ?? [];
+
+  function handleInviteSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get("email"));
+    const name = String(form.get("name") || "");
+    const role = String(form.get("role") || "attendee");
+
+    inviteMutation.mutate({ email, name, role });
+    event.currentTarget.reset();
+  }
 
   return (
     <div className="guest-list-panel">
@@ -571,6 +592,31 @@ function GuestListPanel({ eventId }: { eventId: string }) {
         <strong>Guest list</strong>
         <span>{participantsQuery.isLoading ? "Yükleniyor" : `${participants.length} kişi`}</span>
       </div>
+      <form className="guest-invite-form" onSubmit={handleInviteSubmit}>
+        <label>
+          Email
+          <input name="email" placeholder="member@example.com" required type="email" />
+        </label>
+        <label>
+          Ad
+          <input name="name" placeholder="Opsiyonel" />
+        </label>
+        <label>
+          Rol
+          <select name="role" defaultValue="attendee">
+            <option value="attendee">Attendee</option>
+            <option value="manager">Manager</option>
+            <option value="organizer">Organizer</option>
+          </select>
+        </label>
+        <button className="secondary-action" disabled={inviteMutation.isPending} type="submit">
+          <Plus size={16} />
+          Davet et
+        </button>
+      </form>
+      {inviteNotice ? (
+        <p className={inviteNotice.tone === "success" ? "form-success" : "form-error"}>{inviteNotice.message}</p>
+      ) : null}
       {participants.length === 0 && !participantsQuery.isLoading ? (
         <p className="muted">Henüz katılım talebi yok.</p>
       ) : null}

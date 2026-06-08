@@ -666,6 +666,27 @@ select {
   color: #68746d;
 }
 
+.account-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.profile-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.profile-tag-row span {
+  background: #eef4ec;
+  border-radius: 999px;
+  color: #22543d;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 5px 9px;
+}
+
 .segmented-control {
   background: #eef4ec;
   border-radius: 8px;
@@ -863,6 +884,31 @@ select {
 .guest-list {
   display: grid;
   gap: 8px;
+}
+
+.guest-invite-form {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 1fr) minmax(140px, 0.7fr) minmax(120px, 0.5fr) auto;
+}
+
+.guest-invite-form label {
+  color: #4a554f;
+  display: grid;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 5px;
+}
+
+.guest-invite-form input,
+.guest-invite-form select {
+  background: #fbfcfa;
+  border: 1px solid #ccd6ca;
+  border-radius: 6px;
+  color: #19201d;
+  min-height: 38px;
+  padding: 8px 10px;
 }
 
 .guest-list-row {
@@ -1638,7 +1684,8 @@ select {
   .admin-grid,
   .form-grid,
   .guest-list-header,
-  .guest-list-row {
+  .guest-list-row,
+  .guest-invite-form {
     grid-template-columns: 1fr;
   }
 

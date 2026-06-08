@@ -6,10 +6,12 @@ import {
   clearUserSession,
   createUserEvent,
   getUserSession,
+  getProfileInterests,
   isMockApiMode,
   listTags,
   registerUser,
   setUserSession,
+  updateProfileInterests,
   userLogin
 } from "../lib/api";
 
@@ -19,6 +21,13 @@ export function AccountPage() {
   const [mode, setMode] = useState<"login" | "register">("register");
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const { data: tags = [] } = useQuery({ queryKey: ["tags"], queryFn: listTags });
+  const interestsQuery = useQuery({
+    queryKey: ["profile-interests", user?.id],
+    queryFn: getProfileInterests,
+    enabled: Boolean(user)
+  });
+  const interestTagIds = interestsQuery.data?.map((tag) => tag.id) ?? [];
+  const interestTags = tags.filter((tag) => interestTagIds.includes(tag.id));
 
   const authMutation = useMutation({
     mutationFn: (input: { name?: string; email: string; password: string }) =>
@@ -28,6 +37,7 @@ export function AccountPage() {
     onSuccess: (response) => {
       setUserSession(response);
       setUser(response.user);
+      void queryClient.invalidateQueries({ queryKey: ["profile-interests", response.user.id] });
       setNotice({ tone: "success", message: "Giriş yapıldı. Artık etkinlik oluşturabilirsin." });
     },
     onError: () => setNotice({ tone: "error", message: "İşlem tamamlanamadı. Bilgileri kontrol edip tekrar dene." })
@@ -40,6 +50,17 @@ export function AccountPage() {
       void queryClient.invalidateQueries({ queryKey: ["events"] });
     },
     onError: () => setNotice({ tone: "error", message: "Etkinlik oluşturulamadı. Zorunlu alanları kontrol et." })
+  });
+  const interestsMutation = useMutation({
+    mutationFn: updateProfileInterests,
+    onSuccess: (_, tagIds) => {
+      queryClient.setQueryData(
+        ["profile-interests", user?.id],
+        tags.filter((tag) => tagIds.includes(tag.id))
+      );
+      setNotice({ tone: "success", message: "İlgi alanların kaydedildi." });
+    },
+    onError: () => setNotice({ tone: "error", message: "İlgi alanları kaydedilemedi. Lütfen tekrar dene." })
   });
 
   function handleLogout() {
@@ -90,6 +111,14 @@ export function AccountPage() {
 
     eventMutation.mutate(input);
     event.currentTarget.reset();
+  }
+
+  function handleInterestSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const selectedTagIds = form.getAll("interestTagIds").map(String);
+
+    interestsMutation.mutate(selectedTagIds);
   }
 
   return (
@@ -155,81 +184,113 @@ export function AccountPage() {
             <strong>{user.name}</strong>
             <span>{user.email}</span>
             <span>Rol: {user.role}</span>
+            {interestTags.length > 0 ? (
+              <div className="profile-tag-row">
+                {interestTags.map((tag) => (
+                  <span key={tag.id}>{tag.name}</span>
+                ))}
+              </div>
+            ) : (
+              <span>İlgi alanı seçilmedi</span>
+            )}
           </aside>
-          <form className="admin-form" onSubmit={handleEventSubmit}>
-            <h2>Etkinlik oluştur</h2>
-            <label>
-              Başlık
-              <input name="title" placeholder="Community Breakfast" required minLength={3} />
-            </label>
-            <label>
-              Özet
-              <textarea name="summary" required minLength={10} rows={2} />
-            </label>
-            <label>
-              Açıklama
-              <textarea name="description" required minLength={10} rows={4} />
-            </label>
-            <div className="form-grid">
+          <div className="account-stack">
+            <form className="admin-form" onSubmit={handleInterestSubmit}>
+              <h2>İlgi alanları</h2>
+              <p className="form-help">Seçtiğin tag'ler profilinde görünür ve etkinlik oluştururken varsayılan seçili gelir.</p>
+              <fieldset className="tag-fieldset">
+                <legend>Tag'ler</legend>
+                {tags.map((tag) => (
+                  <label key={tag.id}>
+                    <input
+                      defaultChecked={interestTagIds.includes(tag.id)}
+                      name="interestTagIds"
+                      type="checkbox"
+                      value={tag.id}
+                    />
+                    {tag.name}
+                  </label>
+                ))}
+              </fieldset>
+              <button className="secondary-action" type="submit">
+                {interestsMutation.isPending ? "Kaydediliyor" : "İlgi alanlarını kaydet"}
+              </button>
+            </form>
+            <form className="admin-form" onSubmit={handleEventSubmit}>
+              <h2>Etkinlik oluştur</h2>
               <label>
-                Başlangıç
-                <input name="startsAt" required type="datetime-local" />
+                Başlık
+                <input name="title" placeholder="Community Breakfast" required minLength={3} />
               </label>
               <label>
-                Format
-                <select name="format" defaultValue="offline">
-                  <option value="online">Online</option>
-                  <option value="offline">Offline</option>
-                  <option value="hybrid">Hybrid</option>
-                </select>
+                Özet
+                <textarea name="summary" required minLength={10} rows={2} />
               </label>
               <label>
-                Katılım tipi
-                <select name="visibility" defaultValue="open">
-                  <option value="open">Open</option>
-                  <option value="approval_required">Approval required</option>
-                  <option value="invite_only">Invite only</option>
-                </select>
+                Açıklama
+                <textarea name="description" required minLength={10} rows={4} />
               </label>
-              <label>
-                Dil
-                <input name="language" defaultValue="en" />
-              </label>
-              <label>
-                Şehir
-                <input name="city" placeholder="Istanbul" />
-              </label>
-              <label>
-                Ülke
-                <input name="country" placeholder="Turkey" />
-              </label>
-              <label>
-                Zaman dilimi
-                <input name="timezone" defaultValue="Europe/Istanbul" />
-              </label>
-              <label>
-                Kapasite
-                <input min={1} name="capacity" type="number" />
-              </label>
-            </div>
-            <label>
-              Kapak görseli URL'si
-              <input name="coverImageUrl" placeholder="https://images.unsplash.com/..." type="url" />
-            </label>
-            <fieldset className="tag-fieldset">
-              <legend>Tag'ler</legend>
-              {tags.map((tag) => (
-                <label key={tag.id}>
-                  <input name="tagIds" type="checkbox" value={tag.id} />
-                  {tag.name}
+              <div className="form-grid">
+                <label>
+                  Başlangıç
+                  <input name="startsAt" required type="datetime-local" />
                 </label>
-              ))}
-            </fieldset>
-            <button className="secondary-action" disabled={eventMutation.isPending} type="submit">
-              <Plus size={18} />
-              Etkinlik yayınla
-            </button>
-          </form>
+                <label>
+                  Format
+                  <select name="format" defaultValue="offline">
+                    <option value="online">Online</option>
+                    <option value="offline">Offline</option>
+                    <option value="hybrid">Hybrid</option>
+                  </select>
+                </label>
+                <label>
+                  Katılım tipi
+                  <select name="visibility" defaultValue="open">
+                    <option value="open">Open</option>
+                    <option value="approval_required">Approval required</option>
+                    <option value="invite_only">Invite only</option>
+                  </select>
+                </label>
+                <label>
+                  Dil
+                  <input name="language" defaultValue="en" />
+                </label>
+                <label>
+                  Şehir
+                  <input name="city" placeholder="Istanbul" />
+                </label>
+                <label>
+                  Ülke
+                  <input name="country" placeholder="Turkey" />
+                </label>
+                <label>
+                  Zaman dilimi
+                  <input name="timezone" defaultValue="Europe/Istanbul" />
+                </label>
+                <label>
+                  Kapasite
+                  <input min={1} name="capacity" type="number" />
+                </label>
+              </div>
+              <label>
+                Kapak görseli URL'si
+                <input name="coverImageUrl" placeholder="https://images.unsplash.com/..." type="url" />
+              </label>
+              <fieldset className="tag-fieldset">
+                <legend>Tag'ler</legend>
+                {tags.map((tag) => (
+                  <label key={tag.id}>
+                    <input defaultChecked={interestTagIds.includes(tag.id)} name="tagIds" type="checkbox" value={tag.id} />
+                    {tag.name}
+                  </label>
+                ))}
+              </fieldset>
+              <button className="secondary-action" disabled={eventMutation.isPending} type="submit">
+                <Plus size={18} />
+                Etkinlik yayınla
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </section>

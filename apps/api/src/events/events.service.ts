@@ -1,5 +1,7 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { EventParticipantRole, EventParticipantStatus, EventStatus, Prisma, User } from "@prisma/client";
+import { hash } from "bcryptjs";
+import { randomUUID } from "crypto";
 import { toSlug } from "../common/slug";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateEventDto, EventQueryDto, InviteParticipantDto } from "./events.dto";
@@ -147,18 +149,30 @@ export class EventsService {
 
   async inviteParticipant(eventId: string, input: InviteParticipantDto, actor: User) {
     await this.ensureCanManageParticipants(eventId, actor);
+    const invitee = await this.resolveInvitee(input);
 
     return this.prisma.eventParticipant.upsert({
-      where: { eventId_userId: { eventId, userId: input.userId } },
+      where: { eventId_userId: { eventId, userId: invitee.id } },
       update: {
         status: EventParticipantStatus.invited,
         role: input.role ?? EventParticipantRole.attendee
       },
       create: {
         eventId,
-        userId: input.userId,
+        userId: invitee.id,
         status: EventParticipantStatus.invited,
         role: input.role ?? EventParticipantRole.attendee
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            status: true
+          }
+        }
       }
     });
   }
@@ -176,7 +190,18 @@ export class EventsService {
 
     return this.prisma.eventParticipant.update({
       where: { eventId_userId: { eventId, userId } },
-      data: { status }
+      data: { status },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            status: true
+          }
+        }
+      }
     });
   }
 
@@ -199,6 +224,17 @@ export class EventsService {
       data: {
         status: EventParticipantStatus.attended,
         checkedInAt: new Date()
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            status: true
+          }
+        }
       }
     });
   }
@@ -308,6 +344,39 @@ export class EventsService {
         await this.prisma.tag.update({ where: { id: tagId }, data: { usageCount } });
       })
     );
+  }
+
+  private async resolveInvitee(input: InviteParticipantDto) {
+    if (input.userId) {
+      const user = await this.prisma.user.findUnique({ where: { id: input.userId } });
+
+      if (!user) {
+        throw new NotFoundException("Davet edilecek kullanıcı bulunamadı.");
+      }
+
+      return user;
+    }
+
+    if (!input.email) {
+      throw new BadRequestException("Davet için userId veya email gerekli.");
+    }
+
+    const email = input.email.toLowerCase().trim();
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+
+    if (existing) {
+      return existing;
+    }
+
+    return this.prisma.user.create({
+      data: {
+        email,
+        name: input.name?.trim() || email.split("@")[0] || email,
+        passwordHash: await hash(randomUUID(), 10),
+        role: "user",
+        status: "invited"
+      }
+    });
   }
 
   private async ensureCanManageParticipants(eventId: string, user: User) {

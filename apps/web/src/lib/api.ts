@@ -19,6 +19,7 @@ const USE_MOCK_FALLBACK =
 const TOKEN_KEY = "konnektora_admin_token";
 const USER_TOKEN_KEY = "konnektora_user_token";
 const USER_KEY = "konnektora_user";
+const USER_INTEREST_TAGS_KEY = "konnektora_user_interest_tags";
 const MOCK_EVENTS_KEY = "konnektora_mock_events";
 const MOCK_TAGS_KEY = "konnektora_mock_tags";
 const MOCK_USERS_KEY = "konnektora_mock_users";
@@ -61,6 +62,27 @@ export function getUserSession() {
 export function clearUserSession() {
   localStorage.removeItem(USER_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+}
+
+export function getUserInterestTagIds() {
+  const user = getUserSession();
+  const allInterests = readStorage<Record<string, string[]>>(USER_INTEREST_TAGS_KEY, {});
+
+  return user ? allInterests[user.id] ?? [] : [];
+}
+
+export function setUserInterestTagIds(tagIds: string[]) {
+  const user = getUserSession();
+
+  if (!user) {
+    return;
+  }
+
+  const allInterests = readStorage<Record<string, string[]>>(USER_INTEREST_TAGS_KEY, {});
+  writeStorage(USER_INTEREST_TAGS_KEY, {
+    ...allInterests,
+    [user.id]: [...new Set(tagIds)]
+  });
 }
 
 async function requestJson<T>(path: string, schema: z.ZodType<T>, options: RequestOptions = {}): Promise<T> {
@@ -131,6 +153,16 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(loginMockUser(parseBody<{ email: string; password: string }>(options)));
   }
 
+  if (pathname === "/profile/interests" && method === "GET") {
+    return schema.parse(getTagsByIds(getUserInterestTagIds()));
+  }
+
+  if (pathname === "/profile/interests" && method === "PUT") {
+    const input = parseBody<{ tagIds: string[] }>(options);
+    setUserInterestTagIds(input.tagIds);
+    return schema.parse(getTagsByIds(input.tagIds));
+  }
+
   if (pathname === "/admin/dashboard" && method === "GET") {
     return schema.parse(getMockDashboard());
   }
@@ -165,6 +197,10 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname.startsWith("/events/") && pathname.endsWith("/attend") && method === "POST") {
     return schema.parse(requestMockAttendance(pathname.slice("/events/".length, -"/attend".length)));
+  }
+
+  if (pathname.startsWith("/events/") && pathname.endsWith("/invite") && method === "POST") {
+    return schema.parse(inviteMockParticipant(pathname.slice("/events/".length, -"/invite".length), parseBody(options)));
   }
 
   if (pathname.startsWith("/events/") && pathname.endsWith("/participants") && method === "GET") {
@@ -284,6 +320,52 @@ function requestMockAttendance(eventId: string): EventParticipant {
     role: "attendee",
     checkedInAt: null,
     user
+  };
+
+  writeStorage(MOCK_PARTICIPANTS_KEY, [
+    participant,
+    ...participants.filter((item) => !(item.eventId === eventId && item.userId === user.id))
+  ]);
+
+  return participant;
+}
+
+function inviteMockParticipant(
+  eventId: string,
+  input: { userId?: string; email?: string; name?: string; role?: string }
+): EventParticipant {
+  const users = readStorage<Array<{ id: string; name: string; email: string; password: string }>>(MOCK_USERS_KEY, []);
+  const email = input.email?.toLowerCase().trim();
+  const existingUser = input.userId
+    ? users.find((user) => user.id === input.userId)
+    : users.find((user) => user.email === email);
+  const user = existingUser ?? {
+    id: createId(),
+    name: input.name?.trim() || email?.split("@")[0] || "Invited user",
+    email: email || `invited-${Date.now()}@konnektora.local`,
+    password: ""
+  };
+
+  if (!existingUser) {
+    writeStorage(MOCK_USERS_KEY, [user, ...users]);
+  }
+
+  const participants = readStorage<EventParticipant[]>(MOCK_PARTICIPANTS_KEY, []);
+  const existing = participants.find((participant) => participant.eventId === eventId && participant.userId === user.id);
+  const participant: EventParticipant = {
+    id: existing?.id ?? createId(),
+    eventId,
+    userId: user.id,
+    status: "invited",
+    role: input.role === "organizer" || input.role === "manager" ? input.role : "attendee",
+    checkedInAt: null,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: "user",
+      status: "invited"
+    }
   };
 
   writeStorage(MOCK_PARTICIPANTS_KEY, [
@@ -564,6 +646,18 @@ export function listTags(): Promise<Tag[]> {
   return requestJson("/tags", z.array(tagSchema));
 }
 
+export function getProfileInterests(): Promise<Tag[]> {
+  return requestJson("/profile/interests", z.array(tagSchema), { auth: "user" });
+}
+
+export function updateProfileInterests(tagIds: string[]): Promise<Tag[]> {
+  return requestJson("/profile/interests", z.array(tagSchema), {
+    auth: "user",
+    method: "PUT",
+    body: JSON.stringify({ tagIds })
+  });
+}
+
 export function adminLogin(email: string, password: string): Promise<LoginResponse> {
   return requestJson("/admin/auth/login", loginResponseSchema, {
     method: "POST",
@@ -684,7 +778,7 @@ export function requestEventAttendance(eventId: string): Promise<EventParticipan
 
 export function inviteEventParticipant(
   eventId: string,
-  input: { userId: string; role?: string }
+  input: { userId?: string; email?: string; name?: string; role?: string }
 ): Promise<EventParticipant> {
   return requestJson(`/events/${eventId}/invite`, eventParticipantSchema, {
     auth: true,
