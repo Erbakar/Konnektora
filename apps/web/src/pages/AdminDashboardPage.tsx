@@ -18,6 +18,7 @@ import {
   listAdminReports,
   listAdminTags,
   listEventParticipants,
+  resolveAdminReportAction,
   setAdminToken,
   updateAdminEvent,
   updateEventParticipantStatus,
@@ -138,6 +139,21 @@ export function AdminDashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
     }
   });
+  const resolveReportActionMutation = useMutation({
+    mutationFn: (input: {
+      id: string;
+      action: "archive_event" | "archive_tag" | "disable_user";
+      resolutionNote?: string;
+    }) => resolveAdminReportAction(input.id, { action: input.action, resolutionNote: input.resolutionNote }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-events"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-tags"] });
+      void queryClient.invalidateQueries({ queryKey: ["events"] });
+      void queryClient.invalidateQueries({ queryKey: ["tags"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+    }
+  });
 
   function handleLogout() {
     clearAdminToken();
@@ -209,7 +225,8 @@ export function AdminDashboardPage() {
 
       <div className="admin-grid">
         <ReportAdminPanel
-          isPending={updateReportMutation.isPending}
+          isPending={updateReportMutation.isPending || resolveReportActionMutation.isPending}
+          onResolve={(input) => resolveReportActionMutation.mutate(input)}
           onUpdate={(input) => updateReportMutation.mutate(input)}
           reports={reports}
         />
@@ -237,10 +254,16 @@ export function AdminDashboardPage() {
 
 function ReportAdminPanel({
   isPending,
+  onResolve,
   onUpdate,
   reports
 }: {
   isPending: boolean;
+  onResolve: (input: {
+    id: string;
+    action: "archive_event" | "archive_tag" | "disable_user";
+    resolutionNote?: string;
+  }) => void;
   onUpdate: (input: { id: string; status: "open" | "reviewing" | "resolved" | "dismissed"; resolutionNote?: string }) => void;
   reports: ContentReport[];
 }) {
@@ -253,6 +276,18 @@ function ReportAdminPanel({
       status: String(form.get("status")) as "open" | "reviewing" | "resolved" | "dismissed",
       resolutionNote: String(form.get("resolutionNote") || "") || undefined
     });
+  }
+
+  function getModerationAction(report: ContentReport) {
+    if (report.targetType === "event") {
+      return { action: "archive_event" as const, label: "Etkinliği arşivle" };
+    }
+
+    if (report.targetType === "tag") {
+      return { action: "archive_tag" as const, label: "Tag'i arşivle" };
+    }
+
+    return { action: "disable_user" as const, label: "Kullanıcıyı disable et" };
   }
 
   return (
@@ -294,6 +329,23 @@ function ReportAdminPanel({
                 Güncelle
               </button>
             </form>
+            {report.status !== "resolved" ? (
+              <button
+                className="danger-action"
+                disabled={isPending}
+                onClick={() => {
+                  const action = getModerationAction(report);
+                  onResolve({
+                    id: report.id,
+                    action: action.action,
+                    resolutionNote: `${action.label} aksiyonu uygulandı.`
+                  });
+                }}
+                type="button"
+              >
+                {getModerationAction(report).label}
+              </button>
+            ) : null}
           </div>
         ))}
       </div>
