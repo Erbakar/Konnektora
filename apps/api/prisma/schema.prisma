@@ -60,6 +60,19 @@ enum EventParticipantRole {
   manager
 }
 
+enum ReportTargetType {
+  event
+  tag
+  user
+}
+
+enum ReportStatus {
+  open
+  reviewing
+  resolved
+  dismissed
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -76,6 +89,8 @@ model User {
   updatedEvents Event[] @relation("EventUpdatedBy")
   eventParticipations EventParticipant[]
   interestTags UserInterestTag[]
+  submittedReports ContentReport[] @relation("ReportSubmittedBy")
+  resolvedReports ContentReport[] @relation("ReportResolvedBy")
 
   @@map("users")
 }
@@ -123,7 +138,7 @@ model Event {
   slug                    String      @unique
   summary                 String
   description             String
-  status                  EventStatus @default(draft)
+  status                  EventStatus @default(published)
   startsAt                DateTime    @map("starts_at")
   endsAt                  DateTime?   @map("ends_at")
   timezone                String
@@ -209,4 +224,26 @@ model UserInterestTag {
   @@id([userId, tagId])
   @@index([tagId])
   @@map("user_interest_tags")
+}
+
+model ContentReport {
+  id             String           @id @default(uuid())
+  targetType     ReportTargetType @map("target_type")
+  targetId       String           @map("target_id")
+  reason         String
+  details        String?
+  status         ReportStatus     @default(open)
+  resolutionNote String?          @map("resolution_note")
+  reporterId     String           @map("reporter_id")
+  resolvedById   String?          @map("resolved_by")
+  resolvedAt     DateTime?        @map("resolved_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  reporter   User  @relation("ReportSubmittedBy", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolvedBy User? @relation("ReportResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([targetType, targetId])
+  @@index([status, createdAt])
+  @@map("content_reports")
 }

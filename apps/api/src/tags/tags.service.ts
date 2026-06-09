@@ -44,6 +44,27 @@ export class TagsService {
     });
   }
 
+  async createUserTag(input: CreateTagDto, userId: string) {
+    const slug = toSlug(input.name);
+    const existing = await this.prisma.tag.findUnique({ where: { slug } });
+
+    if (existing) {
+      return existing;
+    }
+
+    return this.prisma.tag.create({
+      data: {
+        name: input.name.trim(),
+        slug,
+        description: input.description?.trim() || null,
+        category: input.categoryId ? { connect: { id: input.categoryId } } : undefined,
+        status: TagStatus.active,
+        createdBy: { connect: { id: userId } },
+        updatedBy: { connect: { id: userId } }
+      }
+    });
+  }
+
   async updateTag(id: string, input: Partial<CreateTagDto>, userId?: string) {
     const existing = await this.prisma.tag.findUnique({ where: { id } });
 

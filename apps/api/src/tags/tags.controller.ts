@@ -1,9 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { User } from "@prisma/client";
 import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CreateTagDto } from "./tags.dto";
 import { TagsService } from "./tags.service";
-import { User } from "@prisma/client";
 
 @Controller()
 export class TagsController {
@@ -17,6 +18,12 @@ export class TagsController {
   @Get("tag-categories")
   listTagCategories() {
     return this.tagsService.listTagCategories();
+  }
+
+  @Post("tags")
+  @UseGuards(JwtAuthGuard)
+  createUserTag(@Body() body: CreateTagDto, @CurrentUser() user: User) {
+    return this.tagsService.createUserTag(body, user.id);
   }
 
   @Get("admin/tags")

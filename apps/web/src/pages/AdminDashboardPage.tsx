@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarCheck, Check, ClipboardCheck, LogOut, Plus, Tags, Users, X } from "lucide-react";
+import { AlertTriangle, CalendarCheck, Check, ClipboardCheck, LogOut, Plus, Tags, Users, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import {
   type AdminEventInput,
@@ -15,14 +15,16 @@ import {
   checkInEventParticipant,
   inviteEventParticipant,
   listAdminEvents,
+  listAdminReports,
   listAdminTags,
   listEventParticipants,
   setAdminToken,
   updateAdminEvent,
   updateEventParticipantStatus,
+  updateAdminReport,
   updateAdminTag
 } from "../lib/api";
-import type { Event, EventParticipant, Tag } from "@konnektora/shared";
+import type { ContentReport, Event, EventParticipant, Tag } from "@konnektora/shared";
 
 export function AdminDashboardPage() {
   const queryClient = useQueryClient();
@@ -45,6 +47,11 @@ export function AdminDashboardPage() {
     queryFn: listAdminTags,
     enabled: Boolean(token)
   });
+  const reportsQuery = useQuery({
+    queryKey: ["admin-reports"],
+    queryFn: listAdminReports,
+    enabled: Boolean(token)
+  });
 
   const loginMutation = useMutation({
     mutationFn: (input: { email: string; password: string }) => adminLogin(input.email, input.password),
@@ -55,6 +62,7 @@ export function AdminDashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-events"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-tags"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
     },
     onError: () => setLoginError("Email veya şifre hatalı.")
   });
@@ -123,6 +131,13 @@ export function AdminDashboardPage() {
     },
     onError: () => setEventNotice({ tone: "error", message: "Etkinlik kaydedilemedi. Zorunlu alanları kontrol edip tekrar dene." })
   });
+  const updateReportMutation = useMutation({
+    mutationFn: (input: { id: string; status: "open" | "reviewing" | "resolved" | "dismissed"; resolutionNote?: string }) =>
+      updateAdminReport(input.id, { status: input.status, resolutionNote: input.resolutionNote }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
+    }
+  });
 
   function handleLogout() {
     clearAdminToken();
@@ -169,6 +184,7 @@ export function AdminDashboardPage() {
   const dashboard = dashboardQuery.data;
   const tags = tagsQuery.data ?? [];
   const events = eventsQuery.data ?? [];
+  const reports = reportsQuery.data ?? [];
 
   return (
     <section className="page">
@@ -188,9 +204,15 @@ export function AdminDashboardPage() {
         <MetricCard icon={<CalendarCheck size={24} />} label="Taslak etkinlikler" value={dashboard?.draftEvents ?? 0} />
         <MetricCard icon={<Tags size={24} />} label="Aktif tag'ler" value={dashboard?.activeTags ?? 0} />
         <MetricCard icon={<CalendarCheck size={24} />} label="Yaklaşan etkinlikler" value={dashboard?.upcomingEvents ?? 0} />
+        <MetricCard icon={<AlertTriangle size={24} />} label="Açık raporlar" value={reports.filter((report) => report.status === "open").length} />
       </div>
 
       <div className="admin-grid">
+        <ReportAdminPanel
+          isPending={updateReportMutation.isPending}
+          onUpdate={(input) => updateReportMutation.mutate(input)}
+          reports={reports}
+        />
         <TagAdminPanel
           isPending={createTagMutation.isPending}
           onArchive={(id) => archiveTagMutation.mutate(id)}
@@ -208,6 +230,72 @@ export function AdminDashboardPage() {
           onStatusChange={(id, status) => updateEventMutation.mutate({ id, status })}
           tags={tags.filter((tag) => tag.status === "active")}
         />
+      </div>
+    </section>
+  );
+}
+
+function ReportAdminPanel({
+  isPending,
+  onUpdate,
+  reports
+}: {
+  isPending: boolean;
+  onUpdate: (input: { id: string; status: "open" | "reviewing" | "resolved" | "dismissed"; resolutionNote?: string }) => void;
+  reports: ContentReport[];
+}) {
+  function handleSubmit(reportId: string, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+
+    onUpdate({
+      id: reportId,
+      status: String(form.get("status")) as "open" | "reviewing" | "resolved" | "dismissed",
+      resolutionNote: String(form.get("resolutionNote") || "") || undefined
+    });
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="section-header compact">
+        <h2>Rapor kuyruğu</h2>
+      </div>
+      {reports.length === 0 ? <p className="muted">Henüz raporlanmış içerik yok.</p> : null}
+      <div className="admin-list">
+        {reports.map((report) => (
+          <div className="admin-list-item" key={report.id}>
+            <div className="admin-list-row">
+              <div>
+                <strong>
+                  {report.targetType} · {report.reason}
+                </strong>
+                <span>
+                  {report.status} · {report.reporter?.email ?? report.reporterId}
+                </span>
+              </div>
+              <span className={`status-pill status-${report.status}`}>{report.status}</span>
+            </div>
+            {report.details ? <p className="form-help">{report.details}</p> : null}
+            <form className="guest-invite-form" onSubmit={(event) => handleSubmit(report.id, event)}>
+              <label>
+                Durum
+                <select name="status" defaultValue={report.status}>
+                  <option value="open">Open</option>
+                  <option value="reviewing">Reviewing</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="dismissed">Dismissed</option>
+                </select>
+              </label>
+              <label>
+                Admin notu
+                <input name="resolutionNote" defaultValue={report.resolutionNote ?? ""} />
+              </label>
+              <button className="secondary-action" disabled={isPending} type="submit">
+                Güncelle
+              </button>
+            </form>
+          </div>
+        ))}
       </div>
     </section>
   );

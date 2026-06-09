@@ -1,11 +1,13 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CalendarDays, ExternalLink, MapPin, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { CalendarDays, ExternalLink, Flag, MapPin, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { type FormEvent, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getEvent, getUserSession, requestEventAttendance } from "../lib/api";
+import { createContentReport, getEvent, getUserSession, requestEventAttendance } from "../lib/api";
 
 export function EventDetailPage() {
   const { slug = "" } = useParams();
   const user = getUserSession();
+  const [reportOpen, setReportOpen] = useState(false);
   const { data: event, isLoading } = useQuery({
     queryKey: ["event", slug],
     queryFn: () => getEvent(slug),
@@ -13,6 +15,9 @@ export function EventDetailPage() {
   });
   const attendMutation = useMutation({
     mutationFn: requestEventAttendance
+  });
+  const reportMutation = useMutation({
+    mutationFn: createContentReport
   });
 
   if (isLoading) {
@@ -81,7 +86,42 @@ export function EventDetailPage() {
           <UserPlus size={18} />
           Invite
         </a>
+        {user ? (
+          <button className="ghost-action" onClick={() => setReportOpen((current) => !current)} type="button">
+            <Flag size={18} />
+            Raporla
+          </button>
+        ) : null}
       </div>
+      {reportOpen ? (
+        <form
+          className="admin-form compact-form"
+          onSubmit={(submitEvent: FormEvent<HTMLFormElement>) => {
+            submitEvent.preventDefault();
+            const form = new FormData(submitEvent.currentTarget);
+            reportMutation.mutate({
+              targetType: "event",
+              targetId: event.id,
+              reason: String(form.get("reason")),
+              details: String(form.get("details") || "") || undefined
+            });
+            submitEvent.currentTarget.reset();
+          }}
+        >
+          <label>
+            Rapor sebebi
+            <input name="reason" placeholder="Yanıltıcı bilgi, uygunsuz içerik..." required minLength={3} maxLength={120} />
+          </label>
+          <label>
+            Detay
+            <textarea name="details" rows={3} maxLength={1000} />
+          </label>
+          <button className="secondary-action" disabled={reportMutation.isPending} type="submit">
+            <Flag size={18} />
+            {reportMutation.isPending ? "Gönderiliyor" : "Rapor gönder"}
+          </button>
+        </form>
+      ) : null}
       {attendMutation.data ? (
         <p className="form-success">
           {attendMutation.data.status === "accepted"
@@ -90,6 +130,8 @@ export function EventDetailPage() {
         </p>
       ) : null}
       {attendMutation.isError ? <p className="form-error">Katılım talebi gönderilemedi. Lütfen tekrar dene.</p> : null}
+      {reportMutation.data ? <p className="form-success">Rapor alındı. Admin panelde incelenecek.</p> : null}
+      {reportMutation.isError ? <p className="form-error">Rapor gönderilemedi. Lütfen tekrar dene.</p> : null}
       <p className="detail-copy">{event.description}</p>
       {event.externalRegistrationUrl ? (
         <a className="primary-action" href={event.externalRegistrationUrl} rel="noreferrer" target="_blank">

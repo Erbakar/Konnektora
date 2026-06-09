@@ -15,6 +15,8 @@ export const eventParticipantStatusSchema = z.enum([
   "attended"
 ]);
 export const eventParticipantRoleSchema = z.enum(["attendee", "organizer", "manager"]);
+export const reportTargetTypeSchema = z.enum(["event", "tag", "user"]);
+export const reportStatusSchema = z.enum(["open", "reviewing", "resolved", "dismissed"]);
 
 export const slugSchema = z
   .string()
@@ -94,6 +96,23 @@ export const loginResponseSchema = z.object({
   user: adminUserSchema
 });
 
+export const contentReportSchema = z.object({
+  id: z.string().uuid(),
+  targetType: reportTargetTypeSchema,
+  targetId: z.string().uuid(),
+  reason: z.string().min(3).max(120),
+  details: z.string().max(1000).nullable(),
+  status: reportStatusSchema,
+  resolutionNote: z.string().max(1000).nullable(),
+  reporterId: z.string().uuid(),
+  resolvedById: z.string().uuid().nullable(),
+  resolvedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional(),
+  reporter: adminUserSchema.optional(),
+  resolvedBy: adminUserSchema.optional().nullable()
+});
+
 export type EventStatus = z.infer<typeof eventStatusSchema>;
 export type EventFormat = z.infer<typeof eventFormatSchema>;
 export type TagStatus = z.infer<typeof tagStatusSchema>;
@@ -101,9 +120,12 @@ export type UserRole = z.infer<typeof userRoleSchema>;
 export type UserStatus = z.infer<typeof userStatusSchema>;
 export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema>;
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;
+export type ReportTargetType = z.infer<typeof reportTargetTypeSchema>;
+export type ReportStatus = z.infer<typeof reportStatusSchema>;
 export type Tag = z.infer<typeof tagSchema>;
 export type Event = z.infer<typeof eventSchema>;
 export type EventList = z.infer<typeof eventListSchema>;
 export type AdminDashboard = z.infer<typeof adminDashboardSchema>;
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
 export type EventParticipant = z.infer<typeof eventParticipantSchema>;
+export type ContentReport = z.infer<typeof contentReportSchema>;

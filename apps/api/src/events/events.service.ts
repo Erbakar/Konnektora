@@ -108,7 +108,7 @@ export class EventsService {
         slug,
         summary: input.summary,
         description: input.description,
-        status: input.status ?? "draft",
+        status: input.status ?? EventStatus.published,
         startsAt: new Date(input.startsAt),
         endsAt: input.endsAt ? new Date(input.endsAt) : null,
         timezone: input.timezone,

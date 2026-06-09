@@ -1,11 +1,13 @@
 import {
   adminDashboardSchema,
+  contentReportSchema,
   eventListSchema,
   eventSchema,
   eventParticipantSchema,
   loginResponseSchema,
   tagSchema,
   type AdminDashboard,
+  type ContentReport,
   type Event,
   type EventList,
   type EventParticipant,
@@ -26,11 +28,19 @@ const MOCK_EVENTS_KEY = "konnektora_mock_events";
 const MOCK_TAGS_KEY = "konnektora_mock_tags";
 const MOCK_USERS_KEY = "konnektora_mock_users";
 const MOCK_PARTICIPANTS_KEY = "konnektora_mock_participants";
+const MOCK_REPORTS_KEY = "konnektora_mock_reports";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
 
 type AuthMode = boolean | "admin" | "user";
+type MockUser = {
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+  status?: "active" | "invited" | "pending";
+};
 
 type RequestOptions = RequestInit & {
   auth?: AuthMode;
@@ -165,8 +175,24 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(getTagsByIds(input.tagIds));
   }
 
+  if (pathname === "/tags" && method === "POST" && options.auth === "user") {
+    return schema.parse(createMockTag(parseBody<{ name: string; description?: string }>(options)));
+  }
+
+  if (pathname === "/reports" && method === "POST" && options.auth === "user") {
+    return schema.parse(createMockReport(parseBody<CreateReportInput>(options)));
+  }
+
   if (pathname === "/admin/dashboard" && method === "GET") {
     return schema.parse(getMockDashboard());
+  }
+
+  if (pathname === "/admin/reports" && method === "GET") {
+    return schema.parse(listMockReports());
+  }
+
+  if (pathname.startsWith("/admin/reports/") && method === "PATCH") {
+    return schema.parse(updateMockReport(pathname.slice("/admin/reports/".length), parseBody<UpdateReportInput>(options)));
   }
 
   if (pathname === "/admin/tags" && method === "GET") {
@@ -359,7 +385,7 @@ function inviteMockParticipant(
   eventId: string,
   input: { userId?: string; email?: string; name?: string; role?: string }
 ): EventParticipant {
-  const users = readStorage<Array<{ id: string; name: string; email: string; password: string }>>(MOCK_USERS_KEY, []);
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
   const email = input.email?.toLowerCase().trim();
   const existingUser = input.userId
     ? users.find((user) => user.id === input.userId)
@@ -368,7 +394,8 @@ function inviteMockParticipant(
     id: createId(),
     name: input.name?.trim() || email?.split("@")[0] || "Invited user",
     email: email || `invited-${Date.now()}@konnektora.local`,
-    password: ""
+    password: "",
+    status: "invited" as const
   };
 
   if (!existingUser) {
@@ -432,6 +459,76 @@ function updateMockParticipantStatus(
   return updatedParticipant;
 }
 
+function createMockReport(input: CreateReportInput): ContentReport {
+  const reports = readStorage<ContentReport[]>(MOCK_REPORTS_KEY, []);
+  const reporter = getUserSession();
+  const report: ContentReport = {
+    id: createId(),
+    targetType: input.targetType,
+    targetId: input.targetId,
+    reason: input.reason.trim(),
+    details: input.details?.trim() || null,
+    status: "open",
+    resolutionNote: null,
+    reporterId: reporter?.id ?? "88888888-8888-4888-8888-888888888888",
+    resolvedById: null,
+    resolvedAt: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    reporter: reporter ?? {
+      id: "88888888-8888-4888-8888-888888888888",
+      email: "user@konnektora.local",
+      name: "Konnektora User",
+      role: "user",
+      status: "active"
+    },
+    resolvedBy: null
+  };
+
+  writeStorage(MOCK_REPORTS_KEY, [report, ...reports]);
+  return report;
+}
+
+function listMockReports(): ContentReport[] {
+  return readStorage<ContentReport[]>(MOCK_REPORTS_KEY, []);
+}
+
+function updateMockReport(id: string, input: UpdateReportInput): ContentReport {
+  const reports = readStorage<ContentReport[]>(MOCK_REPORTS_KEY, []);
+  const adminUser = {
+    id: "99999999-9999-4999-8999-999999999999",
+    email: "admin@konnektora.local",
+    name: "Konnektora Admin",
+    role: "super_admin" as const,
+    status: "active" as const
+  };
+  const updatedReports = reports.map((report) => {
+    if (report.id !== id) {
+      return report;
+    }
+
+    const isClosed = input.status === "resolved" || input.status === "dismissed";
+
+    return {
+      ...report,
+      status: input.status,
+      resolutionNote: input.resolutionNote?.trim() || null,
+      resolvedById: isClosed ? adminUser.id : null,
+      resolvedAt: isClosed ? new Date().toISOString() : null,
+      updatedAt: new Date().toISOString(),
+      resolvedBy: isClosed ? adminUser : null
+    };
+  });
+  const report = updatedReports.find((item) => item.id === id);
+
+  if (!report) {
+    throw new Error("Mock report not found");
+  }
+
+  writeStorage(MOCK_REPORTS_KEY, updatedReports);
+  return report;
+}
+
 function parseParticipantPath(pathname: string, marker: string) {
   const [eventId, userId] = pathname.slice("/events/".length).split(marker);
 
@@ -443,19 +540,28 @@ function parseParticipantPath(pathname: string, marker: string) {
 }
 
 function registerMockUser(input: { name: string; email: string; password: string }): LoginResponse {
-  const users = readStorage<Array<{ id: string; name: string; email: string; password: string }>>(MOCK_USERS_KEY, []);
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
   const email = input.email.toLowerCase().trim();
   const existing = users.find((user) => user.email === email);
 
   if (existing) {
-    return createMockLoginResponse(existing);
+    const activatedUser: MockUser = {
+      ...existing,
+      name: input.name.trim(),
+      password: input.password,
+      status: "active"
+    };
+
+    writeStorage(MOCK_USERS_KEY, [activatedUser, ...users.filter((user) => user.id !== existing.id)]);
+    return createMockLoginResponse(activatedUser);
   }
 
-  const user = {
+  const user: MockUser = {
     id: createId(),
     name: input.name.trim(),
     email,
-    password: input.password
+    password: input.password,
+    status: "active"
   };
 
   writeStorage(MOCK_USERS_KEY, [user, ...users]);
@@ -464,12 +570,13 @@ function registerMockUser(input: { name: string; email: string; password: string
 
 function loginMockUser(input: { email: string; password: string }): LoginResponse {
   const email = input.email.toLowerCase().trim();
-  const users = readStorage<Array<{ id: string; name: string; email: string; password: string }>>(MOCK_USERS_KEY, []);
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
   const user = users.find((item) => item.email === email && item.password === input.password) ?? {
     id: "88888888-8888-4888-8888-888888888888",
     name: "Konnektora User",
     email,
-    password: input.password
+    password: input.password,
+    status: "active" as const
   };
 
   return createMockLoginResponse(user);
@@ -503,10 +610,17 @@ function getMockDashboard(): AdminDashboard {
 
 function createMockTag(input: { name: string; description?: string }): Tag {
   const tags = getStoredTags();
+  const slug = uniqueSlug(input.name, []);
+  const existing = tags.find((tag) => tag.slug === slug);
+
+  if (existing) {
+    return existing;
+  }
+
   const tag: Tag = {
     id: createId(),
-    name: input.name,
-    slug: uniqueSlug(input.name, tags.map((item) => item.slug)),
+    name: input.name.trim(),
+    slug,
     description: input.description || null,
     categoryId: null,
     status: "active",
@@ -636,7 +750,7 @@ function uniqueSlug(value: string, usedSlugs: string[]) {
 }
 
 function parseEventStatus(value?: string): Event["status"] {
-  return value === "published" || value === "cancelled" || value === "archived" ? value : "draft";
+  return value === "draft" || value === "cancelled" || value === "archived" ? value : "published";
 }
 
 function parseEventFormat(value?: string): Event["format"] {
@@ -669,6 +783,14 @@ export function getEvent(slug: string): Promise<Event> {
 
 export function listTags(): Promise<Tag[]> {
   return requestJson("/tags", z.array(tagSchema));
+}
+
+export function createUserTag(input: { name: string; description?: string }): Promise<Tag> {
+  return requestJson("/tags", tagSchema, {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify(input)
+  });
 }
 
 export function getProfileInterests(): Promise<Tag[]> {
@@ -766,6 +888,18 @@ export type AdminEventInput = {
   tagIds?: string[];
 };
 
+export type CreateReportInput = {
+  targetType: "event" | "tag" | "user";
+  targetId: string;
+  reason: string;
+  details?: string;
+};
+
+export type UpdateReportInput = {
+  status: "open" | "reviewing" | "resolved" | "dismissed";
+  resolutionNote?: string;
+};
+
 export function updateAdminEvent(id: string, input: Partial<AdminEventInput>): Promise<Event> {
   return requestJson(`/admin/events/${id}`, eventSchema, {
     auth: true,
@@ -786,6 +920,26 @@ export function createUserEvent(input: AdminEventInput): Promise<Event> {
   return requestJson("/events", eventSchema, {
     auth: "user",
     method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function createContentReport(input: CreateReportInput): Promise<ContentReport> {
+  return requestJson("/reports", contentReportSchema, {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function listAdminReports(): Promise<ContentReport[]> {
+  return requestJson("/admin/reports", z.array(contentReportSchema), { auth: true });
+}
+
+export function updateAdminReport(id: string, input: UpdateReportInput): Promise<ContentReport> {
+  return requestJson(`/admin/reports/${id}`, contentReportSchema, {
+    auth: true,
+    method: "PATCH",
     body: JSON.stringify(input)
   });
 }

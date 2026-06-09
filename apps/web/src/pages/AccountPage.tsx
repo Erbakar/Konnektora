@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import {
   type AdminEventInput,
   clearUserSession,
+  createUserTag,
   createUserEvent,
   getUserSession,
   getProfileInterests,
@@ -46,10 +47,19 @@ export function AccountPage() {
   const eventMutation = useMutation({
     mutationFn: createUserEvent,
     onSuccess: () => {
-      setNotice({ tone: "success", message: "Etkinlik oluşturuldu. Published ise public listede görünür." });
+      setNotice({ tone: "success", message: "Etkinlik yayınlandı ve public listede görünür." });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
     },
     onError: () => setNotice({ tone: "error", message: "Etkinlik oluşturulamadı. Zorunlu alanları kontrol et." })
+  });
+  const tagMutation = useMutation({
+    mutationFn: createUserTag,
+    onSuccess: (tag) => {
+      setNotice({ tone: "success", message: `${tag.name} tag'i hazır.` });
+      void queryClient.invalidateQueries({ queryKey: ["tags"] });
+      void queryClient.invalidateQueries({ queryKey: ["tags", "home"] });
+    },
+    onError: () => setNotice({ tone: "error", message: "Tag oluşturulamadı. Aynı isimde sorunlu bir tag olabilir." })
   });
   const interestsMutation = useMutation({
     mutationFn: updateProfileInterests,
@@ -110,6 +120,23 @@ export function AccountPage() {
     }
 
     eventMutation.mutate(input);
+    event.currentTarget.reset();
+  }
+
+  function handleTagSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("name") || "").trim();
+    const description = String(form.get("description") || "").trim();
+
+    if (!name) {
+      return;
+    }
+
+    tagMutation.mutate({
+      name,
+      description: description || undefined
+    });
     event.currentTarget.reset();
   }
 
@@ -195,6 +222,24 @@ export function AccountPage() {
             )}
           </aside>
           <div className="account-stack">
+            <form className="admin-form" onSubmit={handleTagSubmit}>
+              <h2>Tag oluştur</h2>
+              <p className="form-help">Var olan tag'leri önce arayıp öneriyoruz; yeni ihtiyaç varsa kullanıcılar direkt aktif tag oluşturabilir.</p>
+              <div className="form-grid">
+                <label>
+                  Tag adı
+                  <input name="name" placeholder="AI Builders" required minLength={2} maxLength={80} />
+                </label>
+                <label>
+                  Kısa açıklama
+                  <input name="description" placeholder="Optional" maxLength={500} />
+                </label>
+              </div>
+              <button className="secondary-action" disabled={tagMutation.isPending} type="submit">
+                <Plus size={18} />
+                {tagMutation.isPending ? "Oluşturuluyor" : "Tag oluştur"}
+              </button>
+            </form>
             <form className="admin-form" onSubmit={handleInterestSubmit}>
               <h2>İlgi alanları</h2>
               <p className="form-help">Seçtiğin tag'ler profilinde görünür ve etkinlik oluştururken varsayılan seçili gelir.</p>

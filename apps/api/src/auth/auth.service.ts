@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import { User } from "@prisma/client";
 import { compare, hash } from "bcryptjs";
 import { PrismaService } from "../prisma/prisma.service";
 import { LoginDto, RegisterDto } from "./auth.dto";
@@ -28,16 +29,7 @@ export class AuthService {
       throw new UnauthorizedException("Geçersiz kullanıcı hesabı.");
     }
 
-    return {
-      accessToken: await this.jwtService.signAsync({ sub: user.id, role: user.role }),
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        status: user.status
-      }
-    };
+    return this.createLoginResponse(user);
   }
 
   async register(input: RegisterDto) {
@@ -45,7 +37,20 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({ where: { email } });
 
     if (existing) {
-      throw new ConflictException("Bu email adresi zaten kullanılıyor.");
+      if (existing.status === "active") {
+        throw new ConflictException("Bu email adresi zaten kullanılıyor.");
+      }
+
+      const activatedUser = await this.prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          name: input.name.trim(),
+          passwordHash: await hash(input.password, 10),
+          status: "active"
+        }
+      });
+
+      return this.createLoginResponse(activatedUser);
     }
 
     const user = await this.prisma.user.create({
@@ -58,6 +63,10 @@ export class AuthService {
       }
     });
 
+    return this.createLoginResponse(user);
+  }
+
+  private async createLoginResponse(user: User) {
     return {
       accessToken: await this.jwtService.signAsync({ sub: user.id, role: user.role }),
       user: {
