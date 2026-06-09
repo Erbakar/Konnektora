@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, ReportStatus, ReportTargetType, User } from "@prisma/client";
+import { EventStatus, Prisma, ReportStatus, ReportTargetType, TagStatus, User, UserStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import { CreateReportDto, UpdateReportDto } from "./reports.dto";
+import { CreateReportDto, ModerationAction, ResolveReportActionDto, UpdateReportDto } from "./reports.dto";
 
 const REPORT_INCLUDE = {
   reporter: { select: { id: true, email: true, name: true, role: true, status: true } },
@@ -55,6 +55,60 @@ export class ReportsService {
     });
   }
 
+  async resolveWithAction(id: string, input: ResolveReportActionDto, admin: User) {
+    const report = await this.prisma.contentReport.findUnique({ where: { id } });
+
+    if (!report) {
+      throw new NotFoundException("Rapor bulunamadı.");
+    }
+
+    this.ensureActionMatchesTarget(report.targetType, input.action);
+
+    if (input.action === ModerationAction.disable_user && report.targetId === admin.id) {
+      throw new BadRequestException("Admin kendi hesabını bu aksiyonla disable edemez.");
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      if (input.action === ModerationAction.archive_event) {
+        await tx.event.update({
+          where: { id: report.targetId },
+          data: {
+            status: EventStatus.archived,
+            updatedBy: { connect: { id: admin.id } }
+          }
+        });
+      }
+
+      if (input.action === ModerationAction.archive_tag) {
+        await tx.tag.update({
+          where: { id: report.targetId },
+          data: {
+            status: TagStatus.archived,
+            updatedBy: { connect: { id: admin.id } }
+          }
+        });
+      }
+
+      if (input.action === ModerationAction.disable_user) {
+        await tx.user.update({
+          where: { id: report.targetId },
+          data: { status: UserStatus.disabled }
+        });
+      }
+
+      return tx.contentReport.update({
+        where: { id },
+        data: {
+          status: ReportStatus.resolved,
+          resolutionNote: input.resolutionNote?.trim() || this.defaultResolutionNote(input.action),
+          resolvedBy: { connect: { id: admin.id } },
+          resolvedAt: new Date()
+        },
+        include: REPORT_INCLUDE
+      });
+    });
+  }
+
   private async ensureTargetExists(targetType: ReportTargetType, targetId: string) {
     if (targetType === ReportTargetType.event) {
       const event = await this.prisma.event.findUnique({ where: { id: targetId }, select: { id: true } });
@@ -87,5 +141,33 @@ export class ReportsService {
     }
 
     throw new BadRequestException("Desteklenmeyen rapor hedefi.");
+  }
+
+  private ensureActionMatchesTarget(targetType: ReportTargetType, action: ModerationAction) {
+    if (targetType === ReportTargetType.event && action === ModerationAction.archive_event) {
+      return;
+    }
+
+    if (targetType === ReportTargetType.tag && action === ModerationAction.archive_tag) {
+      return;
+    }
+
+    if (targetType === ReportTargetType.user && action === ModerationAction.disable_user) {
+      return;
+    }
+
+    throw new BadRequestException("Moderasyon aksiyonu rapor hedefiyle uyumlu değil.");
+  }
+
+  private defaultResolutionNote(action: ModerationAction) {
+    if (action === ModerationAction.archive_event) {
+      return "Rapor sonucunda etkinlik arşivlendi.";
+    }
+
+    if (action === ModerationAction.archive_tag) {
+      return "Rapor sonucunda tag arşivlendi.";
+    }
+
+    return "Rapor sonucunda kullanıcı disable edildi.";
   }
 }

@@ -195,6 +195,11 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(updateMockReport(pathname.slice("/admin/reports/".length), parseBody<UpdateReportInput>(options)));
   }
 
+  if (pathname.startsWith("/admin/reports/") && pathname.endsWith("/actions") && method === "POST") {
+    const reportId = pathname.slice("/admin/reports/".length, -"/actions".length);
+    return schema.parse(resolveMockReportAction(reportId, parseBody<ResolveReportActionInput>(options)));
+  }
+
   if (pathname === "/admin/tags" && method === "GET") {
     return schema.parse(getStoredTags());
   }
@@ -527,6 +532,48 @@ function updateMockReport(id: string, input: UpdateReportInput): ContentReport {
 
   writeStorage(MOCK_REPORTS_KEY, updatedReports);
   return report;
+}
+
+function resolveMockReportAction(id: string, input: ResolveReportActionInput): ContentReport {
+  const reports = readStorage<ContentReport[]>(MOCK_REPORTS_KEY, []);
+  const report = reports.find((item) => item.id === id);
+
+  if (!report) {
+    throw new Error("Mock report not found");
+  }
+
+  if (input.action === "archive_event") {
+    updateMockEvent(report.targetId, { status: "archived" });
+  }
+
+  if (input.action === "archive_tag") {
+    updateMockTag(report.targetId, { status: "archived" });
+  }
+
+  if (input.action === "disable_user") {
+    const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+    writeStorage(
+      MOCK_USERS_KEY,
+      users.map((user) => (user.id === report.targetId ? { ...user, status: "disabled" } : user))
+    );
+  }
+
+  return updateMockReport(id, {
+    status: "resolved",
+    resolutionNote: input.resolutionNote || defaultMockResolutionNote(input.action)
+  });
+}
+
+function defaultMockResolutionNote(action: ResolveReportActionInput["action"]) {
+  if (action === "archive_event") {
+    return "Rapor sonucunda etkinlik arşivlendi.";
+  }
+
+  if (action === "archive_tag") {
+    return "Rapor sonucunda tag arşivlendi.";
+  }
+
+  return "Rapor sonucunda kullanıcı disable edildi.";
 }
 
 function parseParticipantPath(pathname: string, marker: string) {
@@ -900,6 +947,11 @@ export type UpdateReportInput = {
   resolutionNote?: string;
 };
 
+export type ResolveReportActionInput = {
+  action: "archive_event" | "archive_tag" | "disable_user";
+  resolutionNote?: string;
+};
+
 export function updateAdminEvent(id: string, input: Partial<AdminEventInput>): Promise<Event> {
   return requestJson(`/admin/events/${id}`, eventSchema, {
     auth: true,
@@ -940,6 +992,14 @@ export function updateAdminReport(id: string, input: UpdateReportInput): Promise
   return requestJson(`/admin/reports/${id}`, contentReportSchema, {
     auth: true,
     method: "PATCH",
+    body: JSON.stringify(input)
+  });
+}
+
+export function resolveAdminReportAction(id: string, input: ResolveReportActionInput): Promise<ContentReport> {
+  return requestJson(`/admin/reports/${id}/actions`, contentReportSchema, {
+    auth: true,
+    method: "POST",
     body: JSON.stringify(input)
   });
 }
