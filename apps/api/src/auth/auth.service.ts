@@ -2,6 +2,7 @@ import { ConflictException, Injectable, UnauthorizedException } from "@nestjs/co
 import { JwtService } from "@nestjs/jwt";
 import { User } from "@prisma/client";
 import { compare, hash } from "bcryptjs";
+import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { LoginDto, RegisterDto } from "./auth.dto";
 
@@ -9,7 +10,8 @@ import { LoginDto, RegisterDto } from "./auth.dto";
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
+    private readonly mailService: MailService
   ) {}
 
   async login(input: LoginDto, options: { adminOnly?: boolean } = {}) {
@@ -50,6 +52,11 @@ export class AuthService {
         }
       });
 
+      await this.mailService.sendAccountActivatedEmail({
+        to: activatedUser.email,
+        name: activatedUser.name
+      });
+
       return this.createLoginResponse(activatedUser);
     }
 
@@ -61,6 +68,11 @@ export class AuthService {
         role: "user",
         status: "active"
       }
+    });
+
+    await this.mailService.sendAccountActivatedEmail({
+      to: user.email,
+      name: user.name
     });
 
     return this.createLoginResponse(user);

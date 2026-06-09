@@ -52,10 +52,15 @@ Environment variables:
 DATABASE_URL=<Render PostgreSQL connection string>
 JWT_SECRET=<uzun-random-secret>
 WEB_ORIGIN=https://konnektora.netlify.app
+PUBLIC_APP_URL=https://konnektora.netlify.app
+EMAIL_FROM=Konnektora <noreply@your-domain.com>
+RESEND_API_KEY=<resend-api-key>
 NODE_ENV=production
 ```
 
 Render kendi `PORT` değerini sağlar. Bu yüzden ayrıca `PORT` tanımlamak zorunda değilsin.
+
+`EMAIL_FROM` ve `RESEND_API_KEY` tanımlı değilse API üyelik/davet akışlarını bozmaz; gönderilecek e-postaları Render loglarına dev mail olarak yazar.
 
 ## 3. İlk Seed
 

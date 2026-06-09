@@ -14,15 +14,19 @@ describe("AuthService", () => {
     const jwtService = {
       signAsync: jest.fn().mockResolvedValue("signed-token")
     } as unknown as JwtService;
+    const mailService = {
+      sendAccountActivatedEmail: jest.fn().mockResolvedValue(undefined)
+    };
 
     return {
-      service: new AuthService(prisma as never, jwtService),
-      prisma
+      service: new AuthService(prisma as never, jwtService, mailService as never),
+      prisma,
+      mailService
     };
   };
 
   it("activates an invited user when they register with the same email", async () => {
-    const { service, prisma } = createService();
+    const { service, prisma, mailService } = createService();
     const invitedUser = {
       id: "user-1",
       email: "invitee@example.com",
@@ -63,6 +67,10 @@ describe("AuthService", () => {
         role: activatedUser.role,
         status: activatedUser.status
       }
+    });
+    expect(mailService.sendAccountActivatedEmail).toHaveBeenCalledWith({
+      to: activatedUser.email,
+      name: activatedUser.name
     });
   });
 

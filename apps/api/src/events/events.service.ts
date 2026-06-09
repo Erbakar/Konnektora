@@ -3,12 +3,16 @@ import { EventParticipantRole, EventParticipantStatus, EventStatus, Prisma, User
 import { hash } from "bcryptjs";
 import { randomUUID } from "crypto";
 import { toSlug } from "../common/slug";
+import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateEventDto, EventQueryDto, InviteParticipantDto } from "./events.dto";
 
 @Injectable()
 export class EventsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService
+  ) {}
 
   async listPublicEvents(query: EventQueryDto) {
     const page = query.page ?? 1;
@@ -209,9 +213,18 @@ export class EventsService {
 
   async inviteParticipant(eventId: string, input: InviteParticipantDto, actor: User) {
     await this.ensureCanManageParticipants(eventId, actor);
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, title: true, slug: true }
+    });
+
+    if (!event) {
+      throw new NotFoundException("Etkinlik bulunamadı.");
+    }
+
     const invitee = await this.resolveInvitee(input);
 
-    return this.prisma.eventParticipant.upsert({
+    const participant = await this.prisma.eventParticipant.upsert({
       where: { eventId_userId: { eventId, userId: invitee.id } },
       update: {
         status: EventParticipantStatus.invited,
@@ -235,6 +248,16 @@ export class EventsService {
         }
       }
     });
+
+    await this.mailService.sendEventInviteEmail({
+      to: invitee.email,
+      name: invitee.name,
+      eventTitle: event.title,
+      eventSlug: event.slug,
+      invitedByName: actor.name
+    });
+
+    return participant;
   }
 
   async updateParticipantStatus(eventId: string, userId: string, status: EventParticipantStatus, actor: User) {
