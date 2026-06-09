@@ -19,12 +19,10 @@ export function EventCard({ event }: { event: Event }) {
         <div className="event-meta">
           <span>{event.format}</span>
           <span>{event.visibility.replace("_", " ")}</span>
-          <span>{event.language.toUpperCase()}</span>
         </div>
         <h3>
           <Link to={`/events/${event.slug}`}>{event.title}</Link>
         </h3>
-        <p>{event.summary}</p>
       </div>
       <div className="event-details">
         <span>

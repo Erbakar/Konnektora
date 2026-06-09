@@ -39,13 +39,11 @@ export function EventDetailPage() {
         {event.format} · {event.visibility.replace("_", " ")}
       </p>
       <h1>{event.title}</h1>
-      <p className="lead">{event.summary}</p>
       <div className="detail-meta">
         <span>
           <CalendarDays size={16} />
           {new Intl.DateTimeFormat("tr-TR", { dateStyle: "full", timeStyle: "short" }).format(new Date(event.startsAt))}
         </span>
-        <span>{event.timezone}</span>
         <span>
           <MapPin size={16} />
           {[event.city, event.country].filter(Boolean).join(", ") || "Online"}
@@ -80,7 +78,7 @@ export function EventDetailPage() {
         <a
           className="secondary-action"
           href={`mailto:?subject=${encodeURIComponent(event.title)}&body=${encodeURIComponent(
-            `${event.title}\n\n${event.summary}\n\n${window.location.href}`
+            `${event.title}\n\n${window.location.href}`
           )}`}
         >
           <UserPlus size={18} />

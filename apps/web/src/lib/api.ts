@@ -29,6 +29,7 @@ const MOCK_TAGS_KEY = "konnektora_mock_tags";
 const MOCK_USERS_KEY = "konnektora_mock_users";
 const MOCK_PARTICIPANTS_KEY = "konnektora_mock_participants";
 const MOCK_REPORTS_KEY = "konnektora_mock_reports";
+const MOCK_USER_EVENT_IDS_KEY = "konnektora_mock_user_event_ids";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -225,7 +226,20 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   }
 
   if (pathname === "/events" && method === "POST" && options.auth === "user") {
-    return schema.parse(createMockEvent(parseBody<AdminEventInput>(options), getUserSession()?.name ?? "Konnektora User"));
+    const user = getUserSession();
+    return schema.parse(createMockEvent(parseBody<AdminEventInput>(options), user?.name ?? "Konnektora User", user?.id));
+  }
+
+  if (pathname === "/me/events" && method === "GET" && options.auth === "user") {
+    return schema.parse(listMockUserEvents());
+  }
+
+  if (pathname.startsWith("/me/events/") && method === "PATCH" && options.auth === "user") {
+    return schema.parse(updateMockEvent(pathname.slice("/me/events/".length), parseBody(options)));
+  }
+
+  if (pathname.startsWith("/me/events/") && method === "DELETE" && options.auth === "user") {
+    return schema.parse(updateMockEvent(pathname.slice("/me/events/".length), { status: "archived" }));
   }
 
   if (pathname.startsWith("/events/") && pathname.endsWith("/attend") && method === "POST") {
@@ -270,7 +284,6 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     const params = new URLSearchParams(queryString);
     const selectedTag = params.get("tag");
     const selectedFormat = params.get("format");
-    const selectedLanguage = params.get("language");
     const search = params.get("q")?.toLowerCase().trim();
     const dateFrom = params.get("dateFrom");
     const dateTo = params.get("dateTo");
@@ -283,7 +296,6 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
         eventItem.status === "published" &&
         (!selectedTag || eventItem.tags.some((tagItem) => tagItem.slug === selectedTag)) &&
         (!selectedFormat || eventItem.format === selectedFormat) &&
-        (!selectedLanguage || eventItem.language === selectedLanguage) &&
         (!search ||
           [eventItem.title, eventItem.summary, eventItem.description, eventItem.organizerName ?? ""]
             .join(" ")
@@ -691,32 +703,54 @@ function updateMockTag(id: string, input: Partial<Tag>): Tag {
   return updatedTag;
 }
 
-function createMockEvent(input: AdminEventInput, fallbackOrganizerName = "Konnektora Admin"): Event {
+function createMockEvent(input: AdminEventInput, fallbackOrganizerName = "Konnektora Admin", ownerId?: string): Event {
   const events = getStoredEvents();
   const event: Event = {
     id: createId(),
     title: input.title,
     slug: uniqueSlug(input.title, events.map((item) => item.slug)),
-    summary: input.summary,
+    summary: resolveEventSummary(input),
     description: input.description,
     status: parseEventStatus(input.status),
     startsAt: input.startsAt,
     endsAt: input.endsAt ?? new Date(new Date(input.startsAt).getTime() + 1000 * 60 * 60 * 2).toISOString(),
-    timezone: input.timezone,
+    timezone: input.timezone ?? resolveEventTimezone(input.city, input.country),
     format: parseEventFormat(input.format),
     visibility: parseEventVisibility(input.visibility),
     city: input.city || null,
     country: input.country || null,
-    language: input.language,
+    language: input.language ?? "en",
     organizerName: input.organizerName || fallbackOrganizerName,
     externalRegistrationUrl: input.externalRegistrationUrl || null,
     coverImageUrl: input.coverImageUrl || null,
-    capacity: input.capacity ?? null,
+    capacity: null,
     tags: getTagsByIds(input.tagIds ?? [])
   };
 
   setStoredEvents([event, ...events]);
+
+  if (ownerId) {
+    const userEventIds = readStorage<Record<string, string[]>>(MOCK_USER_EVENT_IDS_KEY, {});
+    writeStorage(MOCK_USER_EVENT_IDS_KEY, {
+      ...userEventIds,
+      [ownerId]: [event.id, ...(userEventIds[ownerId] ?? [])]
+    });
+  }
+
   return event;
+}
+
+function listMockUserEvents(): Event[] {
+  const user = getUserSession();
+
+  if (!user) {
+    return [];
+  }
+
+  const userEventIds = readStorage<Record<string, string[]>>(MOCK_USER_EVENT_IDS_KEY, {});
+  const eventIds = new Set(userEventIds[user.id] ?? []);
+
+  return getStoredEvents().filter((event) => eventIds.has(event.id) || event.organizerName === user.name);
 }
 
 function updateMockEvent(id: string, input: Partial<AdminEventInput>): Event {
@@ -729,14 +763,14 @@ function updateMockEvent(id: string, input: Partial<AdminEventInput>): Event {
     return {
       ...event,
       title: input.title ?? event.title,
-      summary: input.summary ?? event.summary,
+      summary: input.summary ? resolveEventSummary(input as AdminEventInput) : event.summary,
       description: input.description ?? event.description,
       status: input.status ? parseEventStatus(input.status) : event.status,
       startsAt: input.startsAt ?? event.startsAt,
       endsAt:
         input.endsAt ??
         (input.startsAt ? new Date(new Date(input.startsAt).getTime() + 1000 * 60 * 60 * 2).toISOString() : event.endsAt),
-      timezone: input.timezone ?? event.timezone,
+      timezone: input.timezone ?? (input.city !== undefined || input.country !== undefined ? resolveEventTimezone(input.city, input.country) : event.timezone),
       format: input.format ? parseEventFormat(input.format) : event.format,
       visibility: input.visibility ? parseEventVisibility(input.visibility) : event.visibility,
       city: input.city === undefined ? event.city : input.city || null,
@@ -746,7 +780,7 @@ function updateMockEvent(id: string, input: Partial<AdminEventInput>): Event {
       externalRegistrationUrl:
         input.externalRegistrationUrl === undefined ? event.externalRegistrationUrl : input.externalRegistrationUrl || null,
       coverImageUrl: input.coverImageUrl === undefined ? event.coverImageUrl : input.coverImageUrl || null,
-      capacity: input.capacity === undefined ? event.capacity : input.capacity ?? null,
+      capacity: event.capacity,
       tags: input.tagIds ? getTagsByIds(input.tagIds) : event.tags
     };
   });
@@ -798,6 +832,27 @@ function uniqueSlug(value: string, usedSlugs: string[]) {
 
 function parseEventStatus(value?: string): Event["status"] {
   return value === "draft" || value === "cancelled" || value === "archived" ? value : "published";
+}
+
+function resolveEventSummary(input: Pick<AdminEventInput, "title" | "summary" | "description">) {
+  const summary = input.summary?.trim();
+
+  if (summary) {
+    return summary;
+  }
+
+  const description = input.description.trim().replace(/\s+/g, " ");
+  return description.length > 300 ? `${description.slice(0, 297)}...` : description || input.title;
+}
+
+function resolveEventTimezone(city?: string, country?: string) {
+  const location = `${city ?? ""} ${country ?? ""}`.toLowerCase();
+
+  if (location.includes("istanbul") || location.includes("turkey") || location.includes("türkiye")) {
+    return "Europe/Istanbul";
+  }
+
+  return "UTC";
 }
 
 function parseEventFormat(value?: string): Event["format"] {
@@ -917,20 +972,19 @@ export function archiveAdminEvent(id: string): Promise<Event> {
 
 export type AdminEventInput = {
   title: string;
-  summary: string;
+  summary?: string;
   description: string;
   startsAt: string;
   endsAt?: string;
-  timezone: string;
+  timezone?: string;
   format: string;
   visibility?: string;
   city?: string;
   country?: string;
-  language: string;
+  language?: string;
   organizerName?: string;
   externalRegistrationUrl?: string;
   coverImageUrl?: string;
-  capacity?: number;
   status?: string;
   tagIds?: string[];
 };
@@ -976,6 +1030,25 @@ export function createUserEvent(input: AdminEventInput): Promise<Event> {
   });
 }
 
+export function listMyEvents(): Promise<Event[]> {
+  return requestJson("/me/events", z.array(eventSchema), { auth: "user" });
+}
+
+export function updateMyEvent(id: string, input: Partial<AdminEventInput>): Promise<Event> {
+  return requestJson(`/me/events/${id}`, eventSchema, {
+    auth: "user",
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+}
+
+export function archiveMyEvent(id: string): Promise<Event> {
+  return requestJson(`/me/events/${id}`, eventSchema, {
+    auth: "user",
+    method: "DELETE"
+  });
+}
+
 export function createContentReport(input: CreateReportInput): Promise<ContentReport> {
   return requestJson("/reports", contentReportSchema, {
     auth: "user",
@@ -1004,8 +1077,8 @@ export function resolveAdminReportAction(id: string, input: ResolveReportActionI
   });
 }
 
-export function listEventParticipants(eventId: string): Promise<EventParticipant[]> {
-  return requestJson(`/events/${eventId}/participants`, z.array(eventParticipantSchema), { auth: true });
+export function listEventParticipants(eventId: string, auth: AuthMode = true): Promise<EventParticipant[]> {
+  return requestJson(`/events/${eventId}/participants`, z.array(eventParticipantSchema), { auth });
 }
 
 export function requestEventAttendance(eventId: string): Promise<EventParticipant> {
@@ -1017,10 +1090,11 @@ export function requestEventAttendance(eventId: string): Promise<EventParticipan
 
 export function inviteEventParticipant(
   eventId: string,
-  input: { userId?: string; email?: string; name?: string; role?: string }
+  input: { userId?: string; email?: string; name?: string; role?: string },
+  auth: AuthMode = true
 ): Promise<EventParticipant> {
   return requestJson(`/events/${eventId}/invite`, eventParticipantSchema, {
-    auth: true,
+    auth,
     method: "POST",
     body: JSON.stringify(input)
   });
@@ -1029,18 +1103,19 @@ export function inviteEventParticipant(
 export function updateEventParticipantStatus(
   eventId: string,
   userId: string,
-  status: string
+  status: string,
+  auth: AuthMode = true
 ): Promise<EventParticipant> {
   return requestJson(`/events/${eventId}/participants/${userId}`, eventParticipantSchema, {
-    auth: true,
+    auth,
     method: "PATCH",
     body: JSON.stringify({ status })
   });
 }
 
-export function checkInEventParticipant(eventId: string, userId: string): Promise<EventParticipant> {
+export function checkInEventParticipant(eventId: string, userId: string, auth: AuthMode = true): Promise<EventParticipant> {
   return requestJson(`/events/${eventId}/participants/${userId}/check-in`, eventParticipantSchema, {
-    auth: true,
+    auth,
     method: "POST"
   });
 }

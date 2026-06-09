@@ -476,20 +476,16 @@ function EventAdminPanel({
     const endsAt = String(form.get("endsAt") || "");
     const registrationUrl = String(form.get("externalRegistrationUrl") || "");
     const coverImageUrl = String(form.get("coverImageUrl") || "");
-    const capacity = Number(form.get("capacity") || 0);
 
     const input: AdminEventInput = {
       title: String(form.get("title")),
-      summary: String(form.get("summary")),
       description: String(form.get("description")),
       startsAt: new Date(startsAt).toISOString(),
-      timezone: String(form.get("timezone") || "Europe/Istanbul"),
       format: String(form.get("format") || "online"),
       visibility: String(form.get("visibility") || "open"),
       status: String(form.get("status") || "published"),
       city: String(form.get("city") || ""),
       country: String(form.get("country") || ""),
-      language: String(form.get("language") || "en"),
       organizerName: String(form.get("organizerName") || "Konnektora Admin"),
       tagIds
     };
@@ -504,10 +500,6 @@ function EventAdminPanel({
 
     if (coverImageUrl) {
       input.coverImageUrl = coverImageUrl;
-    }
-
-    if (capacity > 0) {
-      input.capacity = capacity;
     }
 
     onSave(editingEvent?.id, input);
@@ -533,10 +525,6 @@ function EventAdminPanel({
           <input key={`${editingEvent?.id ?? "new"}-title`} name="title" required minLength={3} placeholder="Etkinlik başlığı" defaultValue={editingEvent?.title ?? ""} />
         </label>
         <label>
-          Özet
-          <textarea key={`${editingEvent?.id ?? "new"}-summary`} name="summary" required minLength={10} rows={2} defaultValue={editingEvent?.summary ?? ""} />
-        </label>
-        <label>
           Açıklama
           <textarea key={`${editingEvent?.id ?? "new"}-description`} name="description" required minLength={10} rows={4} defaultValue={editingEvent?.description ?? ""} />
         </label>
@@ -548,10 +536,6 @@ function EventAdminPanel({
           <label>
             Bitiş
             <input key={`${editingEvent?.id ?? "new"}-ends-at`} name="endsAt" type="datetime-local" defaultValue={editingEvent?.endsAt ? toDateTimeLocalValue(editingEvent.endsAt) : ""} />
-          </label>
-          <label>
-            Zaman dilimi
-            <input key={`${editingEvent?.id ?? "new"}-timezone`} name="timezone" defaultValue={editingEvent?.timezone ?? "Europe/Istanbul"} />
           </label>
           <label>
             Format
@@ -578,16 +562,8 @@ function EventAdminPanel({
             </select>
           </label>
           <label>
-            Dil
-            <input key={`${editingEvent?.id ?? "new"}-language`} name="language" defaultValue={editingEvent?.language ?? "en"} />
-          </label>
-          <label>
             Organizatör
             <input key={`${editingEvent?.id ?? "new"}-organizer`} name="organizerName" defaultValue={editingEvent?.organizerName ?? "Konnektora Admin"} />
-          </label>
-          <label>
-            Kapasite
-            <input key={`${editingEvent?.id ?? "new"}-capacity`} min={1} name="capacity" type="number" defaultValue={editingEvent?.capacity ?? ""} />
           </label>
           <label>
             Şehir

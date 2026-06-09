@@ -27,10 +27,6 @@ export class EventQueryDto {
   tag?: string;
 
   @IsOptional()
-  @IsString()
-  language?: string;
-
-  @IsOptional()
   @IsEnum(EventFormat)
   format?: EventFormat;
 
@@ -72,10 +68,10 @@ export class CreateEventDto {
   @MaxLength(160)
   title!: string;
 
+  @IsOptional()
   @IsString()
-  @MinLength(10)
   @MaxLength(300)
-  summary!: string;
+  summary?: string;
 
   @IsString()
   @MinLength(10)
@@ -92,10 +88,11 @@ export class CreateEventDto {
   @IsDateString()
   endsAt?: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(80)
-  timezone!: string;
+  timezone?: string;
 
   @IsEnum(EventFormat)
   format!: EventFormat;
@@ -124,10 +121,11 @@ export class CreateEventDto {
   @MaxLength(120)
   country?: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(16)
-  language!: string;
+  language?: string;
 
   @IsOptional()
   @IsString()

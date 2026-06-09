@@ -26,6 +26,24 @@ export class EventsController {
     return this.eventsService.createEvent(body, user.id);
   }
 
+  @Get("me/events")
+  @UseGuards(JwtAuthGuard)
+  listMyEvents(@CurrentUser() user: User) {
+    return this.eventsService.listManagedEvents(user);
+  }
+
+  @Patch("me/events/:id")
+  @UseGuards(JwtAuthGuard)
+  updateMyEvent(@Param("id") id: string, @Body() body: Partial<CreateEventDto>, @CurrentUser() user: User) {
+    return this.eventsService.updateManagedEvent(id, body, user);
+  }
+
+  @Delete("me/events/:id")
+  @UseGuards(JwtAuthGuard)
+  archiveMyEvent(@Param("id") id: string, @CurrentUser() user: User) {
+    return this.eventsService.archiveManagedEvent(id, user);
+  }
+
   @Get("events/:id/participants")
   @UseGuards(JwtAuthGuard)
   listParticipants(@Param("id") id: string, @CurrentUser() user: User) {

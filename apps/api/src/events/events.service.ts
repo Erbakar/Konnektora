@@ -36,10 +36,6 @@ export class EventsService {
       ];
     }
 
-    if (query.language) {
-      where.language = query.language;
-    }
-
     if (query.format) {
       where.format = query.format;
     }
@@ -98,6 +94,29 @@ export class EventsService {
     return events.map(this.mapEvent);
   }
 
+  async listManagedEvents(user: User) {
+    const events = await this.prisma.event.findMany({
+      where: {
+        OR: [
+          { createdById: user.id },
+          {
+            participants: {
+              some: {
+                userId: user.id,
+                status: EventParticipantStatus.accepted,
+                role: { in: [EventParticipantRole.organizer, EventParticipantRole.manager] }
+              }
+            }
+          }
+        ]
+      },
+      orderBy: { startsAt: "desc" },
+      include: { tags: { include: { tag: true } } }
+    });
+
+    return events.map(this.mapEvent);
+  }
+
   async createEvent(input: CreateEventDto, userId?: string) {
     const slug = toSlug(input.title);
     await this.ensureSlugAvailable(slug);
@@ -106,23 +125,23 @@ export class EventsService {
       data: {
         title: input.title,
         slug,
-        summary: input.summary,
+        summary: this.resolveSummary(input),
         description: input.description,
         status: input.status ?? EventStatus.published,
         startsAt: new Date(input.startsAt),
         endsAt: input.endsAt ? new Date(input.endsAt) : null,
-        timezone: input.timezone,
+        timezone: input.timezone ?? this.resolveTimezone(input.city, input.country),
         format: input.format,
         visibility: input.visibility ?? "open",
         locationName: input.locationName ?? null,
         locationAddress: input.locationAddress ?? null,
         city: input.city ?? null,
         country: input.country ?? null,
-        language: input.language,
+        language: input.language ?? "en",
         organizerName: input.organizerName ?? null,
         externalRegistrationUrl: input.externalRegistrationUrl ?? null,
         coverImageUrl: input.coverImageUrl ?? null,
-        capacity: input.capacity ?? null,
+        capacity: null,
         createdBy: userId ? { connect: { id: userId } } : undefined,
         updatedBy: userId ? { connect: { id: userId } } : undefined,
         tags: {
@@ -284,12 +303,12 @@ export class EventsService {
     const previousTagIds = await this.getEventTagIds(id);
     const data: Prisma.EventUpdateInput = {
       title: input.title,
-      summary: input.summary,
+      summary: input.summary ? this.resolveSummary(input as CreateEventDto) : undefined,
       description: input.description,
       status: input.status,
       startsAt: input.startsAt ? new Date(input.startsAt) : undefined,
       endsAt: input.endsAt ? new Date(input.endsAt) : undefined,
-      timezone: input.timezone,
+      timezone: input.timezone ?? (input.city !== undefined || input.country !== undefined ? this.resolveTimezone(input.city, input.country) : undefined),
       format: input.format,
       visibility: input.visibility,
       locationName: input.locationName,
@@ -300,7 +319,7 @@ export class EventsService {
       organizerName: input.organizerName,
       externalRegistrationUrl: input.externalRegistrationUrl,
       coverImageUrl: input.coverImageUrl,
-      capacity: input.capacity,
+      capacity: undefined,
       updatedBy: userId ? { connect: { id: userId } } : undefined
     };
 
@@ -328,6 +347,11 @@ export class EventsService {
     return this.mapEvent(event);
   }
 
+  async updateManagedEvent(id: string, input: Partial<CreateEventDto>, user: User) {
+    await this.ensureCanManageParticipants(id, user);
+    return this.updateEvent(id, input, user.id);
+  }
+
   async archiveEvent(id: string, userId?: string) {
     const tagIds = await this.getEventTagIds(id);
     const event = await this.prisma.event.update({
@@ -344,6 +368,11 @@ export class EventsService {
     return this.mapEvent(event);
   }
 
+  async archiveManagedEvent(id: string, user: User) {
+    await this.ensureCanManageParticipants(id, user);
+    return this.archiveEvent(id, user.id);
+  }
+
   private mapEvent(event: Prisma.EventGetPayload<{ include: { tags: { include: { tag: true } } } }>) {
     return {
       ...event,
@@ -351,6 +380,27 @@ export class EventsService {
       endsAt: event.endsAt?.toISOString() ?? null,
       tags: event.tags.map((eventTag) => eventTag.tag)
     };
+  }
+
+  private resolveSummary(input: Pick<CreateEventDto, "title" | "summary" | "description">) {
+    const summary = input.summary?.trim();
+
+    if (summary) {
+      return summary;
+    }
+
+    const description = input.description.trim().replace(/\s+/g, " ");
+    return description.length > 300 ? `${description.slice(0, 297)}...` : description || input.title;
+  }
+
+  private resolveTimezone(city?: string | null, country?: string | null) {
+    const location = `${city ?? ""} ${country ?? ""}`.toLowerCase();
+
+    if (location.includes("istanbul") || location.includes("turkey") || location.includes("türkiye")) {
+      return "Europe/Istanbul";
+    }
+
+    return "UTC";
   }
 
   private async ensureSlugAvailable(slug: string, currentId?: string) {

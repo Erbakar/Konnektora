@@ -94,29 +94,21 @@ export function AccountPage() {
     const form = new FormData(event.currentTarget);
     const startsAt = String(form.get("startsAt"));
     const coverImageUrl = String(form.get("coverImageUrl") || "");
-    const capacity = Number(form.get("capacity") || 0);
     const input: AdminEventInput = {
       title: String(form.get("title")),
-      summary: String(form.get("summary")),
       description: String(form.get("description")),
       startsAt: new Date(startsAt).toISOString(),
-      timezone: String(form.get("timezone") || "Europe/Istanbul"),
       format: String(form.get("format") || "online"),
       visibility: String(form.get("visibility") || "open"),
       status: "published",
       city: String(form.get("city") || ""),
       country: String(form.get("country") || ""),
-      language: String(form.get("language") || "en"),
       organizerName: user?.name ?? "Konnektora User",
       tagIds: form.getAll("tagIds").map(String)
     };
 
     if (coverImageUrl) {
       input.coverImageUrl = coverImageUrl;
-    }
-
-    if (capacity > 0) {
-      input.capacity = capacity;
     }
 
     eventMutation.mutate(input);
@@ -230,10 +222,6 @@ export function AccountPage() {
                   Tag adı
                   <input name="name" placeholder="AI Builders" required minLength={2} maxLength={80} />
                 </label>
-                <label>
-                  Kısa açıklama
-                  <input name="description" placeholder="Optional" maxLength={500} />
-                </label>
               </div>
               <button className="secondary-action" disabled={tagMutation.isPending} type="submit">
                 <Plus size={18} />
@@ -268,10 +256,6 @@ export function AccountPage() {
                 <input name="title" placeholder="Community Breakfast" required minLength={3} />
               </label>
               <label>
-                Özet
-                <textarea name="summary" required minLength={10} rows={2} />
-              </label>
-              <label>
                 Açıklama
                 <textarea name="description" required minLength={10} rows={4} />
               </label>
@@ -297,24 +281,12 @@ export function AccountPage() {
                   </select>
                 </label>
                 <label>
-                  Dil
-                  <input name="language" defaultValue="en" />
-                </label>
-                <label>
                   Şehir
                   <input name="city" placeholder="Istanbul" />
                 </label>
                 <label>
                   Ülke
                   <input name="country" placeholder="Turkey" />
-                </label>
-                <label>
-                  Zaman dilimi
-                  <input name="timezone" defaultValue="Europe/Istanbul" />
-                </label>
-                <label>
-                  Kapasite
-                  <input min={1} name="capacity" type="number" />
                 </label>
               </div>
               <label>

@@ -7,7 +7,6 @@ export function EventsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedTag = searchParams.get("tag");
   const selectedFormat = searchParams.get("format") ?? "";
-  const selectedLanguage = searchParams.get("language") ?? "";
   const selectedQuery = searchParams.get("q") ?? "";
   const selectedDateFrom = searchParams.get("dateFrom") ?? "";
   const selectedDateTo = searchParams.get("dateTo") ?? "";
@@ -69,14 +68,6 @@ export function EventsPage() {
             <option value="online">Online</option>
             <option value="offline">Offline</option>
             <option value="hybrid">Hybrid</option>
-          </select>
-        </label>
-        <label>
-          Dil
-          <select value={selectedLanguage} onChange={(event) => updateFilter("language", event.target.value)}>
-            <option value="">Tümü</option>
-            <option value="en">English</option>
-            <option value="tr">Türkçe</option>
           </select>
         </label>
         <label>
