@@ -5,8 +5,8 @@ import { PrismaService } from "../prisma/prisma.service";
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
-    private readonly jwtService: JwtService,
-    private readonly prisma: PrismaService
+    protected readonly jwtService: JwtService,
+    protected readonly prisma: PrismaService
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -36,4 +36,3 @@ export class JwtAuthGuard implements CanActivate {
     return true;
   }
 }
-

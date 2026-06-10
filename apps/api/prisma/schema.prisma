@@ -79,10 +79,12 @@ model User {
   name         String
   passwordHash String     @map("password_hash")
   role         UserRole   @default(user)
+  adminRoleGroupId String? @map("admin_role_group_id")
   status       UserStatus @default(active)
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
+  adminRoleGroup AdminRoleGroup? @relation(fields: [adminRoleGroupId], references: [id], onDelete: SetNull)
   createdTags  Tag[]   @relation("TagCreatedBy")
   updatedTags  Tag[]   @relation("TagUpdatedBy")
   createdEvents Event[] @relation("EventCreatedBy")
@@ -93,6 +95,20 @@ model User {
   resolvedReports ContentReport[] @relation("ReportResolvedBy")
 
   @@map("users")
+}
+
+model AdminRoleGroup {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  permissions String[] @default([])
+  status      String   @default("active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("admin_role_groups")
 }
 
 model TagCategory {

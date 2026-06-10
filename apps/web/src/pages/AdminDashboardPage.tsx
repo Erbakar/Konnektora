@@ -4,28 +4,44 @@ import { type FormEvent, type ReactNode, useState } from "react";
 import {
   type AdminEventInput,
   adminLogin,
+  adminPermissionOptions,
   archiveAdminEvent,
   archiveAdminTag,
   clearAdminToken,
   createAdminEvent,
+  createAdminRoleGroup,
   createAdminTag,
   getAdminDashboard,
   getAdminToken,
   isMockApiMode,
   checkInEventParticipant,
   inviteEventParticipant,
+  getAdminUser,
   listAdminEvents,
   listAdminReports,
+  listAdminRoleGroups,
   listAdminTags,
+  listAdminUsers,
   listEventParticipants,
   resolveAdminReportAction,
   setAdminToken,
   updateAdminEvent,
+  updateAdminRoleGroup,
   updateEventParticipantStatus,
   updateAdminReport,
-  updateAdminTag
+  updateAdminTag,
+  updateAdminUser
 } from "../lib/api";
-import type { ContentReport, Event, EventParticipant, Tag } from "@konnektora/shared";
+import type {
+  AdminManagedUser,
+  AdminManagedUserDetail,
+  AdminPermission,
+  AdminRoleGroup,
+  ContentReport,
+  Event,
+  EventParticipant,
+  Tag
+} from "@konnektora/shared";
 
 export function AdminDashboardPage() {
   const queryClient = useQueryClient();
@@ -53,6 +69,11 @@ export function AdminDashboardPage() {
     queryFn: listAdminReports,
     enabled: Boolean(token)
   });
+  const roleGroupsQuery = useQuery({
+    queryKey: ["admin-role-groups"],
+    queryFn: listAdminRoleGroups,
+    enabled: Boolean(token)
+  });
 
   const loginMutation = useMutation({
     mutationFn: (input: { email: string; password: string }) => adminLogin(input.email, input.password),
@@ -64,6 +85,8 @@ export function AdminDashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-events"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-tags"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-role-groups"] });
     },
     onError: () => setLoginError("Email veya şifre hatalı.")
   });
@@ -154,6 +177,20 @@ export function AdminDashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
     }
   });
+  const createRoleGroupMutation = useMutation({
+    mutationFn: createAdminRoleGroup,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-role-groups"] });
+    }
+  });
+  const updateRoleGroupMutation = useMutation({
+    mutationFn: (input: { id: string; data: Partial<{ name: string; description?: string; permissions: AdminPermission[]; status: string }> }) =>
+      updateAdminRoleGroup(input.id, input.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-role-groups"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    }
+  });
 
   function handleLogout() {
     clearAdminToken();
@@ -201,6 +238,7 @@ export function AdminDashboardPage() {
   const tags = tagsQuery.data ?? [];
   const events = eventsQuery.data ?? [];
   const reports = reportsQuery.data ?? [];
+  const roleGroups = roleGroupsQuery.data ?? [];
 
   return (
     <section className="page">
@@ -224,6 +262,13 @@ export function AdminDashboardPage() {
       </div>
 
       <div className="admin-grid">
+        <RoleGroupAdminPanel
+          isPending={createRoleGroupMutation.isPending || updateRoleGroupMutation.isPending}
+          onCreate={(input) => createRoleGroupMutation.mutate(input)}
+          onUpdate={(id, data) => updateRoleGroupMutation.mutate({ id, data })}
+          roleGroups={roleGroups}
+        />
+        <UserAdminPanel roleGroups={roleGroups} />
         <ReportAdminPanel
           isPending={updateReportMutation.isPending || resolveReportActionMutation.isPending}
           onResolve={(input) => resolveReportActionMutation.mutate(input)}
@@ -249,6 +294,309 @@ export function AdminDashboardPage() {
         />
       </div>
     </section>
+  );
+}
+
+function RoleGroupAdminPanel({
+  isPending,
+  onCreate,
+  onUpdate,
+  roleGroups
+}: {
+  isPending: boolean;
+  onCreate: (input: { name: string; description?: string; permissions: AdminPermission[] }) => void;
+  onUpdate: (id: string, input: Partial<{ name: string; description?: string; permissions: AdminPermission[]; status: string }>) => void;
+  roleGroups: AdminRoleGroup[];
+}) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+
+    onCreate({
+      name: String(form.get("name")),
+      description: String(form.get("description") || "") || undefined,
+      permissions: form.getAll("permissions").map(String) as AdminPermission[]
+    });
+    event.currentTarget.reset();
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="section-header compact">
+        <h2>Rol / yetki grupları</h2>
+        <span>{roleGroups.length} grup</span>
+      </div>
+      <form className="admin-form" onSubmit={handleSubmit}>
+        <label>
+          Rol grubu adı
+          <input name="name" placeholder="Moderasyon ekibi" required minLength={2} />
+        </label>
+        <label>
+          Açıklama
+          <textarea name="description" rows={2} />
+        </label>
+        <fieldset className="tag-fieldset">
+          <legend>Yetkiler</legend>
+          {adminPermissionOptions.map((permission) => (
+            <label key={permission.value}>
+              <input name="permissions" type="checkbox" value={permission.value} />
+              {permission.label}
+            </label>
+          ))}
+        </fieldset>
+        <button className="secondary-action" disabled={isPending} type="submit">
+          <Plus size={18} />
+          Rol grubu ekle
+        </button>
+      </form>
+      <div className="admin-list">
+        {roleGroups.map((roleGroup) => (
+          <div className="admin-list-item" key={roleGroup.id}>
+            <div className="admin-list-row">
+              <div>
+                <strong>{roleGroup.name}</strong>
+                <span>
+                  {roleGroup.status} · {roleGroup._count?.users ?? 0} üye
+                </span>
+              </div>
+              <span className="muted">{roleGroup.permissions.length} yetki</span>
+              <button
+                className={roleGroup.status === "active" ? "ghost-action" : "secondary-action"}
+                disabled={isPending}
+                onClick={() => onUpdate(roleGroup.id, { status: roleGroup.status === "active" ? "passive" : "active" })}
+                type="button"
+              >
+                {roleGroup.status === "active" ? "Pasif yap" : "Aktif yap"}
+              </button>
+            </div>
+            <div className="profile-tag-row">
+              {roleGroup.permissions.map((permission) => (
+                <span key={permission}>{adminPermissionOptions.find((item) => item.value === permission)?.label ?? permission}</span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
+  const queryClient = useQueryClient();
+  const [filters, setFilters] = useState({ q: "", status: "", role: "", page: 1 });
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const usersQuery = useQuery({
+    queryKey: ["admin-users", filters],
+    queryFn: () => {
+      const params = new URLSearchParams();
+
+      if (filters.q) {
+        params.set("q", filters.q);
+      }
+
+      if (filters.status) {
+        params.set("status", filters.status);
+      }
+
+      if (filters.role) {
+        params.set("role", filters.role);
+      }
+
+      params.set("page", String(filters.page));
+      params.set("pageSize", "25");
+      return listAdminUsers(params);
+    }
+  });
+  const detailQuery = useQuery({
+    queryKey: ["admin-user-detail", selectedUserId],
+    queryFn: () => getAdminUser(selectedUserId ?? ""),
+    enabled: Boolean(selectedUserId)
+  });
+  const updateMutation = useMutation({
+    mutationFn: (input: {
+      id: string;
+      status?: "active" | "invited" | "pending" | "disabled";
+      role?: "user" | "admin" | "super_admin";
+      adminRoleGroupId?: string | null;
+    }) => updateAdminUser(input.id, { status: input.status, role: input.role, adminRoleGroupId: input.adminRoleGroupId }),
+    onSuccess: (_, input) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-user-detail", input.id] });
+    }
+  });
+  const userList = usersQuery.data;
+
+  function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+
+    setFilters({
+      q: String(form.get("q") || ""),
+      status: String(form.get("status") || ""),
+      role: String(form.get("role") || ""),
+      page: 1
+    });
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="section-header compact">
+        <h2>Üye yönetimi</h2>
+        <span>{usersQuery.isLoading ? "Yükleniyor" : `${userList?.total ?? 0} üye`}</span>
+      </div>
+      <form className="guest-invite-form" onSubmit={handleFilterSubmit}>
+        <label>
+          Arama
+          <input name="q" placeholder="Ad veya email" defaultValue={filters.q} />
+        </label>
+        <label>
+          Statü
+          <select name="status" defaultValue={filters.status}>
+            <option value="">Tümü</option>
+            <option value="active">Active</option>
+            <option value="invited">Invited</option>
+            <option value="pending">Pending</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </label>
+        <label>
+          Rol
+          <select name="role" defaultValue={filters.role}>
+            <option value="">Tümü</option>
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+            <option value="super_admin">Super admin</option>
+          </select>
+        </label>
+        <button className="secondary-action" type="submit">
+          Filtrele
+        </button>
+      </form>
+      <div className="admin-list">
+        {(userList?.items ?? []).map((user) => (
+          <UserAdminRow
+            isPending={updateMutation.isPending}
+            key={user.id}
+            onSelect={() => setSelectedUserId(user.id)}
+            onUpdate={(input) => updateMutation.mutate({ id: user.id, ...input })}
+            roleGroups={roleGroups}
+            user={user}
+          />
+        ))}
+      </div>
+      {userList ? (
+        <div className="pagination-row">
+          <button
+            className="secondary-action"
+            disabled={filters.page <= 1}
+            onClick={() => setFilters((current) => ({ ...current, page: Math.max(current.page - 1, 1) }))}
+            type="button"
+          >
+            Önceki
+          </button>
+          <span>Sayfa {userList.page}</span>
+          <button
+            className="secondary-action"
+            disabled={!userList.hasNextPage}
+            onClick={() => setFilters((current) => ({ ...current, page: current.page + 1 }))}
+            type="button"
+          >
+            Sonraki
+          </button>
+        </div>
+      ) : null}
+      {detailQuery.data ? <UserDetailCard user={detailQuery.data} /> : null}
+    </section>
+  );
+}
+
+function UserAdminRow({
+  isPending,
+  onSelect,
+  onUpdate,
+  roleGroups,
+  user
+}: {
+  isPending: boolean;
+  onSelect: () => void;
+  onUpdate: (input: {
+    status?: "active" | "invited" | "pending" | "disabled";
+    role?: "user" | "admin" | "super_admin";
+    adminRoleGroupId?: string | null;
+  }) => void;
+  roleGroups: AdminRoleGroup[];
+  user: AdminManagedUser;
+}) {
+  return (
+    <div className="admin-list-item">
+      <div className="admin-list-row">
+        <div>
+          <strong>{user.name}</strong>
+          <span>{user.email}</span>
+        </div>
+        <span className={`status-pill status-${user.status}`}>{user.status}</span>
+        <span className="muted">{user.role}</span>
+        <select
+          disabled={isPending || user.role === "user"}
+          onChange={(event) => onUpdate({ adminRoleGroupId: event.target.value || null })}
+          value={user.adminRoleGroupId ?? ""}
+        >
+          <option value="">Rol grubu yok</option>
+          {roleGroups
+            .filter((roleGroup) => roleGroup.status === "active")
+            .map((roleGroup) => (
+              <option key={roleGroup.id} value={roleGroup.id}>
+                {roleGroup.name}
+              </option>
+            ))}
+        </select>
+        <span className="muted">{user._count?.createdEvents ?? 0} event</span>
+        <div className="row-actions">
+          <button className="secondary-action" onClick={onSelect} type="button">
+            Detay
+          </button>
+          {user.status === "active" ? (
+            <button className="ghost-action" disabled={isPending} onClick={() => onUpdate({ status: "disabled" })} type="button">
+              Disable
+            </button>
+          ) : (
+            <button className="secondary-action" disabled={isPending} onClick={() => onUpdate({ status: "active" })} type="button">
+              Aktif yap
+            </button>
+          )}
+          {user.role === "user" ? (
+            <button className="secondary-action" disabled={isPending} onClick={() => onUpdate({ role: "admin" })} type="button">
+              Admin yap
+            </button>
+          ) : null}
+          {user.role === "admin" ? (
+            <button className="ghost-action" disabled={isPending} onClick={() => onUpdate({ role: "user" })} type="button">
+              User yap
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UserDetailCard({ user }: { user: AdminManagedUserDetail }) {
+  return (
+    <div className="admin-list-item">
+      <div className="section-header compact">
+        <h3>{user.name}</h3>
+        <span>{user.email}</span>
+      </div>
+      <div className="metric-grid compact-metrics">
+        <MetricCard icon={<CalendarCheck size={20} />} label="Oluşturduğu event" value={user.stats.createdEvents} />
+        <MetricCard icon={<Users size={20} />} label="Katılım" value={user.stats.eventParticipations} />
+        <MetricCard icon={<AlertTriangle size={20} />} label="Bildirdiği şikayet" value={user.stats.submittedReports} />
+        <MetricCard icon={<Check size={20} />} label="Çözdüğü rapor" value={user.stats.resolvedReports} />
+      </div>
+      <div className="profile-tag-row">
+        {user.interestTags.length > 0 ? user.interestTags.map((tag) => <span key={tag.id}>{tag.name}</span>) : <span>İlgi alanı yok</span>}
+      </div>
+    </div>
   );
 }
 

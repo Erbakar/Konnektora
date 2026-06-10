@@ -17,6 +17,28 @@ export const eventParticipantStatusSchema = z.enum([
 export const eventParticipantRoleSchema = z.enum(["attendee", "organizer", "manager"]);
 export const reportTargetTypeSchema = z.enum(["event", "tag", "user"]);
 export const reportStatusSchema = z.enum(["open", "reviewing", "resolved", "dismissed"]);
+export const adminPermissionSchema = z.enum([
+  "cms.manage",
+  "reports.manage",
+  "users.manage",
+  "roles.manage",
+  "tags.manage",
+  "events.manage",
+  "places.manage",
+  "comments.manage",
+  "media.manage"
+]);
+
+export const adminRoleGroupSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(2).max(120),
+  description: z.string().max(500).nullable(),
+  permissions: z.array(adminPermissionSchema),
+  status: z.string(),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional(),
+  _count: z.object({ users: z.number().int().nonnegative() }).optional()
+});
 
 export const slugSchema = z
   .string()
@@ -79,6 +101,39 @@ export const adminUserSchema = z.object({
   status: userStatusSchema.optional()
 });
 
+export const adminManagedUserSchema = adminUserSchema.extend({
+  status: userStatusSchema,
+  adminRoleGroupId: z.string().uuid().nullable().optional(),
+  adminRoleGroup: adminRoleGroupSchema.nullable().optional(),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional(),
+  _count: z
+    .object({
+      createdEvents: z.number().int().nonnegative(),
+      eventParticipations: z.number().int().nonnegative(),
+      submittedReports: z.number().int().nonnegative()
+    })
+    .optional()
+});
+
+export const adminManagedUserListSchema = z.object({
+  items: z.array(adminManagedUserSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+  hasNextPage: z.boolean()
+});
+
+export const adminManagedUserDetailSchema = adminManagedUserSchema.extend({
+  stats: z.object({
+    createdEvents: z.number().int().nonnegative(),
+    eventParticipations: z.number().int().nonnegative(),
+    submittedReports: z.number().int().nonnegative(),
+    resolvedReports: z.number().int().nonnegative()
+  }),
+  interestTags: z.array(tagSchema)
+});
+
 export const eventParticipantSchema = z.object({
   id: z.string().uuid(),
   eventId: z.string().uuid(),
@@ -122,6 +177,8 @@ export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;
 export type ReportTargetType = z.infer<typeof reportTargetTypeSchema>;
 export type ReportStatus = z.infer<typeof reportStatusSchema>;
+export type AdminPermission = z.infer<typeof adminPermissionSchema>;
+export type AdminRoleGroup = z.infer<typeof adminRoleGroupSchema>;
 export type Tag = z.infer<typeof tagSchema>;
 export type Event = z.infer<typeof eventSchema>;
 export type EventList = z.infer<typeof eventListSchema>;
@@ -129,3 +186,6 @@ export type AdminDashboard = z.infer<typeof adminDashboardSchema>;
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
 export type EventParticipant = z.infer<typeof eventParticipantSchema>;
 export type ContentReport = z.infer<typeof contentReportSchema>;
+export type AdminManagedUser = z.infer<typeof adminManagedUserSchema>;
+export type AdminManagedUserList = z.infer<typeof adminManagedUserListSchema>;
+export type AdminManagedUserDetail = z.infer<typeof adminManagedUserDetailSchema>;

@@ -1,5 +1,9 @@
 import {
   adminDashboardSchema,
+  adminManagedUserDetailSchema,
+  adminManagedUserListSchema,
+  adminManagedUserSchema,
+  adminRoleGroupSchema,
   contentReportSchema,
   eventListSchema,
   eventSchema,
@@ -7,6 +11,11 @@ import {
   loginResponseSchema,
   tagSchema,
   type AdminDashboard,
+  type AdminManagedUser,
+  type AdminManagedUserDetail,
+  type AdminManagedUserList,
+  type AdminPermission,
+  type AdminRoleGroup,
   type ContentReport,
   type Event,
   type EventList,
@@ -30,6 +39,7 @@ const MOCK_USERS_KEY = "konnektora_mock_users";
 const MOCK_PARTICIPANTS_KEY = "konnektora_mock_participants";
 const MOCK_REPORTS_KEY = "konnektora_mock_reports";
 const MOCK_USER_EVENT_IDS_KEY = "konnektora_mock_user_event_ids";
+const MOCK_ROLE_GROUPS_KEY = "konnektora_mock_role_groups";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -40,8 +50,22 @@ type MockUser = {
   name: string;
   email: string;
   password: string;
-  status?: "active" | "invited" | "pending";
+  status?: "active" | "invited" | "pending" | "disabled";
+  role?: "user" | "admin" | "super_admin";
+  adminRoleGroupId?: string | null;
 };
+
+export const adminPermissionOptions: Array<{ value: AdminPermission; label: string }> = [
+  { value: "cms.manage", label: "CMS" },
+  { value: "reports.manage", label: "Şikayetler" },
+  { value: "users.manage", label: "Üyeler" },
+  { value: "roles.manage", label: "Rol/Yetki" },
+  { value: "tags.manage", label: "İlgi alanları" },
+  { value: "events.manage", label: "Etkinlikler" },
+  { value: "places.manage", label: "Mekanlar" },
+  { value: "comments.manage", label: "Yorumlar" },
+  { value: "media.manage", label: "Medya" }
+];
 
 type RequestOptions = RequestInit & {
   auth?: AuthMode;
@@ -186,6 +210,35 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname === "/admin/dashboard" && method === "GET") {
     return schema.parse(getMockDashboard());
+  }
+
+  if (pathname === "/admin/users" && method === "GET") {
+    return schema.parse(listMockAdminUsers(new URLSearchParams(queryString)));
+  }
+
+  if (pathname.startsWith("/admin/users/") && method === "GET") {
+    return schema.parse(getMockAdminUser(pathname.slice("/admin/users/".length)));
+  }
+
+  if (pathname.startsWith("/admin/users/") && method === "PATCH") {
+    return schema.parse(updateMockAdminUser(pathname.slice("/admin/users/".length), parseBody<Partial<AdminManagedUser>>(options)));
+  }
+
+  if (pathname === "/admin/role-groups" && method === "GET") {
+    return schema.parse(listMockRoleGroups());
+  }
+
+  if (pathname === "/admin/role-groups" && method === "POST") {
+    return schema.parse(createMockRoleGroup(parseBody<RoleGroupInput>(options)));
+  }
+
+  if (pathname.startsWith("/admin/role-groups/") && method === "PATCH") {
+    return schema.parse(
+      updateMockRoleGroup(
+        pathname.slice("/admin/role-groups/".length),
+        parseBody<Partial<RoleGroupInput> & { status?: string }>(options)
+      )
+    );
   }
 
   if (pathname === "/admin/reports" && method === "GET") {
@@ -508,6 +561,179 @@ function createMockReport(input: CreateReportInput): ContentReport {
 
 function listMockReports(): ContentReport[] {
   return readStorage<ContentReport[]>(MOCK_REPORTS_KEY, []);
+}
+
+function getAllMockUsers(): MockUser[] {
+  const storedUsers = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  const seededUsers: MockUser[] = [
+    {
+      id: "99999999-9999-4999-8999-999999999999",
+      email: "admin@konnektora.local",
+      name: "Konnektora Admin",
+      password: "ChangeMe123!",
+      role: "super_admin",
+      status: "active"
+    },
+    {
+      id: "88888888-8888-4888-8888-888888888888",
+      email: "user@konnektora.local",
+      name: "Konnektora User",
+      password: "ChangeMe123!",
+      role: "user",
+      status: "active"
+    }
+  ];
+  const storedIds = new Set(storedUsers.map((user) => user.id));
+
+  return [...storedUsers, ...seededUsers.filter((user) => !storedIds.has(user.id))];
+}
+
+function listMockRoleGroups(): AdminRoleGroup[] {
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+
+  return readStorage<AdminRoleGroup[]>(MOCK_ROLE_GROUPS_KEY, []).map((roleGroup) => ({
+    ...roleGroup,
+    _count: {
+      users: users.filter((user) => user.adminRoleGroupId === roleGroup.id).length
+    }
+  }));
+}
+
+function createMockRoleGroup(input: RoleGroupInput): AdminRoleGroup {
+  const roleGroups = listMockRoleGroups();
+  const roleGroup: AdminRoleGroup = {
+    id: createId(),
+    name: input.name.trim(),
+    description: input.description?.trim() || null,
+    permissions: [...new Set(input.permissions)],
+    status: "active",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    _count: { users: 0 }
+  };
+
+  writeStorage(MOCK_ROLE_GROUPS_KEY, [roleGroup, ...roleGroups]);
+  return roleGroup;
+}
+
+function updateMockRoleGroup(id: string, input: Partial<RoleGroupInput> & { status?: string }): AdminRoleGroup {
+  const roleGroups = listMockRoleGroups();
+  const updatedRoleGroups = roleGroups.map((roleGroup) =>
+    roleGroup.id === id
+      ? {
+          ...roleGroup,
+          name: input.name?.trim() ?? roleGroup.name,
+          description: input.description === undefined ? roleGroup.description : input.description?.trim() || null,
+          permissions: input.permissions ? [...new Set(input.permissions)] : roleGroup.permissions,
+          status: input.status ?? roleGroup.status,
+          updatedAt: new Date().toISOString()
+        }
+      : roleGroup
+  );
+  const updatedRoleGroup = updatedRoleGroups.find((roleGroup) => roleGroup.id === id);
+
+  if (!updatedRoleGroup) {
+    throw new Error("Mock role group not found");
+  }
+
+  writeStorage(MOCK_ROLE_GROUPS_KEY, updatedRoleGroups);
+  return updatedRoleGroup;
+}
+
+function toAdminManagedUser(user: MockUser): AdminManagedUser {
+  const events = getStoredEvents().filter((event) => event.organizerName === user.name);
+  const participants = readStorage<EventParticipant[]>(MOCK_PARTICIPANTS_KEY, []).filter(
+    (participant) => participant.userId === user.id
+  );
+  const reports = readStorage<ContentReport[]>(MOCK_REPORTS_KEY, []).filter((report) => report.reporterId === user.id);
+  const adminRoleGroup = listMockRoleGroups().find((roleGroup) => roleGroup.id === user.adminRoleGroupId) ?? null;
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role ?? "user",
+    status: user.status ?? "active",
+    adminRoleGroupId: user.adminRoleGroupId ?? null,
+    adminRoleGroup,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    _count: {
+      createdEvents: events.length,
+      eventParticipations: participants.length,
+      submittedReports: reports.length
+    }
+  };
+}
+
+function listMockAdminUsers(params: URLSearchParams): AdminManagedUserList {
+  const q = params.get("q")?.toLowerCase().trim();
+  const status = params.get("status");
+  const role = params.get("role");
+  const page = Math.max(Number(params.get("page") || "1"), 1);
+  const pageSize = Math.min(Math.max(Number(params.get("pageSize") || "25"), 1), 100);
+  const users = getAllMockUsers()
+    .map(toAdminManagedUser)
+    .filter(
+      (user) =>
+        (!q || [user.name, user.email].join(" ").toLowerCase().includes(q)) &&
+        (!status || user.status === status) &&
+        (!role || user.role === role)
+    );
+  const start = (page - 1) * pageSize;
+
+  return {
+    items: users.slice(start, start + pageSize),
+    total: users.length,
+    page,
+    pageSize,
+    hasNextPage: page * pageSize < users.length
+  };
+}
+
+function getMockAdminUser(id: string): AdminManagedUserDetail {
+  const user = getAllMockUsers().find((item) => item.id === id);
+
+  if (!user) {
+    throw new Error("Mock user not found");
+  }
+
+  const managedUser = toAdminManagedUser(user);
+  const allInterests = readStorage<Record<string, string[]>>(USER_INTEREST_TAGS_KEY, {});
+
+  return {
+    ...managedUser,
+    stats: {
+      createdEvents: managedUser._count?.createdEvents ?? 0,
+      eventParticipations: managedUser._count?.eventParticipations ?? 0,
+      submittedReports: managedUser._count?.submittedReports ?? 0,
+      resolvedReports: readStorage<ContentReport[]>(MOCK_REPORTS_KEY, []).filter((report) => report.resolvedById === id).length
+    },
+    interestTags: getTagsByIds(allInterests[id] ?? [])
+  };
+}
+
+function updateMockAdminUser(id: string, input: Partial<AdminManagedUser>): AdminManagedUser {
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  const existing = getAllMockUsers().find((user) => user.id === id);
+
+  if (!existing) {
+    throw new Error("Mock user not found");
+  }
+
+  const updatedUser: MockUser = {
+    ...existing,
+    status: input.status ?? existing.status,
+    role: input.role ?? existing.role,
+    adminRoleGroupId:
+      input.adminRoleGroupId === undefined ? existing.adminRoleGroupId ?? null : input.adminRoleGroupId ?? null
+  };
+  const nextUsers = users.some((user) => user.id === id)
+    ? users.map((user) => (user.id === id ? updatedUser : user))
+    : [updatedUser, ...users];
+
+  writeStorage(MOCK_USERS_KEY, nextUsers);
+  return toAdminManagedUser(updatedUser);
 }
 
 function updateMockReport(id: string, input: UpdateReportInput): ContentReport {
@@ -932,6 +1158,53 @@ export function getAdminDashboard(): Promise<AdminDashboard> {
   return requestJson("/admin/dashboard", adminDashboardSchema, { auth: true });
 }
 
+export function listAdminUsers(params?: URLSearchParams): Promise<AdminManagedUserList> {
+  const query = params?.toString();
+  return requestJson(`/admin/users${query ? `?${query}` : ""}`, adminManagedUserListSchema, { auth: true });
+}
+
+export function getAdminUser(id: string): Promise<AdminManagedUserDetail> {
+  return requestJson(`/admin/users/${id}`, adminManagedUserDetailSchema, { auth: true });
+}
+
+export function updateAdminUser(
+  id: string,
+  input: {
+    status?: "active" | "invited" | "pending" | "disabled";
+    role?: "user" | "admin" | "super_admin";
+    adminRoleGroupId?: string | null;
+  }
+): Promise<AdminManagedUser> {
+  return requestJson(`/admin/users/${id}`, adminManagedUserSchema, {
+    auth: true,
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+}
+
+export function listAdminRoleGroups(): Promise<AdminRoleGroup[]> {
+  return requestJson("/admin/role-groups", z.array(adminRoleGroupSchema), { auth: true });
+}
+
+export function createAdminRoleGroup(input: RoleGroupInput): Promise<AdminRoleGroup> {
+  return requestJson("/admin/role-groups", adminRoleGroupSchema, {
+    auth: true,
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function updateAdminRoleGroup(
+  id: string,
+  input: Partial<RoleGroupInput> & { status?: string }
+): Promise<AdminRoleGroup> {
+  return requestJson(`/admin/role-groups/${id}`, adminRoleGroupSchema, {
+    auth: true,
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+}
+
 export function listAdminEvents(): Promise<Event[]> {
   return requestJson("/admin/events", z.array(eventSchema), { auth: true });
 }
@@ -1004,6 +1277,12 @@ export type UpdateReportInput = {
 export type ResolveReportActionInput = {
   action: "archive_event" | "archive_tag" | "disable_user";
   resolutionNote?: string;
+};
+
+export type RoleGroupInput = {
+  name: string;
+  description?: string;
+  permissions: AdminPermission[];
 };
 
 export function updateAdminEvent(id: string, input: Partial<AdminEventInput>): Promise<Event> {
