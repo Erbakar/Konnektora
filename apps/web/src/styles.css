@@ -862,6 +862,18 @@ select {
   padding: 12px;
 }
 
+.admin-list-button {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.admin-list-button:hover {
+  background: #f4f7f3;
+}
+
 .admin-list-row .row-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1213,6 +1225,87 @@ select {
   gap: 12px;
   justify-content: center;
   margin-top: 30px;
+}
+
+.corp-announcements {
+  display: grid;
+  gap: 12px;
+  margin: -34px auto 0;
+  max-width: 1040px;
+  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.corp-announcement {
+  align-items: flex-start;
+  background: #ffffff;
+  border: 1px solid #dbe4df;
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgba(30, 45, 39, 0.1);
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+}
+
+.corp-announcement > span {
+  align-items: center;
+  background: #eaf3ef;
+  border-radius: 999px;
+  color: #1f5f46;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.corp-announcement strong {
+  color: #10231f;
+  display: block;
+  font-size: 16px;
+  margin-bottom: 5px;
+}
+
+.corp-announcement p {
+  color: #4f5d57;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.policy-page {
+  margin: 0 auto;
+  max-width: 920px;
+  padding-block: 64px;
+}
+
+.policy-header {
+  border-bottom: 1px solid #e3ebe6;
+  margin-bottom: 28px;
+  padding-bottom: 24px;
+}
+
+.policy-header h1 {
+  font-size: clamp(34px, 5vw, 52px);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin: 0;
+}
+
+.policy-header p {
+  color: #5b6962;
+  font-size: 16px;
+  margin: 14px 0 0;
+}
+
+.policy-content {
+  color: #263631;
+  font-size: 17px;
+  line-height: 1.75;
+}
+
+.policy-content p {
+  margin: 0 0 18px;
 }
 
 .corp-btn {

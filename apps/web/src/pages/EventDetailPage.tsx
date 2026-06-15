@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { CalendarDays, ExternalLink, Flag, MapPin, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { createContentReport, getEvent, getUserSession, requestEventAttendance } from "../lib/api";
+import { createContentReport, getEvent, getUserSession, listReportRules, requestEventAttendance } from "../lib/api";
 
 export function EventDetailPage() {
   const { slug = "" } = useParams();
@@ -12,6 +12,11 @@ export function EventDetailPage() {
     queryKey: ["event", slug],
     queryFn: () => getEvent(slug),
     enabled: Boolean(slug)
+  });
+  const { data: reportRules = [] } = useQuery({
+    queryKey: ["report-rules", "event"],
+    queryFn: () => listReportRules("event"),
+    enabled: Boolean(user)
   });
   const attendMutation = useMutation({
     mutationFn: requestEventAttendance
@@ -97,19 +102,36 @@ export function EventDetailPage() {
           onSubmit={(submitEvent: FormEvent<HTMLFormElement>) => {
             submitEvent.preventDefault();
             const form = new FormData(submitEvent.currentTarget);
+            const ruleId = String(form.get("ruleId") || "");
+            const selectedRule = reportRules.find((rule) => rule.id === ruleId);
             reportMutation.mutate({
               targetType: "event",
               targetId: event.id,
-              reason: String(form.get("reason")),
+              ruleId: ruleId || undefined,
+              reason: selectedRule?.title ?? String(form.get("reason")),
               details: String(form.get("details") || "") || undefined
             });
             submitEvent.currentTarget.reset();
           }}
         >
-          <label>
-            Rapor sebebi
-            <input name="reason" placeholder="Yanıltıcı bilgi, uygunsuz içerik..." required minLength={3} maxLength={120} />
-          </label>
+          {reportRules.length ? (
+            <label>
+              Rapor sebebi
+              <select name="ruleId" required>
+                <option value="">Sebep seç</option>
+                {reportRules.map((rule) => (
+                  <option key={rule.id} value={rule.id}>
+                    {rule.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label>
+              Rapor sebebi
+              <input name="reason" placeholder="Yanıltıcı bilgi, uygunsuz içerik..." required minLength={3} maxLength={120} />
+            </label>
+          )}
           <label>
             Detay
             <textarea name="details" rows={3} maxLength={1000} />

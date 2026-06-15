@@ -8,6 +8,7 @@ import { AdminDashboardPage } from "./pages/AdminDashboardPage";
 import { EventDetailPage } from "./pages/EventDetailPage";
 import { EventsPage } from "./pages/EventsPage";
 import { HomePage } from "./pages/HomePage";
+import { PolicyPage } from "./pages/PolicyPage";
 import "./styles.css";
 
 const queryClient = new QueryClient();
@@ -21,7 +22,8 @@ const router = createBrowserRouter([
       { path: "events", element: <EventsPage /> },
       { path: "events/:slug", element: <EventDetailPage /> },
       { path: "account", element: <AccountPage /> },
-      { path: "admin", element: <AdminDashboardPage /> }
+      { path: "admin", element: <AdminDashboardPage /> },
+      { path: ":type", element: <PolicyPage /> }
     ]
   }
 ]);

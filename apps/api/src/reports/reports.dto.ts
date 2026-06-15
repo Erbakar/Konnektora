@@ -1,5 +1,5 @@
 import { ReportStatus, ReportTargetType } from "@prisma/client";
-import { IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
+import { IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from "class-validator";
 
 export enum ModerationAction {
   archive_event = "archive_event",
@@ -13,6 +13,10 @@ export class CreateReportDto {
 
   @IsUUID()
   targetId!: string;
+
+  @IsOptional()
+  @IsUUID()
+  ruleId?: string;
 
   @IsString()
   @MinLength(3)
@@ -43,4 +47,58 @@ export class ResolveReportActionDto {
   @IsString()
   @MaxLength(1000)
   resolutionNote?: string;
+}
+
+export class CreateReportRuleDto {
+  @IsEnum(ReportTargetType)
+  targetType!: ReportTargetType;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(160)
+  title!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  violationScore!: number;
+}
+
+export class UpdateReportRuleDto {
+  @IsOptional()
+  @IsEnum(ReportTargetType)
+  targetType?: ReportTargetType;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(160)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  violationScore?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["active", "passive"])
+  status?: string;
+}
+
+export class UpdateReportGroupNoteDto {
+  @IsString()
+  @MaxLength(2000)
+  note!: string;
 }

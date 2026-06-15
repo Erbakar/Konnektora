@@ -1,23 +1,37 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CalendarCheck, Check, ClipboardCheck, LogOut, Plus, Tags, Users, X } from "lucide-react";
+import { AlertTriangle, CalendarCheck, Check, ClipboardCheck, Megaphone, LogOut, Plus, Tags, Users, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import {
   type AdminEventInput,
+  type AnnouncementInput,
+  type PolicyInput,
+  type ReportRuleInput,
   adminLogin,
   adminPermissionOptions,
   archiveAdminEvent,
   archiveAdminTag,
   clearAdminToken,
+  createAdminAnnouncement,
   createAdminEvent,
+  createAdminCmsCategory,
+  createAdminFaq,
+  createAdminReportRule,
   createAdminRoleGroup,
   createAdminTag,
+  getAdminReportGroup,
   getAdminDashboard,
   getAdminToken,
   isMockApiMode,
   checkInEventParticipant,
   inviteEventParticipant,
   getAdminUser,
+  listAdminAnnouncements,
+  listAdminCmsCategories,
   listAdminEvents,
+  listAdminFaqs,
+  listAdminPolicies,
+  listAdminReportGroups,
+  listAdminReportRules,
   listAdminReports,
   listAdminRoleGroups,
   listAdminTags,
@@ -25,21 +39,36 @@ import {
   listEventParticipants,
   resolveAdminReportAction,
   setAdminToken,
+  updateAdminAnnouncement,
   updateAdminEvent,
+  updateAdminCmsCategory,
+  updateAdminFaq,
   updateAdminRoleGroup,
   updateEventParticipantStatus,
   updateAdminReport,
+  updateAdminReportGroupNote,
+  updateAdminReportRule,
   updateAdminTag,
-  updateAdminUser
+  updateAdminUser,
+  upsertAdminPolicy
 } from "../lib/api";
 import type {
   AdminManagedUser,
   AdminManagedUserDetail,
   AdminPermission,
   AdminRoleGroup,
+  Announcement,
+  CmsCategory,
+  CmsPolicy,
   ContentReport,
   Event,
   EventParticipant,
+  Faq,
+  PolicyType,
+  ReportGroup,
+  ReportGroupDetail,
+  ReportRule,
+  ReportTargetType,
   Tag
 } from "@konnektora/shared";
 
@@ -48,6 +77,8 @@ export function AdminDashboardPage() {
   const [token, setToken] = useState(() => getAdminToken());
   const [loginError, setLoginError] = useState<string | null>(null);
   const [eventNotice, setEventNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [reportGroupScope, setReportGroupScope] = useState<"active" | "old">("active");
+  const [selectedReportGroup, setSelectedReportGroup] = useState<{ targetType: ReportTargetType; targetId: string } | null>(null);
 
   const dashboardQuery = useQuery({
     queryKey: ["admin-dashboard"],
@@ -69,9 +100,44 @@ export function AdminDashboardPage() {
     queryFn: listAdminReports,
     enabled: Boolean(token)
   });
+  const reportRulesQuery = useQuery({
+    queryKey: ["admin-report-rules"],
+    queryFn: listAdminReportRules,
+    enabled: Boolean(token)
+  });
+  const reportGroupsQuery = useQuery({
+    queryKey: ["admin-report-groups", reportGroupScope],
+    queryFn: () => listAdminReportGroups(reportGroupScope),
+    enabled: Boolean(token)
+  });
+  const reportGroupDetailQuery = useQuery({
+    queryKey: ["admin-report-group", selectedReportGroup?.targetType, selectedReportGroup?.targetId],
+    queryFn: () => getAdminReportGroup(selectedReportGroup!.targetType, selectedReportGroup!.targetId),
+    enabled: Boolean(token && selectedReportGroup)
+  });
   const roleGroupsQuery = useQuery({
     queryKey: ["admin-role-groups"],
     queryFn: listAdminRoleGroups,
+    enabled: Boolean(token)
+  });
+  const cmsCategoriesQuery = useQuery({
+    queryKey: ["admin-cms-categories"],
+    queryFn: listAdminCmsCategories,
+    enabled: Boolean(token)
+  });
+  const faqsQuery = useQuery({
+    queryKey: ["admin-faqs"],
+    queryFn: listAdminFaqs,
+    enabled: Boolean(token)
+  });
+  const announcementsQuery = useQuery({
+    queryKey: ["admin-announcements"],
+    queryFn: listAdminAnnouncements,
+    enabled: Boolean(token)
+  });
+  const policiesQuery = useQuery({
+    queryKey: ["admin-policies"],
+    queryFn: listAdminPolicies,
     enabled: Boolean(token)
   });
 
@@ -85,8 +151,14 @@ export function AdminDashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-events"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-tags"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-rules"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-groups"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-role-groups"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-cms-categories"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-faqs"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-announcements"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-policies"] });
     },
     onError: () => setLoginError("Email veya şifre hatalı.")
   });
@@ -160,6 +232,8 @@ export function AdminDashboardPage() {
       updateAdminReport(input.id, { status: input.status, resolutionNote: input.resolutionNote }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-groups"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-group"] });
     }
   });
   const resolveReportActionMutation = useMutation({
@@ -170,11 +244,36 @@ export function AdminDashboardPage() {
     }) => resolveAdminReportAction(input.id, { action: input.action, resolutionNote: input.resolutionNote }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-groups"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-group"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-events"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-tags"] });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
       void queryClient.invalidateQueries({ queryKey: ["tags"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+    }
+  });
+  const createReportRuleMutation = useMutation({
+    mutationFn: createAdminReportRule,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-rules"] });
+      void queryClient.invalidateQueries({ queryKey: ["report-rules"] });
+    }
+  });
+  const updateReportRuleMutation = useMutation({
+    mutationFn: (input: { id: string; data: Partial<ReportRuleInput> & { status?: string } }) =>
+      updateAdminReportRule(input.id, input.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-rules"] });
+      void queryClient.invalidateQueries({ queryKey: ["report-rules"] });
+    }
+  });
+  const updateReportGroupNoteMutation = useMutation({
+    mutationFn: (input: { targetType: ReportTargetType; targetId: string; note: string }) =>
+      updateAdminReportGroupNote(input.targetType, input.targetId, input.note),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-groups"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-group"] });
     }
   });
   const createRoleGroupMutation = useMutation({
@@ -189,6 +288,56 @@ export function AdminDashboardPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin-role-groups"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    }
+  });
+  const createCmsCategoryMutation = useMutation({
+    mutationFn: createAdminCmsCategory,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-cms-categories"] });
+    }
+  });
+  const updateCmsCategoryMutation = useMutation({
+    mutationFn: (input: { id: string; data: Partial<CmsCategory> }) => updateAdminCmsCategory(input.id, input.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-cms-categories"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-faqs"] });
+    }
+  });
+  const createFaqMutation = useMutation({
+    mutationFn: createAdminFaq,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-faqs"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-cms-categories"] });
+    }
+  });
+  const updateFaqMutation = useMutation({
+    mutationFn: (input: { id: string; data: Partial<{ categoryId: string; title: string; body: string; status: string }> }) =>
+      updateAdminFaq(input.id, input.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-faqs"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-cms-categories"] });
+    }
+  });
+  const createAnnouncementMutation = useMutation({
+    mutationFn: createAdminAnnouncement,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-announcements"] });
+      void queryClient.invalidateQueries({ queryKey: ["announcements"] });
+    }
+  });
+  const updateAnnouncementMutation = useMutation({
+    mutationFn: (input: { id: string; data: Partial<AnnouncementInput> & { status?: string } }) =>
+      updateAdminAnnouncement(input.id, input.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-announcements"] });
+      void queryClient.invalidateQueries({ queryKey: ["announcements"] });
+    }
+  });
+  const upsertPolicyMutation = useMutation({
+    mutationFn: upsertAdminPolicy,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-policies"] });
+      void queryClient.invalidateQueries({ queryKey: ["policy"] });
     }
   });
 
@@ -238,7 +387,14 @@ export function AdminDashboardPage() {
   const tags = tagsQuery.data ?? [];
   const events = eventsQuery.data ?? [];
   const reports = reportsQuery.data ?? [];
+  const reportGroups = reportGroupsQuery.data ?? [];
+  const reportGroupDetail = reportGroupDetailQuery.data ?? null;
+  const reportRules = reportRulesQuery.data ?? [];
   const roleGroups = roleGroupsQuery.data ?? [];
+  const cmsCategories = cmsCategoriesQuery.data ?? [];
+  const faqs = faqsQuery.data ?? [];
+  const announcements = announcementsQuery.data ?? [];
+  const policies = policiesQuery.data ?? [];
 
   return (
     <section className="page">
@@ -262,6 +418,28 @@ export function AdminDashboardPage() {
       </div>
 
       <div className="admin-grid">
+        <CmsAdminPanel
+          announcements={announcements}
+          categories={cmsCategories}
+          faqs={faqs}
+          isPending={
+            createCmsCategoryMutation.isPending ||
+            updateCmsCategoryMutation.isPending ||
+            createFaqMutation.isPending ||
+            updateFaqMutation.isPending ||
+            createAnnouncementMutation.isPending ||
+            updateAnnouncementMutation.isPending ||
+            upsertPolicyMutation.isPending
+          }
+          onCreateAnnouncement={(input) => createAnnouncementMutation.mutate(input)}
+          onCreateCategory={(input) => createCmsCategoryMutation.mutate(input)}
+          onCreateFaq={(input) => createFaqMutation.mutate(input)}
+          onSavePolicy={(input) => upsertPolicyMutation.mutate(input)}
+          onUpdateAnnouncement={(id, data) => updateAnnouncementMutation.mutate({ id, data })}
+          onUpdateCategory={(id, data) => updateCmsCategoryMutation.mutate({ id, data })}
+          onUpdateFaq={(id, data) => updateFaqMutation.mutate({ id, data })}
+          policies={policies}
+        />
         <RoleGroupAdminPanel
           isPending={createRoleGroupMutation.isPending || updateRoleGroupMutation.isPending}
           onCreate={(input) => createRoleGroupMutation.mutate(input)}
@@ -270,9 +448,24 @@ export function AdminDashboardPage() {
         />
         <UserAdminPanel roleGroups={roleGroups} />
         <ReportAdminPanel
-          isPending={updateReportMutation.isPending || resolveReportActionMutation.isPending}
+          isPending={
+            updateReportMutation.isPending ||
+            resolveReportActionMutation.isPending ||
+            createReportRuleMutation.isPending ||
+            updateReportRuleMutation.isPending ||
+            updateReportGroupNoteMutation.isPending
+          }
+          groupDetail={reportGroupDetail}
+          groupScope={reportGroupScope}
+          groups={reportGroups}
+          onCreateRule={(input) => createReportRuleMutation.mutate(input)}
           onResolve={(input) => resolveReportActionMutation.mutate(input)}
+          onSaveGroupNote={(input) => updateReportGroupNoteMutation.mutate(input)}
+          onSelectGroup={(group) => setSelectedReportGroup({ targetType: group.targetType, targetId: group.targetId })}
+          onSetGroupScope={setReportGroupScope}
+          onUpdateRule={(id, data) => updateReportRuleMutation.mutate({ id, data })}
           onUpdate={(input) => updateReportMutation.mutate(input)}
+          rules={reportRules}
           reports={reports}
         />
         <TagAdminPanel
@@ -292,6 +485,303 @@ export function AdminDashboardPage() {
           onStatusChange={(id, status) => updateEventMutation.mutate({ id, status })}
           tags={tags.filter((tag) => tag.status === "active")}
         />
+      </div>
+    </section>
+  );
+}
+
+function formatDateTime(value: string | Date) {
+  return new Intl.DateTimeFormat("tr-TR", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
+}
+
+const policyTypes: Array<{ value: PolicyType; label: string; defaultTitle: string; defaultBody: string }> = [
+  {
+    value: "privacy",
+    label: "Gizlilik Politikası",
+    defaultTitle: "Privacy Policy",
+    defaultBody: "Konnektora gizlilik politikası içeriği admin panelinden yönetilir."
+  },
+  {
+    value: "terms",
+    label: "Kullanım Şartları",
+    defaultTitle: "Terms of Use",
+    defaultBody: "Konnektora kullanım şartları içeriği admin panelinden yönetilir."
+  },
+  {
+    value: "cookies",
+    label: "Çerez Politikası",
+    defaultTitle: "Cookie Policy",
+    defaultBody: "Konnektora çerez politikası içeriği admin panelinden yönetilir."
+  }
+];
+
+function CmsAdminPanel({
+  announcements,
+  categories,
+  faqs,
+  isPending,
+  onCreateAnnouncement,
+  onCreateCategory,
+  onCreateFaq,
+  onSavePolicy,
+  onUpdateAnnouncement,
+  onUpdateCategory,
+  onUpdateFaq,
+  policies
+}: {
+  announcements: Announcement[];
+  categories: CmsCategory[];
+  faqs: Faq[];
+  isPending: boolean;
+  onCreateAnnouncement: (input: AnnouncementInput) => void;
+  onCreateCategory: (input: { name: string; description?: string }) => void;
+  onCreateFaq: (input: { categoryId: string; title: string; body: string }) => void;
+  onSavePolicy: (input: PolicyInput) => void;
+  onUpdateAnnouncement: (id: string, input: Partial<AnnouncementInput> & { status?: string }) => void;
+  onUpdateCategory: (id: string, input: Partial<CmsCategory>) => void;
+  onUpdateFaq: (id: string, input: Partial<{ categoryId: string; title: string; body: string; status: string }>) => void;
+  policies: CmsPolicy[];
+}) {
+  function handleCategorySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+
+    onCreateCategory({
+      name: String(form.get("name")),
+      description: String(form.get("description") || "") || undefined
+    });
+    event.currentTarget.reset();
+  }
+
+  function handleFaqSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+
+    onCreateFaq({
+      categoryId: String(form.get("categoryId")),
+      title: String(form.get("title")),
+      body: String(form.get("body"))
+    });
+    event.currentTarget.reset();
+  }
+
+  function handleAnnouncementSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const publishAt = String(form.get("publishAt") || "");
+    const expiresAt = String(form.get("expiresAt") || "");
+
+    onCreateAnnouncement({
+      title: String(form.get("title")),
+      body: String(form.get("body")),
+      target: String(form.get("target") || "all"),
+      publishAt: publishAt ? new Date(publishAt).toISOString() : undefined,
+      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined
+    });
+    event.currentTarget.reset();
+  }
+
+  function handlePolicySubmit(event: FormEvent<HTMLFormElement>, type: PolicyType) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+
+    onSavePolicy({
+      type,
+      title: String(form.get("title")),
+      body: String(form.get("body")),
+      status: String(form.get("status") || "active")
+    });
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="section-header compact">
+        <h2>CMS / SSS</h2>
+        <span>
+          {categories.length} kategori · {faqs.length} SSS · {announcements.length} duyuru · {policies.length} policy
+        </span>
+      </div>
+      <div className="admin-subsection">
+        <h3>Policy sayfaları</h3>
+        <div className="policy-editor-grid">
+          {policyTypes.map((policyType) => {
+            const policy = policies.find((item) => item.type === policyType.value);
+
+            return (
+              <form className="admin-form" key={policyType.value} onSubmit={(event) => handlePolicySubmit(event, policyType.value)}>
+                <div className="admin-list-row">
+                  <div>
+                    <strong>{policyType.label}</strong>
+                    <span>{policy?.status ?? "henüz oluşturulmadı"}</span>
+                  </div>
+                  <select name="status" defaultValue={policy?.status ?? "active"} disabled={isPending}>
+                    <option value="active">Aktif</option>
+                    <option value="passive">Pasif</option>
+                  </select>
+                </div>
+                <label>
+                  Başlık
+                  <input name="title" defaultValue={policy?.title ?? policyType.defaultTitle} required minLength={3} maxLength={160} />
+                </label>
+                <label>
+                  İçerik
+                  <textarea name="body" defaultValue={policy?.body ?? policyType.defaultBody} required minLength={10} rows={8} />
+                </label>
+                <button className="secondary-action" disabled={isPending} type="submit">
+                  <Check size={18} />
+                  Kaydet
+                </button>
+              </form>
+            );
+          })}
+        </div>
+      </div>
+      <form className="admin-form" onSubmit={handleAnnouncementSubmit}>
+        <h3>Duyuru oluştur</h3>
+        <label>
+          Başlık
+          <input name="title" required minLength={3} maxLength={160} />
+        </label>
+        <label>
+          İçerik
+          <textarea name="body" required minLength={3} rows={4} />
+        </label>
+        <div className="admin-form-grid">
+          <label>
+            Hedef
+            <select name="target" defaultValue="all">
+              <option value="all">Herkes</option>
+              <option value="members">Üyeler</option>
+              <option value="admins">Adminler</option>
+            </select>
+          </label>
+          <label>
+            Yayın zamanı
+            <input name="publishAt" type="datetime-local" />
+          </label>
+          <label>
+            Bitiş zamanı
+            <input name="expiresAt" type="datetime-local" />
+          </label>
+        </div>
+        <button className="secondary-action" disabled={isPending} type="submit">
+          <Megaphone size={18} />
+          Duyuru ekle
+        </button>
+      </form>
+      <div className="admin-list">
+        {announcements.map((announcement) => (
+          <div className="admin-list-item" key={announcement.id}>
+            <div className="admin-list-row">
+              <div>
+                <strong>{announcement.title}</strong>
+                <span>
+                  {announcement.status} · {announcement.target} · {formatDateTime(announcement.publishAt)}
+                </span>
+              </div>
+              <button
+                className={announcement.status === "active" ? "ghost-action" : "secondary-action"}
+                disabled={isPending}
+                onClick={() =>
+                  onUpdateAnnouncement(announcement.id, { status: announcement.status === "active" ? "passive" : "active" })
+                }
+                type="button"
+              >
+                {announcement.status === "active" ? "Pasif yap" : "Aktif yap"}
+              </button>
+            </div>
+            <p className="form-help">{announcement.body}</p>
+          </div>
+        ))}
+      </div>
+      <form className="admin-form" onSubmit={handleCategorySubmit}>
+        <h3>Kategori oluştur</h3>
+        <label>
+          Kategori adı
+          <input name="name" placeholder="Account" required minLength={2} />
+        </label>
+        <label>
+          Açıklama
+          <textarea name="description" rows={2} />
+        </label>
+        <button className="secondary-action" disabled={isPending} type="submit">
+          <Plus size={18} />
+          Kategori ekle
+        </button>
+      </form>
+      <div className="admin-list">
+        {categories.map((category) => (
+          <div className="admin-list-row" key={category.id}>
+            <div>
+              <strong>{category.name}</strong>
+              <span>
+                {category.status} · {category._count?.faqs ?? 0} SSS
+              </span>
+            </div>
+            <button
+              className={category.status === "active" ? "ghost-action" : "secondary-action"}
+              disabled={isPending}
+              onClick={() => onUpdateCategory(category.id, { status: category.status === "active" ? "passive" : "active" })}
+              type="button"
+            >
+              {category.status === "active" ? "Pasif yap" : "Aktif yap"}
+            </button>
+          </div>
+        ))}
+      </div>
+      <form className="admin-form" onSubmit={handleFaqSubmit}>
+        <h3>SSS oluştur</h3>
+        <label>
+          Kategori
+          <select name="categoryId" required>
+            <option value="">Kategori seç</option>
+            {categories
+              .filter((category) => category.status === "active")
+              .map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label>
+          SSS başlığı
+          <input name="title" required minLength={3} />
+        </label>
+        <label>
+          SSS açıklaması
+          <textarea name="body" required minLength={3} rows={4} />
+        </label>
+        <button className="secondary-action" disabled={isPending || categories.length === 0} type="submit">
+          <Plus size={18} />
+          SSS ekle
+        </button>
+      </form>
+      <div className="admin-list">
+        {faqs.map((faq) => (
+          <div className="admin-list-item" key={faq.id}>
+            <div className="admin-list-row">
+              <div>
+                <strong>{faq.title}</strong>
+                <span>
+                  {faq.category?.name ?? "Kategori yok"} · {faq.status}
+                </span>
+              </div>
+              <button
+                className={faq.status === "active" ? "ghost-action" : "secondary-action"}
+                disabled={isPending}
+                onClick={() => onUpdateFaq(faq.id, { status: faq.status === "active" ? "passive" : "active" })}
+                type="button"
+              >
+                {faq.status === "active" ? "Pasif yap" : "Aktif yap"}
+              </button>
+            </div>
+            <p className="form-help">{faq.body}</p>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -601,20 +1091,51 @@ function UserDetailCard({ user }: { user: AdminManagedUserDetail }) {
 }
 
 function ReportAdminPanel({
+  groupDetail,
+  groupScope,
+  groups,
   isPending,
+  onCreateRule,
   onResolve,
+  onSaveGroupNote,
+  onSelectGroup,
+  onSetGroupScope,
+  onUpdateRule,
   onUpdate,
+  rules,
   reports
 }: {
+  groupDetail: ReportGroupDetail | null;
+  groupScope: "active" | "old";
+  groups: ReportGroup[];
   isPending: boolean;
+  onCreateRule: (input: ReportRuleInput) => void;
   onResolve: (input: {
     id: string;
     action: "archive_event" | "archive_tag" | "disable_user";
     resolutionNote?: string;
   }) => void;
+  onSaveGroupNote: (input: { targetType: ReportTargetType; targetId: string; note: string }) => void;
+  onSelectGroup: (group: ReportGroup) => void;
+  onSetGroupScope: (scope: "active" | "old") => void;
+  onUpdateRule: (id: string, input: Partial<ReportRuleInput> & { status?: string }) => void;
   onUpdate: (input: { id: string; status: "open" | "reviewing" | "resolved" | "dismissed"; resolutionNote?: string }) => void;
+  rules: ReportRule[];
   reports: ContentReport[];
 }) {
+  function handleRuleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+
+    onCreateRule({
+      targetType: String(form.get("targetType")) as "event" | "tag" | "user",
+      title: String(form.get("title")),
+      description: String(form.get("description") || "") || undefined,
+      violationScore: Number(form.get("violationScore") || 1)
+    });
+    event.currentTarget.reset();
+  }
+
   function handleSubmit(reportId: string, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -623,6 +1144,21 @@ function ReportAdminPanel({
       id: reportId,
       status: String(form.get("status")) as "open" | "reviewing" | "resolved" | "dismissed",
       resolutionNote: String(form.get("resolutionNote") || "") || undefined
+    });
+  }
+
+  function handleGroupNoteSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!groupDetail) {
+      return;
+    }
+
+    const form = new FormData(event.currentTarget);
+    onSaveGroupNote({
+      targetType: groupDetail.targetType,
+      targetId: groupDetail.targetId,
+      note: String(form.get("note") || "")
     });
   }
 
@@ -641,7 +1177,125 @@ function ReportAdminPanel({
   return (
     <section className="admin-panel">
       <div className="section-header compact">
-        <h2>Rapor kuyruğu</h2>
+        <h2>Şikayetler</h2>
+        <span>
+          {rules.length} kural · {groups.length} grup · {reports.length} rapor
+        </span>
+      </div>
+      <form className="admin-form" onSubmit={handleRuleSubmit}>
+        <h3>Şikayet kuralı oluştur</h3>
+        <div className="admin-form-grid">
+          <label>
+            İçerik tipi
+            <select name="targetType" defaultValue="event">
+              <option value="event">Etkinlik</option>
+              <option value="tag">Tag</option>
+              <option value="user">Kullanıcı</option>
+            </select>
+          </label>
+          <label>
+            İhlal puanı
+            <input name="violationScore" defaultValue={1} min={1} max={100} required type="number" />
+          </label>
+        </div>
+        <label>
+          Kural başlığı
+          <input name="title" placeholder="Spam veya yanıltıcı içerik" required minLength={3} maxLength={160} />
+        </label>
+        <label>
+          Açıklama
+          <textarea name="description" rows={2} />
+        </label>
+        <button className="secondary-action" disabled={isPending} type="submit">
+          <Plus size={18} />
+          Kural ekle
+        </button>
+      </form>
+      <div className="admin-list">
+        {rules.map((rule) => (
+          <div className="admin-list-row" key={rule.id}>
+            <div>
+              <strong>{rule.title}</strong>
+              <span>
+                {rule.targetType} · {rule.violationScore} puan · {rule.status}
+              </span>
+            </div>
+            <button
+              className={rule.status === "active" ? "ghost-action" : "secondary-action"}
+              disabled={isPending}
+              onClick={() => onUpdateRule(rule.id, { status: rule.status === "active" ? "passive" : "active" })}
+              type="button"
+            >
+              {rule.status === "active" ? "Pasif yap" : "Aktif yap"}
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="section-header compact">
+        <h3>Şikayet grupları</h3>
+        <div className="segmented-control">
+          <button className={groupScope === "active" ? "active" : ""} onClick={() => onSetGroupScope("active")} type="button">
+            Aktif
+          </button>
+          <button className={groupScope === "old" ? "active" : ""} onClick={() => onSetGroupScope("old")} type="button">
+            Eski
+          </button>
+        </div>
+      </div>
+      {groups.length === 0 ? <p className="muted">Bu sekmede şikayet grubu yok.</p> : null}
+      <div className="admin-list">
+        {groups.map((group) => (
+          <button className="admin-list-row admin-list-button" key={`${group.targetType}-${group.targetId}`} onClick={() => onSelectGroup(group)} type="button">
+            <div>
+              <strong>
+                {group.targetType} · {group.targetId.slice(0, 8)}
+              </strong>
+              <span>
+                {group.activeReports} aktif · {group.oldReports} eski · {group.violationScore} puan
+              </span>
+            </div>
+            <span className="status-pill status-reviewing">{group.totalReports} rapor</span>
+          </button>
+        ))}
+      </div>
+      {groupDetail ? (
+        <div className="admin-list-item">
+          <div className="admin-list-row">
+            <div>
+              <strong>
+                Detay · {groupDetail.targetType} · {groupDetail.targetId.slice(0, 8)}
+              </strong>
+              <span>
+                {groupDetail.totalReports} rapor · {groupDetail.violationScore} ihlal puanı
+              </span>
+            </div>
+          </div>
+          <form className="admin-form compact-form" onSubmit={handleGroupNoteSubmit}>
+            <label>
+              Grup admin notu
+              <textarea name="note" defaultValue={groupDetail.note?.note ?? ""} rows={3} maxLength={2000} />
+            </label>
+            <button className="secondary-action" disabled={isPending} type="submit">
+              Notu kaydet
+            </button>
+          </form>
+          <div className="admin-list">
+            {groupDetail.reports.map((report) => (
+              <div className="admin-list-row" key={report.id}>
+                <div>
+                  <strong>{report.reason}</strong>
+                  <span>
+                    {report.status} · {report.rule?.title ?? "Serbest rapor"} · {report.reporter?.email ?? report.reporterId}
+                  </span>
+                </div>
+                <span className={`status-pill status-${report.status}`}>{report.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <div className="section-header compact">
+        <h3>Tekil rapor kuyruğu</h3>
       </div>
       {reports.length === 0 ? <p className="muted">Henüz raporlanmış içerik yok.</p> : null}
       <div className="admin-list">
@@ -653,7 +1307,7 @@ function ReportAdminPanel({
                   {report.targetType} · {report.reason}
                 </strong>
                 <span>
-                  {report.status} · {report.reporter?.email ?? report.reporterId}
+                  {report.status} · {report.rule?.title ?? "Serbest rapor"} · {report.reporter?.email ?? report.reporterId}
                 </span>
               </div>
               <span className={`status-pill status-${report.status}`}>{report.status}</span>

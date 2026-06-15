@@ -29,6 +29,12 @@ export const adminPermissionSchema = z.enum([
   "media.manage"
 ]);
 
+export const slugSchema = z
+  .string()
+  .min(2)
+  .max(120)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
 export const adminRoleGroupSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(2).max(120),
@@ -40,11 +46,54 @@ export const adminRoleGroupSchema = z.object({
   _count: z.object({ users: z.number().int().nonnegative() }).optional()
 });
 
-export const slugSchema = z
-  .string()
-  .min(2)
-  .max(120)
-  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+export const cmsCategorySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(2).max(120),
+  slug: slugSchema,
+  description: z.string().max(500).nullable(),
+  status: z.enum(["active", "passive"]),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional(),
+  _count: z.object({ faqs: z.number().int().nonnegative() }).optional()
+});
+
+export const faqSchema = z.object({
+  id: z.string().uuid(),
+  categoryId: z.string().uuid(),
+  title: z.string().min(3).max(160),
+  body: z.string().min(3),
+  status: z.enum(["active", "passive"]),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional(),
+  category: cmsCategorySchema.optional()
+});
+
+export const announcementSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().min(3).max(160),
+  body: z.string().min(3),
+  target: z.enum(["all", "members", "admins"]),
+  status: z.enum(["active", "passive"]),
+  publishAt: z.string().datetime().or(z.date()),
+  expiresAt: z.string().datetime().or(z.date()).nullable(),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional()
+});
+
+export const announcementListSchema = z.array(announcementSchema);
+
+export const policyTypeSchema = z.enum(["privacy", "terms", "cookies"]);
+
+export const cmsPolicySchema = z.object({
+  id: z.string().uuid(),
+  type: policyTypeSchema,
+  title: z.string().min(3).max(160),
+  body: z.string().min(10),
+  status: z.enum(["active", "passive"]),
+  publishedAt: z.string().datetime().or(z.date()).nullable(),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional()
+});
 
 export const tagSchema = z.object({
   id: z.string().uuid(),
@@ -164,8 +213,61 @@ export const contentReportSchema = z.object({
   resolvedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional(),
+  ruleId: z.string().uuid().nullable().optional(),
+  rule: z
+    .object({
+      id: z.string().uuid(),
+      targetType: reportTargetTypeSchema,
+      title: z.string().min(3).max(160),
+      description: z.string().max(500).nullable(),
+      violationScore: z.number().int().min(1).max(100),
+      status: z.enum(["active", "passive"]),
+      createdAt: z.string().datetime().or(z.date()).optional(),
+      updatedAt: z.string().datetime().or(z.date()).optional()
+    })
+    .optional()
+    .nullable(),
   reporter: adminUserSchema.optional(),
   resolvedBy: adminUserSchema.optional().nullable()
+});
+
+export const reportRuleSchema = z.object({
+  id: z.string().uuid(),
+  targetType: reportTargetTypeSchema,
+  title: z.string().min(3).max(160),
+  description: z.string().max(500).nullable(),
+  violationScore: z.number().int().min(1).max(100),
+  status: z.enum(["active", "passive"]),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional()
+});
+
+export const reportGroupNoteSchema = z.object({
+  id: z.string().uuid(),
+  targetType: reportTargetTypeSchema,
+  targetId: z.string().uuid(),
+  note: z.string(),
+  updatedById: z.string().uuid().nullable().optional(),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional(),
+  updatedBy: adminUserSchema.optional().nullable()
+});
+
+export const reportGroupSchema = z.object({
+  targetType: reportTargetTypeSchema,
+  targetId: z.string().uuid(),
+  totalReports: z.number().int().nonnegative(),
+  activeReports: z.number().int().nonnegative(),
+  oldReports: z.number().int().nonnegative(),
+  violationScore: z.number().int().nonnegative(),
+  latestReportAt: z.string().datetime().or(z.date()),
+  statuses: z.array(reportStatusSchema),
+  reasons: z.array(z.string()),
+  note: reportGroupNoteSchema.nullable().optional()
+});
+
+export const reportGroupDetailSchema = reportGroupSchema.extend({
+  reports: z.array(contentReportSchema)
 });
 
 export type EventStatus = z.infer<typeof eventStatusSchema>;
@@ -179,6 +281,11 @@ export type ReportTargetType = z.infer<typeof reportTargetTypeSchema>;
 export type ReportStatus = z.infer<typeof reportStatusSchema>;
 export type AdminPermission = z.infer<typeof adminPermissionSchema>;
 export type AdminRoleGroup = z.infer<typeof adminRoleGroupSchema>;
+export type CmsCategory = z.infer<typeof cmsCategorySchema>;
+export type Faq = z.infer<typeof faqSchema>;
+export type Announcement = z.infer<typeof announcementSchema>;
+export type PolicyType = z.infer<typeof policyTypeSchema>;
+export type CmsPolicy = z.infer<typeof cmsPolicySchema>;
 export type Tag = z.infer<typeof tagSchema>;
 export type Event = z.infer<typeof eventSchema>;
 export type EventList = z.infer<typeof eventListSchema>;
@@ -186,6 +293,10 @@ export type AdminDashboard = z.infer<typeof adminDashboardSchema>;
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
 export type EventParticipant = z.infer<typeof eventParticipantSchema>;
 export type ContentReport = z.infer<typeof contentReportSchema>;
+export type ReportRule = z.infer<typeof reportRuleSchema>;
+export type ReportGroupNote = z.infer<typeof reportGroupNoteSchema>;
+export type ReportGroup = z.infer<typeof reportGroupSchema>;
+export type ReportGroupDetail = z.infer<typeof reportGroupDetailSchema>;
 export type AdminManagedUser = z.infer<typeof adminManagedUserSchema>;
 export type AdminManagedUserList = z.infer<typeof adminManagedUserListSchema>;
 export type AdminManagedUserDetail = z.infer<typeof adminManagedUserDetailSchema>;

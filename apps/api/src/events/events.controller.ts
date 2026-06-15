@@ -3,6 +3,7 @@ import { User } from "@prisma/client";
 import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { RequirePermissions } from "../auth/permissions";
 import { CreateEventDto, EventQueryDto, InviteParticipantDto, UpdateParticipantDto } from "./events.dto";
 import { EventsService } from "./events.service";
 
@@ -81,24 +82,28 @@ export class EventsController {
 
   @Get("admin/events")
   @UseGuards(AdminGuard)
+  @RequirePermissions("events.manage")
   listAdminEvents() {
     return this.eventsService.listAdminEvents();
   }
 
   @Post("admin/events")
   @UseGuards(AdminGuard)
+  @RequirePermissions("events.manage")
   createEvent(@Body() body: CreateEventDto, @CurrentUser() user: User) {
     return this.eventsService.createEvent(body, user.id);
   }
 
   @Patch("admin/events/:id")
   @UseGuards(AdminGuard)
+  @RequirePermissions("events.manage")
   updateEvent(@Param("id") id: string, @Body() body: Partial<CreateEventDto>, @CurrentUser() user: User) {
     return this.eventsService.updateEvent(id, body, user.id);
   }
 
   @Delete("admin/events/:id")
   @UseGuards(AdminGuard)
+  @RequirePermissions("events.manage")
   archiveEvent(@Param("id") id: string, @CurrentUser() user: User) {
     return this.eventsService.archiveEvent(id, user.id);
   }

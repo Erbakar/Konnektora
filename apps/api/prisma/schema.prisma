@@ -93,6 +93,7 @@ model User {
   interestTags UserInterestTag[]
   submittedReports ContentReport[] @relation("ReportSubmittedBy")
   resolvedReports ContentReport[] @relation("ReportResolvedBy")
+  updatedReportGroupNotes ReportGroupNote[]
 
   @@map("users")
 }
@@ -109,6 +110,65 @@ model AdminRoleGroup {
   users User[]
 
   @@map("admin_role_groups")
+}
+
+model CmsCategory {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  faqs Faq[]
+
+  @@index([status])
+  @@map("cms_categories")
+}
+
+model Faq {
+  id          String   @id @default(uuid())
+  categoryId  String   @map("category_id")
+  title       String
+  body        String
+  status      String   @default("active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  category CmsCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId, status])
+  @@map("faqs")
+}
+
+model Announcement {
+  id          String   @id @default(uuid())
+  title       String
+  body        String
+  target      String   @default("all")
+  status      String   @default("active")
+  publishAt   DateTime @default(now()) @map("publish_at")
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([status, publishAt])
+  @@map("announcements")
+}
+
+model CmsPolicy {
+  id          String   @id @default(uuid())
+  type        String   @unique
+  title       String
+  body        String
+  status      String   @default("active")
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("cms_policies")
 }
 
 model TagCategory {
@@ -246,6 +306,7 @@ model ContentReport {
   id             String           @id @default(uuid())
   targetType     ReportTargetType @map("target_type")
   targetId       String           @map("target_id")
+  ruleId         String?          @map("rule_id")
   reason         String
   details        String?
   status         ReportStatus     @default(open)
@@ -258,8 +319,41 @@ model ContentReport {
 
   reporter   User  @relation("ReportSubmittedBy", fields: [reporterId], references: [id], onDelete: Cascade)
   resolvedBy User? @relation("ReportResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  rule       ReportRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
 
   @@index([targetType, targetId])
   @@index([status, createdAt])
+  @@index([ruleId])
   @@map("content_reports")
+}
+
+model ReportGroupNote {
+  id             String           @id @default(uuid())
+  targetType     ReportTargetType @map("target_type")
+  targetId       String           @map("target_id")
+  note           String
+  updatedById    String?          @map("updated_by")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([targetType, targetId])
+  @@map("report_group_notes")
+}
+
+model ReportRule {
+  id             String           @id @default(uuid())
+  targetType     ReportTargetType @map("target_type")
+  title          String
+  description    String?
+  violationScore Int              @default(1) @map("violation_score")
+  status         String           @default("active")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  reports ContentReport[]
+
+  @@index([targetType, status])
+  @@map("report_rules")
 }

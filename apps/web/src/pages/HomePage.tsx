@@ -5,6 +5,7 @@ import {
   Globe2,
   Lightbulb,
   MapPin,
+  Megaphone,
   Rocket,
   Search,
   Sparkles,
@@ -14,7 +15,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { HomeEventTile } from "../components/HomeEventTile";
-import { listEvents, listTags } from "../lib/api";
+import { listAnnouncements, listEvents, listTags } from "../lib/api";
 
 const categoryMeta: Record<string, { icon: typeof Rocket; copy: string }> = {
   startup: {
@@ -53,6 +54,10 @@ export function HomePage() {
     queryKey: ["tags", "home"],
     queryFn: listTags
   });
+  const { data: announcements = [] } = useQuery({
+    queryKey: ["announcements", "home"],
+    queryFn: listAnnouncements
+  });
   const events = eventList?.items ?? [];
 
   const localEvents = events.filter((event) => event.city).slice(0, 8);
@@ -83,6 +88,22 @@ export function HomePage() {
           </div>
         </div>
       </section>
+
+      {announcements.length ? (
+        <section className="corp-announcements" aria-label="Announcements">
+          {announcements.slice(0, 3).map((announcement) => (
+            <article className="corp-announcement" key={announcement.id}>
+              <span>
+                <Megaphone size={18} />
+              </span>
+              <div>
+                <strong>{announcement.title}</strong>
+                <p>{announcement.body}</p>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : null}
 
       <section className="corp-section">
         <div className="corp-section-head">

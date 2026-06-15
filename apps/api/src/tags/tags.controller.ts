@@ -3,6 +3,7 @@ import { User } from "@prisma/client";
 import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { RequirePermissions } from "../auth/permissions";
 import { CreateTagDto } from "./tags.dto";
 import { TagsService } from "./tags.service";
 
@@ -28,24 +29,28 @@ export class TagsController {
 
   @Get("admin/tags")
   @UseGuards(AdminGuard)
+  @RequirePermissions("tags.manage")
   listAdminTags() {
     return this.tagsService.listAdminTags();
   }
 
   @Post("admin/tags")
   @UseGuards(AdminGuard)
+  @RequirePermissions("tags.manage")
   createTag(@Body() body: CreateTagDto, @CurrentUser() user: User) {
     return this.tagsService.createTag(body, user.id);
   }
 
   @Patch("admin/tags/:id")
   @UseGuards(AdminGuard)
+  @RequirePermissions("tags.manage")
   updateTag(@Param("id") id: string, @Body() body: Partial<CreateTagDto>, @CurrentUser() user: User) {
     return this.tagsService.updateTag(id, body, user.id);
   }
 
   @Delete("admin/tags/:id")
   @UseGuards(AdminGuard)
+  @RequirePermissions("tags.manage")
   archiveTag(@Param("id") id: string, @CurrentUser() user: User) {
     return this.tagsService.archiveTag(id, user.id);
   }

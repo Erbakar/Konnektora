@@ -4,11 +4,20 @@ import {
   adminManagedUserListSchema,
   adminManagedUserSchema,
   adminRoleGroupSchema,
+  announcementListSchema,
+  announcementSchema,
   contentReportSchema,
+  cmsCategorySchema,
+  cmsPolicySchema,
   eventListSchema,
   eventSchema,
   eventParticipantSchema,
+  faqSchema,
   loginResponseSchema,
+  reportGroupDetailSchema,
+  reportGroupNoteSchema,
+  reportGroupSchema,
+  reportRuleSchema,
   tagSchema,
   type AdminDashboard,
   type AdminManagedUser,
@@ -16,11 +25,21 @@ import {
   type AdminManagedUserList,
   type AdminPermission,
   type AdminRoleGroup,
+  type Announcement,
+  type CmsPolicy,
+  type CmsCategory,
   type ContentReport,
   type Event,
   type EventList,
   type EventParticipant,
+  type Faq,
   type LoginResponse,
+  type PolicyType,
+  type ReportRule,
+  type ReportGroup,
+  type ReportGroupDetail,
+  type ReportGroupNote,
+  type ReportTargetType,
   type Tag
 } from "@konnektora/shared";
 import { z } from "zod";
@@ -38,8 +57,14 @@ const MOCK_TAGS_KEY = "konnektora_mock_tags";
 const MOCK_USERS_KEY = "konnektora_mock_users";
 const MOCK_PARTICIPANTS_KEY = "konnektora_mock_participants";
 const MOCK_REPORTS_KEY = "konnektora_mock_reports";
+const MOCK_REPORT_RULES_KEY = "konnektora_mock_report_rules";
+const MOCK_REPORT_GROUP_NOTES_KEY = "konnektora_mock_report_group_notes";
 const MOCK_USER_EVENT_IDS_KEY = "konnektora_mock_user_event_ids";
 const MOCK_ROLE_GROUPS_KEY = "konnektora_mock_role_groups";
+const MOCK_CMS_CATEGORIES_KEY = "konnektora_mock_cms_categories";
+const MOCK_FAQS_KEY = "konnektora_mock_faqs";
+const MOCK_ANNOUNCEMENTS_KEY = "konnektora_mock_announcements";
+const MOCK_POLICIES_KEY = "konnektora_mock_policies";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -208,6 +233,20 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(createMockReport(parseBody<CreateReportInput>(options)));
   }
 
+  if (pathname === "/admin/report-rules" && method === "GET") {
+    return schema.parse(listMockReportRules());
+  }
+
+  if (pathname === "/admin/report-rules" && method === "POST") {
+    return schema.parse(createMockReportRule(parseBody<ReportRuleInput>(options)));
+  }
+
+  if (pathname.startsWith("/admin/report-rules/") && method === "PATCH") {
+    return schema.parse(
+      updateMockReportRule(pathname.slice("/admin/report-rules/".length), parseBody<Partial<ReportRuleInput> & { status?: string }>(options))
+    );
+  }
+
   if (pathname === "/admin/dashboard" && method === "GET") {
     return schema.parse(getMockDashboard());
   }
@@ -241,8 +280,74 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     );
   }
 
+  if (pathname === "/admin/cms/categories" && method === "GET") {
+    return schema.parse(listMockCmsCategories());
+  }
+
+  if (pathname === "/admin/cms/categories" && method === "POST") {
+    return schema.parse(createMockCmsCategory(parseBody<{ name: string; description?: string }>(options)));
+  }
+
+  if (pathname.startsWith("/admin/cms/categories/") && method === "PATCH") {
+    return schema.parse(
+      updateMockCmsCategory(pathname.slice("/admin/cms/categories/".length), parseBody<Partial<CmsCategory>>(options))
+    );
+  }
+
+  if (pathname === "/admin/cms/faqs" && method === "GET") {
+    return schema.parse(listMockFaqs());
+  }
+
+  if (pathname === "/admin/cms/faqs" && method === "POST") {
+    return schema.parse(createMockFaq(parseBody<FaqInput>(options)));
+  }
+
+  if (pathname.startsWith("/admin/cms/faqs/") && method === "PATCH") {
+    return schema.parse(updateMockFaq(pathname.slice("/admin/cms/faqs/".length), parseBody<Partial<FaqInput> & { status?: string }>(options)));
+  }
+
+  if (pathname === "/admin/cms/announcements" && method === "GET") {
+    return schema.parse(listMockAnnouncements());
+  }
+
+  if (pathname === "/admin/cms/announcements" && method === "POST") {
+    return schema.parse(createMockAnnouncement(parseBody<AnnouncementInput>(options)));
+  }
+
+  if (pathname.startsWith("/admin/cms/announcements/") && method === "PATCH") {
+    return schema.parse(
+      updateMockAnnouncement(
+        pathname.slice("/admin/cms/announcements/".length),
+        parseBody<Partial<AnnouncementInput> & { status?: string }>(options)
+      )
+    );
+  }
+
+  if (pathname === "/admin/cms/policies" && method === "GET") {
+    return schema.parse(listMockPolicies());
+  }
+
+  if (pathname === "/admin/cms/policies" && method === "POST") {
+    return schema.parse(upsertMockPolicy(parseBody<PolicyInput>(options)));
+  }
+
   if (pathname === "/admin/reports" && method === "GET") {
     return schema.parse(listMockReports());
+  }
+
+  if (pathname === "/admin/report-groups" && method === "GET") {
+    const params = new URLSearchParams(queryString);
+    return schema.parse(listMockReportGroups(params.get("scope") === "old" ? "old" : "active"));
+  }
+
+  if (pathname.startsWith("/admin/report-groups/") && pathname.endsWith("/note") && method === "PATCH") {
+    const { targetType, targetId } = parseReportGroupPath(pathname.slice(0, -"/note".length));
+    return schema.parse(updateMockReportGroupNote(targetType, targetId, parseBody<{ note: string }>(options).note));
+  }
+
+  if (pathname.startsWith("/admin/report-groups/") && method === "GET") {
+    const { targetType, targetId } = parseReportGroupPath(pathname);
+    return schema.parse(getMockReportGroupDetail(targetType, targetId));
   }
 
   if (pathname.startsWith("/admin/reports/") && method === "PATCH") {
@@ -327,6 +432,26 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (method !== "GET" || options.auth) {
     return undefined;
+  }
+
+  if (pathname === "/faqs") {
+    return schema.parse(listMockFaqs().filter((faq) => faq.status === "active" && faq.category?.status === "active"));
+  }
+
+  if (pathname === "/announcements") {
+    return schema.parse(listMockPublicAnnouncements());
+  }
+
+  if (pathname === "/report-rules") {
+    const params = new URLSearchParams(queryString);
+    const targetType = params.get("targetType");
+    return schema.parse(listMockReportRules().filter((rule) => rule.status === "active" && (!targetType || rule.targetType === targetType)));
+  }
+
+  if (pathname.startsWith("/policies/")) {
+    const type = pathname.slice("/policies/".length);
+    const policy = getMockPublicPolicy(type);
+    return policy ? schema.parse(policy) : undefined;
   }
 
   if (pathname === "/tags") {
@@ -532,10 +657,12 @@ function updateMockParticipantStatus(
 function createMockReport(input: CreateReportInput): ContentReport {
   const reports = readStorage<ContentReport[]>(MOCK_REPORTS_KEY, []);
   const reporter = getUserSession();
+  const rule = input.ruleId ? listMockReportRules().find((item) => item.id === input.ruleId) ?? null : null;
   const report: ContentReport = {
     id: createId(),
     targetType: input.targetType,
     targetId: input.targetId,
+    ruleId: rule?.id ?? null,
     reason: input.reason.trim(),
     details: input.details?.trim() || null,
     status: "open",
@@ -545,6 +672,7 @@ function createMockReport(input: CreateReportInput): ContentReport {
     resolvedAt: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    rule,
     reporter: reporter ?? {
       id: "88888888-8888-4888-8888-888888888888",
       email: "user@konnektora.local",
@@ -560,7 +688,154 @@ function createMockReport(input: CreateReportInput): ContentReport {
 }
 
 function listMockReports(): ContentReport[] {
-  return readStorage<ContentReport[]>(MOCK_REPORTS_KEY, []);
+  const rules = listMockReportRules();
+
+  return readStorage<ContentReport[]>(MOCK_REPORTS_KEY, []).map((report) => ({
+    ...report,
+    rule: report.ruleId ? rules.find((rule) => rule.id === report.ruleId) ?? null : report.rule ?? null
+  }));
+}
+
+function listMockReportGroups(scope: "active" | "old"): ReportGroup[] {
+  const activeStatuses = new Set(["open", "reviewing"]);
+  const reports = listMockReports().filter((report) =>
+    scope === "active" ? activeStatuses.has(report.status) : !activeStatuses.has(report.status)
+  );
+
+  return buildMockReportGroups(reports);
+}
+
+function getMockReportGroupDetail(targetType: ReportTargetType, targetId: string): ReportGroupDetail {
+  const reports = listMockReports().filter((report) => report.targetType === targetType && report.targetId === targetId);
+  const group = buildMockReportGroups(reports)[0];
+
+  if (!group) {
+    throw new Error("Mock report group not found");
+  }
+
+  return { ...group, reports };
+}
+
+function buildMockReportGroups(reports: ContentReport[]): ReportGroup[] {
+  const notes = readStorage<ReportGroupNote[]>(MOCK_REPORT_GROUP_NOTES_KEY, []);
+  const grouped = new Map<string, ContentReport[]>();
+
+  reports.forEach((report) => {
+    const key = `${report.targetType}:${report.targetId}`;
+    grouped.set(key, [...(grouped.get(key) ?? []), report]);
+  });
+
+  return [...grouped.entries()]
+    .map(([key, groupReports]) => {
+      const [targetType, targetId] = key.split(":") as [ReportTargetType, string];
+      const activeReports = groupReports.filter((report) => report.status === "open" || report.status === "reviewing").length;
+
+      return {
+        targetType,
+        targetId,
+        totalReports: groupReports.length,
+        activeReports,
+        oldReports: groupReports.length - activeReports,
+        violationScore: groupReports.reduce((total, report) => total + (report.rule?.violationScore ?? 0), 0),
+        latestReportAt: groupReports[0]?.createdAt ?? new Date().toISOString(),
+        statuses: [...new Set(groupReports.map((report) => report.status))],
+        reasons: [...new Set(groupReports.map((report) => report.reason))],
+        note: notes.find((note) => note.targetType === targetType && note.targetId === targetId) ?? null
+      };
+    })
+    .sort((first, second) => {
+      if (second.activeReports !== first.activeReports) {
+        return second.activeReports - first.activeReports;
+      }
+
+      return new Date(second.latestReportAt).getTime() - new Date(first.latestReportAt).getTime();
+    });
+}
+
+function updateMockReportGroupNote(targetType: ReportTargetType, targetId: string, noteValue: string): ReportGroupNote {
+  const notes = readStorage<ReportGroupNote[]>(MOCK_REPORT_GROUP_NOTES_KEY, []);
+  const adminUser = {
+    id: "99999999-9999-4999-8999-999999999999",
+    email: "admin@konnektora.local",
+    name: "Konnektora Admin",
+    role: "super_admin" as const,
+    status: "active" as const
+  };
+  const existing = notes.find((note) => note.targetType === targetType && note.targetId === targetId);
+  const now = new Date().toISOString();
+  const note: ReportGroupNote = {
+    id: existing?.id ?? createId(),
+    targetType,
+    targetId,
+    note: noteValue.trim(),
+    updatedById: adminUser.id,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    updatedBy: adminUser
+  };
+
+  writeStorage(MOCK_REPORT_GROUP_NOTES_KEY, [
+    note,
+    ...notes.filter((item) => !(item.targetType === targetType && item.targetId === targetId))
+  ]);
+  return note;
+}
+
+function parseReportGroupPath(pathname: string) {
+  const [targetType, targetId] = pathname.slice("/admin/report-groups/".length).split("/");
+
+  if (!targetType || !targetId) {
+    throw new Error("Invalid report group path");
+  }
+
+  return { targetType: parseReportTargetType(targetType), targetId };
+}
+
+function listMockReportRules(): ReportRule[] {
+  return readStorage<ReportRule[]>(MOCK_REPORT_RULES_KEY, []);
+}
+
+function createMockReportRule(input: ReportRuleInput): ReportRule {
+  const rules = listMockReportRules();
+  const now = new Date().toISOString();
+  const rule: ReportRule = {
+    id: createId(),
+    targetType: parseReportTargetType(input.targetType),
+    title: input.title.trim(),
+    description: input.description?.trim() || null,
+    violationScore: Number(input.violationScore),
+    status: "active",
+    createdAt: now,
+    updatedAt: now
+  };
+
+  writeStorage(MOCK_REPORT_RULES_KEY, [rule, ...rules]);
+  return rule;
+}
+
+function updateMockReportRule(id: string, input: Partial<ReportRuleInput> & { status?: string }): ReportRule {
+  const rules = listMockReportRules();
+  const updatedRules = rules.map((rule) =>
+    rule.id === id
+      ? {
+          ...rule,
+          targetType: input.targetType ? parseReportTargetType(input.targetType) : rule.targetType,
+          title: input.title?.trim() ?? rule.title,
+          description: input.description === undefined ? rule.description : input.description?.trim() || null,
+          violationScore: input.violationScore === undefined ? rule.violationScore : Number(input.violationScore),
+          status: parseCmsStatus(input.status, rule.status),
+          updatedAt: new Date().toISOString()
+        }
+      : rule
+  );
+  const updatedRule = updatedRules.find((rule) => rule.id === id);
+
+  if (!updatedRule) {
+    throw new Error("Mock report rule not found");
+  }
+
+  writeStorage(MOCK_REPORT_RULES_KEY, updatedRules);
+  return updatedRule;
 }
 
 function getAllMockUsers(): MockUser[] {
@@ -638,6 +913,248 @@ function updateMockRoleGroup(id: string, input: Partial<RoleGroupInput> & { stat
 
   writeStorage(MOCK_ROLE_GROUPS_KEY, updatedRoleGroups);
   return updatedRoleGroup;
+}
+
+function listMockCmsCategories(): CmsCategory[] {
+  const faqs = readStorage<Faq[]>(MOCK_FAQS_KEY, []);
+
+  return readStorage<CmsCategory[]>(MOCK_CMS_CATEGORIES_KEY, []).map((category) => ({
+    ...category,
+    _count: { faqs: faqs.filter((faq) => faq.categoryId === category.id).length }
+  }));
+}
+
+function createMockCmsCategory(input: { name: string; description?: string }): CmsCategory {
+  const categories = listMockCmsCategories();
+  const category: CmsCategory = {
+    id: createId(),
+    name: input.name.trim(),
+    slug: uniqueSlug(input.name, categories.map((item) => item.slug)),
+    description: input.description?.trim() || null,
+    status: "active",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    _count: { faqs: 0 }
+  };
+
+  writeStorage(MOCK_CMS_CATEGORIES_KEY, [category, ...categories]);
+  return category;
+}
+
+function updateMockCmsCategory(id: string, input: Partial<CmsCategory>): CmsCategory {
+  const categories = listMockCmsCategories();
+  const updatedCategories = categories.map((category) =>
+    category.id === id
+      ? {
+          ...category,
+          name: input.name?.trim() ?? category.name,
+          slug: input.name ? uniqueSlug(input.name, categories.filter((item) => item.id !== id).map((item) => item.slug)) : category.slug,
+          description: input.description === undefined ? category.description : input.description?.trim() || null,
+          status: parseCmsStatus(input.status, category.status),
+          updatedAt: new Date().toISOString()
+        }
+      : category
+  );
+  const updatedCategory = updatedCategories.find((category) => category.id === id);
+
+  if (!updatedCategory) {
+    throw new Error("Mock CMS category not found");
+  }
+
+  writeStorage(MOCK_CMS_CATEGORIES_KEY, updatedCategories);
+  return updatedCategory;
+}
+
+function listMockFaqs(): Faq[] {
+  const categories = listMockCmsCategories();
+
+  return readStorage<Faq[]>(MOCK_FAQS_KEY, []).map((faq) => ({
+    ...faq,
+    category: categories.find((category) => category.id === faq.categoryId)
+  }));
+}
+
+function createMockFaq(input: FaqInput): Faq {
+  const faqs = listMockFaqs();
+  const category = listMockCmsCategories().find((item) => item.id === input.categoryId);
+
+  if (!category) {
+    throw new Error("Mock CMS category not found");
+  }
+
+  const faq: Faq = {
+    id: createId(),
+    categoryId: input.categoryId,
+    title: input.title.trim(),
+    body: input.body.trim(),
+    status: "active",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    category
+  };
+
+  writeStorage(MOCK_FAQS_KEY, [faq, ...faqs]);
+  return faq;
+}
+
+function updateMockFaq(id: string, input: Partial<FaqInput> & { status?: string }): Faq {
+  const faqs = listMockFaqs();
+  const categories = listMockCmsCategories();
+  const updatedFaqs = faqs.map((faq) => {
+    if (faq.id !== id) {
+      return faq;
+    }
+
+    const categoryId = input.categoryId ?? faq.categoryId;
+
+    return {
+      ...faq,
+      categoryId,
+      title: input.title?.trim() ?? faq.title,
+      body: input.body?.trim() ?? faq.body,
+      status: parseCmsStatus(input.status, faq.status),
+      updatedAt: new Date().toISOString(),
+      category: categories.find((category) => category.id === categoryId)
+    };
+  });
+  const updatedFaq = updatedFaqs.find((faq) => faq.id === id);
+
+  if (!updatedFaq) {
+    throw new Error("Mock FAQ not found");
+  }
+
+  writeStorage(MOCK_FAQS_KEY, updatedFaqs);
+  return updatedFaq;
+}
+
+function listMockAnnouncements(): Announcement[] {
+  return readStorage<Announcement[]>(MOCK_ANNOUNCEMENTS_KEY, []);
+}
+
+function listMockPublicAnnouncements(): Announcement[] {
+  const now = Date.now();
+
+  return listMockAnnouncements().filter(
+    (announcement) =>
+      announcement.status === "active" &&
+      new Date(announcement.publishAt).getTime() <= now &&
+      (!announcement.expiresAt || new Date(announcement.expiresAt).getTime() > now)
+  );
+}
+
+function createMockAnnouncement(input: AnnouncementInput): Announcement {
+  const announcements = listMockAnnouncements();
+  const now = new Date().toISOString();
+  const announcement: Announcement = {
+    id: createId(),
+    title: input.title.trim(),
+    body: input.body.trim(),
+    target: parseAnnouncementTarget(input.target),
+    status: "active",
+    publishAt: input.publishAt || now,
+    expiresAt: input.expiresAt || null,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  writeStorage(MOCK_ANNOUNCEMENTS_KEY, [announcement, ...announcements]);
+  return announcement;
+}
+
+function updateMockAnnouncement(id: string, input: Partial<AnnouncementInput> & { status?: string }): Announcement {
+  const announcements = listMockAnnouncements();
+  const updatedAnnouncements = announcements.map((announcement) =>
+    announcement.id === id
+      ? {
+          ...announcement,
+          title: input.title?.trim() ?? announcement.title,
+          body: input.body?.trim() ?? announcement.body,
+          target: input.target ? parseAnnouncementTarget(input.target) : announcement.target,
+          status: parseCmsStatus(input.status, announcement.status),
+          publishAt: input.publishAt ?? announcement.publishAt,
+          expiresAt: input.expiresAt === undefined ? announcement.expiresAt : input.expiresAt || null,
+          updatedAt: new Date().toISOString()
+        }
+      : announcement
+  );
+  const updatedAnnouncement = updatedAnnouncements.find((announcement) => announcement.id === id);
+
+  if (!updatedAnnouncement) {
+    throw new Error("Mock announcement not found");
+  }
+
+  writeStorage(MOCK_ANNOUNCEMENTS_KEY, updatedAnnouncements);
+  return updatedAnnouncement;
+}
+
+function listMockPolicies(): CmsPolicy[] {
+  const policies = readStorage<CmsPolicy[]>(MOCK_POLICIES_KEY, []);
+  const existingTypes = new Set(policies.map((policy) => policy.type));
+
+  return [
+    ...policies,
+    ...defaultPolicies().filter((policy) => !existingTypes.has(policy.type))
+  ];
+}
+
+function getMockPublicPolicy(type: string): CmsPolicy | undefined {
+  return listMockPolicies().find((policy) => policy.type === type && policy.status === "active");
+}
+
+function upsertMockPolicy(input: PolicyInput): CmsPolicy {
+  const policies = listMockPolicies();
+  const now = new Date().toISOString();
+  const type = parsePolicyType(input.type);
+  const nextPolicy: CmsPolicy = {
+    id: policies.find((policy) => policy.type === type)?.id ?? createId(),
+    type,
+    title: input.title.trim(),
+    body: input.body.trim(),
+    status: parseCmsStatus(input.status),
+    publishedAt: parseCmsStatus(input.status) === "active" ? now : null,
+    createdAt: policies.find((policy) => policy.type === type)?.createdAt ?? now,
+    updatedAt: now
+  };
+
+  writeStorage(MOCK_POLICIES_KEY, [nextPolicy, ...policies.filter((policy) => policy.type !== type)]);
+  return nextPolicy;
+}
+
+function defaultPolicies(): CmsPolicy[] {
+  const now = new Date().toISOString();
+
+  return [
+    {
+      id: "10000000-1000-4000-8000-100000000101",
+      type: "privacy",
+      title: "Privacy Policy",
+      body: "Konnektora privacy policy content will be managed from the admin panel.",
+      status: "passive",
+      publishedAt: null,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "10000000-1000-4000-8000-100000000102",
+      type: "terms",
+      title: "Terms of Use",
+      body: "Konnektora terms of use content will be managed from the admin panel.",
+      status: "passive",
+      publishedAt: null,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "10000000-1000-4000-8000-100000000103",
+      type: "cookies",
+      title: "Cookie Policy",
+      body: "Konnektora cookie policy content will be managed from the admin panel.",
+      status: "passive",
+      publishedAt: null,
+      createdAt: now,
+      updatedAt: now
+    }
+  ];
 }
 
 function toAdminManagedUser(user: MockUser): AdminManagedUser {
@@ -1060,6 +1577,22 @@ function parseEventStatus(value?: string): Event["status"] {
   return value === "draft" || value === "cancelled" || value === "archived" ? value : "published";
 }
 
+function parseCmsStatus(value?: string, fallback: "active" | "passive" = "active") {
+  return value === "passive" ? "passive" : value === "active" ? "active" : fallback;
+}
+
+function parseAnnouncementTarget(value?: string): Announcement["target"] {
+  return value === "members" || value === "admins" ? value : "all";
+}
+
+function parsePolicyType(value?: string): PolicyType {
+  return value === "terms" || value === "cookies" ? value : "privacy";
+}
+
+function parseReportTargetType(value?: string): ReportTargetType {
+  return value === "tag" || value === "user" ? value : "event";
+}
+
 function resolveEventSummary(input: Pick<AdminEventInput, "title" | "summary" | "description">) {
   const summary = input.summary?.trim();
 
@@ -1205,6 +1738,89 @@ export function updateAdminRoleGroup(
   });
 }
 
+export function listAdminCmsCategories(): Promise<CmsCategory[]> {
+  return requestJson("/admin/cms/categories", z.array(cmsCategorySchema), { auth: true });
+}
+
+export function createAdminCmsCategory(input: { name: string; description?: string }): Promise<CmsCategory> {
+  return requestJson("/admin/cms/categories", cmsCategorySchema, {
+    auth: true,
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function updateAdminCmsCategory(id: string, input: Partial<CmsCategory>): Promise<CmsCategory> {
+  return requestJson(`/admin/cms/categories/${id}`, cmsCategorySchema, {
+    auth: true,
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+}
+
+export function listAdminFaqs(): Promise<Faq[]> {
+  return requestJson("/admin/cms/faqs", z.array(faqSchema), { auth: true });
+}
+
+export function createAdminFaq(input: FaqInput): Promise<Faq> {
+  return requestJson("/admin/cms/faqs", faqSchema, {
+    auth: true,
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function updateAdminFaq(id: string, input: Partial<FaqInput> & { status?: string }): Promise<Faq> {
+  return requestJson(`/admin/cms/faqs/${id}`, faqSchema, {
+    auth: true,
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+}
+
+export function listAnnouncements(): Promise<Announcement[]> {
+  return requestJson("/announcements", announcementListSchema);
+}
+
+export function listAdminAnnouncements(): Promise<Announcement[]> {
+  return requestJson("/admin/cms/announcements", z.array(announcementSchema), { auth: true });
+}
+
+export function createAdminAnnouncement(input: AnnouncementInput): Promise<Announcement> {
+  return requestJson("/admin/cms/announcements", announcementSchema, {
+    auth: true,
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function updateAdminAnnouncement(
+  id: string,
+  input: Partial<AnnouncementInput> & { status?: string }
+): Promise<Announcement> {
+  return requestJson(`/admin/cms/announcements/${id}`, announcementSchema, {
+    auth: true,
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+}
+
+export function getPolicy(type: PolicyType): Promise<CmsPolicy> {
+  return requestJson(`/policies/${type}`, cmsPolicySchema);
+}
+
+export function listAdminPolicies(): Promise<CmsPolicy[]> {
+  return requestJson("/admin/cms/policies", z.array(cmsPolicySchema), { auth: true });
+}
+
+export function upsertAdminPolicy(input: PolicyInput): Promise<CmsPolicy> {
+  return requestJson("/admin/cms/policies", cmsPolicySchema, {
+    auth: true,
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
 export function listAdminEvents(): Promise<Event[]> {
   return requestJson("/admin/events", z.array(eventSchema), { auth: true });
 }
@@ -1265,6 +1881,7 @@ export type AdminEventInput = {
 export type CreateReportInput = {
   targetType: "event" | "tag" | "user";
   targetId: string;
+  ruleId?: string;
   reason: string;
   details?: string;
 };
@@ -1283,6 +1900,34 @@ export type RoleGroupInput = {
   name: string;
   description?: string;
   permissions: AdminPermission[];
+};
+
+export type ReportRuleInput = {
+  targetType: ReportTargetType;
+  title: string;
+  description?: string;
+  violationScore: number;
+};
+
+export type FaqInput = {
+  categoryId: string;
+  title: string;
+  body: string;
+};
+
+export type AnnouncementInput = {
+  title: string;
+  body: string;
+  target?: string;
+  publishAt?: string;
+  expiresAt?: string;
+};
+
+export type PolicyInput = {
+  type: PolicyType;
+  title: string;
+  body: string;
+  status?: string;
 };
 
 export function updateAdminEvent(id: string, input: Partial<AdminEventInput>): Promise<Event> {
@@ -1336,8 +1981,62 @@ export function createContentReport(input: CreateReportInput): Promise<ContentRe
   });
 }
 
+export function listReportRules(targetType?: ReportTargetType): Promise<ReportRule[]> {
+  const params = new URLSearchParams();
+
+  if (targetType) {
+    params.set("targetType", targetType);
+  }
+
+  const query = params.toString();
+  return requestJson(`/report-rules${query ? `?${query}` : ""}`, z.array(reportRuleSchema));
+}
+
 export function listAdminReports(): Promise<ContentReport[]> {
   return requestJson("/admin/reports", z.array(contentReportSchema), { auth: true });
+}
+
+export function listAdminReportGroups(scope: "active" | "old" = "active"): Promise<ReportGroup[]> {
+  return requestJson(`/admin/report-groups?scope=${scope}`, z.array(reportGroupSchema), { auth: true });
+}
+
+export function getAdminReportGroup(targetType: ReportTargetType, targetId: string): Promise<ReportGroupDetail> {
+  return requestJson(`/admin/report-groups/${targetType}/${targetId}`, reportGroupDetailSchema, { auth: true });
+}
+
+export function updateAdminReportGroupNote(
+  targetType: ReportTargetType,
+  targetId: string,
+  note: string
+): Promise<ReportGroupNote> {
+  return requestJson(`/admin/report-groups/${targetType}/${targetId}/note`, reportGroupNoteSchema, {
+    auth: true,
+    method: "PATCH",
+    body: JSON.stringify({ note })
+  });
+}
+
+export function listAdminReportRules(): Promise<ReportRule[]> {
+  return requestJson("/admin/report-rules", z.array(reportRuleSchema), { auth: true });
+}
+
+export function createAdminReportRule(input: ReportRuleInput): Promise<ReportRule> {
+  return requestJson("/admin/report-rules", reportRuleSchema, {
+    auth: true,
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function updateAdminReportRule(
+  id: string,
+  input: Partial<ReportRuleInput> & { status?: string }
+): Promise<ReportRule> {
+  return requestJson(`/admin/report-rules/${id}`, reportRuleSchema, {
+    auth: true,
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
 }
 
 export function updateAdminReport(id: string, input: UpdateReportInput): Promise<ContentReport> {
