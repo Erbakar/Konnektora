@@ -1,5 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CalendarCheck, Check, ClipboardCheck, Megaphone, LogOut, Plus, Tags, Users, X } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarCheck,
+  Check,
+  ClipboardCheck,
+  FileText,
+  Key,
+  LayoutDashboard,
+  LogOut,
+  Megaphone,
+  Plus,
+  ShieldCheck,
+  Tags,
+  Users,
+  X
+} from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import {
   type AdminEventInput,
@@ -28,6 +43,7 @@ import {
   isMockApiMode,
   checkInEventParticipant,
   inviteEventParticipant,
+  listEventParticipants,
   getAdminUser,
   listAdminAnnouncements,
   listAdminCmsCategories,
@@ -40,7 +56,6 @@ import {
   listAdminRoleGroups,
   listAdminTags,
   listAdminUsers,
-  listEventParticipants,
   mergeAdminTag,
   resolveAdminReportAction,
   setAdminToken,
@@ -78,10 +93,67 @@ import type {
   Tag
 } from "@konnektora/shared";
 
+type AdminSection =
+  | "dashboard"
+  | "users"
+  | "roles"
+  | "events"
+  | "tags"
+  | "reports"
+  | "cms"
+  | "email-tokens";
+
+const NAV_GROUPS: Array<{
+  label: string;
+  items: Array<{ id: AdminSection; label: string; Icon: React.ElementType }>;
+}> = [
+  {
+    label: "Genel",
+    items: [{ id: "dashboard", label: "Dashboard", Icon: LayoutDashboard }]
+  },
+  {
+    label: "Kullanıcılar",
+    items: [
+      { id: "users", label: "Üye Yönetimi", Icon: Users },
+      { id: "roles", label: "Rol / Yetkiler", Icon: ShieldCheck }
+    ]
+  },
+  {
+    label: "İçerik",
+    items: [
+      { id: "events", label: "Etkinlikler", Icon: CalendarCheck },
+      { id: "tags", label: "İlgi Alanları", Icon: Tags }
+    ]
+  },
+  {
+    label: "Moderasyon",
+    items: [{ id: "reports", label: "Şikayetler", Icon: AlertTriangle }]
+  },
+  {
+    label: "CMS",
+    items: [
+      { id: "cms", label: "CMS / SSS / Duyurular", Icon: FileText },
+      { id: "email-tokens", label: "Email Tokenları", Icon: Key }
+    ]
+  }
+];
+
+const SECTION_TITLES: Record<AdminSection, string> = {
+  dashboard: "Dashboard",
+  users: "Üye Yönetimi",
+  roles: "Rol / Yetkiler",
+  events: "Etkinlikler",
+  tags: "İlgi Alanları",
+  reports: "Şikayetler",
+  cms: "CMS / SSS / Duyurular / Politikalar",
+  "email-tokens": "Email Tokenları"
+};
+
 export function AdminDashboardPage() {
   const queryClient = useQueryClient();
   const [token, setToken] = useState(() => getAdminToken());
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<AdminSection>("dashboard");
   const [eventNotice, setEventNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [reportGroupScope, setReportGroupScope] = useState<"active" | "old">("active");
   const [selectedReportGroup, setSelectedReportGroup] = useState<{ targetType: ReportTargetType; targetId: string } | null>(null);
@@ -152,7 +224,6 @@ export function AdminDashboardPage() {
     queryFn: listAdminPolicies,
     enabled: Boolean(token)
   });
-
   const loginMutation = useMutation({
     mutationFn: (input: { email: string; password: string }) => adminLogin(input.email, input.password),
     onSuccess: (response) => {
@@ -438,103 +509,290 @@ export function AdminDashboardPage() {
   const announcements = announcementsQuery.data ?? [];
   const policies = policiesQuery.data ?? [];
 
+  const openReports = reports.filter((r) => r.status === "open").length;
+
   return (
-    <section className="page">
-      <div className="section-header">
-        <div>
-          <p className="eyebrow">Admin</p>
-          <h1>Dashboard</h1>
+    <div className="admin-layout">
+      <aside className="admin-sidebar">
+        <div className="admin-sidebar-header">
+          <span className="admin-sidebar-title">
+            <LayoutDashboard size={16} />
+            Admin Paneli
+          </span>
+          <button className="admin-logout-btn" onClick={handleLogout} title="Çıkış yap" type="button">
+            <LogOut size={16} />
+          </button>
         </div>
-        <button className="secondary-action" onClick={handleLogout} type="button">
-          <LogOut size={18} />
-          Çıkış
-        </button>
-      </div>
+        <nav className="admin-nav">
+          {NAV_GROUPS.map((group) => (
+            <div className="admin-nav-group" key={group.label}>
+              <span className="admin-nav-group-label">{group.label}</span>
+              {group.items.map(({ id, label, Icon }) => (
+                <button
+                  className={`admin-nav-btn${activeSection === id ? " active" : ""}`}
+                  key={id}
+                  onClick={() => setActiveSection(id)}
+                  type="button"
+                >
+                  <Icon size={15} />
+                  {label}
+                  {id === "reports" && openReports > 0 ? (
+                    <span className="admin-nav-badge">{openReports}</span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+      </aside>
 
-      <div className="metric-grid">
-        <MetricCard icon={<CalendarCheck size={24} />} label="Yayınlanan etkinlikler" value={dashboard?.publishedEvents ?? 0} />
-        <MetricCard icon={<CalendarCheck size={24} />} label="Taslak etkinlikler" value={dashboard?.draftEvents ?? 0} />
-        <MetricCard icon={<Tags size={24} />} label="Aktif tag'ler" value={dashboard?.activeTags ?? 0} />
-        <MetricCard icon={<CalendarCheck size={24} />} label="Yaklaşan etkinlikler" value={dashboard?.upcomingEvents ?? 0} />
-        <MetricCard icon={<AlertTriangle size={24} />} label="Açık raporlar" value={reports.filter((report) => report.status === "open").length} />
-      </div>
+      <div className="admin-content">
+        <div className="admin-content-header">
+          <h1>{SECTION_TITLES[activeSection]}</h1>
+          {isMockApiMode ? <span className="status-pill status-requested">Demo modu</span> : null}
+        </div>
 
-      <div className="admin-grid">
-        <CmsAdminPanel
-          announcements={announcements}
-          categories={cmsCategories}
-          faqs={faqs}
-          isPending={
-            createCmsCategoryMutation.isPending ||
-            updateCmsCategoryMutation.isPending ||
-            createFaqMutation.isPending ||
-            updateFaqMutation.isPending ||
-            createAnnouncementMutation.isPending ||
-            updateAnnouncementMutation.isPending ||
-            upsertPolicyMutation.isPending
-          }
-          onCreateAnnouncement={(input) => createAnnouncementMutation.mutate(input)}
-          onCreateCategory={(input) => createCmsCategoryMutation.mutate(input)}
-          onCreateFaq={(input) => createFaqMutation.mutate(input)}
-          onSavePolicy={(input) => upsertPolicyMutation.mutate(input)}
-          onUpdateAnnouncement={(id, data) => updateAnnouncementMutation.mutate({ id, data })}
-          onUpdateCategory={(id, data) => updateCmsCategoryMutation.mutate({ id, data })}
-          onUpdateFaq={(id, data) => updateFaqMutation.mutate({ id, data })}
-          policies={policies}
-        />
-        <RoleGroupAdminPanel
-          isPending={createRoleGroupMutation.isPending || updateRoleGroupMutation.isPending}
-          onCreate={(input) => createRoleGroupMutation.mutate(input)}
-          onUpdate={(id, data) => updateRoleGroupMutation.mutate({ id, data })}
-          roleGroups={roleGroups}
-        />
-        <UserAdminPanel roleGroups={roleGroups} />
-        <ReportAdminPanel
-          isPending={
-            updateReportMutation.isPending ||
-            resolveReportActionMutation.isPending ||
-            createReportRuleMutation.isPending ||
-            updateReportRuleMutation.isPending ||
-            updateReportGroupNoteMutation.isPending ||
-            createModerationDecisionMutation.isPending
-          }
-          groupDetail={reportGroupDetail}
-          groupScope={reportGroupScope}
-          groups={reportGroups}
-          onCreateRule={(input) => createReportRuleMutation.mutate(input)}
-          onResolve={(input) => resolveReportActionMutation.mutate(input)}
-          onSaveGroupNote={(input) => updateReportGroupNoteMutation.mutate(input)}
-          onCreateDecision={(input) => createModerationDecisionMutation.mutate(input)}
-          onSelectGroup={(group) => setSelectedReportGroup({ targetType: group.targetType, targetId: group.targetId })}
-          onSetGroupScope={setReportGroupScope}
-          onUpdateRule={(id, data) => updateReportRuleMutation.mutate({ id, data })}
-          onUpdate={(input) => updateReportMutation.mutate(input)}
-          rules={reportRules}
-          reports={reports}
-        />
-        <TagAdminPanel
-          detail={tagDetail}
-          isPending={createTagMutation.isPending || banTagMutation.isPending || mergeTagMutation.isPending}
-          onArchive={(id) => archiveTagMutation.mutate(id)}
-          onBan={(id) => banTagMutation.mutate(id)}
-          onCreate={(input) => createTagMutation.mutate(input)}
-          onMerge={(id, targetTagId) => mergeTagMutation.mutate({ id, targetTagId })}
-          onSelect={(id) => setSelectedTagId(id)}
-          onUpdate={(input) => updateTagMutation.mutate(input)}
-          tags={tags}
-        />
-        <EventAdminPanel
-          events={events}
-          isDemoMode={isMockApiMode}
-          isPending={saveEventMutation.isPending}
-          notice={eventNotice}
-          onArchive={(id) => archiveEventMutation.mutate(id)}
-          onSave={(id, data) => saveEventMutation.mutate({ id, data })}
-          onStatusChange={(id, status) => updateEventMutation.mutate({ id, status })}
-          tags={tags.filter((tag) => tag.status === "active")}
-        />
+        {activeSection === "dashboard" && (
+          <div className="dashboard-sections">
+            {(dashboard?.publishedEvents ?? 0) === 0 && tags.length === 0 && events.length === 0 ? (
+              <div className="admin-getting-started">
+                <p className="admin-getting-started-title">Başlangıç kılavuzu — ilk 3 adım</p>
+                <div className="admin-getting-started-steps">
+                  <button className="admin-getting-started-step" onClick={() => setActiveSection("tags")} type="button">
+                    <span className="step-num">1</span>
+                    <div>
+                      <strong>İlgi alanı tag'leri oluştur</strong>
+                      <p>Etkinliklerde kullanmak için önce tag'leri tanımla.</p>
+                    </div>
+                  </button>
+                  <button className="admin-getting-started-step" onClick={() => setActiveSection("events")} type="button">
+                    <span className="step-num">2</span>
+                    <div>
+                      <strong>İlk etkinliği ekle</strong>
+                      <p>Etkinliği oluştur ve Published olarak kaydet.</p>
+                    </div>
+                  </button>
+                  <button className="admin-getting-started-step" onClick={() => setActiveSection("cms")} type="button">
+                    <span className="step-num">3</span>
+                    <div>
+                      <strong>CMS içeriklerini doldur</strong>
+                      <p>SSS, duyurular ve politika sayfalarını ekle.</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="metric-grid">
+              <MetricCard icon={<CalendarCheck size={24} />} label="Yayınlanan etkinlikler" value={dashboard?.publishedEvents ?? 0} />
+              <MetricCard icon={<CalendarCheck size={24} />} label="Yaklaşan etkinlikler" value={dashboard?.upcomingEvents ?? 0} />
+              <MetricCard icon={<Tags size={24} />} label="Aktif tag'ler" value={dashboard?.activeTags ?? 0} />
+              <MetricCard icon={<CalendarCheck size={24} />} label="Taslak etkinlikler" value={dashboard?.draftEvents ?? 0} />
+              <MetricCard icon={<AlertTriangle size={24} />} label="Açık şikayetler" value={openReports} />
+              <MetricCard icon={<Megaphone size={24} />} label="Aktif duyurular" value={announcements.filter((a) => a.status === "active").length} />
+            </div>
+
+            <p className="admin-dashboard-subtitle">Modüller</p>
+            <div className="dashboard-module-grid">
+              <DashboardModuleCard
+                Icon={Users}
+                label="Üye Yönetimi"
+                onClick={() => setActiveSection("users")}
+                stats={[
+                  { label: "Rol grupları", value: roleGroups.length }
+                ]}
+              />
+              <DashboardModuleCard
+                Icon={ShieldCheck}
+                label="Rol / Yetkiler"
+                onClick={() => setActiveSection("roles")}
+                stats={[
+                  { label: "Gruplar", value: roleGroups.length },
+                  { label: "Aktif", value: roleGroups.filter((rg) => rg.status === "active").length }
+                ]}
+              />
+              <DashboardModuleCard
+                Icon={CalendarCheck}
+                label="Etkinlikler"
+                onClick={() => setActiveSection("events")}
+                stats={[
+                  { label: "Yayınlanan", value: dashboard?.publishedEvents ?? 0 },
+                  { label: "Taslak", value: dashboard?.draftEvents ?? 0 },
+                  { label: "Yaklaşan", value: dashboard?.upcomingEvents ?? 0 }
+                ]}
+              />
+              <DashboardModuleCard
+                Icon={Tags}
+                label="İlgi Alanları"
+                onClick={() => setActiveSection("tags")}
+                stats={[
+                  { label: "Toplam tag", value: tags.length },
+                  { label: "Aktif", value: tags.filter((t) => t.status === "active").length },
+                  { label: "Arşiv", value: tags.filter((t) => t.status === "archived").length }
+                ]}
+              />
+              <DashboardModuleCard
+                danger={openReports > 0}
+                Icon={AlertTriangle}
+                label="Şikayetler"
+                onClick={() => setActiveSection("reports")}
+                stats={[
+                  { label: "Açık", value: openReports, danger: openReports > 0 },
+                  { label: "İnceleniyor", value: reports.filter((r) => r.status === "reviewing").length },
+                  { label: "Kurallar", value: reportRules.length }
+                ]}
+              />
+              <DashboardModuleCard
+                Icon={FileText}
+                label="CMS / SSS / Duyurular"
+                onClick={() => setActiveSection("cms")}
+                stats={[
+                  { label: "Kategoriler", value: cmsCategories.length },
+                  { label: "SSS", value: faqs.length },
+                  { label: "Duyurular", value: announcements.length },
+                  { label: "Politikalar", value: policies.length }
+                ]}
+              />
+              <DashboardModuleCard
+                Icon={Key}
+                label="Email Tokenları"
+                onClick={() => setActiveSection("email-tokens")}
+                stats={[
+                  { label: "Akış tipi", value: 3 },
+                  { label: "Durum", value: "Aktif" }
+                ]}
+              />
+            </div>
+          </div>
+        )}
+
+        {activeSection === "users" && (
+          <UserAdminPanel roleGroups={roleGroups} />
+        )}
+
+        {activeSection === "roles" && (
+          <RoleGroupAdminPanel
+            isPending={createRoleGroupMutation.isPending || updateRoleGroupMutation.isPending}
+            onCreate={(input) => createRoleGroupMutation.mutate(input)}
+            onUpdate={(id, data) => updateRoleGroupMutation.mutate({ id, data })}
+            roleGroups={roleGroups}
+          />
+        )}
+
+        {activeSection === "events" && (
+          <EventAdminPanel
+            events={events}
+            isDemoMode={isMockApiMode}
+            isPending={saveEventMutation.isPending}
+            notice={eventNotice}
+            onArchive={(id) => archiveEventMutation.mutate(id)}
+            onSave={(id, data) => saveEventMutation.mutate({ id, data })}
+            onStatusChange={(id, status) => updateEventMutation.mutate({ id, status })}
+            tags={tags.filter((tag) => tag.status === "active")}
+          />
+        )}
+
+        {activeSection === "tags" && (
+          <TagAdminPanel
+            detail={tagDetail}
+            isPending={createTagMutation.isPending || banTagMutation.isPending || mergeTagMutation.isPending}
+            onArchive={(id) => archiveTagMutation.mutate(id)}
+            onBan={(id) => banTagMutation.mutate(id)}
+            onCreate={(input) => createTagMutation.mutate(input)}
+            onMerge={(id, targetTagId) => mergeTagMutation.mutate({ id, targetTagId })}
+            onSelect={(id) => setSelectedTagId(id)}
+            onUpdate={(input) => updateTagMutation.mutate(input)}
+            tags={tags}
+          />
+        )}
+
+        {activeSection === "reports" && (
+          <ReportAdminPanel
+            isPending={
+              updateReportMutation.isPending ||
+              resolveReportActionMutation.isPending ||
+              createReportRuleMutation.isPending ||
+              updateReportRuleMutation.isPending ||
+              updateReportGroupNoteMutation.isPending ||
+              createModerationDecisionMutation.isPending
+            }
+            groupDetail={reportGroupDetail}
+            groupScope={reportGroupScope}
+            groups={reportGroups}
+            onCreateRule={(input) => createReportRuleMutation.mutate(input)}
+            onResolve={(input) => resolveReportActionMutation.mutate(input)}
+            onSaveGroupNote={(input) => updateReportGroupNoteMutation.mutate(input)}
+            onCreateDecision={(input) => createModerationDecisionMutation.mutate(input)}
+            onSelectGroup={(group) => setSelectedReportGroup({ targetType: group.targetType, targetId: group.targetId })}
+            onSetGroupScope={setReportGroupScope}
+            onUpdateRule={(id, data) => updateReportRuleMutation.mutate({ id, data })}
+            onUpdate={(input) => updateReportMutation.mutate(input)}
+            rules={reportRules}
+            reports={reports}
+          />
+        )}
+
+        {activeSection === "cms" && (
+          <CmsAdminPanel
+            announcements={announcements}
+            categories={cmsCategories}
+            faqs={faqs}
+            isPending={
+              createCmsCategoryMutation.isPending ||
+              updateCmsCategoryMutation.isPending ||
+              createFaqMutation.isPending ||
+              updateFaqMutation.isPending ||
+              createAnnouncementMutation.isPending ||
+              updateAnnouncementMutation.isPending ||
+              upsertPolicyMutation.isPending
+            }
+            onCreateAnnouncement={(input) => createAnnouncementMutation.mutate(input)}
+            onCreateCategory={(input) => createCmsCategoryMutation.mutate(input)}
+            onCreateFaq={(input) => createFaqMutation.mutate(input)}
+            onSavePolicy={(input) => upsertPolicyMutation.mutate(input)}
+            onUpdateAnnouncement={(id, data) => updateAnnouncementMutation.mutate({ id, data })}
+            onUpdateCategory={(id, data) => updateCmsCategoryMutation.mutate({ id, data })}
+            onUpdateFaq={(id, data) => updateFaqMutation.mutate({ id, data })}
+            policies={policies}
+          />
+        )}
+
+        {activeSection === "email-tokens" && <EmailTokenInfoPanel />}
       </div>
-    </section>
+    </div>
+  );
+}
+
+function DashboardModuleCard({
+  danger,
+  Icon,
+  label,
+  onClick,
+  stats
+}: {
+  danger?: boolean;
+  Icon: React.ElementType;
+  label: string;
+  onClick: () => void;
+  stats: Array<{ label: string; value: number | string; danger?: boolean }>;
+}) {
+  return (
+    <button className={`dashboard-module-card${danger ? " dashboard-module-card--alert" : ""}`} onClick={onClick} type="button">
+      <div className="dashboard-module-header">
+        <span className="dashboard-module-icon">
+          <Icon size={18} />
+        </span>
+        <h3>{label}</h3>
+      </div>
+      <div className="dashboard-module-stats">
+        {stats.map((stat) => (
+          <div className="dashboard-stat" key={stat.label}>
+            <span className={`dashboard-stat-value${stat.danger ? " danger" : ""}`}>{stat.value}</span>
+            <span className="dashboard-stat-label">{stat.label}</span>
+          </div>
+        ))}
+      </div>
+    </button>
   );
 }
 
@@ -661,15 +919,241 @@ function CmsAdminPanel({
       <div className="section-header compact">
         <h2>CMS / SSS</h2>
         <span>
-          {categories.length} kategori · {faqs.length} SSS · {announcements.length} duyuru · {policies.length} policy
+          {categories.length} kategori · {faqs.length} SSS · {announcements.length} duyuru · {policies.length} politika
         </span>
       </div>
+      <p className="admin-section-desc">
+        SSS kategorilerini ve sorularını ekle, site duyurularını yönet, yasal politika sayfalarını düzenle. Önce kategori oluştur, ardından o kategoriye SSS ekle.
+      </p>
+
+      {/* ── 1. Kategoriler ── */}
       <div className="admin-subsection">
-        <h3>Policy sayfaları</h3>
+        <div className="admin-subsection-header">
+          <h3>İçerik Kategorileri</h3>
+          <span>{categories.length} kategori</span>
+        </div>
+        <div className="admin-create-section">
+          <span className="admin-create-section-label"><Plus size={11} /> Yeni kategori</span>
+          <form className="admin-form" onSubmit={handleCategorySubmit}>
+            <label>
+              Kategori adı
+              <input name="name" placeholder="Örn. Hesap & Gizlilik, Etkinlikler, Ödeme..." required minLength={2} />
+            </label>
+            <label>
+              Açıklama
+              <textarea name="description" placeholder="Bu kategori hangi konuları kapsar? (opsiyonel)" rows={2} />
+            </label>
+            <button className="secondary-action" disabled={isPending} type="submit">
+              <Plus size={18} />
+              Kategori ekle
+            </button>
+          </form>
+        </div>
+        <div className="admin-manage-section-label">
+          <span>Mevcut kategoriler</span>
+          <span>{categories.length} kayıt</span>
+        </div>
+        {categories.length === 0 ? (
+          <div className="admin-empty-state">
+            <strong>Henüz kategori yok</strong>
+            <p>SSS eklemeden önce en az bir kategori oluşturman gerekiyor.</p>
+          </div>
+        ) : (
+          <div className="admin-list">
+            {categories.map((category) => (
+              <div className="admin-list-row" key={category.id}>
+                <div>
+                  <strong>{category.name}</strong>
+                  <span>
+                    {category.status} · {category._count?.faqs ?? 0} SSS
+                  </span>
+                </div>
+                <button
+                  className={category.status === "active" ? "ghost-action" : "secondary-action"}
+                  disabled={isPending}
+                  onClick={() => onUpdateCategory(category.id, { status: category.status === "active" ? "passive" : "active" })}
+                  type="button"
+                >
+                  {category.status === "active" ? "Pasif yap" : "Aktif yap"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── 2. SSS ── */}
+      <div className="admin-subsection">
+        <div className="admin-subsection-header">
+          <h3>Sık Sorulan Sorular</h3>
+          <span>{faqs.length} soru</span>
+        </div>
+        {categories.filter((c) => c.status === "active").length === 0 ? (
+          <div className="admin-empty-state">
+            <strong>Önce bir kategori oluşturman gerekiyor</strong>
+            <p>Aktif kategori olmadan SSS ekleyemezsin. Yukarıdaki Kategoriler bölümünden başla.</p>
+          </div>
+        ) : (
+          <>
+            <div className="admin-create-section">
+              <span className="admin-create-section-label"><Plus size={11} /> Yeni SSS sorusu</span>
+              <form className="admin-form" onSubmit={handleFaqSubmit}>
+                <label>
+                  Kategori
+                  <select name="categoryId" required>
+                    <option value="">Kategori seç</option>
+                    {categories
+                      .filter((category) => category.status === "active")
+                      .map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  Soru başlığı
+                  <input name="title" placeholder="Örn. Şifremi nasıl değiştirebilirim?" required minLength={3} />
+                </label>
+                <label>
+                  Cevap
+                  <textarea name="body" placeholder="Kullanıcının bu sorusuna net ve kısa bir cevap yaz..." required minLength={3} rows={4} />
+                </label>
+                <button className="secondary-action" disabled={isPending} type="submit">
+                  <Plus size={18} />
+                  SSS ekle
+                </button>
+              </form>
+            </div>
+            <div className="admin-manage-section-label">
+              <span>Mevcut SSS'ler</span>
+              <span>{faqs.length} kayıt</span>
+            </div>
+            {faqs.length === 0 ? (
+              <div className="admin-empty-state">
+                <strong>Henüz SSS yok</strong>
+                <p>Yukarıdaki formu doldurarak ilk soruyu ekle.</p>
+              </div>
+            ) : (
+              <div className="admin-list">
+                {faqs.map((faq) => (
+                  <div className="admin-list-item" key={faq.id}>
+                    <div className="admin-list-row">
+                      <div>
+                        <strong>{faq.title}</strong>
+                        <span>
+                          {faq.category?.name ?? "Kategori yok"} · {faq.status}
+                        </span>
+                      </div>
+                      <button
+                        className={faq.status === "active" ? "ghost-action" : "secondary-action"}
+                        disabled={isPending}
+                        onClick={() => onUpdateFaq(faq.id, { status: faq.status === "active" ? "passive" : "active" })}
+                        type="button"
+                      >
+                        {faq.status === "active" ? "Pasif yap" : "Aktif yap"}
+                      </button>
+                    </div>
+                    <p className="form-help">{faq.body}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── 3. Duyurular ── */}
+      <div className="admin-subsection">
+        <div className="admin-subsection-header">
+          <h3>Duyurular</h3>
+          <span>{announcements.length} duyuru</span>
+        </div>
+        <div className="admin-create-section">
+          <span className="admin-create-section-label"><Plus size={11} /> Yeni duyuru</span>
+          <form className="admin-form" onSubmit={handleAnnouncementSubmit}>
+            <label>
+              Başlık
+              <input name="title" placeholder="Örn. Yeni özellik: Etkinlik daveti" required minLength={3} maxLength={160} />
+            </label>
+            <label>
+              İçerik
+              <textarea name="body" placeholder="Duyurunun detaylarını buraya yaz..." required minLength={3} rows={4} />
+            </label>
+            <div className="admin-form-grid">
+              <label>
+                Hedef
+                <select name="target" defaultValue="all">
+                  <option value="all">Herkes</option>
+                  <option value="members">Üyeler</option>
+                  <option value="admins">Adminler</option>
+                </select>
+              </label>
+              <label>
+                Yayın zamanı
+                <input name="publishAt" type="datetime-local" />
+              </label>
+              <label>
+                Bitiş zamanı
+                <input name="expiresAt" type="datetime-local" />
+              </label>
+            </div>
+            <button className="secondary-action" disabled={isPending} type="submit">
+              <Megaphone size={18} />
+              Duyuru ekle
+            </button>
+          </form>
+        </div>
+        <div className="admin-manage-section-label">
+          <span>Mevcut duyurular</span>
+          <span>{announcements.length} kayıt</span>
+        </div>
+        {announcements.length === 0 ? (
+          <div className="admin-empty-state">
+            <strong>Henüz duyuru yok</strong>
+            <p>Yukarıdaki formu doldurarak ilk duyuruyu oluştur.</p>
+          </div>
+        ) : (
+          <div className="admin-list">
+            {announcements.map((announcement) => (
+              <div className="admin-list-item" key={announcement.id}>
+                <div className="admin-list-row">
+                  <div>
+                    <strong>{announcement.title}</strong>
+                    <span>
+                      {announcement.status} · {announcement.target} · {formatDateTime(announcement.publishAt)}
+                    </span>
+                  </div>
+                  <button
+                    className={announcement.status === "active" ? "ghost-action" : "secondary-action"}
+                    disabled={isPending}
+                    onClick={() =>
+                      onUpdateAnnouncement(announcement.id, { status: announcement.status === "active" ? "passive" : "active" })
+                    }
+                    type="button"
+                  >
+                    {announcement.status === "active" ? "Pasif yap" : "Aktif yap"}
+                  </button>
+                </div>
+                <p className="form-help">{announcement.body}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── 4. Politika sayfaları ── */}
+      <div className="admin-subsection">
+        <div className="admin-subsection-header">
+          <h3>Yasal Politika Sayfaları</h3>
+          <span>{policies.length} / {policyTypes.length} dolduruldu</span>
+        </div>
+        <p className="admin-section-desc" style={{ margin: "0 0 14px" }}>
+          Her politika türü için başlık ve içerik gir, ardından Kaydet'e bas. Aktif politikalar kullanıcılara gösterilir.
+        </p>
         <div className="policy-editor-grid">
           {policyTypes.map((policyType) => {
             const policy = policies.find((item) => item.type === policyType.value);
-
             return (
               <form className="admin-form" key={policyType.value} onSubmit={(event) => handlePolicySubmit(event, policyType.value)}>
                 <div className="admin-list-row">
@@ -699,149 +1183,79 @@ function CmsAdminPanel({
           })}
         </div>
       </div>
-      <form className="admin-form" onSubmit={handleAnnouncementSubmit}>
-        <h3>Duyuru oluştur</h3>
-        <label>
-          Başlık
-          <input name="title" required minLength={3} maxLength={160} />
-        </label>
-        <label>
-          İçerik
-          <textarea name="body" required minLength={3} rows={4} />
-        </label>
-        <div className="admin-form-grid">
-          <label>
-            Hedef
-            <select name="target" defaultValue="all">
-              <option value="all">Herkes</option>
-              <option value="members">Üyeler</option>
-              <option value="admins">Adminler</option>
-            </select>
-          </label>
-          <label>
-            Yayın zamanı
-            <input name="publishAt" type="datetime-local" />
-          </label>
-          <label>
-            Bitiş zamanı
-            <input name="expiresAt" type="datetime-local" />
-          </label>
+    </section>
+  );
+}
+
+function EmailTokenInfoPanel() {
+  return (
+    <section className="admin-panel">
+      <div className="section-header compact">
+        <h2>Email Token Akışları</h2>
+        <span>3 akış · sistem yönetimli</span>
+      </div>
+
+      <div className="metric-grid compact-metrics">
+        <div className="metric-card">
+          <Key size={20} />
+          <span>Token türü</span>
+          <strong>Kriptografik UUID</strong>
         </div>
-        <button className="secondary-action" disabled={isPending} type="submit">
-          <Megaphone size={18} />
-          Duyuru ekle
-        </button>
-      </form>
-      <div className="admin-list">
-        {announcements.map((announcement) => (
-          <div className="admin-list-item" key={announcement.id}>
-            <div className="admin-list-row">
-              <div>
-                <strong>{announcement.title}</strong>
-                <span>
-                  {announcement.status} · {announcement.target} · {formatDateTime(announcement.publishAt)}
-                </span>
-              </div>
-              <button
-                className={announcement.status === "active" ? "ghost-action" : "secondary-action"}
-                disabled={isPending}
-                onClick={() =>
-                  onUpdateAnnouncement(announcement.id, { status: announcement.status === "active" ? "passive" : "active" })
-                }
-                type="button"
-              >
-                {announcement.status === "active" ? "Pasif yap" : "Aktif yap"}
-              </button>
-            </div>
-            <p className="form-help">{announcement.body}</p>
-          </div>
-        ))}
+        <div className="metric-card">
+          <Check size={20} />
+          <span>Tek kullanımlık</span>
+          <strong>Evet</strong>
+        </div>
+        <div className="metric-card">
+          <AlertTriangle size={20} />
+          <span>Geçerlilik süresi</span>
+          <strong>24 saat</strong>
+        </div>
       </div>
-      <form className="admin-form" onSubmit={handleCategorySubmit}>
-        <h3>Kategori oluştur</h3>
-        <label>
-          Kategori adı
-          <input name="name" placeholder="Account" required minLength={2} />
-        </label>
-        <label>
-          Açıklama
-          <textarea name="description" rows={2} />
-        </label>
-        <button className="secondary-action" disabled={isPending} type="submit">
-          <Plus size={18} />
-          Kategori ekle
-        </button>
-      </form>
-      <div className="admin-list">
-        {categories.map((category) => (
-          <div className="admin-list-row" key={category.id}>
+
+      <div className="admin-list" style={{ marginTop: "18px" }}>
+        <div className="admin-list-item">
+          <div className="admin-list-row">
             <div>
-              <strong>{category.name}</strong>
-              <span>
-                {category.status} · {category._count?.faqs ?? 0} SSS
-              </span>
+              <strong>Email doğrulama</strong>
+              <span>verify_email · Kayıt sonrası gönderilir</span>
             </div>
-            <button
-              className={category.status === "active" ? "ghost-action" : "secondary-action"}
-              disabled={isPending}
-              onClick={() => onUpdateCategory(category.id, { status: category.status === "active" ? "passive" : "active" })}
-              type="button"
-            >
-              {category.status === "active" ? "Pasif yap" : "Aktif yap"}
-            </button>
+            <span className="status-pill status-accepted">Aktif</span>
           </div>
-        ))}
-      </div>
-      <form className="admin-form" onSubmit={handleFaqSubmit}>
-        <h3>SSS oluştur</h3>
-        <label>
-          Kategori
-          <select name="categoryId" required>
-            <option value="">Kategori seç</option>
-            {categories
-              .filter((category) => category.status === "active")
-              .map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-          </select>
-        </label>
-        <label>
-          SSS başlığı
-          <input name="title" required minLength={3} />
-        </label>
-        <label>
-          SSS açıklaması
-          <textarea name="body" required minLength={3} rows={4} />
-        </label>
-        <button className="secondary-action" disabled={isPending || categories.length === 0} type="submit">
-          <Plus size={18} />
-          SSS ekle
-        </button>
-      </form>
-      <div className="admin-list">
-        {faqs.map((faq) => (
-          <div className="admin-list-item" key={faq.id}>
-            <div className="admin-list-row">
-              <div>
-                <strong>{faq.title}</strong>
-                <span>
-                  {faq.category?.name ?? "Kategori yok"} · {faq.status}
-                </span>
-              </div>
-              <button
-                className={faq.status === "active" ? "ghost-action" : "secondary-action"}
-                disabled={isPending}
-                onClick={() => onUpdateFaq(faq.id, { status: faq.status === "active" ? "passive" : "active" })}
-                type="button"
-              >
-                {faq.status === "active" ? "Pasif yap" : "Aktif yap"}
-              </button>
+          <p className="form-help" style={{ padding: "0 12px 12px" }}>
+            Kullanıcı kayıt olduğunda sistem otomatik olarak bir doğrulama tokeni oluşturur.
+            <code>/auth/token</code> endpoint'i üzerinden tüketilir. Token tüketilince kullanıcı
+            statüsü <code>pending → active</code> geçişi yapar.
+          </p>
+        </div>
+
+        <div className="admin-list-item">
+          <div className="admin-list-row">
+            <div>
+              <strong>Şifre sıfırlama</strong>
+              <span>password_reset · Şifre sıfırlama talebinde gönderilir</span>
             </div>
-            <p className="form-help">{faq.body}</p>
+            <span className="status-pill status-accepted">Aktif</span>
           </div>
-        ))}
+          <p className="form-help" style={{ padding: "0 12px 12px" }}>
+            <code>/auth/forgot-password</code> endpoint'i ile token oluşturulur.
+            Kullanıcı linke tıkladığında <code>/auth/reset-password</code> endpoint'i ile tüketilir.
+          </p>
+        </div>
+
+        <div className="admin-list-item">
+          <div className="admin-list-row">
+            <div>
+              <strong>Davet kabulü</strong>
+              <span>invite_accept · Admin etkinliğe katılımcı davet ettiğinde</span>
+            </div>
+            <span className="status-pill status-accepted">Aktif</span>
+          </div>
+          <p className="form-help" style={{ padding: "0 12px 12px" }}>
+            Etkinlik Yönetimi → Guest List bölümündeki "Davet et" aksiyonu ile oluşturulur.
+            Davet edilen kişi linke tıkladığında token tüketilir ve katılımı onaylanır.
+          </p>
+        </div>
       </div>
     </section>
   );
@@ -873,32 +1287,48 @@ function RoleGroupAdminPanel({
   return (
     <section className="admin-panel">
       <div className="section-header compact">
-        <h2>Rol / yetki grupları</h2>
+        <h2>Rol / Yetki Grupları</h2>
         <span>{roleGroups.length} grup</span>
       </div>
-      <form className="admin-form" onSubmit={handleSubmit}>
-        <label>
-          Rol grubu adı
-          <input name="name" placeholder="Moderasyon ekibi" required minLength={2} />
-        </label>
-        <label>
-          Açıklama
-          <textarea name="description" rows={2} />
-        </label>
-        <fieldset className="tag-fieldset">
-          <legend>Yetkiler</legend>
-          {adminPermissionOptions.map((permission) => (
-            <label key={permission.value}>
-              <input name="permissions" type="checkbox" value={permission.value} />
-              {permission.label}
-            </label>
-          ))}
-        </fieldset>
-        <button className="secondary-action" disabled={isPending} type="submit">
-          <Plus size={18} />
-          Rol grubu ekle
-        </button>
-      </form>
+      <p className="admin-section-desc">
+        Admin yetki grupları oluştur ve her gruba farklı yetkiler ata. Admin kullanıcılara yetki grubu atamak için <strong>Üye Yönetimi</strong> bölümüne git.
+      </p>
+      <div className="admin-create-section">
+        <span className="admin-create-section-label"><Plus size={11} /> Yeni rol grubu</span>
+        <form className="admin-form" onSubmit={handleSubmit}>
+          <label>
+            Rol grubu adı
+            <input name="name" placeholder="Örn. Moderasyon Ekibi, İçerik Editörü..." required minLength={2} />
+          </label>
+          <label>
+            Açıklama
+            <textarea name="description" placeholder="Bu grubun sorumluluğu nedir? (opsiyonel)" rows={2} />
+          </label>
+          <fieldset className="tag-fieldset">
+            <legend>Yetkiler</legend>
+            {adminPermissionOptions.map((permission) => (
+              <label key={permission.value}>
+                <input name="permissions" type="checkbox" value={permission.value} />
+                {permission.label}
+              </label>
+            ))}
+          </fieldset>
+          <button className="secondary-action" disabled={isPending} type="submit">
+            <Plus size={18} />
+            Rol grubu ekle
+          </button>
+        </form>
+      </div>
+      <div className="admin-manage-section-label">
+        <span>Mevcut rol grupları</span>
+        <span>{roleGroups.length} kayıt</span>
+      </div>
+      {roleGroups.length === 0 ? (
+        <div className="admin-empty-state">
+          <strong>Henüz rol grubu yok</strong>
+          <p>Yukarıdaki formu doldurarak ilk yetki grubunu oluştur.</p>
+        </div>
+      ) : (
       <div className="admin-list">
         {roleGroups.map((roleGroup) => (
           <div className="admin-list-item" key={roleGroup.id}>
@@ -927,6 +1357,7 @@ function RoleGroupAdminPanel({
           </div>
         ))}
       </div>
+      )}
     </section>
   );
 }
@@ -971,6 +1402,7 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
     }) => updateAdminUser(input.id, { status: input.status, role: input.role, adminRoleGroupId: input.adminRoleGroupId }),
     onSuccess: (_, input) => {
       void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-users-total"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-user-detail", input.id] });
     }
   });
@@ -991,9 +1423,12 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
   return (
     <section className="admin-panel">
       <div className="section-header compact">
-        <h2>Üye yönetimi</h2>
+        <h2>Üye Yönetimi</h2>
         <span>{usersQuery.isLoading ? "Yükleniyor" : `${userList?.total ?? 0} üye`}</span>
       </div>
+      <p className="admin-section-desc">
+        Tüm üyeleri ara, filtrele ve yönet. Statü değiştirebilir, rol atayabilir, admin rol grubu belirleyebilirsin.
+      </p>
       <form className="guest-invite-form" onSubmit={handleFilterSubmit}>
         <label>
           Arama
@@ -1022,6 +1457,12 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
           Filtrele
         </button>
       </form>
+      {usersQuery.isSuccess && (userList?.items ?? []).length === 0 ? (
+        <div className="admin-empty-state">
+          <strong>Sonuç bulunamadı</strong>
+          <p>Farklı filtreler deneyebilir veya arama terimini değiştirebilirsin.</p>
+        </div>
+      ) : null}
       <div className="admin-list">
         {(userList?.items ?? []).map((user) => (
           <UserAdminRow
@@ -1263,11 +1704,14 @@ function ReportAdminPanel({
   return (
     <section className="admin-panel">
       <div className="section-header compact">
-        <h2>Şikayetler</h2>
+        <h2>Şikayetler & Moderasyon</h2>
         <span>
           {rules.length} kural · {groups.length} grup · {reports.length} rapor
         </span>
       </div>
+      <p className="admin-section-desc">
+        Şikayet kuralları tanımla, bildirilen içerikleri incele ve moderasyon kararları uygula. Açık şikayetler acil dikkat gerektirir.
+      </p>
       <form className="admin-form" onSubmit={handleRuleSubmit}>
         <h3>Şikayet kuralı oluştur</h3>
         <div className="admin-form-grid">
@@ -1366,7 +1810,7 @@ function ReportAdminPanel({
             </button>
           </form>
           <form className="admin-form compact-form" onSubmit={handleDecisionSubmit}>
-            <h3>Ceza / müdahale kararı</h3>
+            <h3>Ceza / Müdahale Kararı</h3>
             <div className="admin-form-grid">
               <label>
                 Karar
@@ -1562,17 +2006,25 @@ function TagAdminPanel({
   return (
     <section className="admin-panel">
       <div className="section-header compact">
-        <h2>Tag yönetimi</h2>
+        <h2>İlgi Alanı / Tag Yönetimi</h2>
         <span>{tags.length} tag</span>
       </div>
+      <p className="admin-section-desc">
+        İlgi alanı tag'lerini oluştur ve yönet. Kullanıcılar bu tag'leri profillerinde ve etkinliklerde kullanır. Tag'leri birleştirip arşivleyebilirsin.
+      </p>
+      <div className="admin-create-section">
+        <span className="admin-create-section-label">
+          <Plus size={11} />
+          {editingTag ? "Tag'i güncelle" : "Yeni tag"}
+        </span>
       <form className="admin-form" onSubmit={handleSubmit}>
         <label>
           Tag adı
-          <input key={editingTag?.id ?? "new-tag-name"} name="name" placeholder="Örn. Startup" required minLength={2} defaultValue={editingTag?.name ?? ""} />
+          <input key={editingTag?.id ?? "new-tag-name"} name="name" placeholder="Örn. Startup, Fintech, Tasarım..." required minLength={2} defaultValue={editingTag?.name ?? ""} />
         </label>
         <label>
           Açıklama
-          <textarea key={editingTag?.id ?? "new-tag-description"} name="description" placeholder="Opsiyonel açıklama" rows={3} defaultValue={editingTag?.description ?? ""} />
+          <textarea key={editingTag?.id ?? "new-tag-description"} name="description" placeholder="Bu tag ne tür içerikleri kapsar? (opsiyonel)" rows={3} defaultValue={editingTag?.description ?? ""} />
         </label>
         <button className="secondary-action" disabled={isPending} type="submit">
           <Plus size={18} />
@@ -1584,6 +2036,17 @@ function TagAdminPanel({
           </button>
         ) : null}
       </form>
+      </div>
+      <div className="admin-manage-section-label">
+        <span>Mevcut tag'ler</span>
+        <span>{tags.length} kayıt</span>
+      </div>
+      {tags.length === 0 ? (
+        <div className="admin-empty-state">
+          <strong>Henüz tag yok</strong>
+          <p>Yukarıdaki formu kullanarak ilk ilgi alanı tag'ini ekle.</p>
+        </div>
+      ) : (
       <div className="admin-list">
         {tags.map((tag) => (
           <div className="admin-list-row" key={tag.id}>
@@ -1607,6 +2070,7 @@ function TagAdminPanel({
           </div>
         ))}
       </div>
+      )}
       {detail ? (
         <div className="admin-list-item">
           <div className="section-header compact">
@@ -1728,8 +2192,12 @@ function EventAdminPanel({
   return (
     <section className="admin-panel">
       <div className="section-header compact">
-        <h2>Etkinlik yönetimi</h2>
+        <h2>Etkinlik Yönetimi</h2>
+        <span>{events.length} etkinlik</span>
       </div>
+      <p className="admin-section-desc">
+        Etkinlik ekle veya düzenle. <strong>Published</strong> durumundaki etkinlikler herkese açık listede görünür; <strong>Draft</strong> olanlar sadece burada listelenir.
+      </p>
       {isDemoMode ? (
         <p className="form-help">
           Demo modunda kayıtlar bu tarayıcıya kaydedilir. Canlı database için backend deploy edip Netlify'da
@@ -1737,6 +2205,11 @@ function EventAdminPanel({
         </p>
       ) : null}
       {notice ? <p className={notice.tone === "success" ? "form-success" : "form-error"}>{notice.message}</p> : null}
+      <div className="admin-create-section">
+        <span className="admin-create-section-label">
+          <Plus size={11} />
+          {editingEvent ? "Etkinliği güncelle" : "Yeni etkinlik"}
+        </span>
       <form className="admin-form" onSubmit={handleSubmit}>
         <label>
           Başlık
@@ -1744,7 +2217,7 @@ function EventAdminPanel({
         </label>
         <label>
           Açıklama
-          <textarea key={`${editingEvent?.id ?? "new"}-description`} name="description" required minLength={10} rows={4} defaultValue={editingEvent?.description ?? ""} />
+          <textarea key={`${editingEvent?.id ?? "new"}-description`} name="description" required minLength={10} rows={4} placeholder="Etkinliği kısaca tanımla: konu, hedef kitle, neler öğrenilecek..." defaultValue={editingEvent?.description ?? ""} />
         </label>
         <div className="form-grid">
           <label>
@@ -1826,6 +2299,17 @@ function EventAdminPanel({
           </button>
         ) : null}
       </form>
+      </div>
+      <div className="admin-manage-section-label">
+        <span>Mevcut etkinlikler</span>
+        <span>{events.length} kayıt</span>
+      </div>
+      {events.length === 0 ? (
+        <div className="admin-empty-state">
+          <strong>Henüz etkinlik yok</strong>
+          <p>Yukarıdaki formu doldurarak ilk etkinliği oluşturabilirsin.</p>
+        </div>
+      ) : (
       <div className="admin-list">
         {events.map((event) => (
           <div className="admin-list-item" key={event.id}>
@@ -1875,6 +2359,7 @@ function EventAdminPanel({
           </div>
         ))}
       </div>
+      )}
     </section>
   );
 }
@@ -1907,7 +2392,7 @@ function GuestListPanel({ eventId }: { eventId: string }) {
     },
     onError: () => setInviteNotice({ tone: "error", message: "Davet gönderilemedi. Email adresini kontrol et." })
   });
-  const participants = participantsQuery.data ?? [];
+  const participants: EventParticipant[] = participantsQuery.data ?? [];
 
   function handleInviteSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
