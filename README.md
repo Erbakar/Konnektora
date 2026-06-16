@@ -126,6 +126,13 @@ WEB_ORIGIN=https://konnektora.netlify.app
 - Event detayında kullanıcı Attend akışı
 - Admin/organizer guest list görüntüleme, kabul/ret, ban ve check-in UI
 - Organizer email ile kullanıcı davet etme ve invited kullanıcı oluşturma akışı
+- Davet kabul linki: `POST /auth/invite/accept`, `/accept-invite?token=...`
+- Email doğrulama linki: `POST /auth/email/verify`, `/verify-email?token=...`
+- Şifre sıfırlama linki: `POST /auth/password/reset`, `/reset-password?token=...`
+- Admin üye yönetimi, rol/yetki grupları ve permission bazlı guard kontrolleri
+- CMS kategori/SSS/duyuru/policy yönetimi
+- Şikayet kuralları, şikayet gruplama, grup notları, ceza/müdahale kararları
+- Tag detay yönetimi, creator bilgisi, şikayet sayısı, merge ve ban/gizle akışları
 - Event listelemede tag, format ve dil filtreleri
 - Event discovery API'de arama, tarih, şehir/ülke ve sayfalama
 - Event-tag değişikliklerinde tag kullanım sayısı güncelleme
@@ -134,8 +141,8 @@ WEB_ORIGIN=https://konnektora.netlify.app
 
 ## Sonraki Teknik Adımlar
 
-1. Event owner/organizer permission kontrollerini daha ayrıntılı test et.
-2. Profil ve event akışları için API testlerini genişlet.
-3. Frontend smoke testlerini ekle.
-4. Production email gönderimi ve davet kabul ekranını ekle.
-5. Harita/distance filtrelerini veri modelindeki koordinatlarla bağla.
+1. Deploy ortamında `npm run db:deploy` ve `npm run db:generate` komutlarını Node 22 ile çalıştır.
+2. Resend veya seçilecek mail provider için `EMAIL_FROM` ve `RESEND_API_KEY` değerlerini production'a gir.
+3. Profil, event, moderation ve email token akışları için e2e/smoke testleri ekle.
+4. Harita/distance filtrelerini veri modelindeki koordinatlarla bağla.
+5. Production seed/admin şifresi stratejisini gerçek operasyon sürecine göre sertleştir.

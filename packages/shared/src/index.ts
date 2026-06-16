@@ -150,6 +150,28 @@ export const adminUserSchema = z.object({
   status: userStatusSchema.optional()
 });
 
+export const adminTagDetailSchema = tagSchema.extend({
+  category: z
+    .object({
+      id: z.string().uuid(),
+      name: z.string(),
+      slug: slugSchema,
+      description: z.string().nullable().optional(),
+      sortOrder: z.number().int().optional()
+    })
+    .nullable()
+    .optional(),
+  createdBy: adminUserSchema.optional().nullable(),
+  updatedBy: adminUserSchema.optional().nullable(),
+  reportCount: z.number().int().nonnegative(),
+  _count: z
+    .object({
+      events: z.number().int().nonnegative(),
+      interestedUsers: z.number().int().nonnegative()
+    })
+    .optional()
+});
+
 export const adminManagedUserSchema = adminUserSchema.extend({
   status: userStatusSchema,
   adminRoleGroupId: z.string().uuid().nullable().optional(),
@@ -253,6 +275,22 @@ export const reportGroupNoteSchema = z.object({
   updatedBy: adminUserSchema.optional().nullable()
 });
 
+export const moderationDecisionSchema = z.object({
+  id: z.string().uuid(),
+  targetType: reportTargetTypeSchema,
+  targetId: z.string().uuid(),
+  decision: z.enum(["violation", "no_violation"]),
+  action: z.enum(["none", "warn_user", "suspend_user", "ban_user", "archive_event", "archive_tag"]),
+  penaltyScore: z.number().int().nonnegative(),
+  note: z.string().max(2000).nullable(),
+  userId: z.string().uuid().nullable().optional(),
+  issuedById: z.string().uuid().nullable().optional(),
+  suspensionEndsAt: z.string().datetime().or(z.date()).nullable(),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  user: adminUserSchema.optional().nullable(),
+  issuedBy: adminUserSchema.optional().nullable()
+});
+
 export const reportGroupSchema = z.object({
   targetType: reportTargetTypeSchema,
   targetId: z.string().uuid(),
@@ -263,7 +301,8 @@ export const reportGroupSchema = z.object({
   latestReportAt: z.string().datetime().or(z.date()),
   statuses: z.array(reportStatusSchema),
   reasons: z.array(z.string()),
-  note: reportGroupNoteSchema.nullable().optional()
+  note: reportGroupNoteSchema.nullable().optional(),
+  decisions: z.array(moderationDecisionSchema).optional()
 });
 
 export const reportGroupDetailSchema = reportGroupSchema.extend({
@@ -287,6 +326,7 @@ export type Announcement = z.infer<typeof announcementSchema>;
 export type PolicyType = z.infer<typeof policyTypeSchema>;
 export type CmsPolicy = z.infer<typeof cmsPolicySchema>;
 export type Tag = z.infer<typeof tagSchema>;
+export type AdminTagDetail = z.infer<typeof adminTagDetailSchema>;
 export type Event = z.infer<typeof eventSchema>;
 export type EventList = z.infer<typeof eventListSchema>;
 export type AdminDashboard = z.infer<typeof adminDashboardSchema>;
@@ -295,6 +335,7 @@ export type EventParticipant = z.infer<typeof eventParticipantSchema>;
 export type ContentReport = z.infer<typeof contentReportSchema>;
 export type ReportRule = z.infer<typeof reportRuleSchema>;
 export type ReportGroupNote = z.infer<typeof reportGroupNoteSchema>;
+export type ModerationDecision = z.infer<typeof moderationDecisionSchema>;
 export type ReportGroup = z.infer<typeof reportGroupSchema>;
 export type ReportGroupDetail = z.infer<typeof reportGroupDetailSchema>;
 export type AdminManagedUser = z.infer<typeof adminManagedUserSchema>;

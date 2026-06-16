@@ -22,6 +22,36 @@ export class TagsService {
     });
   }
 
+  async getAdminTag(id: string) {
+    const tag = await this.prisma.tag.findUnique({
+      where: { id },
+      include: {
+        category: true,
+        createdBy: { select: { id: true, email: true, name: true, role: true, status: true } },
+        updatedBy: { select: { id: true, email: true, name: true, role: true, status: true } },
+        _count: {
+          select: {
+            events: true,
+            interestedUsers: true
+          }
+        }
+      }
+    });
+
+    if (!tag) {
+      throw new NotFoundException("Tag bulunamadı.");
+    }
+
+    const reportCount = await this.prisma.contentReport.count({
+      where: { targetType: "tag", targetId: id }
+    });
+
+    return {
+      ...tag,
+      reportCount
+    };
+  }
+
   listTagCategories() {
     return this.prisma.tagCategory.findMany({
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
@@ -98,6 +128,78 @@ export class TagsService {
         status: TagStatus.archived,
         updatedBy: userId ? { connect: { id: userId } } : undefined
       }
+    });
+  }
+
+  banTag(id: string, userId?: string) {
+    return this.prisma.tag.update({
+      where: { id },
+      data: {
+        status: TagStatus.hidden,
+        updatedBy: userId ? { connect: { id: userId } } : undefined
+      }
+    });
+  }
+
+  async mergeTag(sourceTagId: string, targetTagId: string, userId?: string) {
+    if (sourceTagId === targetTagId) {
+      throw new ConflictException("Bir tag kendi içine merge edilemez.");
+    }
+
+    const [sourceTag, targetTag] = await Promise.all([
+      this.prisma.tag.findUnique({ where: { id: sourceTagId } }),
+      this.prisma.tag.findUnique({ where: { id: targetTagId } })
+    ]);
+
+    if (!sourceTag || !targetTag) {
+      throw new NotFoundException("Merge edilecek tag bulunamadı.");
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const sourceEventTags = await tx.eventTag.findMany({ where: { tagId: sourceTagId } });
+      const sourceInterestTags = await tx.userInterestTag.findMany({ where: { tagId: sourceTagId } });
+
+      for (const eventTag of sourceEventTags) {
+        await tx.eventTag.upsert({
+          where: { eventId_tagId: { eventId: eventTag.eventId, tagId: targetTagId } },
+          create: { eventId: eventTag.eventId, tagId: targetTagId },
+          update: {}
+        });
+      }
+
+      for (const interestTag of sourceInterestTags) {
+        await tx.userInterestTag.upsert({
+          where: { userId_tagId: { userId: interestTag.userId, tagId: targetTagId } },
+          create: { userId: interestTag.userId, tagId: targetTagId },
+          update: {}
+        });
+      }
+
+      await tx.eventTag.deleteMany({ where: { tagId: sourceTagId } });
+      await tx.userInterestTag.deleteMany({ where: { tagId: sourceTagId } });
+      await tx.contentReport.updateMany({
+        where: { targetType: "tag", targetId: sourceTagId },
+        data: { targetId: targetTagId }
+      });
+
+      const usageCount = await tx.eventTag.count({ where: { tagId: targetTagId } });
+
+      await tx.tag.update({
+        where: { id: targetTagId },
+        data: {
+          usageCount,
+          updatedBy: userId ? { connect: { id: userId } } : undefined
+        }
+      });
+
+      return tx.tag.update({
+        where: { id: sourceTagId },
+        data: {
+          status: TagStatus.archived,
+          usageCount: 0,
+          updatedBy: userId ? { connect: { id: userId } } : undefined
+        }
+      });
     });
   }
 

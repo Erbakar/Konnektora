@@ -3,6 +3,7 @@ import {
   adminManagedUserDetailSchema,
   adminManagedUserListSchema,
   adminManagedUserSchema,
+  adminTagDetailSchema,
   adminRoleGroupSchema,
   announcementListSchema,
   announcementSchema,
@@ -14,6 +15,7 @@ import {
   eventParticipantSchema,
   faqSchema,
   loginResponseSchema,
+  moderationDecisionSchema,
   reportGroupDetailSchema,
   reportGroupNoteSchema,
   reportGroupSchema,
@@ -25,6 +27,7 @@ import {
   type AdminManagedUserList,
   type AdminPermission,
   type AdminRoleGroup,
+  type AdminTagDetail,
   type Announcement,
   type CmsPolicy,
   type CmsCategory,
@@ -34,6 +37,7 @@ import {
   type EventParticipant,
   type Faq,
   type LoginResponse,
+  type ModerationDecision,
   type PolicyType,
   type ReportRule,
   type ReportGroup,
@@ -59,6 +63,8 @@ const MOCK_PARTICIPANTS_KEY = "konnektora_mock_participants";
 const MOCK_REPORTS_KEY = "konnektora_mock_reports";
 const MOCK_REPORT_RULES_KEY = "konnektora_mock_report_rules";
 const MOCK_REPORT_GROUP_NOTES_KEY = "konnektora_mock_report_group_notes";
+const MOCK_MODERATION_DECISIONS_KEY = "konnektora_mock_moderation_decisions";
+const MOCK_EMAIL_TOKENS_KEY = "konnektora_mock_email_tokens";
 const MOCK_USER_EVENT_IDS_KEY = "konnektora_mock_user_event_ids";
 const MOCK_ROLE_GROUPS_KEY = "konnektora_mock_role_groups";
 const MOCK_CMS_CATEGORIES_KEY = "konnektora_mock_cms_categories";
@@ -215,6 +221,28 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(loginMockUser(parseBody<{ email: string; password: string }>(options)));
   }
 
+  if (pathname === "/auth/email/verify/request" && method === "POST") {
+    return schema.parse(createMockEmailToken(parseBody<{ email: string }>(options).email, "verify_email"));
+  }
+
+  if (pathname === "/auth/email/verify" && method === "POST") {
+    return schema.parse(consumeMockEmailToken(parseBody<{ token: string }>(options).token, "verify_email"));
+  }
+
+  if (pathname === "/auth/password/forgot" && method === "POST") {
+    return schema.parse(createMockEmailToken(parseBody<{ email: string }>(options).email, "password_reset"));
+  }
+
+  if (pathname === "/auth/password/reset" && method === "POST") {
+    const input = parseBody<{ token: string; password: string }>(options);
+    return schema.parse(resetMockPassword(input.token, input.password));
+  }
+
+  if (pathname === "/auth/invite/accept" && method === "POST") {
+    const input = parseBody<{ token: string; name?: string; password: string }>(options);
+    return schema.parse(acceptMockInvite(input.token, input.password, input.name));
+  }
+
   if (pathname === "/profile/interests" && method === "GET") {
     return schema.parse(getTagsByIds(getUserInterestTagIds()));
   }
@@ -345,6 +373,11 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(updateMockReportGroupNote(targetType, targetId, parseBody<{ note: string }>(options).note));
   }
 
+  if (pathname.startsWith("/admin/report-groups/") && pathname.endsWith("/decisions") && method === "POST") {
+    const { targetType, targetId } = parseReportGroupPath(pathname.slice(0, -"/decisions".length));
+    return schema.parse(createMockModerationDecision(targetType, targetId, parseBody<ModerationDecisionInput>(options)));
+  }
+
   if (pathname.startsWith("/admin/report-groups/") && method === "GET") {
     const { targetType, targetId } = parseReportGroupPath(pathname);
     return schema.parse(getMockReportGroupDetail(targetType, targetId));
@@ -365,6 +398,18 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname === "/admin/tags" && method === "POST") {
     return schema.parse(createMockTag(parseBody<{ name: string; description?: string }>(options)));
+  }
+
+  if (pathname.startsWith("/admin/tags/") && pathname.endsWith("/ban") && method === "POST") {
+    return schema.parse(updateMockTag(pathname.slice("/admin/tags/".length, -"/ban".length), { status: "hidden" }));
+  }
+
+  if (pathname.startsWith("/admin/tags/") && pathname.endsWith("/merge") && method === "POST") {
+    return schema.parse(mergeMockTag(pathname.slice("/admin/tags/".length, -"/merge".length), parseBody<{ targetTagId: string }>(options).targetTagId));
+  }
+
+  if (pathname.startsWith("/admin/tags/") && method === "GET") {
+    return schema.parse(getMockAdminTag(pathname.slice("/admin/tags/".length)));
   }
 
   if (pathname.startsWith("/admin/tags/") && method === "PATCH") {
@@ -718,6 +763,7 @@ function getMockReportGroupDetail(targetType: ReportTargetType, targetId: string
 
 function buildMockReportGroups(reports: ContentReport[]): ReportGroup[] {
   const notes = readStorage<ReportGroupNote[]>(MOCK_REPORT_GROUP_NOTES_KEY, []);
+  const decisions = readStorage<ModerationDecision[]>(MOCK_MODERATION_DECISIONS_KEY, []);
   const grouped = new Map<string, ContentReport[]>();
 
   reports.forEach((report) => {
@@ -740,7 +786,8 @@ function buildMockReportGroups(reports: ContentReport[]): ReportGroup[] {
         latestReportAt: groupReports[0]?.createdAt ?? new Date().toISOString(),
         statuses: [...new Set(groupReports.map((report) => report.status))],
         reasons: [...new Set(groupReports.map((report) => report.reason))],
-        note: notes.find((note) => note.targetType === targetType && note.targetId === targetId) ?? null
+        note: notes.find((note) => note.targetType === targetType && note.targetId === targetId) ?? null,
+        decisions: decisions.filter((decision) => decision.targetType === targetType && decision.targetId === targetId)
       };
     })
     .sort((first, second) => {
@@ -750,6 +797,112 @@ function buildMockReportGroups(reports: ContentReport[]): ReportGroup[] {
 
       return new Date(second.latestReportAt).getTime() - new Date(first.latestReportAt).getTime();
     });
+}
+
+function createMockModerationDecision(
+  targetType: ReportTargetType,
+  targetId: string,
+  input: ModerationDecisionInput
+): ModerationDecision {
+  const decisions = readStorage<ModerationDecision[]>(MOCK_MODERATION_DECISIONS_KEY, []);
+  const now = new Date().toISOString();
+  const adminUser = {
+    id: "99999999-9999-4999-8999-999999999999",
+    email: "admin@konnektora.local",
+    name: "Konnektora Admin",
+    role: "super_admin" as const,
+    status: "active" as const
+  };
+  const targetUserId = resolveMockDecisionUserId(targetType, targetId, input.action);
+  const targetUser = targetUserId ? getAllMockUsers().find((user) => user.id === targetUserId) : null;
+  const decision: ModerationDecision = {
+    id: createId(),
+    targetType,
+    targetId,
+    decision: input.decision,
+    action: input.action,
+    penaltyScore: Number(input.penaltyScore),
+    note: input.note?.trim() || null,
+    userId: targetUserId,
+    issuedById: adminUser.id,
+    suspensionEndsAt: input.suspensionEndsAt || null,
+    createdAt: now,
+    user: targetUser
+      ? {
+          id: targetUser.id,
+          email: targetUser.email,
+          name: targetUser.name,
+          role: targetUser.role ?? "user",
+          status: targetUser.status ?? "active"
+        }
+      : null,
+    issuedBy: adminUser
+  };
+
+  applyMockModerationAction(targetType, targetId, input.action);
+  closeMockReportsForDecision(targetType, targetId, input);
+  writeStorage(MOCK_MODERATION_DECISIONS_KEY, [decision, ...decisions]);
+  return decision;
+}
+
+function resolveMockDecisionUserId(targetType: ReportTargetType, targetId: string, action: ModerationDecisionInput["action"]) {
+  if (targetType === "user") {
+    return targetId;
+  }
+
+  if (targetType === "event") {
+    const event = getStoredEvents().find((item) => item.id === targetId);
+    const user = getAllMockUsers().find((item) => item.name === event?.organizerName);
+    return user?.id ?? null;
+  }
+
+  if (action === "archive_tag") {
+    return null;
+  }
+
+  return null;
+}
+
+function applyMockModerationAction(targetType: ReportTargetType, targetId: string, action: ModerationDecisionInput["action"]) {
+  if (targetType === "event" && action === "archive_event") {
+    updateMockEvent(targetId, { status: "archived" });
+  }
+
+  if (targetType === "tag" && action === "archive_tag") {
+    updateMockTag(targetId, { status: "archived" });
+  }
+
+  if (targetType === "user" && (action === "suspend_user" || action === "ban_user")) {
+    const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+    writeStorage(
+      MOCK_USERS_KEY,
+      users.map((user) => (user.id === targetId ? { ...user, status: "disabled" } : user))
+    );
+  }
+}
+
+function closeMockReportsForDecision(targetType: ReportTargetType, targetId: string, input: ModerationDecisionInput) {
+  const reports = readStorage<ContentReport[]>(MOCK_REPORTS_KEY, []);
+  const closedStatus = input.decision === "violation" ? "resolved" : "dismissed";
+  const now = new Date().toISOString();
+
+  writeStorage(
+    MOCK_REPORTS_KEY,
+    reports.map((report) =>
+      report.targetType === targetType &&
+      report.targetId === targetId &&
+      (report.status === "open" || report.status === "reviewing")
+        ? {
+            ...report,
+            status: closedStatus,
+            resolutionNote: input.note?.trim() || (input.decision === "violation" ? `${input.action} aksiyonu uygulandı.` : "İhlal bulunmadı."),
+            resolvedById: "99999999-9999-4999-8999-999999999999",
+            resolvedAt: now,
+            updatedAt: now
+          }
+        : report
+    )
+  );
 }
 
 function updateMockReportGroupNote(targetType: ReportTargetType, targetId: string, noteValue: string): ReportGroupNote {
@@ -1370,6 +1523,65 @@ function registerMockUser(input: { name: string; email: string; password: string
   return createMockLoginResponse(user);
 }
 
+function createMockEmailToken(email: string, type: "verify_email" | "password_reset" | "invite_accept") {
+  const users = getAllMockUsers();
+  const user = users.find((item) => item.email === email.toLowerCase().trim());
+
+  if (!user) {
+    return { ok: true };
+  }
+
+  const tokens = readStorage<Array<{ token: string; userId: string; type: string }>>(MOCK_EMAIL_TOKENS_KEY, []);
+  const token = `mock-${type}-${createId()}`;
+  writeStorage(MOCK_EMAIL_TOKENS_KEY, [{ token, userId: user.id, type }, ...tokens]);
+  return { ok: true, token };
+}
+
+function consumeMockEmailToken(token: string, type: "verify_email" | "password_reset" | "invite_accept"): LoginResponse {
+  const tokens = readStorage<Array<{ token: string; userId: string; type: string }>>(MOCK_EMAIL_TOKENS_KEY, []);
+  const match = tokens.find((item) => item.token === token && item.type === type);
+
+  if (!match) {
+    throw new Error("Mock token not found");
+  }
+
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  const existing = getAllMockUsers().find((user) => user.id === match.userId);
+
+  if (!existing) {
+    throw new Error("Mock user not found");
+  }
+
+  const user: MockUser = { ...existing, status: "active" };
+  writeStorage(MOCK_USERS_KEY, [user, ...users.filter((item) => item.id !== user.id)]);
+  writeStorage(MOCK_EMAIL_TOKENS_KEY, tokens.filter((item) => item.token !== token));
+  return createMockLoginResponse(user);
+}
+
+function resetMockPassword(token: string, password: string): LoginResponse {
+  const response = consumeMockEmailToken(token, "password_reset");
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  const user = users.find((item) => item.id === response.user.id);
+
+  if (user) {
+    writeStorage(MOCK_USERS_KEY, [{ ...user, password }, ...users.filter((item) => item.id !== user.id)]);
+  }
+
+  return response;
+}
+
+function acceptMockInvite(token: string, password: string, name?: string): LoginResponse {
+  const response = consumeMockEmailToken(token, "invite_accept");
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  const user = users.find((item) => item.id === response.user.id);
+
+  if (user) {
+    writeStorage(MOCK_USERS_KEY, [{ ...user, name: name?.trim() || user.name, password }, ...users.filter((item) => item.id !== user.id)]);
+  }
+
+  return response;
+}
+
 function loginMockUser(input: { email: string; password: string }): LoginResponse {
   const email = input.email.toLowerCase().trim();
   const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
@@ -1444,6 +1656,79 @@ function updateMockTag(id: string, input: Partial<Tag>): Tag {
 
   setStoredTags(updatedTags);
   return updatedTag;
+}
+
+function getMockAdminTag(id: string): AdminTagDetail {
+  const tag = getStoredTags().find((item) => item.id === id);
+
+  if (!tag) {
+    throw new Error("Mock tag not found");
+  }
+
+  const reports = listMockReports().filter((report) => report.targetType === "tag" && report.targetId === id);
+  const interestedUsers = readStorage<Record<string, string[]>>(USER_INTEREST_TAGS_KEY, {});
+
+  return {
+    ...tag,
+    category: null,
+    createdBy: null,
+    updatedBy: null,
+    reportCount: reports.length,
+    _count: {
+      events: getStoredEvents().filter((event) => event.tags.some((item) => item.id === id)).length,
+      interestedUsers: Object.values(interestedUsers).filter((tagIds) => tagIds.includes(id)).length
+    }
+  };
+}
+
+function mergeMockTag(sourceTagId: string, targetTagId: string): Tag {
+  if (sourceTagId === targetTagId) {
+    throw new Error("Mock tag cannot merge into itself");
+  }
+
+  const tags = getStoredTags();
+  const sourceTag = tags.find((tag) => tag.id === sourceTagId);
+  const targetTag = tags.find((tag) => tag.id === targetTagId);
+
+  if (!sourceTag || !targetTag) {
+    throw new Error("Mock tag not found");
+  }
+
+  setStoredEvents(
+    getStoredEvents().map((event) => {
+      if (!event.tags.some((tag) => tag.id === sourceTagId)) {
+        return event;
+      }
+
+      const nextTags = event.tags.filter((tag) => tag.id !== sourceTagId);
+      return {
+        ...event,
+        tags: nextTags.some((tag) => tag.id === targetTagId) ? nextTags : [...nextTags, targetTag]
+      };
+    })
+  );
+
+  const interests = readStorage<Record<string, string[]>>(USER_INTEREST_TAGS_KEY, {});
+  writeStorage(
+    USER_INTEREST_TAGS_KEY,
+    Object.fromEntries(
+      Object.entries(interests).map(([userId, tagIds]) => [
+        userId,
+        [...new Set(tagIds.map((tagId) => (tagId === sourceTagId ? targetTagId : tagId)))]
+      ])
+    )
+  );
+
+  writeStorage(
+    MOCK_REPORTS_KEY,
+    readStorage<ContentReport[]>(MOCK_REPORTS_KEY, []).map((report) =>
+      report.targetType === "tag" && report.targetId === sourceTagId ? { ...report, targetId: targetTagId } : report
+    )
+  );
+
+  const updatedSource = { ...sourceTag, status: "archived" as const, usageCount: 0 };
+  setStoredTags(tags.map((tag) => (tag.id === sourceTagId ? updatedSource : tag)));
+  return updatedSource;
 }
 
 function createMockEvent(input: AdminEventInput, fallbackOrganizerName = "Konnektora Admin", ownerId?: string): Event {
@@ -1687,6 +1972,41 @@ export function registerUser(input: { name: string; email: string; password: str
   });
 }
 
+export function requestEmailVerification(email: string): Promise<{ ok: boolean; token?: string }> {
+  return requestJson("/auth/email/verify/request", z.object({ ok: z.boolean(), token: z.string().optional() }), {
+    method: "POST",
+    body: JSON.stringify({ email })
+  });
+}
+
+export function confirmEmail(token: string): Promise<LoginResponse> {
+  return requestJson("/auth/email/verify", loginResponseSchema, {
+    method: "POST",
+    body: JSON.stringify({ token })
+  });
+}
+
+export function requestPasswordReset(email: string): Promise<{ ok: boolean; token?: string }> {
+  return requestJson("/auth/password/forgot", z.object({ ok: z.boolean(), token: z.string().optional() }), {
+    method: "POST",
+    body: JSON.stringify({ email })
+  });
+}
+
+export function resetPassword(token: string, password: string): Promise<LoginResponse> {
+  return requestJson("/auth/password/reset", loginResponseSchema, {
+    method: "POST",
+    body: JSON.stringify({ token, password })
+  });
+}
+
+export function acceptInvite(input: { token: string; name?: string; password: string }): Promise<LoginResponse> {
+  return requestJson("/auth/invite/accept", loginResponseSchema, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
 export function getAdminDashboard(): Promise<AdminDashboard> {
   return requestJson("/admin/dashboard", adminDashboardSchema, { auth: true });
 }
@@ -1829,6 +2149,10 @@ export function listAdminTags(): Promise<Tag[]> {
   return requestJson("/admin/tags", z.array(tagSchema), { auth: true });
 }
 
+export function getAdminTag(id: string): Promise<AdminTagDetail> {
+  return requestJson(`/admin/tags/${id}`, adminTagDetailSchema, { auth: true });
+}
+
 export function createAdminTag(input: { name: string; description?: string }): Promise<Tag> {
   return requestJson("/admin/tags", tagSchema, {
     auth: true,
@@ -1849,6 +2173,21 @@ export function archiveAdminTag(id: string): Promise<Tag> {
   return requestJson(`/admin/tags/${id}`, tagSchema, {
     auth: true,
     method: "DELETE"
+  });
+}
+
+export function banAdminTag(id: string): Promise<Tag> {
+  return requestJson(`/admin/tags/${id}/ban`, tagSchema, {
+    auth: true,
+    method: "POST"
+  });
+}
+
+export function mergeAdminTag(id: string, targetTagId: string): Promise<Tag> {
+  return requestJson(`/admin/tags/${id}/merge`, tagSchema, {
+    auth: true,
+    method: "POST",
+    body: JSON.stringify({ targetTagId })
   });
 }
 
@@ -1907,6 +2246,14 @@ export type ReportRuleInput = {
   title: string;
   description?: string;
   violationScore: number;
+};
+
+export type ModerationDecisionInput = {
+  decision: "violation" | "no_violation";
+  action: "none" | "warn_user" | "suspend_user" | "ban_user" | "archive_event" | "archive_tag";
+  penaltyScore: number;
+  note?: string;
+  suspensionEndsAt?: string;
 };
 
 export type FaqInput = {
@@ -2013,6 +2360,18 @@ export function updateAdminReportGroupNote(
     auth: true,
     method: "PATCH",
     body: JSON.stringify({ note })
+  });
+}
+
+export function createAdminModerationDecision(
+  targetType: ReportTargetType,
+  targetId: string,
+  input: ModerationDecisionInput
+): Promise<ModerationDecision> {
+  return requestJson(`/admin/report-groups/${targetType}/${targetId}/decisions`, moderationDecisionSchema, {
+    auth: true,
+    method: "POST",
+    body: JSON.stringify(input)
   });
 }
 

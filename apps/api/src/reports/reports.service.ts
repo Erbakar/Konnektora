@@ -4,6 +4,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import {
   CreateReportDto,
   CreateReportRuleDto,
+  CreateModerationDecisionDto,
   ModerationAction,
   ResolveReportActionDto,
   UpdateReportDto,
@@ -94,6 +95,79 @@ export class ReportsService {
       include: {
         updatedBy: { select: { id: true, email: true, name: true, role: true, status: true } }
       }
+    });
+  }
+
+  async createModerationDecision(
+    targetType: ReportTargetType,
+    targetId: string,
+    input: CreateModerationDecisionDto,
+    admin: User
+  ) {
+    await this.ensureTargetExists(targetType, targetId);
+    this.ensureDecisionActionMatchesTarget(targetType, input.action);
+
+    if (targetType === ReportTargetType.user && targetId === admin.id && (input.action === "suspend_user" || input.action === "ban_user")) {
+      throw new BadRequestException("Admin kendi hesabını askıya alamaz veya yasaklayamaz.");
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      let userId: string | null = targetType === ReportTargetType.user ? targetId : null;
+
+      if (targetType === ReportTargetType.event && input.action === "archive_event") {
+        const event = await tx.event.update({
+          where: { id: targetId },
+          data: { status: EventStatus.archived, updatedBy: { connect: { id: admin.id } } },
+          select: { createdById: true }
+        });
+        userId = event.createdById;
+      }
+
+      if (targetType === ReportTargetType.tag && input.action === "archive_tag") {
+        const tag = await tx.tag.update({
+          where: { id: targetId },
+          data: { status: TagStatus.archived, updatedBy: { connect: { id: admin.id } } },
+          select: { createdById: true }
+        });
+        userId = tag.createdById;
+      }
+
+      if (targetType === ReportTargetType.user && (input.action === "suspend_user" || input.action === "ban_user")) {
+        await tx.user.update({
+          where: { id: targetId },
+          data: { status: UserStatus.disabled }
+        });
+      }
+
+      const decision = await (tx as any).moderationDecision.create({
+        data: {
+          targetType,
+          targetId,
+          decision: input.decision,
+          action: input.action,
+          penaltyScore: input.penaltyScore,
+          note: input.note?.trim() || null,
+          suspensionEndsAt: input.suspensionEndsAt ? new Date(input.suspensionEndsAt) : null,
+          user: userId ? { connect: { id: userId } } : undefined,
+          issuedBy: { connect: { id: admin.id } }
+        },
+        include: {
+          user: { select: { id: true, email: true, name: true, role: true, status: true } },
+          issuedBy: { select: { id: true, email: true, name: true, role: true, status: true } }
+        }
+      });
+
+      await tx.contentReport.updateMany({
+        where: { targetType, targetId, status: { in: [ReportStatus.open, ReportStatus.reviewing] } },
+        data: {
+          status: input.decision === "violation" ? ReportStatus.resolved : ReportStatus.dismissed,
+          resolutionNote: input.note?.trim() || this.defaultDecisionNote(input),
+          resolvedById: admin.id,
+          resolvedAt: new Date()
+        }
+      });
+
+      return decision;
     });
   }
 
@@ -269,6 +343,14 @@ export class ReportsService {
             updatedBy: { select: { id: true, email: true, name: true, role: true, status: true } }
           }
         });
+        const decisions = await (this.prisma as any).moderationDecision.findMany({
+          where: { targetType, targetId },
+          orderBy: [{ createdAt: "desc" }],
+          include: {
+            user: { select: { id: true, email: true, name: true, role: true, status: true } },
+            issuedBy: { select: { id: true, email: true, name: true, role: true, status: true } }
+          }
+        });
         const activeStatuses = new Set([ReportStatus.open, ReportStatus.reviewing]);
         const activeCount = groupReports.filter((report) => activeStatuses.has(report.status)).length;
         const oldCount = groupReports.length - activeCount;
@@ -284,7 +366,8 @@ export class ReportsService {
           latestReportAt: groupReports[0]?.createdAt ?? new Date(),
           statuses: [...new Set(groupReports.map((report) => report.status))],
           reasons: [...new Set(groupReports.map((report) => report.reason))],
-          note
+          note,
+          decisions
         };
       })
     );
@@ -330,6 +413,34 @@ export class ReportsService {
     }
 
     throw new BadRequestException("Moderasyon aksiyonu rapor hedefiyle uyumlu değil.");
+  }
+
+  private ensureDecisionActionMatchesTarget(targetType: ReportTargetType, action: string) {
+    if (action === "none") {
+      return;
+    }
+
+    if (targetType === ReportTargetType.event && action === "archive_event") {
+      return;
+    }
+
+    if (targetType === ReportTargetType.tag && action === "archive_tag") {
+      return;
+    }
+
+    if (targetType === ReportTargetType.user && (action === "warn_user" || action === "suspend_user" || action === "ban_user")) {
+      return;
+    }
+
+    throw new BadRequestException("Ceza aksiyonu şikayet hedefiyle uyumlu değil.");
+  }
+
+  private defaultDecisionNote(input: CreateModerationDecisionDto) {
+    if (input.decision === "no_violation") {
+      return "İhlal bulunmadı.";
+    }
+
+    return `${input.action} aksiyonu uygulandı.`;
   }
 
   private defaultResolutionNote(action: ModerationAction) {

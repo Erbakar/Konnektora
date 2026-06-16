@@ -17,6 +17,8 @@ import {
   listMyEvents,
   listTags,
   registerUser,
+  requestEmailVerification,
+  requestPasswordReset,
   setUserSession,
   updateEventParticipantStatus,
   updateMyEvent,
@@ -52,9 +54,25 @@ export function AccountPage() {
       setUserSession(response);
       setUser(response.user);
       void queryClient.invalidateQueries({ queryKey: ["profile-interests", response.user.id] });
-      setNotice({ tone: "success", message: "Giriş yapıldı. Artık etkinlik oluşturabilirsin." });
+      setNotice({
+        tone: "success",
+        message:
+          response.user.status === "pending"
+            ? "Hesap oluşturuldu. Email doğrulama linkini kontrol et."
+            : "Giriş yapıldı. Artık etkinlik oluşturabilirsin."
+      });
     },
     onError: () => setNotice({ tone: "error", message: "İşlem tamamlanamadı. Bilgileri kontrol edip tekrar dene." })
+  });
+  const forgotPasswordMutation = useMutation({
+    mutationFn: requestPasswordReset,
+    onSuccess: () => setNotice({ tone: "success", message: "Şifre sıfırlama linki email adresine gönderildi." }),
+    onError: () => setNotice({ tone: "error", message: "Şifre sıfırlama isteği gönderilemedi." })
+  });
+  const resendVerificationMutation = useMutation({
+    mutationFn: requestEmailVerification,
+    onSuccess: () => setNotice({ tone: "success", message: "Doğrulama emaili tekrar gönderildi." }),
+    onError: () => setNotice({ tone: "error", message: "Doğrulama emaili gönderilemedi." })
   });
 
   const eventMutation = useMutation({
@@ -170,6 +188,11 @@ export function AccountPage() {
       </div>
 
       {notice ? <p className={notice.tone === "success" ? "form-success" : "form-error"}>{notice.message}</p> : null}
+      {user?.status === "pending" ? (
+        <button className="secondary-action" disabled={resendVerificationMutation.isPending} onClick={() => resendVerificationMutation.mutate(user.email)} type="button">
+          Doğrulama emailini tekrar gönder
+        </button>
+      ) : null}
 
       {!user ? (
         <div className="account-grid">
@@ -208,6 +231,21 @@ export function AccountPage() {
               <UserRound size={18} />
               {mode === "register" ? "Üye ol" : "Giriş yap"}
             </button>
+            {mode === "login" ? (
+              <button
+                className="ghost-action"
+                disabled={forgotPasswordMutation.isPending}
+                onClick={() => {
+                  const emailInput = document.querySelector<HTMLInputElement>('input[name="email"]');
+                  if (emailInput?.value) {
+                    forgotPasswordMutation.mutate(emailInput.value);
+                  }
+                }}
+                type="button"
+              >
+                Şifremi unuttum
+              </button>
+            ) : null}
           </form>
         </div>
       ) : (

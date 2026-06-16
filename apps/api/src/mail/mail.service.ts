@@ -25,21 +25,47 @@ export class MailService {
     });
   }
 
+  async sendVerificationEmail(input: { to: string; name: string; token: string }) {
+    const appUrl = this.getAppUrl();
+    const verifyUrl = `${appUrl}/verify-email?token=${encodeURIComponent(input.token)}`;
+
+    await this.send({
+      to: input.to,
+      subject: "Konnektora email doğrulama",
+      text: `Merhaba ${input.name}, Konnektora hesabını doğrulamak için linki aç: ${verifyUrl}`,
+      html: `<p>Merhaba ${input.name},</p><p>Konnektora hesabını doğrulamak için aşağıdaki linki aç.</p><p><a href="${verifyUrl}">Email adresimi doğrula</a></p>`
+    });
+  }
+
+  async sendPasswordResetEmail(input: { to: string; name: string; token: string }) {
+    const appUrl = this.getAppUrl();
+    const resetUrl = `${appUrl}/reset-password?token=${encodeURIComponent(input.token)}`;
+
+    await this.send({
+      to: input.to,
+      subject: "Konnektora şifre sıfırlama",
+      text: `Merhaba ${input.name}, şifreni sıfırlamak için linki aç: ${resetUrl}`,
+      html: `<p>Merhaba ${input.name},</p><p>Şifreni sıfırlamak için aşağıdaki linki aç.</p><p><a href="${resetUrl}">Şifremi sıfırla</a></p>`
+    });
+  }
+
   async sendEventInviteEmail(input: {
     to: string;
     name: string;
     eventTitle: string;
     eventSlug: string;
     invitedByName: string;
+    acceptToken?: string;
   }) {
     const appUrl = this.getAppUrl();
     const eventUrl = `${appUrl}/events/${input.eventSlug}`;
+    const acceptUrl = input.acceptToken ? `${appUrl}/accept-invite?token=${encodeURIComponent(input.acceptToken)}` : eventUrl;
 
     await this.send({
       to: input.to,
       subject: `${input.eventTitle} etkinliğine davetlisin`,
-      text: `Merhaba ${input.name}, ${input.invitedByName} seni ${input.eventTitle} etkinliğine davet etti. Detaylar: ${eventUrl}`,
-      html: `<p>Merhaba ${input.name},</p><p>${input.invitedByName} seni <strong>${input.eventTitle}</strong> etkinliğine davet etti.</p><p><a href="${eventUrl}">Etkinliği görüntüle</a></p>`
+      text: `Merhaba ${input.name}, ${input.invitedByName} seni ${input.eventTitle} etkinliğine davet etti. Daveti kabul et: ${acceptUrl}`,
+      html: `<p>Merhaba ${input.name},</p><p>${input.invitedByName} seni <strong>${input.eventTitle}</strong> etkinliğine davet etti.</p><p><a href="${acceptUrl}">Daveti görüntüle</a></p>`
     });
   }
 

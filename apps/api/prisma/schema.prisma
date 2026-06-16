@@ -94,6 +94,9 @@ model User {
   submittedReports ContentReport[] @relation("ReportSubmittedBy")
   resolvedReports ContentReport[] @relation("ReportResolvedBy")
   updatedReportGroupNotes ReportGroupNote[]
+  moderationDecisions ModerationDecision[] @relation("ModerationDecisionUser")
+  issuedModerationDecisions ModerationDecision[] @relation("ModerationDecisionActor")
+  emailTokens EmailToken[]
 
   @@map("users")
 }
@@ -356,4 +359,41 @@ model ReportRule {
 
   @@index([targetType, status])
   @@map("report_rules")
+}
+
+model ModerationDecision {
+  id               String           @id @default(uuid())
+  targetType       ReportTargetType @map("target_type")
+  targetId         String           @map("target_id")
+  decision         String
+  action           String
+  penaltyScore     Int              @default(0) @map("penalty_score")
+  note             String?
+  userId           String?          @map("user_id")
+  issuedById       String?          @map("issued_by")
+  suspensionEndsAt DateTime?        @map("suspension_ends_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  user     User? @relation("ModerationDecisionUser", fields: [userId], references: [id], onDelete: SetNull)
+  issuedBy User? @relation("ModerationDecisionActor", fields: [issuedById], references: [id], onDelete: SetNull)
+
+  @@index([targetType, targetId])
+  @@index([userId])
+  @@map("moderation_decisions")
+}
+
+model EmailToken {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  type       String
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([expiresAt])
+  @@map("email_tokens")
 }

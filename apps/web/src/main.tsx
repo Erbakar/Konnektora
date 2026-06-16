@@ -5,6 +5,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { AccountPage } from "./pages/AccountPage";
 import { AdminDashboardPage } from "./pages/AdminDashboardPage";
+import { AcceptInvitePage, ResetPasswordPage, VerifyEmailPage } from "./pages/AuthTokenPage";
 import { EventDetailPage } from "./pages/EventDetailPage";
 import { EventsPage } from "./pages/EventsPage";
 import { HomePage } from "./pages/HomePage";
@@ -22,6 +23,9 @@ const router = createBrowserRouter([
       { path: "events", element: <EventsPage /> },
       { path: "events/:slug", element: <EventDetailPage /> },
       { path: "account", element: <AccountPage /> },
+      { path: "verify-email", element: <VerifyEmailPage /> },
+      { path: "reset-password", element: <ResetPasswordPage /> },
+      { path: "accept-invite", element: <AcceptInvitePage /> },
       { path: "admin", element: <AdminDashboardPage /> },
       { path: ":type", element: <PolicyPage /> }
     ]

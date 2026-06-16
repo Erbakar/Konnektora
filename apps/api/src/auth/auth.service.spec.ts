@@ -9,13 +9,18 @@ describe("AuthService", () => {
         findUnique: jest.fn(),
         update: jest.fn(),
         create: jest.fn()
+      },
+      emailToken: {
+        create: jest.fn().mockResolvedValue({})
       }
     };
     const jwtService = {
       signAsync: jest.fn().mockResolvedValue("signed-token")
     } as unknown as JwtService;
     const mailService = {
-      sendAccountActivatedEmail: jest.fn().mockResolvedValue(undefined)
+      sendAccountActivatedEmail: jest.fn().mockResolvedValue(undefined),
+      sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
+      sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined)
     };
 
     return {
@@ -25,7 +30,7 @@ describe("AuthService", () => {
     };
   };
 
-  it("activates an invited user when they register with the same email", async () => {
+  it("marks an invited user pending and sends verification when they register with the same email", async () => {
     const { service, prisma, mailService } = createService();
     const invitedUser = {
       id: "user-1",
@@ -35,15 +40,15 @@ describe("AuthService", () => {
       role: "user",
       status: "invited"
     };
-    const activatedUser = {
+    const pendingUser = {
       ...invitedUser,
       name: "Active Invitee",
       passwordHash: "new-hash",
-      status: "active"
+      status: "pending"
     };
 
     prisma.user.findUnique.mockResolvedValue(invitedUser);
-    prisma.user.update.mockResolvedValue(activatedUser);
+    prisma.user.update.mockResolvedValue(pendingUser);
 
     const result = await service.register({
       email: "INVITEE@example.com",
@@ -55,22 +60,23 @@ describe("AuthService", () => {
       where: { id: invitedUser.id },
       data: expect.objectContaining({
         name: "Active Invitee",
-        status: "active"
+        status: "pending"
       })
     });
     expect(result).toEqual({
       accessToken: "signed-token",
       user: {
-        id: activatedUser.id,
-        email: activatedUser.email,
-        name: activatedUser.name,
-        role: activatedUser.role,
-        status: activatedUser.status
+        id: pendingUser.id,
+        email: pendingUser.email,
+        name: pendingUser.name,
+        role: pendingUser.role,
+        status: pendingUser.status
       }
     });
-    expect(mailService.sendAccountActivatedEmail).toHaveBeenCalledWith({
-      to: activatedUser.email,
-      name: activatedUser.name
+    expect(mailService.sendVerificationEmail).toHaveBeenCalledWith({
+      to: pendingUser.email,
+      name: pendingUser.name,
+      token: expect.any(String)
     });
   });
 

@@ -16,3 +16,7 @@ export class CreateTagDto {
   categoryId?: string;
 }
 
+export class MergeTagDto {
+  @IsUUID()
+  targetTagId!: string;
+}

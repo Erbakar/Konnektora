@@ -55,12 +55,15 @@ WEB_ORIGIN=https://konnektora.netlify.app
 PUBLIC_APP_URL=https://konnektora.netlify.app
 EMAIL_FROM=Konnektora <noreply@your-domain.com>
 RESEND_API_KEY=<resend-api-key>
+NODE_VERSION=22
 NODE_ENV=production
 ```
 
 Render kendi `PORT` değerini sağlar. Bu yüzden ayrıca `PORT` tanımlamak zorunda değilsin.
 
 `EMAIL_FROM` ve `RESEND_API_KEY` tanımlı değilse API üyelik/davet akışlarını bozmaz; gönderilecek e-postaları Render loglarına dev mail olarak yazar.
+
+Önemli: Repo `Node.js >=22` ister. Localde veya Render build sırasında Node 18 kullanılırsa Prisma CLI native hatalar verebilir. Render'da `NODE_VERSION=22` tanımlı olmalı; localde `.nvmrc` için `nvm use` çalıştır.
 
 ## 3. İlk Seed
 
@@ -100,6 +103,8 @@ Bu değişiklikten sonra frontend mock mode yerine gerçek API'ye bağlanır. Ad
 - Admin login çalışıyor mu?
 - Admin panelde yeni event `Published` olarak kaydediliyor mu?
 - `/events` sayfasında yeni event görünüyor mu?
+- `/verify-email`, `/reset-password`, `/accept-invite` token sayfaları frontend'de açılıyor mu?
+- API logs içinde email gönderimleri için Resend hatası veya dev mail logu görünüyor mu?
 - Render API logs içinde CORS veya database hatası var mı?
 
 ## 6. Sık Hatalar

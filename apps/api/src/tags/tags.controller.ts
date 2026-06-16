@@ -4,7 +4,7 @@ import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RequirePermissions } from "../auth/permissions";
-import { CreateTagDto } from "./tags.dto";
+import { CreateTagDto, MergeTagDto } from "./tags.dto";
 import { TagsService } from "./tags.service";
 
 @Controller()
@@ -41,6 +41,13 @@ export class TagsController {
     return this.tagsService.createTag(body, user.id);
   }
 
+  @Get("admin/tags/:id")
+  @UseGuards(AdminGuard)
+  @RequirePermissions("tags.manage")
+  getAdminTag(@Param("id") id: string) {
+    return this.tagsService.getAdminTag(id);
+  }
+
   @Patch("admin/tags/:id")
   @UseGuards(AdminGuard)
   @RequirePermissions("tags.manage")
@@ -53,5 +60,19 @@ export class TagsController {
   @RequirePermissions("tags.manage")
   archiveTag(@Param("id") id: string, @CurrentUser() user: User) {
     return this.tagsService.archiveTag(id, user.id);
+  }
+
+  @Post("admin/tags/:id/ban")
+  @UseGuards(AdminGuard)
+  @RequirePermissions("tags.manage")
+  banTag(@Param("id") id: string, @CurrentUser() user: User) {
+    return this.tagsService.banTag(id, user.id);
+  }
+
+  @Post("admin/tags/:id/merge")
+  @UseGuards(AdminGuard)
+  @RequirePermissions("tags.manage")
+  mergeTag(@Param("id") id: string, @Body() body: MergeTagDto, @CurrentUser() user: User) {
+    return this.tagsService.mergeTag(id, body.targetTagId, user.id);
   }
 }

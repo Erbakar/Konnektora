@@ -4,23 +4,27 @@ import { type FormEvent, type ReactNode, useState } from "react";
 import {
   type AdminEventInput,
   type AnnouncementInput,
+  type ModerationDecisionInput,
   type PolicyInput,
   type ReportRuleInput,
   adminLogin,
   adminPermissionOptions,
   archiveAdminEvent,
   archiveAdminTag,
+  banAdminTag,
   clearAdminToken,
   createAdminAnnouncement,
   createAdminEvent,
   createAdminCmsCategory,
   createAdminFaq,
+  createAdminModerationDecision,
   createAdminReportRule,
   createAdminRoleGroup,
   createAdminTag,
   getAdminReportGroup,
   getAdminDashboard,
   getAdminToken,
+  getAdminTag,
   isMockApiMode,
   checkInEventParticipant,
   inviteEventParticipant,
@@ -37,6 +41,7 @@ import {
   listAdminTags,
   listAdminUsers,
   listEventParticipants,
+  mergeAdminTag,
   resolveAdminReportAction,
   setAdminToken,
   updateAdminAnnouncement,
@@ -57,6 +62,7 @@ import type {
   AdminManagedUserDetail,
   AdminPermission,
   AdminRoleGroup,
+  AdminTagDetail,
   Announcement,
   CmsCategory,
   CmsPolicy,
@@ -79,6 +85,7 @@ export function AdminDashboardPage() {
   const [eventNotice, setEventNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [reportGroupScope, setReportGroupScope] = useState<"active" | "old">("active");
   const [selectedReportGroup, setSelectedReportGroup] = useState<{ targetType: ReportTargetType; targetId: string } | null>(null);
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
 
   const dashboardQuery = useQuery({
     queryKey: ["admin-dashboard"],
@@ -94,6 +101,11 @@ export function AdminDashboardPage() {
     queryKey: ["admin-tags"],
     queryFn: listAdminTags,
     enabled: Boolean(token)
+  });
+  const tagDetailQuery = useQuery({
+    queryKey: ["admin-tag", selectedTagId],
+    queryFn: () => getAdminTag(selectedTagId!),
+    enabled: Boolean(token && selectedTagId)
   });
   const reportsQuery = useQuery({
     queryKey: ["admin-reports"],
@@ -178,6 +190,23 @@ export function AdminDashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-tags"] });
       void queryClient.invalidateQueries({ queryKey: ["tags"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+    }
+  });
+  const banTagMutation = useMutation({
+    mutationFn: banAdminTag,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-tags"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-tag"] });
+      void queryClient.invalidateQueries({ queryKey: ["tags"] });
+    }
+  });
+  const mergeTagMutation = useMutation({
+    mutationFn: (input: { id: string; targetTagId: string }) => mergeAdminTag(input.id, input.targetTagId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-tags"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-tag"] });
+      void queryClient.invalidateQueries({ queryKey: ["tags"] });
+      void queryClient.invalidateQueries({ queryKey: ["events"] });
     }
   });
 
@@ -274,6 +303,18 @@ export function AdminDashboardPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin-report-groups"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-report-group"] });
+    }
+  });
+  const createModerationDecisionMutation = useMutation({
+    mutationFn: (input: { targetType: ReportTargetType; targetId: string; data: ModerationDecisionInput }) =>
+      createAdminModerationDecision(input.targetType, input.targetId, input.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-groups"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-group"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-events"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-tags"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     }
   });
   const createRoleGroupMutation = useMutation({
@@ -385,6 +426,7 @@ export function AdminDashboardPage() {
 
   const dashboard = dashboardQuery.data;
   const tags = tagsQuery.data ?? [];
+  const tagDetail = tagDetailQuery.data ?? null;
   const events = eventsQuery.data ?? [];
   const reports = reportsQuery.data ?? [];
   const reportGroups = reportGroupsQuery.data ?? [];
@@ -453,7 +495,8 @@ export function AdminDashboardPage() {
             resolveReportActionMutation.isPending ||
             createReportRuleMutation.isPending ||
             updateReportRuleMutation.isPending ||
-            updateReportGroupNoteMutation.isPending
+            updateReportGroupNoteMutation.isPending ||
+            createModerationDecisionMutation.isPending
           }
           groupDetail={reportGroupDetail}
           groupScope={reportGroupScope}
@@ -461,6 +504,7 @@ export function AdminDashboardPage() {
           onCreateRule={(input) => createReportRuleMutation.mutate(input)}
           onResolve={(input) => resolveReportActionMutation.mutate(input)}
           onSaveGroupNote={(input) => updateReportGroupNoteMutation.mutate(input)}
+          onCreateDecision={(input) => createModerationDecisionMutation.mutate(input)}
           onSelectGroup={(group) => setSelectedReportGroup({ targetType: group.targetType, targetId: group.targetId })}
           onSetGroupScope={setReportGroupScope}
           onUpdateRule={(id, data) => updateReportRuleMutation.mutate({ id, data })}
@@ -469,9 +513,13 @@ export function AdminDashboardPage() {
           reports={reports}
         />
         <TagAdminPanel
-          isPending={createTagMutation.isPending}
+          detail={tagDetail}
+          isPending={createTagMutation.isPending || banTagMutation.isPending || mergeTagMutation.isPending}
           onArchive={(id) => archiveTagMutation.mutate(id)}
+          onBan={(id) => banTagMutation.mutate(id)}
           onCreate={(input) => createTagMutation.mutate(input)}
+          onMerge={(id, targetTagId) => mergeTagMutation.mutate({ id, targetTagId })}
+          onSelect={(id) => setSelectedTagId(id)}
           onUpdate={(input) => updateTagMutation.mutate(input)}
           tags={tags}
         />
@@ -495,6 +543,18 @@ function formatDateTime(value: string | Date) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function defaultModerationAction(targetType: ReportTargetType): ModerationDecisionInput["action"] {
+  if (targetType === "event") {
+    return "archive_event";
+  }
+
+  if (targetType === "tag") {
+    return "archive_tag";
+  }
+
+  return "warn_user";
 }
 
 const policyTypes: Array<{ value: PolicyType; label: string; defaultTitle: string; defaultBody: string }> = [
@@ -1095,6 +1155,7 @@ function ReportAdminPanel({
   groupScope,
   groups,
   isPending,
+  onCreateDecision,
   onCreateRule,
   onResolve,
   onSaveGroupNote,
@@ -1109,6 +1170,7 @@ function ReportAdminPanel({
   groupScope: "active" | "old";
   groups: ReportGroup[];
   isPending: boolean;
+  onCreateDecision: (input: { targetType: ReportTargetType; targetId: string; data: ModerationDecisionInput }) => void;
   onCreateRule: (input: ReportRuleInput) => void;
   onResolve: (input: {
     id: string;
@@ -1160,6 +1222,30 @@ function ReportAdminPanel({
       targetId: groupDetail.targetId,
       note: String(form.get("note") || "")
     });
+  }
+
+  function handleDecisionSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!groupDetail) {
+      return;
+    }
+
+    const form = new FormData(event.currentTarget);
+    const suspensionEndsAt = String(form.get("suspensionEndsAt") || "");
+
+    onCreateDecision({
+      targetType: groupDetail.targetType,
+      targetId: groupDetail.targetId,
+      data: {
+        decision: String(form.get("decision")) as "violation" | "no_violation",
+        action: String(form.get("action")) as ModerationDecisionInput["action"],
+        penaltyScore: Number(form.get("penaltyScore") || 0),
+        note: String(form.get("note") || "") || undefined,
+        suspensionEndsAt: suspensionEndsAt ? new Date(suspensionEndsAt).toISOString() : undefined
+      }
+    });
+    event.currentTarget.reset();
   }
 
   function getModerationAction(report: ContentReport) {
@@ -1279,6 +1365,61 @@ function ReportAdminPanel({
               Notu kaydet
             </button>
           </form>
+          <form className="admin-form compact-form" onSubmit={handleDecisionSubmit}>
+            <h3>Ceza / müdahale kararı</h3>
+            <div className="admin-form-grid">
+              <label>
+                Karar
+                <select name="decision" defaultValue="violation">
+                  <option value="violation">İhlal var</option>
+                  <option value="no_violation">İhlal yok</option>
+                </select>
+              </label>
+              <label>
+                Aksiyon
+                <select name="action" defaultValue={defaultModerationAction(groupDetail.targetType)}>
+                  <option value="none">Aksiyon yok</option>
+                  <option value="warn_user">Kullanıcıyı uyar</option>
+                  <option value="suspend_user">Kullanıcıyı askıya al</option>
+                  <option value="ban_user">Kullanıcıyı yasakla</option>
+                  <option value="archive_event">Etkinliği arşivle</option>
+                  <option value="archive_tag">Tag'i arşivle</option>
+                </select>
+              </label>
+              <label>
+                Ceza puanı
+                <input name="penaltyScore" defaultValue={groupDetail.violationScore} min={0} max={1000} type="number" />
+              </label>
+              <label>
+                Askı bitişi
+                <input name="suspensionEndsAt" type="datetime-local" />
+              </label>
+            </div>
+            <label>
+              Karar notu
+              <textarea name="note" rows={3} maxLength={2000} />
+            </label>
+            <button className="danger-action" disabled={isPending} type="submit">
+              Kararı uygula
+            </button>
+          </form>
+          {groupDetail.decisions?.length ? (
+            <div className="admin-list">
+              {groupDetail.decisions.map((decision) => (
+                <div className="admin-list-row" key={decision.id}>
+                  <div>
+                    <strong>
+                      {decision.decision} · {decision.action}
+                    </strong>
+                    <span>
+                      {decision.penaltyScore} puan · {decision.issuedBy?.email ?? "admin"}
+                    </span>
+                  </div>
+                  <span className="status-pill status-resolved">{decision.createdAt ? formatDateTime(decision.createdAt) : "karar"}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <div className="admin-list">
             {groupDetail.reports.map((report) => (
               <div className="admin-list-row" key={report.id}>
@@ -1366,15 +1507,23 @@ function MetricCard({ icon, label, value }: { icon: ReactNode; label: string; va
 }
 
 function TagAdminPanel({
+  detail,
   isPending,
   onArchive,
+  onBan,
   onCreate,
+  onMerge,
+  onSelect,
   onUpdate,
   tags
 }: {
+  detail: AdminTagDetail | null;
   isPending: boolean;
   onArchive: (id: string) => void;
+  onBan: (id: string) => void;
   onCreate: (input: { name: string; description?: string }) => void;
+  onMerge: (id: string, targetTagId: string) => void;
+  onSelect: (id: string) => void;
   onUpdate: (input: { id: string; name: string; description?: string }) => void;
   tags: Tag[];
 }) {
@@ -1399,10 +1548,22 @@ function TagAdminPanel({
     event.currentTarget.reset();
   }
 
+  function handleMergeSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!detail) {
+      return;
+    }
+
+    const form = new FormData(event.currentTarget);
+    onMerge(detail.id, String(form.get("targetTagId")));
+  }
+
   return (
     <section className="admin-panel">
       <div className="section-header compact">
         <h2>Tag yönetimi</h2>
+        <span>{tags.length} tag</span>
       </div>
       <form className="admin-form" onSubmit={handleSubmit}>
         <label>
@@ -1435,6 +1596,9 @@ function TagAdminPanel({
             <button className="secondary-action" onClick={() => setEditingTagId(tag.id)} type="button">
               Düzenle
             </button>
+            <button className="ghost-action" onClick={() => onSelect(tag.id)} type="button">
+              Detay
+            </button>
             {tag.status !== "archived" ? (
               <button className="danger-action" onClick={() => onArchive(tag.id)} type="button">
                 Arşivle
@@ -1443,6 +1607,58 @@ function TagAdminPanel({
           </div>
         ))}
       </div>
+      {detail ? (
+        <div className="admin-list-item">
+          <div className="section-header compact">
+            <div>
+              <h3>{detail.name}</h3>
+              <span>{detail.slug}</span>
+            </div>
+            <span className={`status-pill status-${detail.status}`}>{detail.status}</span>
+          </div>
+          <div className="metric-grid compact-metrics">
+            <MetricCard icon={<CalendarCheck size={20} />} label="Event" value={detail._count?.events ?? 0} />
+            <MetricCard icon={<Users size={20} />} label="İlgilenen üye" value={detail._count?.interestedUsers ?? 0} />
+            <MetricCard icon={<AlertTriangle size={20} />} label="Şikayet" value={detail.reportCount} />
+          </div>
+          <div className="admin-list-row">
+            <div>
+              <strong>Creator</strong>
+              <span>{detail.createdBy?.email ?? "Bilinmiyor"}</span>
+            </div>
+            <div>
+              <strong>Son güncelleyen</strong>
+              <span>{detail.updatedBy?.email ?? "Bilinmiyor"}</span>
+            </div>
+          </div>
+          <form className="admin-form compact-form" onSubmit={handleMergeSubmit}>
+            <label>
+              Merge hedefi
+              <select name="targetTagId" required>
+                <option value="">Tag seç</option>
+                {tags
+                  .filter((tag) => tag.id !== detail.id && tag.status === "active")
+                  .map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <button className="danger-action" disabled={isPending} type="submit">
+              Merge et
+            </button>
+          </form>
+          <div className="row-actions">
+            <button className="danger-action" disabled={isPending || detail.status === "hidden"} onClick={() => onBan(detail.id)} type="button">
+              Banla / gizle
+            </button>
+            <button className="danger-action" disabled={isPending || detail.status === "archived"} onClick={() => onArchive(detail.id)} type="button">
+              Arşivle
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

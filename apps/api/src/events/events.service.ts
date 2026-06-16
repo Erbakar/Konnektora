@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { EventParticipantRole, EventParticipantStatus, EventStatus, Prisma, User } from "@prisma/client";
 import { hash } from "bcryptjs";
 import { randomUUID } from "crypto";
+import { AuthService } from "../auth/auth.service";
 import { toSlug } from "../common/slug";
 import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -11,7 +12,8 @@ import { CreateEventDto, EventQueryDto, InviteParticipantDto } from "./events.dt
 export class EventsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly mailService: MailService
+    private readonly mailService: MailService,
+    private readonly authService: AuthService
   ) {}
 
   async listPublicEvents(query: EventQueryDto) {
@@ -249,12 +251,15 @@ export class EventsService {
       }
     });
 
+    const acceptToken = invitee.status === "invited" ? await this.authService.createInviteAcceptToken(invitee.id) : undefined;
+
     await this.mailService.sendEventInviteEmail({
       to: invitee.email,
       name: invitee.name,
       eventTitle: event.title,
       eventSlug: event.slug,
-      invitedByName: actor.name
+      invitedByName: actor.name,
+      acceptToken
     });
 
     return participant;

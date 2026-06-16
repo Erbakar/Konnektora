@@ -102,3 +102,27 @@ export class UpdateReportGroupNoteDto {
   @MaxLength(2000)
   note!: string;
 }
+
+export class CreateModerationDecisionDto {
+  @IsString()
+  @IsIn(["violation", "no_violation"])
+  decision!: string;
+
+  @IsString()
+  @IsIn(["none", "warn_user", "suspend_user", "ban_user", "archive_event", "archive_tag"])
+  action!: string;
+
+  @IsInt()
+  @Min(0)
+  @Max(1000)
+  penaltyScore!: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  note?: string;
+
+  @IsOptional()
+  @IsString()
+  suspensionEndsAt?: string;
+}
