@@ -1,9 +1,41 @@
 [build]
-  command = "npm run build -w packages/shared && npm run build -w apps/web"
+  command = "DATABASE_URL=${DATABASE_URL:-postgresql://konnektora:konnektora@localhost:5432/konnektora} npm run db:generate && npm run build -w packages/shared && npm run build -w apps/api && npm run build -w apps/web"
   publish = "apps/web/dist"
+  functions = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "22"
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = [
+    "@nestjs/common",
+    "@nestjs/config",
+    "@nestjs/core",
+    "@nestjs/jwt",
+    "@nestjs/passport",
+    "@nestjs/platform-express",
+    "@prisma/client",
+    "bcryptjs",
+    "class-transformer",
+    "class-validator",
+    "express",
+    "passport",
+    "reflect-metadata",
+    "rxjs",
+    "serverless-http"
+  ]
+  included_files = [
+    "apps/api/dist/**",
+    "apps/api/prisma/**",
+    "node_modules/.prisma/**"
+  ]
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
 
 [[redirects]]
   from = "/*"

@@ -1,4 +1,5 @@
 node_modules/
+.netlify/
 dist/
 build/
 coverage/
@@ -6,4 +7,3 @@ coverage/
 .env.local
 .DS_Store
 *.log
-

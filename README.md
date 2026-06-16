@@ -84,9 +84,14 @@ password: ChangeMe123!
 
 Admin formunda `Published` durumuyla kaydedilen etkinlikler public event listesinde görünür. `Draft` kayıtlar sadece admin listesinde kalır.
 
-Gerçek backend için repo kökünde `render.yaml` bulunur. Render Blueprint ile `konnektora-api` ve `konnektora-db` oluşturulduğunda frontend production build varsayılan olarak `https://konnektora-api.onrender.com` adresini dener.
+Gerçek backend için iki yol hazırdır:
 
-Render servis URL'i farklıysa Netlify Environment variables içine şunu ekle:
+- Netlify full-stack: Netlify Function `/api/*` altında Nest API'yi çalıştırır. Netlify Database veya başka bir Postgres bağlantısı `DATABASE_URL` olarak tanımlanmalıdır.
+- Render: Repo kökünde `render.yaml` bulunur. Render Blueprint ile `konnektora-api` ve `konnektora-db` oluşturulabilir.
+
+Frontend production build varsayılan olarak aynı domain altındaki `/api` endpoint'ini dener. Bu, Netlify Function yoludur.
+
+Render veya başka harici API kullanılacaksa Netlify Environment variables içine şunu ekle:
 
 ```text
 VITE_API_URL=https://api-domainin.com

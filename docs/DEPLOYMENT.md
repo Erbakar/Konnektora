@@ -1,22 +1,61 @@
 # Konnektora Deployment
 
-Bu rehber Netlify frontend + Render backend + Render PostgreSQL düzeni içindir.
+Bu rehber iki production yolunu kapsar:
+
+1. Netlify frontend + Netlify Function API + Netlify Database/Postgres
+2. Netlify frontend + Render backend + Render PostgreSQL
 
 ## Mimari
 
 ```text
 Netlify Web
-  VITE_API_URL=https://konnektora-api.onrender.com
+  /api/*
       |
       v
-Render Web Service: NestJS API
+Netlify Function: NestJS API
   DATABASE_URL=postgresql://...
       |
       v
-Render PostgreSQL
+Netlify Database / Postgres
 ```
 
-## 1. Render Blueprint ile Backend + PostgreSQL
+Harici backend kullanılacaksa `VITE_API_URL=https://konnektora-api.onrender.com` gibi bir değerle `/api` default'u override edilebilir.
+
+## 1. Netlify Full-Stack Kurulum
+
+Repo `netlify.toml` içinde `/api/*` isteklerini `netlify/functions/api.cjs` fonksiyonuna yönlendirir. Build sırasında API de derlenir.
+
+Netlify Environment variables:
+
+```text
+DATABASE_URL=<Netlify Database veya Postgres connection string>
+JWT_SECRET=<uzun-random-secret>
+WEB_ORIGIN=https://konnektora.netlify.app
+PUBLIC_APP_URL=https://konnektora.netlify.app
+NODE_VERSION=22
+NODE_ENV=production
+VITE_MOCK_API=false
+EMAIL_FROM=Konnektora <noreply@your-domain.com>
+RESEND_API_KEY=<resend-api-key>
+```
+
+Netlify Database aktif edildiğinde `DATABASE_URL` otomatik oluşabilir. Oluşmazsa Netlify Database bağlantı string'i manuel env olarak eklenmelidir.
+
+İlk deploy sonrası migration ve seed için Netlify Functions tek başına iyi bir one-off job ortamı değildir. En pratik seçenek lokalden veya Netlify CLI ile production database URL'ine karşı çalıştırmaktır:
+
+```bash
+DATABASE_URL="<production-postgres-url>" npm run db:deploy
+DATABASE_URL="<production-postgres-url>" npm run db:seed
+```
+
+Kontrol:
+
+```text
+https://konnektora.netlify.app/api/health
+https://konnektora.netlify.app/api/events
+```
+
+## 2. Render Blueprint ile Backend + PostgreSQL
 
 Repo kökünde `render.yaml` vardır. Render Dashboard'da **New > Blueprint** seçip GitHub repo'yu bağladığında Render iki kaynak oluşturur:
 
@@ -35,7 +74,7 @@ https://konnektora-api.onrender.com
 
 Eğer Render servis URL'ini farklı verirse Netlify'da `VITE_API_URL` ile override et.
 
-## 2. Manuel Render Kurulumu Gerekirse
+## 3. Manuel Render Kurulumu Gerekirse
 
 Render'da yeni Web Service aç ve GitHub repo'yu bağla.
 
@@ -78,7 +117,7 @@ Render kendi `PORT` değerini sağlar. Bu yüzden ayrıca `PORT` tanımlamak zor
 
 Önemli: Repo `Node.js >=22` ister. Localde veya Render build sırasında Node 18 kullanılırsa Prisma CLI native hatalar verebilir. Render'da `NODE_VERSION=22` tanımlı olmalı; localde `.nvmrc` için `nvm use` çalıştır.
 
-## 3. İlk Seed
+## 4. İlk Seed
 
 API deploy tamamlandıktan sonra Render Shell veya one-off job üzerinden seed çalıştır:
 
@@ -97,15 +136,15 @@ password: ChangeMe123!
 
 Production'a geçmeden admin şifresi ve seed stratejisi değiştirilmeli.
 
-## 4. Netlify Frontend Ayarı
+## 5. Netlify Frontend Ayarı
 
 Frontend production build varsayılan olarak şu API adresini dener:
 
 ```text
-https://konnektora-api.onrender.com
+/api
 ```
 
-Render servis URL'i farklıysa Netlify site settings içinde Environment variables alanına API URL'ini ekle:
+Render servis URL'i veya başka harici API kullanılacaksa Netlify site settings içinde Environment variables alanına API URL'ini ekle:
 
 ```text
 VITE_API_URL=https://konnektora-api.onrender.com
@@ -118,8 +157,10 @@ Bu değişiklikten sonra frontend mock mode yerine gerçek API'ye bağlanır. Ad
 
 Backend henüz hazır değilken Netlify demo için `VITE_MOCK_API=true` kullanılabilir. Bu modda kayıtlar tarayıcı `localStorage` alanında kalır ve ortak database'e yazılmaz.
 
-## 5. Kontrol Listesi
+## 6. Kontrol Listesi
 
+- `https://konnektora.netlify.app/api/health` `{ ok: true }` dönüyor mu?
+- `https://konnektora.netlify.app/api/events` JSON dönüyor mu?
 - `https://konnektora-api.onrender.com/health` `{ ok: true }` dönüyor mu?
 - `https://konnektora-api.onrender.com/events` JSON dönüyor mu?
 - Netlify build log'unda `VITE_API_URL` doğru mu?
@@ -130,7 +171,7 @@ Backend henüz hazır değilken Netlify demo için `VITE_MOCK_API=true` kullanı
 - API logs içinde email gönderimleri için Resend hatası veya dev mail logu görünüyor mu?
 - Render API logs içinde CORS veya database hatası var mı?
 
-## 6. Sık Hatalar
+## 7. Sık Hatalar
 
 ### Netlify'da event görünmüyor
 
