@@ -84,7 +84,9 @@ password: ChangeMe123!
 
 Admin formunda `Published` durumuyla kaydedilen etkinlikler public event listesinde görünür. `Draft` kayıtlar sadece admin listesinde kalır.
 
-Gerçek backend deploy edildikten sonra Netlify Environment variables içine şunu ekle:
+Gerçek backend için repo kökünde `render.yaml` bulunur. Render Blueprint ile `konnektora-api` ve `konnektora-db` oluşturulduğunda frontend production build varsayılan olarak `https://konnektora-api.onrender.com` adresini dener.
+
+Render servis URL'i farklıysa Netlify Environment variables içine şunu ekle:
 
 ```text
 VITE_API_URL=https://api-domainin.com

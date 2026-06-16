@@ -35,4 +35,4 @@ databases:
     databaseName: konnektora
     user: konnektora
     region: frankfurt
-    plan: free
+    plan: basic-256mb

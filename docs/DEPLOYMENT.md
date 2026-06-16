@@ -16,19 +16,26 @@ Render Web Service: NestJS API
 Render PostgreSQL
 ```
 
-## 1. PostgreSQL Oluştur
+## 1. Render Blueprint ile Backend + PostgreSQL
 
-Render dashboard içinde yeni PostgreSQL servisi oluştur.
+Repo kökünde `render.yaml` vardır. Render Dashboard'da **New > Blueprint** seçip GitHub repo'yu bağladığında Render iki kaynak oluşturur:
 
-Not alman gereken değer:
+- `konnektora-api`: NestJS API web service
+- `konnektora-db`: PostgreSQL database (`basic-256mb`)
+
+Blueprint `DATABASE_URL` değerini database connection string'den otomatik alır, `JWT_SECRET` değerini de otomatik üretir. Health check path `/health` olarak ayarlanmıştır.
+
+Not: Render PostgreSQL `basic-256mb` ücretli olabilir. Blueprint'i deploy etmeden önce Render plan/fiyat ekranını kontrol et.
+
+Beklenen API URL:
 
 ```text
-Internal Database URL veya External Database URL
+https://konnektora-api.onrender.com
 ```
 
-API Render üzerinde aynı workspace/project içinde çalışacağı için genelde internal URL tercih edilir. Local bilgisayardan bağlanman gerekiyorsa external URL kullanılır.
+Eğer Render servis URL'ini farklı verirse Netlify'da `VITE_API_URL` ile override et.
 
-## 2. API Web Service Oluştur
+## 2. Manuel Render Kurulumu Gerekirse
 
 Render'da yeni Web Service aç ve GitHub repo'yu bağla.
 
@@ -43,7 +50,7 @@ npm ci && npm run db:generate && npm run build -w packages/shared && npm run bui
 Start command:
 
 ```bash
-npm run db:deploy && npm run start -w apps/api
+npm run start -w apps/api
 ```
 
 Environment variables:
@@ -57,6 +64,12 @@ EMAIL_FROM=Konnektora <noreply@your-domain.com>
 RESEND_API_KEY=<resend-api-key>
 NODE_VERSION=22
 NODE_ENV=production
+```
+
+Pre-deploy command:
+
+```bash
+npm run db:deploy
 ```
 
 Render kendi `PORT` değerini sağlar. Bu yüzden ayrıca `PORT` tanımlamak zorunda değilsin.
@@ -86,7 +99,13 @@ Production'a geçmeden admin şifresi ve seed stratejisi değiştirilmeli.
 
 ## 4. Netlify Frontend Ayarı
 
-Netlify site settings içinde Environment variables alanına API URL'ini ekle:
+Frontend production build varsayılan olarak şu API adresini dener:
+
+```text
+https://konnektora-api.onrender.com
+```
+
+Render servis URL'i farklıysa Netlify site settings içinde Environment variables alanına API URL'ini ekle:
 
 ```text
 VITE_API_URL=https://konnektora-api.onrender.com
@@ -101,6 +120,7 @@ Backend henüz hazır değilken Netlify demo için `VITE_MOCK_API=true` kullanı
 
 ## 5. Kontrol Listesi
 
+- `https://konnektora-api.onrender.com/health` `{ ok: true }` dönüyor mu?
 - `https://konnektora-api.onrender.com/events` JSON dönüyor mu?
 - Netlify build log'unda `VITE_API_URL` doğru mu?
 - Admin login çalışıyor mu?
