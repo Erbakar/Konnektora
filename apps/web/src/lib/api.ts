@@ -49,9 +49,15 @@ import {
 import { z } from "zod";
 import { mockEvents, mockTags } from "./mockData";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+const CONFIGURED_API_URL = import.meta.env.VITE_API_URL;
+const API_URL = CONFIGURED_API_URL ?? "http://localhost:3000";
+const MOCK_API_SETTING = import.meta.env.VITE_MOCK_API;
+const isBrowser = typeof window !== "undefined";
+const isLocalApiUrl = API_URL.includes("localhost") || API_URL.includes("127.0.0.1");
+const isNetlifyPreview = isBrowser && window.location.hostname.endsWith("netlify.app");
 const USE_MOCK_FALLBACK =
-  import.meta.env.PROD && (API_URL.includes("localhost") || API_URL.includes("127.0.0.1"));
+  MOCK_API_SETTING === "true" ||
+  (MOCK_API_SETTING !== "false" && import.meta.env.PROD && (!CONFIGURED_API_URL || isLocalApiUrl || isNetlifyPreview));
 const TOKEN_KEY = "konnektora_admin_token";
 const USER_TOKEN_KEY = "konnektora_user_token";
 const USER_KEY = "konnektora_user";
@@ -101,6 +107,12 @@ export const adminPermissionOptions: Array<{ value: AdminPermission; label: stri
 type RequestOptions = RequestInit & {
   auth?: AuthMode;
 };
+
+class ApiHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`API request failed: ${status}`);
+  }
+}
 
 export function getAdminToken() {
   return localStorage.getItem(TOKEN_KEY);
@@ -172,7 +184,7 @@ async function requestJson<T>(path: string, schema: z.ZodType<T>, options: Reque
     const response = await fetch(`${API_URL}${path}`, { ...options, headers });
 
     if (!response.ok) {
-      throw new Error(`API request failed: ${response.status}`);
+      throw new ApiHttpError(response.status);
     }
 
     if (response.status === 204) {
@@ -183,12 +195,24 @@ async function requestJson<T>(path: string, schema: z.ZodType<T>, options: Reque
   } catch (error) {
     const fallback = getMockResponse(path, schema, options);
 
-    if (fallback !== undefined) {
+    if (shouldUseMockFallback(error) && fallback !== undefined) {
       return fallback;
     }
 
     throw error;
   }
+}
+
+function shouldUseMockFallback(error: unknown) {
+  if (!USE_MOCK_FALLBACK) {
+    return false;
+  }
+
+  if (error instanceof ApiHttpError && [401, 403].includes(error.status)) {
+    return false;
+  }
+
+  return true;
 }
 
 function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: RequestOptions): T | undefined {

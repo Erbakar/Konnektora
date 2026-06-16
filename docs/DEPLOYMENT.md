@@ -90,11 +90,14 @@ Netlify site settings içinde Environment variables alanına API URL'ini ekle:
 
 ```text
 VITE_API_URL=https://konnektora-api.onrender.com
+VITE_MOCK_API=false
 ```
 
 Sonra Netlify deploy'u yeniden çalıştır.
 
 Bu değişiklikten sonra frontend mock mode yerine gerçek API'ye bağlanır. Adminin eklediği `Published` event'ler PostgreSQL'e kaydedilir ve herkes için `/events` listesinde görünür.
+
+Backend henüz hazır değilken Netlify demo için `VITE_MOCK_API=true` kullanılabilir. Bu modda kayıtlar tarayıcı `localStorage` alanında kalır ve ortak database'e yazılmaz.
 
 ## 5. Kontrol Listesi
 
@@ -111,7 +114,7 @@ Bu değişiklikten sonra frontend mock mode yerine gerçek API'ye bağlanır. Ad
 
 ### Netlify'da event görünmüyor
 
-`VITE_API_URL` eksik veya Netlify deploy'u env ekledikten sonra yeniden çalışmamış olabilir.
+`VITE_API_URL` eksik, `VITE_MOCK_API=false` iken API deploy edilmemiş veya Netlify deploy'u env ekledikten sonra yeniden çalışmamış olabilir.
 
 ### API CORS hatası veriyor
 

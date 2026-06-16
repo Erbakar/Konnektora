@@ -73,6 +73,8 @@ Netlify sadece React/Vite frontend'i host eder. Node/NestJS API ayrıca Render, 
 
 Frontend canlı ortamda `VITE_API_URL` verilmezse public event listeleme, event detay, tag filtreleri ve admin event oluşturma mock data ile çalışır. Admin demo modunda veriler tarayıcı `localStorage` alanına yazılır; aynı cihaz/tarayıcıda görünür, başka kullanıcılara ortak database gibi yansımaz.
 
+Netlify demo ortamında backend henüz hazır değilse veya API cevap vermezse frontend mock veriye düşer. Bu davranışı açıkça yönetmek için Netlify Environment variables içine `VITE_MOCK_API=true` eklenebilir. Gerçek backend'e kesin geçişte `VITE_MOCK_API=false` kullanılmalı ve `VITE_API_URL` canlı API adresini göstermelidir.
+
 Demo modunda `/admin` ekranına aşağıdaki bilgilerle veya herhangi bir email/şifreyle girilebilir:
 
 ```text
@@ -86,6 +88,7 @@ Gerçek backend deploy edildikten sonra Netlify Environment variables içine şu
 
 ```text
 VITE_API_URL=https://api-domainin.com
+VITE_MOCK_API=false
 ```
 
 Sonra Netlify deploy'unu yeniden çalıştır. Backend CORS ayarında da Netlify domain'i izinli olmalıdır:
