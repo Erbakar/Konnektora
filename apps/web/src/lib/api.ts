@@ -50,7 +50,8 @@ import { z } from "zod";
 import { mockEvents, mockTags } from "./mockData";
 
 const CONFIGURED_API_URL = import.meta.env.VITE_API_URL;
-const API_URL = CONFIGURED_API_URL ?? "http://localhost:3000";
+const DEFAULT_API_URL = import.meta.env.PROD ? "https://konnektora-api.onrender.com" : "http://localhost:3000";
+const API_URL = CONFIGURED_API_URL ?? DEFAULT_API_URL;
 const MOCK_API_SETTING = import.meta.env.VITE_MOCK_API;
 const isBrowser = typeof window !== "undefined";
 const isLocalApiUrl = API_URL.includes("localhost") || API_URL.includes("127.0.0.1");
