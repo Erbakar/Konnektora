@@ -7,6 +7,7 @@ export const ADMIN_PERMISSIONS = [
   "roles.manage",
   "tags.manage",
   "events.manage",
+  "messages.manage",
   "places.manage",
   "comments.manage",
   "media.manage"

@@ -35,7 +35,6 @@ import {
   createAdminModerationDecision,
   createAdminReportRule,
   createAdminRoleGroup,
-  createAdminTag,
   getAdminReportGroup,
   getAdminDashboard,
   getAdminToken,
@@ -149,6 +148,17 @@ const SECTION_TITLES: Record<AdminSection, string> = {
   "email-tokens": "Email Tokenları"
 };
 
+const REPORT_RULE_TITLE_OPTIONS: Record<ReportTargetType, string[]> = {
+  event: [
+    "Spam veya yanıltıcı etkinlik",
+    "Uygunsuz etkinlik içeriği",
+    "Sahte veya hatalı etkinlik bilgisi",
+    "Güvenlik riski taşıyan etkinlik"
+  ],
+  tag: ["Spam tag", "Yanıltıcı tag", "Uygunsuz tag adı", "Tekrarlayan / mükerrer tag"],
+  user: ["Spam kullanıcı", "Taciz veya kötüye kullanım", "Sahte profil", "Topluluk kurallarını ihlal"]
+};
+
 export function AdminDashboardPage() {
   const queryClient = useQueryClient();
   const [token, setToken] = useState(() => getAdminToken());
@@ -244,15 +254,6 @@ export function AdminDashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-policies"] });
     },
     onError: () => setLoginError("Email veya şifre hatalı.")
-  });
-
-  const createTagMutation = useMutation({
-    mutationFn: createAdminTag,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["admin-tags"] });
-      void queryClient.invalidateQueries({ queryKey: ["tags"] });
-      void queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
-    }
   });
 
   const archiveTagMutation = useMutation({
@@ -695,10 +696,9 @@ export function AdminDashboardPage() {
         {activeSection === "tags" && (
           <TagAdminPanel
             detail={tagDetail}
-            isPending={createTagMutation.isPending || banTagMutation.isPending || mergeTagMutation.isPending}
+            isPending={banTagMutation.isPending || mergeTagMutation.isPending || updateTagMutation.isPending}
             onArchive={(id) => archiveTagMutation.mutate(id)}
             onBan={(id) => banTagMutation.mutate(id)}
-            onCreate={(input) => createTagMutation.mutate(input)}
             onMerge={(id, targetTagId) => mergeTagMutation.mutate({ id, targetTagId })}
             onSelect={(id) => setSelectedTagId(id)}
             onUpdate={(input) => updateTagMutation.mutate(input)}
@@ -1496,7 +1496,14 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
           </button>
         </div>
       ) : null}
-      {detailQuery.data ? <UserDetailCard user={detailQuery.data} /> : null}
+      {detailQuery.data ? (
+        <UserDetailCard
+          isPending={updateMutation.isPending}
+          onUpdate={(input) => updateMutation.mutate({ id: detailQuery.data.id, ...input })}
+          roleGroups={roleGroups}
+          user={detailQuery.data}
+        />
+      ) : null}
     </section>
   );
 }
@@ -1528,8 +1535,13 @@ function UserAdminRow({
         <span className={`status-pill status-${user.status}`}>{user.status}</span>
         <span className="muted">{user.role}</span>
         <select
-          disabled={isPending || user.role === "user"}
-          onChange={(event) => onUpdate({ adminRoleGroupId: event.target.value || null })}
+          disabled={isPending}
+          onChange={(event) =>
+            onUpdate({
+              adminRoleGroupId: event.target.value || null,
+              role: event.target.value && user.role === "user" ? "admin" : undefined
+            })
+          }
           value={user.adminRoleGroupId ?? ""}
         >
           <option value="">Rol grubu yok</option>
@@ -1571,12 +1583,83 @@ function UserAdminRow({
   );
 }
 
-function UserDetailCard({ user }: { user: AdminManagedUserDetail }) {
+function UserDetailCard({
+  isPending,
+  onUpdate,
+  roleGroups,
+  user
+}: {
+  isPending: boolean;
+  onUpdate: (input: {
+    status?: "active" | "invited" | "pending" | "disabled";
+    role?: "user" | "admin" | "super_admin";
+    adminRoleGroupId?: string | null;
+  }) => void;
+  roleGroups: AdminRoleGroup[];
+  user: AdminManagedUserDetail;
+}) {
   return (
     <div className="admin-list-item">
       <div className="section-header compact">
-        <h3>{user.name}</h3>
-        <span>{user.email}</span>
+        <div>
+          <h3>{user.name}</h3>
+          <span>{user.email}</span>
+        </div>
+        <span className={`status-pill status-${user.status}`}>{user.status}</span>
+      </div>
+      <div className="admin-list-row">
+        <div>
+          <strong>Hesap bilgileri</strong>
+          <span>
+            Rol: {user.role} · Rol grubu: {user.adminRoleGroup?.name ?? "Yok"}
+          </span>
+          <span>
+            Oluşturulma: {user.createdAt ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date(user.createdAt)) : "Bilinmiyor"}
+          </span>
+        </div>
+        <label className="inline-select-label">
+          Rol grubu
+          <select
+            disabled={isPending}
+            onChange={(event) =>
+              onUpdate({
+                adminRoleGroupId: event.target.value || null,
+                role: event.target.value && user.role === "user" ? "admin" : undefined
+              })
+            }
+            value={user.adminRoleGroupId ?? ""}
+          >
+            <option value="">Rol grubu yok</option>
+            {roleGroups
+              .filter((roleGroup) => roleGroup.status === "active")
+              .map((roleGroup) => (
+                <option key={roleGroup.id} value={roleGroup.id}>
+                  {roleGroup.name}
+                </option>
+              ))}
+          </select>
+        </label>
+        <div className="row-actions">
+          {user.role === "user" ? (
+            <button className="secondary-action" disabled={isPending} onClick={() => onUpdate({ role: "admin" })} type="button">
+              Admin yap
+            </button>
+          ) : null}
+          {user.role === "admin" ? (
+            <button className="ghost-action" disabled={isPending} onClick={() => onUpdate({ role: "user", adminRoleGroupId: null })} type="button">
+              User yap
+            </button>
+          ) : null}
+          {user.status === "active" ? (
+            <button className="ghost-action" disabled={isPending} onClick={() => onUpdate({ status: "disabled" })} type="button">
+              Disable
+            </button>
+          ) : (
+            <button className="secondary-action" disabled={isPending} onClick={() => onUpdate({ status: "active" })} type="button">
+              Aktif yap
+            </button>
+          )}
+        </div>
       </div>
       <div className="metric-grid compact-metrics">
         <MetricCard icon={<CalendarCheck size={20} />} label="Oluşturduğu event" value={user.stats.createdEvents} />
@@ -1626,12 +1709,14 @@ function ReportAdminPanel({
   rules: ReportRule[];
   reports: ContentReport[];
 }) {
+  const [ruleTargetType, setRuleTargetType] = useState<ReportTargetType>("event");
+
   function handleRuleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
 
     onCreateRule({
-      targetType: String(form.get("targetType")) as "event" | "tag" | "user",
+      targetType: String(form.get("targetType")) as ReportTargetType,
       title: String(form.get("title")),
       description: String(form.get("description") || "") || undefined,
       violationScore: Number(form.get("violationScore") || 1)
@@ -1716,8 +1801,8 @@ function ReportAdminPanel({
         <h3>Şikayet kuralı oluştur</h3>
         <div className="admin-form-grid">
           <label>
-            İçerik tipi
-            <select name="targetType" defaultValue="event">
+            Kategori
+            <select name="targetType" value={ruleTargetType} onChange={(event) => setRuleTargetType(event.target.value as ReportTargetType)}>
               <option value="event">Etkinlik</option>
               <option value="tag">Tag</option>
               <option value="user">Kullanıcı</option>
@@ -1730,7 +1815,13 @@ function ReportAdminPanel({
         </div>
         <label>
           Kural başlığı
-          <input name="title" placeholder="Spam veya yanıltıcı içerik" required minLength={3} maxLength={160} />
+          <select name="title" required>
+            {REPORT_RULE_TITLE_OPTIONS[ruleTargetType].map((title) => (
+              <option key={title} value={title}>
+                {title}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           Açıklama
@@ -1955,7 +2046,6 @@ function TagAdminPanel({
   isPending,
   onArchive,
   onBan,
-  onCreate,
   onMerge,
   onSelect,
   onUpdate,
@@ -1965,7 +2055,6 @@ function TagAdminPanel({
   isPending: boolean;
   onArchive: (id: string) => void;
   onBan: (id: string) => void;
-  onCreate: (input: { name: string; description?: string }) => void;
   onMerge: (id: string, targetTagId: string) => void;
   onSelect: (id: string) => void;
   onUpdate: (input: { id: string; name: string; description?: string }) => void;
@@ -1982,12 +2071,12 @@ function TagAdminPanel({
       description: String(form.get("description") || "")
     };
 
-    if (editingTag) {
-      onUpdate({ id: editingTag.id, ...input });
-      setEditingTagId(null);
-    } else {
-      onCreate(input);
+    if (!editingTag) {
+      return;
     }
+
+    onUpdate({ id: editingTag.id, ...input });
+    setEditingTagId(null);
 
     event.currentTarget.reset();
   }
@@ -2010,33 +2099,29 @@ function TagAdminPanel({
         <span>{tags.length} tag</span>
       </div>
       <p className="admin-section-desc">
-        İlgi alanı tag'lerini oluştur ve yönet. Kullanıcılar bu tag'leri profillerinde ve etkinliklerde kullanır. Tag'leri birleştirip arşivleyebilirsin.
+        İlgi alanı tag'lerini incele, yeniden adlandır, birleştir ve arşivle. Yeni tag oluşturma kullanıcı/etkinlik akışından yapılır.
       </p>
-      <div className="admin-create-section">
-        <span className="admin-create-section-label">
-          <Plus size={11} />
-          {editingTag ? "Tag'i güncelle" : "Yeni tag"}
-        </span>
-      <form className="admin-form" onSubmit={handleSubmit}>
-        <label>
-          Tag adı
-          <input key={editingTag?.id ?? "new-tag-name"} name="name" placeholder="Örn. Startup, Fintech, Tasarım..." required minLength={2} defaultValue={editingTag?.name ?? ""} />
-        </label>
-        <label>
-          Açıklama
-          <textarea key={editingTag?.id ?? "new-tag-description"} name="description" placeholder="Bu tag ne tür içerikleri kapsar? (opsiyonel)" rows={3} defaultValue={editingTag?.description ?? ""} />
-        </label>
-        <button className="secondary-action" disabled={isPending} type="submit">
-          <Plus size={18} />
-          {editingTag ? "Tag güncelle" : "Tag ekle"}
-        </button>
-        {editingTag ? (
-          <button className="ghost-action" onClick={() => setEditingTagId(null)} type="button">
-            Vazgeç
-          </button>
-        ) : null}
-      </form>
-      </div>
+      {editingTag ? (
+        <div className="admin-create-section">
+          <span className="admin-create-section-label">Tag'i güncelle</span>
+          <form className="admin-form" onSubmit={handleSubmit}>
+            <label>
+              Tag adı
+              <input key={`${editingTag.id}-name`} name="name" required minLength={2} defaultValue={editingTag.name} />
+            </label>
+            <label>
+              Açıklama
+              <textarea key={`${editingTag.id}-description`} name="description" rows={3} defaultValue={editingTag.description ?? ""} />
+            </label>
+            <button className="secondary-action" disabled={isPending} type="submit">
+              Tag güncelle
+            </button>
+            <button className="ghost-action" onClick={() => setEditingTagId(null)} type="button">
+              Vazgeç
+            </button>
+          </form>
+        </div>
+      ) : null}
       <div className="admin-manage-section-label">
         <span>Mevcut tag'ler</span>
         <span>{tags.length} kayıt</span>
@@ -2044,7 +2129,7 @@ function TagAdminPanel({
       {tags.length === 0 ? (
         <div className="admin-empty-state">
           <strong>Henüz tag yok</strong>
-          <p>Yukarıdaki formu kullanarak ilk ilgi alanı tag'ini ekle.</p>
+          <p>Yeni tag'ler kullanıcıların tag ekleme veya etkinlik oluşturma akışından gelir.</p>
         </div>
       ) : (
       <div className="admin-list">

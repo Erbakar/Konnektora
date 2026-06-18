@@ -24,6 +24,7 @@ export const adminPermissionSchema = z.enum([
   "roles.manage",
   "tags.manage",
   "events.manage",
+  "messages.manage",
   "places.manage",
   "comments.manage",
   "media.manage"

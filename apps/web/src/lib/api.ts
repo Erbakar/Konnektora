@@ -100,6 +100,7 @@ export const adminPermissionOptions: Array<{ value: AdminPermission; label: stri
   { value: "roles.manage", label: "Rol/Yetki" },
   { value: "tags.manage", label: "İlgi alanları" },
   { value: "events.manage", label: "Etkinlikler" },
+  { value: "messages.manage", label: "Mesajlaşma" },
   { value: "places.manage", label: "Mekanlar" },
   { value: "comments.manage", label: "Yorumlar" },
   { value: "media.manage", label: "Medya" }
