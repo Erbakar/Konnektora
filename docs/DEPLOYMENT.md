@@ -28,7 +28,7 @@ Repo `netlify.toml` içinde `/api/*` isteklerini `netlify/functions/api.cjs` fon
 Netlify Environment variables:
 
 ```text
-DATABASE_URL=<Netlify Database veya Postgres connection string>
+DATABASE_URL=<opsiyonel harici Postgres connection string>
 JWT_SECRET=<uzun-random-secret>
 WEB_ORIGIN=https://konnektora.netlify.app
 PUBLIC_APP_URL=https://konnektora.netlify.app
@@ -39,13 +39,12 @@ EMAIL_FROM=Konnektora <noreply@your-domain.com>
 RESEND_API_KEY=<resend-api-key>
 ```
 
-Netlify Database aktif edildiğinde `DATABASE_URL` otomatik oluşabilir. Oluşmazsa Netlify Database bağlantı string'i manuel env olarak eklenmelidir.
+Netlify Database aktif edildiğinde connection string `NETLIFY_DB_URL` olarak sağlanır. API runtime bu değeri otomatik `DATABASE_URL` fallback'i olarak kullanır; harici Postgres kullanılmayacaksa `DATABASE_URL` manuel tanımlamak gerekmez.
 
-İlk deploy sonrası migration ve seed için Netlify Functions tek başına iyi bir one-off job ortamı değildir. En pratik seçenek lokalden veya Netlify CLI ile production database URL'ine karşı çalıştırmaktır:
+Build sırasında `NETLIFY_DB_URL` varsa Prisma migration otomatik çalışır. İlk seed için Netlify Functions tek başına iyi bir one-off job ortamı değildir. En pratik seçenek lokalden veya Netlify CLI ile production database URL'ine karşı çalıştırmaktır:
 
 ```bash
-DATABASE_URL="<production-postgres-url>" npm run db:deploy
-DATABASE_URL="<production-postgres-url>" npm run db:seed
+NETLIFY_DB_URL="<production-postgres-url>" npm run db:seed
 ```
 
 Kontrol:
