@@ -5,6 +5,7 @@ import { AuthModule } from "./auth/auth.module";
 import { CmsModule } from "./cms/cms.module";
 import { EventsModule } from "./events/events.module";
 import { HealthController } from "./health.controller";
+import { MessagesModule } from "./messages/messages.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { ProfileModule } from "./profile/profile.module";
 import { ReportsModule } from "./reports/reports.module";
@@ -18,6 +19,7 @@ import { TagsModule } from "./tags/tags.module";
     CmsModule,
     AdminModule,
     EventsModule,
+    MessagesModule,
     ProfileModule,
     ReportsModule,
     TagsModule

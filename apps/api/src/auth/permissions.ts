@@ -8,6 +8,9 @@ export const ADMIN_PERMISSIONS = [
   "tags.manage",
   "events.manage",
   "messages.manage",
+  "messages.faq.manage",
+  "messages.account_freeze.manage",
+  "messages.write_to_us.manage",
   "places.manage",
   "comments.manage",
   "media.manage"

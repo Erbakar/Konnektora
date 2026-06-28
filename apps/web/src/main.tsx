@@ -9,6 +9,7 @@ import { AcceptInvitePage, ResetPasswordPage, VerifyEmailPage } from "./pages/Au
 import { EventDetailPage } from "./pages/EventDetailPage";
 import { EventsPage } from "./pages/EventsPage";
 import { HomePage } from "./pages/HomePage";
+import { ContactPage } from "./pages/ContactPage";
 import { PolicyPage } from "./pages/PolicyPage";
 import "./styles.css";
 
@@ -23,6 +24,7 @@ const router = createBrowserRouter([
       { path: "events", element: <EventsPage /> },
       { path: "events/:slug", element: <EventDetailPage /> },
       { path: "account", element: <AccountPage /> },
+      { path: "contact", element: <ContactPage /> },
       { path: "verify-email", element: <VerifyEmailPage /> },
       { path: "reset-password", element: <ResetPasswordPage /> },
       { path: "accept-invite", element: <AcceptInvitePage /> },

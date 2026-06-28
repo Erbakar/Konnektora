@@ -21,6 +21,8 @@ import {
   reportGroupSchema,
   reportRuleSchema,
   tagSchema,
+  userMessageListSchema,
+  userMessageSchema,
   type AdminDashboard,
   type AdminManagedUser,
   type AdminManagedUserDetail,
@@ -44,7 +46,11 @@ import {
   type ReportGroupDetail,
   type ReportGroupNote,
   type ReportTargetType,
-  type Tag
+  type Tag,
+  type UserMessage,
+  type UserMessageList,
+  type UserMessageStatus,
+  type UserMessageType
 } from "@konnektora/shared";
 import { z } from "zod";
 import { mockEvents, mockTags } from "./mockData";
@@ -78,6 +84,7 @@ const MOCK_CMS_CATEGORIES_KEY = "konnektora_mock_cms_categories";
 const MOCK_FAQS_KEY = "konnektora_mock_faqs";
 const MOCK_ANNOUNCEMENTS_KEY = "konnektora_mock_announcements";
 const MOCK_POLICIES_KEY = "konnektora_mock_policies";
+const MOCK_USER_MESSAGES_KEY = "konnektora_mock_user_messages";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -100,7 +107,9 @@ export const adminPermissionOptions: Array<{ value: AdminPermission; label: stri
   { value: "roles.manage", label: "Rol/Yetki" },
   { value: "tags.manage", label: "İlgi alanları" },
   { value: "events.manage", label: "Etkinlikler" },
-  { value: "messages.manage", label: "Mesajlaşma" },
+  { value: "messages.faq.manage", label: "Kullanıcı mesajları - FAQ" },
+  { value: "messages.account_freeze.manage", label: "Kullanıcı mesajları - Hesap dondurma" },
+  { value: "messages.write_to_us.manage", label: "Kullanıcı mesajları - Write to us" },
   { value: "places.manage", label: "Mekanlar" },
   { value: "comments.manage", label: "Yorumlar" },
   { value: "media.manage", label: "Medya" }
@@ -277,6 +286,24 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     const input = parseBody<{ tagIds: string[] }>(options);
     setUserInterestTagIds(input.tagIds);
     return schema.parse(getTagsByIds(input.tagIds));
+  }
+
+  if ((pathname === "/messages" || pathname === "/me/messages") && method === "POST") {
+    return schema.parse(createMockUserMessage(parseBody<UserMessageInput>(options), pathname === "/me/messages"));
+  }
+
+  if (pathname.startsWith("/admin/messages/") && method === "GET") {
+    const messageType = userMessageTypeFromAdminPath(pathname);
+
+    if (messageType) {
+      return schema.parse(listMockUserMessages(messageType, new URLSearchParams(queryString)));
+    }
+
+    return schema.parse(getMockUserMessage(pathname.slice("/admin/messages/".length)));
+  }
+
+  if (pathname.startsWith("/admin/messages/") && method === "PATCH") {
+    return schema.parse(updateMockUserMessage(pathname.slice("/admin/messages/".length), parseBody<{ status: UserMessageStatus }>(options)));
   }
 
   if (pathname === "/tags" && method === "POST" && options.auth === "user") {
@@ -611,6 +638,187 @@ function readStorage<T>(key: string, fallback: T): T {
 
 function writeStorage<T>(key: string, value: T) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function userMessageTypeFromAdminPath(pathname: string): UserMessageType | null {
+  if (pathname === "/admin/messages/faq") {
+    return "faq";
+  }
+
+  if (pathname === "/admin/messages/account-freeze") {
+    return "account_freeze";
+  }
+
+  if (pathname === "/admin/messages/write-to-us") {
+    return "write_to_us";
+  }
+
+  return null;
+}
+
+function getStoredUserMessages(): UserMessage[] {
+  const now = new Date().toISOString();
+  const seededMessages: UserMessage[] = [
+    {
+      id: "70000000-0000-4000-8000-000000000001",
+      type: "faq",
+      category: "Events",
+      userId: null,
+      name: "Deniz Yilmaz",
+      email: "deniz@example.com",
+      phone: "+90 555 000 0001",
+      body: "Etkinlik davetleri icin SSS'de hangi adimlari takip etmeliyim?",
+      status: "unread",
+      appVersion: "web-demo",
+      systemInfo: "Chrome / macOS",
+      readAt: null,
+      readById: null,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "70000000-0000-4000-8000-000000000002",
+      type: "account_freeze",
+      category: null,
+      userId: null,
+      name: "Ayse Kaya",
+      email: "ayse@example.com",
+      phone: null,
+      body: "Hesabimi bir sure dondurmak istiyorum.",
+      status: "read",
+      appVersion: "ios-0.1",
+      systemInfo: "iOS 18",
+      readAt: now,
+      readById: null,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "70000000-0000-4000-8000-000000000003",
+      type: "write_to_us",
+      category: "Oneriler",
+      userId: null,
+      name: "Mert Demir",
+      email: "mert@example.com",
+      phone: "+90 555 000 0003",
+      body: "Etkinliklerde sektore gore filtreleme daha gorunur olabilir.",
+      status: "unread",
+      appVersion: "web-demo",
+      systemInfo: "Safari / macOS",
+      readAt: null,
+      readById: null,
+      createdAt: now,
+      updatedAt: now
+    }
+  ];
+  const storedMessages = readStorage<UserMessage[]>(MOCK_USER_MESSAGES_KEY, []);
+  const storedIds = new Set(storedMessages.map((message) => message.id));
+
+  return [...storedMessages, ...seededMessages.filter((message) => !storedIds.has(message.id))];
+}
+
+function setStoredUserMessages(messages: UserMessage[]) {
+  writeStorage(MOCK_USER_MESSAGES_KEY, messages);
+}
+
+function createMockUserMessage(input: UserMessageInput, useCurrentUser: boolean): UserMessage {
+  const user = useCurrentUser ? getUserSession() : null;
+  const now = new Date().toISOString();
+  const message: UserMessage = {
+    id: createId(),
+    type: input.type,
+    category: input.category?.trim() || null,
+    userId: user?.id ?? null,
+    name: input.name.trim() || user?.name || "Konnektora User",
+    email: input.email.trim().toLowerCase() || user?.email || "user@example.com",
+    phone: input.phone?.trim() || null,
+    body: input.body.trim(),
+    status: "unread",
+    appVersion: input.appVersion?.trim() || null,
+    systemInfo: input.systemInfo?.trim() || null,
+    readAt: null,
+    readById: null,
+    createdAt: now,
+    updatedAt: now,
+    user: user ? { id: user.id, email: user.email, name: user.name, role: user.role, status: user.status } : null,
+    readBy: null
+  };
+
+  setStoredUserMessages([message, ...getStoredUserMessages()]);
+  return message;
+}
+
+function listMockUserMessages(type: UserMessageType, params: URLSearchParams): UserMessageList {
+  const status = params.get("status");
+  const category = params.get("category");
+  const q = params.get("q")?.toLowerCase().trim();
+  const page = Math.max(Number(params.get("page") || "1"), 1);
+  const pageSize = Math.min(Math.max(Number(params.get("pageSize") || "25"), 1), 100);
+  const messages = getStoredUserMessages()
+    .filter(
+      (message) =>
+        message.type === type &&
+        (!status || message.status === status) &&
+        (!category || message.category === category) &&
+        (!q || [message.name, message.email, message.phone ?? "", message.body].join(" ").toLowerCase().includes(q))
+    )
+    .sort((a, b) => {
+      if (a.status !== b.status) {
+        return a.status === "unread" ? -1 : 1;
+      }
+
+      return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
+    });
+  const start = (page - 1) * pageSize;
+
+  return {
+    items: messages.slice(start, start + pageSize),
+    total: messages.length,
+    page,
+    pageSize,
+    hasNextPage: start + pageSize < messages.length
+  };
+}
+
+function getMockUserMessage(id: string): UserMessage {
+  const message = getStoredUserMessages().find((item) => item.id === id);
+
+  if (!message) {
+    throw new Error("Mock user message not found");
+  }
+
+  return message;
+}
+
+function updateMockUserMessage(id: string, input: { status: UserMessageStatus }): UserMessage {
+  const messages = getStoredUserMessages();
+  const admin = getUserSession() ?? {
+    id: "99999999-9999-4999-8999-999999999999",
+    email: "admin@konnektora.local",
+    name: "Konnektora Admin",
+    role: "super_admin" as const,
+    status: "active" as const
+  };
+  const updatedMessages = messages.map((message) =>
+    message.id === id
+      ? {
+          ...message,
+          status: input.status,
+          readAt: input.status === "read" ? new Date().toISOString() : null,
+          readById: input.status === "read" ? admin.id : null,
+          readBy: input.status === "read" ? admin : null,
+          updatedAt: new Date().toISOString()
+        }
+      : message
+  );
+  const updatedMessage = updatedMessages.find((message) => message.id === id);
+
+  if (!updatedMessage) {
+    throw new Error("Mock user message not found");
+  }
+
+  setStoredUserMessages(updatedMessages);
+  return updatedMessage;
 }
 
 function requestMockAttendance(eventId: string): EventParticipant {
@@ -2084,6 +2292,44 @@ export function updateAdminRoleGroup(
   });
 }
 
+export function createUserMessage(input: UserMessageInput): Promise<UserMessage> {
+  return requestJson("/messages", userMessageSchema, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function createMyMessage(input: UserMessageInput): Promise<UserMessage> {
+  return requestJson("/me/messages", userMessageSchema, {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function listAdminMessages(type: UserMessageType, params?: URLSearchParams): Promise<UserMessageList> {
+  const pathByType: Record<UserMessageType, string> = {
+    faq: "/admin/messages/faq",
+    account_freeze: "/admin/messages/account-freeze",
+    write_to_us: "/admin/messages/write-to-us"
+  };
+  const query = params?.toString();
+
+  return requestJson(`${pathByType[type]}${query ? `?${query}` : ""}`, userMessageListSchema, { auth: true });
+}
+
+export function getAdminMessage(id: string): Promise<UserMessage> {
+  return requestJson(`/admin/messages/${id}`, userMessageSchema, { auth: true });
+}
+
+export function updateAdminMessage(id: string, status: UserMessageStatus): Promise<UserMessage> {
+  return requestJson(`/admin/messages/${id}`, userMessageSchema, {
+    auth: true,
+    method: "PATCH",
+    body: JSON.stringify({ status })
+  });
+}
+
 export function listAdminCmsCategories(): Promise<CmsCategory[]> {
   return requestJson("/admin/cms/categories", z.array(cmsCategorySchema), { auth: true });
 }
@@ -2265,6 +2511,17 @@ export type RoleGroupInput = {
   name: string;
   description?: string;
   permissions: AdminPermission[];
+};
+
+export type UserMessageInput = {
+  type: UserMessageType;
+  category?: string;
+  name: string;
+  email: string;
+  phone?: string;
+  body: string;
+  appVersion?: string;
+  systemInfo?: string;
 };
 
 export type ReportRuleInput = {

@@ -44,12 +44,30 @@ export class AdminGuard extends JwtAuthGuard implements CanActivate {
       include: { adminRoleGroup: true }
     });
     const permissions = new Set(adminUser?.adminRoleGroup?.permissions ?? []);
-    const hasAllPermissions = requiredPermissions.every((permission) => permissions.has(permission));
+    const hasAllPermissions = requiredPermissions.every((permission) => this.hasPermission(permission, permissions));
 
     if (!hasAllPermissions) {
       throw new UnauthorizedException("Bu işlem için yetki gerekli.");
     }
 
     return true;
+  }
+
+  private hasPermission(permission: AdminPermission, permissions: Set<string>) {
+    if (permissions.has(permission)) {
+      return true;
+    }
+
+    if (permission.startsWith("messages.") && permissions.has("messages.manage")) {
+      return true;
+    }
+
+    if (permission === "messages.manage") {
+      return ["messages.faq.manage", "messages.account_freeze.manage", "messages.write_to_us.manage"].some((item) =>
+        permissions.has(item)
+      );
+    }
+
+    return false;
   }
 }

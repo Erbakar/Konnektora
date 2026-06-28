@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LogOut,
   Megaphone,
+  MessageSquare,
   Plus,
   ShieldCheck,
   Tags,
@@ -37,6 +38,7 @@ import {
   createAdminRoleGroup,
   getAdminReportGroup,
   getAdminDashboard,
+  getAdminMessage,
   getAdminToken,
   getAdminTag,
   isMockApiMode,
@@ -48,6 +50,7 @@ import {
   listAdminCmsCategories,
   listAdminEvents,
   listAdminFaqs,
+  listAdminMessages,
   listAdminPolicies,
   listAdminReportGroups,
   listAdminReportRules,
@@ -62,6 +65,7 @@ import {
   updateAdminEvent,
   updateAdminCmsCategory,
   updateAdminFaq,
+  updateAdminMessage,
   updateAdminRoleGroup,
   updateEventParticipantStatus,
   updateAdminReport,
@@ -89,7 +93,10 @@ import type {
   ReportGroupDetail,
   ReportRule,
   ReportTargetType,
-  Tag
+  Tag,
+  UserMessage,
+  UserMessageStatus,
+  UserMessageType
 } from "@konnektora/shared";
 
 type AdminSection =
@@ -99,6 +106,7 @@ type AdminSection =
   | "events"
   | "tags"
   | "reports"
+  | "messages"
   | "cms"
   | "email-tokens";
 
@@ -126,7 +134,10 @@ const NAV_GROUPS: Array<{
   },
   {
     label: "Moderasyon",
-    items: [{ id: "reports", label: "Şikayetler", Icon: AlertTriangle }]
+    items: [
+      { id: "reports", label: "Şikayetler", Icon: AlertTriangle },
+      { id: "messages", label: "Kullanıcı Mesajları", Icon: MessageSquare }
+    ]
   },
   {
     label: "CMS",
@@ -144,6 +155,7 @@ const SECTION_TITLES: Record<AdminSection, string> = {
   events: "Etkinlikler",
   tags: "İlgi Alanları",
   reports: "Şikayetler",
+  messages: "Kullanıcı Mesajları",
   cms: "CMS / SSS / Duyurular / Politikalar",
   "email-tokens": "Email Tokenları"
 };
@@ -157,6 +169,24 @@ const REPORT_RULE_TITLE_OPTIONS: Record<ReportTargetType, string[]> = {
   ],
   tag: ["Spam tag", "Yanıltıcı tag", "Uygunsuz tag adı", "Tekrarlayan / mükerrer tag"],
   user: ["Spam kullanıcı", "Taciz veya kötüye kullanım", "Sahte profil", "Topluluk kurallarını ihlal"]
+};
+
+const USER_MESSAGE_TYPE_META: Record<UserMessageType, { label: string; description: string; categories: string[] }> = {
+  faq: {
+    label: "FAQ mesajları",
+    description: "SSS sayfalarından veya yardım akışından gelen kullanıcı soruları.",
+    categories: ["Profile", "Account", "Rules", "Tags", "Events", "Places", "Media Files", "Comments", "Private Messages"]
+  },
+  account_freeze: {
+    label: "Hesap dondurma mesajları",
+    description: "Hesabını dondurmak veya hesap erişimiyle ilgili destek isteyen kullanıcı mesajları.",
+    categories: []
+  },
+  write_to_us: {
+    label: "Write to us mesajları",
+    description: "Hata, öneri, şikayet, reklam, iş birliği ve diğer iletişim talepleri.",
+    categories: ["Hata", "Oneriler", "Sikayet", "Reklam", "Is birligi", "Diger"]
+  }
 };
 
 export function AdminDashboardPage() {
@@ -732,6 +762,8 @@ export function AdminDashboardPage() {
           />
         )}
 
+        {activeSection === "messages" && <UserMessagesAdminPanel />}
+
         {activeSection === "cms" && (
           <CmsAdminPanel
             announcements={announcements}
@@ -1258,6 +1290,253 @@ function EmailTokenInfoPanel() {
         </div>
       </div>
     </section>
+  );
+}
+
+function UserMessagesAdminPanel() {
+  const queryClient = useQueryClient();
+  const [type, setType] = useState<UserMessageType>("faq");
+  const [filters, setFilters] = useState({ q: "", status: "", category: "", page: 1 });
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const meta = USER_MESSAGE_TYPE_META[type];
+  const messagesQuery = useQuery({
+    queryKey: ["admin-user-messages", type, filters],
+    queryFn: () => {
+      const params = new URLSearchParams();
+
+      if (filters.q) {
+        params.set("q", filters.q);
+      }
+
+      if (filters.status) {
+        params.set("status", filters.status);
+      }
+
+      if (filters.category) {
+        params.set("category", filters.category);
+      }
+
+      params.set("page", String(filters.page));
+      params.set("pageSize", "25");
+      return listAdminMessages(type, params);
+    }
+  });
+  const detailQuery = useQuery({
+    queryKey: ["admin-user-message", selectedMessageId],
+    queryFn: () => getAdminMessage(selectedMessageId!),
+    enabled: Boolean(selectedMessageId)
+  });
+  const updateMutation = useMutation({
+    mutationFn: (input: { id: string; status: UserMessageStatus }) => updateAdminMessage(input.id, input.status),
+    onSuccess: (_, input) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-user-messages"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-user-message", input.id] });
+    }
+  });
+  const messageList = messagesQuery.data;
+
+  function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+
+    setFilters({
+      q: String(form.get("q") || ""),
+      status: String(form.get("status") || ""),
+      category: String(form.get("category") || ""),
+      page: 1
+    });
+  }
+
+  function selectType(nextType: UserMessageType) {
+    setType(nextType);
+    setSelectedMessageId(null);
+    setFilters({ q: "", status: "", category: "", page: 1 });
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="section-header compact">
+        <h2>Kullanıcılardan Mesajlar</h2>
+        <span>{messagesQuery.isLoading ? "Yükleniyor" : `${messageList?.total ?? 0} mesaj`}</span>
+      </div>
+      <p className="admin-section-desc">{meta.description}</p>
+      <div className="segmented-control">
+        {(Object.keys(USER_MESSAGE_TYPE_META) as UserMessageType[]).map((item) => (
+          <button className={type === item ? "active" : ""} key={item} onClick={() => selectType(item)} type="button">
+            {USER_MESSAGE_TYPE_META[item].label}
+          </button>
+        ))}
+      </div>
+      <form className="guest-invite-form" onSubmit={handleFilterSubmit}>
+        <label>
+          Arama
+          <input name="q" placeholder="Kullanıcı, email, telefon veya mesaj" defaultValue={filters.q} />
+        </label>
+        <label>
+          Okunma durumu
+          <select name="status" defaultValue={filters.status}>
+            <option value="">Tümü</option>
+            <option value="unread">Okunmadı</option>
+            <option value="read">Okundu</option>
+          </select>
+        </label>
+        {meta.categories.length > 0 ? (
+          <label>
+            Kategori
+            <select name="category" defaultValue={filters.category}>
+              <option value="">Tümü</option>
+              {meta.categories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <button className="secondary-action" type="submit">
+          Filtrele
+        </button>
+      </form>
+      <div className="admin-list">
+        {(messageList?.items ?? []).map((message) => (
+          <UserMessageRow
+            isPending={updateMutation.isPending}
+            key={message.id}
+            message={message}
+            onSelect={() => setSelectedMessageId(message.id)}
+            onStatusChange={(status) => updateMutation.mutate({ id: message.id, status })}
+          />
+        ))}
+      </div>
+      {messageList && messageList.items.length === 0 ? (
+        <div className="admin-empty-state">
+          <strong>Mesaj bulunamadı</strong>
+          <p>Bu filtrelerle listelenecek kullanıcı mesajı yok.</p>
+        </div>
+      ) : null}
+      {messageList ? (
+        <div className="pagination-row">
+          <button
+            className="secondary-action"
+            disabled={filters.page <= 1}
+            onClick={() => setFilters((current) => ({ ...current, page: Math.max(current.page - 1, 1) }))}
+            type="button"
+          >
+            Önceki
+          </button>
+          <span>Sayfa {messageList.page}</span>
+          <button
+            className="secondary-action"
+            disabled={!messageList.hasNextPage}
+            onClick={() => setFilters((current) => ({ ...current, page: current.page + 1 }))}
+            type="button"
+          >
+            Sonraki
+          </button>
+        </div>
+      ) : null}
+      {detailQuery.data ? (
+        <UserMessageDetail
+          isPending={updateMutation.isPending}
+          message={detailQuery.data}
+          onStatusChange={(status) => updateMutation.mutate({ id: detailQuery.data.id, status })}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function UserMessageRow({
+  isPending,
+  message,
+  onSelect,
+  onStatusChange
+}: {
+  isPending: boolean;
+  message: UserMessage;
+  onSelect: () => void;
+  onStatusChange: (status: UserMessageStatus) => void;
+}) {
+  return (
+    <div className="admin-list-row">
+      <div>
+        <strong>{message.category ?? USER_MESSAGE_TYPE_META[message.type].label}</strong>
+        <span>
+          {message.name} · {message.email} · {message.createdAt ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(message.createdAt)) : "Tarih yok"}
+        </span>
+      </div>
+      <span className={`status-pill status-${message.status === "unread" ? "open" : "resolved"}`}>
+        {message.status === "unread" ? "Okunmadı" : "Okundu"}
+      </span>
+      <button className="secondary-action" onClick={onSelect} type="button">
+        Detay
+      </button>
+      <button
+        className={message.status === "unread" ? "secondary-action" : "ghost-action"}
+        disabled={isPending}
+        onClick={() => onStatusChange(message.status === "unread" ? "read" : "unread")}
+        type="button"
+      >
+        {message.status === "unread" ? "Okundu yap" : "Okunmadı yap"}
+      </button>
+    </div>
+  );
+}
+
+function UserMessageDetail({
+  isPending,
+  message,
+  onStatusChange
+}: {
+  isPending: boolean;
+  message: UserMessage;
+  onStatusChange: (status: UserMessageStatus) => void;
+}) {
+  return (
+    <div className="admin-list-item">
+      <div className="section-header compact">
+        <div>
+          <h3>{message.category ?? USER_MESSAGE_TYPE_META[message.type].label}</h3>
+          <span>{message.name}</span>
+        </div>
+        <span className={`status-pill status-${message.status === "unread" ? "open" : "resolved"}`}>
+          {message.status === "unread" ? "Okunmadı" : "Okundu"}
+        </span>
+      </div>
+      <div className="admin-list-row">
+        <div>
+          <strong>Kullanıcı bilgileri</strong>
+          <span>Email: {message.email}</span>
+          <span>Telefon: {message.phone ?? "Yok"}</span>
+        </div>
+        <div>
+          <strong>Sistem bilgileri</strong>
+          <span>App: {message.appVersion ?? "Bilinmiyor"}</span>
+          <span>Sistem: {message.systemInfo ?? "Bilinmiyor"}</span>
+        </div>
+        <div>
+          <strong>Zaman</strong>
+          <span>
+            Gönderim: {message.createdAt ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(message.createdAt)) : "Bilinmiyor"}
+          </span>
+          <span>
+            Okunma: {message.readAt ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(message.readAt)) : "Okunmadı"}
+          </span>
+        </div>
+      </div>
+      <div className="admin-list-item">
+        <strong>Kullanıcı mesajı</strong>
+        <p className="form-help">{message.body}</p>
+      </div>
+      <button
+        className={message.status === "unread" ? "secondary-action" : "ghost-action"}
+        disabled={isPending}
+        onClick={() => onStatusChange(message.status === "unread" ? "read" : "unread")}
+        type="button"
+      >
+        {message.status === "unread" ? "Okundu olarak işaretle" : "Okunmadı olarak işaretle"}
+      </button>
+    </div>
   );
 }
 

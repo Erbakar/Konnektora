@@ -17,6 +17,8 @@ export const eventParticipantStatusSchema = z.enum([
 export const eventParticipantRoleSchema = z.enum(["attendee", "organizer", "manager"]);
 export const reportTargetTypeSchema = z.enum(["event", "tag", "user"]);
 export const reportStatusSchema = z.enum(["open", "reviewing", "resolved", "dismissed"]);
+export const userMessageTypeSchema = z.enum(["faq", "account_freeze", "write_to_us"]);
+export const userMessageStatusSchema = z.enum(["unread", "read"]);
 export const adminPermissionSchema = z.enum([
   "cms.manage",
   "reports.manage",
@@ -25,6 +27,9 @@ export const adminPermissionSchema = z.enum([
   "tags.manage",
   "events.manage",
   "messages.manage",
+  "messages.faq.manage",
+  "messages.account_freeze.manage",
+  "messages.write_to_us.manage",
   "places.manage",
   "comments.manage",
   "media.manage"
@@ -292,6 +297,34 @@ export const moderationDecisionSchema = z.object({
   issuedBy: adminUserSchema.optional().nullable()
 });
 
+export const userMessageSchema = z.object({
+  id: z.string().uuid(),
+  type: userMessageTypeSchema,
+  category: z.string().max(120).nullable(),
+  userId: z.string().uuid().nullable(),
+  name: z.string().min(2).max(160),
+  email: z.string().email(),
+  phone: z.string().max(40).nullable(),
+  body: z.string().min(3).max(5000),
+  status: userMessageStatusSchema,
+  appVersion: z.string().max(80).nullable(),
+  systemInfo: z.string().max(500).nullable(),
+  readAt: z.string().datetime().or(z.date()).nullable(),
+  readById: z.string().uuid().nullable(),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional(),
+  user: adminUserSchema.optional().nullable(),
+  readBy: adminUserSchema.optional().nullable()
+});
+
+export const userMessageListSchema = z.object({
+  items: z.array(userMessageSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+  hasNextPage: z.boolean()
+});
+
 export const reportGroupSchema = z.object({
   targetType: reportTargetTypeSchema,
   targetId: z.string().uuid(),
@@ -319,6 +352,8 @@ export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;
 export type ReportTargetType = z.infer<typeof reportTargetTypeSchema>;
 export type ReportStatus = z.infer<typeof reportStatusSchema>;
+export type UserMessageType = z.infer<typeof userMessageTypeSchema>;
+export type UserMessageStatus = z.infer<typeof userMessageStatusSchema>;
 export type AdminPermission = z.infer<typeof adminPermissionSchema>;
 export type AdminRoleGroup = z.infer<typeof adminRoleGroupSchema>;
 export type CmsCategory = z.infer<typeof cmsCategorySchema>;
@@ -337,6 +372,8 @@ export type ContentReport = z.infer<typeof contentReportSchema>;
 export type ReportRule = z.infer<typeof reportRuleSchema>;
 export type ReportGroupNote = z.infer<typeof reportGroupNoteSchema>;
 export type ModerationDecision = z.infer<typeof moderationDecisionSchema>;
+export type UserMessage = z.infer<typeof userMessageSchema>;
+export type UserMessageList = z.infer<typeof userMessageListSchema>;
 export type ReportGroup = z.infer<typeof reportGroupSchema>;
 export type ReportGroupDetail = z.infer<typeof reportGroupDetailSchema>;
 export type AdminManagedUser = z.infer<typeof adminManagedUserSchema>;

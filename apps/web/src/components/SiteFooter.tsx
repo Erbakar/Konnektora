@@ -27,6 +27,7 @@ export function SiteFooter() {
               GitHub
             </a>
             <Link to="/admin">Admin login</Link>
+            <Link to="/contact">Contact</Link>
             <Link to="/privacy">Privacy</Link>
             <Link to="/terms">Terms</Link>
             <Link to="/cookies">Cookies</Link>

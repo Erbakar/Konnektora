@@ -73,6 +73,17 @@ enum ReportStatus {
   dismissed
 }
 
+enum UserMessageType {
+  faq
+  account_freeze
+  write_to_us
+}
+
+enum UserMessageStatus {
+  unread
+  read
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -97,6 +108,8 @@ model User {
   moderationDecisions ModerationDecision[] @relation("ModerationDecisionUser")
   issuedModerationDecisions ModerationDecision[] @relation("ModerationDecisionActor")
   emailTokens EmailToken[]
+  userMessages UserMessage[] @relation("UserMessageUser")
+  readUserMessages UserMessage[] @relation("UserMessageReadBy")
 
   @@map("users")
 }
@@ -396,4 +409,30 @@ model EmailToken {
   @@index([userId, type])
   @@index([expiresAt])
   @@map("email_tokens")
+}
+
+model UserMessage {
+  id          String            @id @default(uuid())
+  type        UserMessageType
+  category    String?
+  userId      String?           @map("user_id")
+  name        String
+  email       String
+  phone       String?
+  body        String
+  status      UserMessageStatus @default(unread)
+  appVersion  String?           @map("app_version")
+  systemInfo  String?           @map("system_info")
+  readAt      DateTime?         @map("read_at")
+  readById    String?           @map("read_by")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  user   User? @relation("UserMessageUser", fields: [userId], references: [id], onDelete: SetNull)
+  readBy User? @relation("UserMessageReadBy", fields: [readById], references: [id], onDelete: SetNull)
+
+  @@index([type, status, createdAt])
+  @@index([email])
+  @@index([userId])
+  @@map("user_messages")
 }
