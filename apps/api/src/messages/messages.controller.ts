@@ -46,8 +46,8 @@ export class MessagesController {
   @Get("admin/messages/:id")
   @UseGuards(AdminGuard)
   @RequirePermissions("messages.manage")
-  getMessage(@Param("id") id: string) {
-    return this.messagesService.getAdminMessage(id);
+  getMessage(@Param("id") id: string, @CurrentUser() admin: User) {
+    return this.messagesService.getAdminMessage(id, admin);
   }
 
   @Patch("admin/messages/:id")

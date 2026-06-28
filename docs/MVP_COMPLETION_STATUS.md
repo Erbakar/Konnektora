@@ -14,6 +14,7 @@ Güncel durum: önerilen büyük iş listesi tamamlandı.
 - Ceza / müdahale sistemi
 - İlgi alanı detay yönetimi
 - Email token akışları
+- Kullanıcılardan mesajlar: FAQ, hesap dondurma ve write to us mesajları için public form, admin liste/detay ekranı, okundu/okunmadı yönetimi ve ayrı rol yetkileri
 
 ## Deploy Öncesi Zorunlu Kontroller
 

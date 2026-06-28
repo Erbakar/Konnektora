@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, UserMessageStatus, UserMessageType } from "@prisma/client";
 import { hash } from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -405,6 +405,52 @@ async function main() {
     const usageCount = await prisma.eventTag.count({ where: { tagId: tag.id } });
     await prisma.tag.update({ where: { id: tag.id }, data: { usageCount } });
   }
+
+  const seededUserMessages = [
+    {
+      id: "seed-user-message-faq",
+      type: UserMessageType.faq,
+      category: "Etkinlik oluşturma",
+      name: "Elif Demir",
+      email: "elif.demo@konnektora.local",
+      phone: "+90 555 010 1001",
+      body: "Etkinlik oluştururken davetli listesini sonradan toplu güncelleyebilir miyim?",
+      status: UserMessageStatus.unread
+    },
+    {
+      id: "seed-user-message-account-freeze",
+      type: UserMessageType.account_freeze,
+      category: "Geçici dondurma",
+      userId: demoUser.id,
+      name: "Konnektora User",
+      email: "user@konnektora.local",
+      phone: "+90 555 010 1002",
+      body: "Hesabımı birkaç hafta dondurmak istiyorum. Etkinlik katılım geçmişim korunacak mı?",
+      status: UserMessageStatus.read,
+      readAt: new Date(Date.now() - day),
+      readById: admin.id
+    },
+    {
+      id: "seed-user-message-write-to-us",
+      type: UserMessageType.write_to_us,
+      category: "Geri bildirim",
+      name: "Marcus Lee",
+      email: "marcus.demo@konnektora.local",
+      phone: "+44 20 0000 1003",
+      body: "London community launch için partnerlik ve özel event akışı hakkında görüşmek istiyoruz.",
+      status: UserMessageStatus.unread,
+      appVersion: "web-mvp",
+      systemInfo: "Seed message"
+    }
+  ];
+
+  await prisma.userMessage.deleteMany({
+    where: { id: { in: seededUserMessages.map((message) => message.id) } }
+  });
+
+  await prisma.userMessage.createMany({
+    data: seededUserMessages
+  });
 }
 
 main()

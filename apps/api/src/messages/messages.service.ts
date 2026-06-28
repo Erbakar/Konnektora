@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { Prisma, User, UserMessageStatus, UserMessageType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { AdminMessageQueryDto, CreateUserMessageDto, UpdateUserMessageDto } from "./messages.dto";
@@ -7,6 +7,12 @@ const MESSAGE_INCLUDE = {
   user: { select: { id: true, email: true, name: true, role: true, status: true } },
   readBy: { select: { id: true, email: true, name: true, role: true, status: true } }
 } satisfies Prisma.UserMessageInclude;
+
+const MESSAGE_PERMISSION_BY_TYPE = {
+  [UserMessageType.faq]: "messages.faq.manage",
+  [UserMessageType.account_freeze]: "messages.account_freeze.manage",
+  [UserMessageType.write_to_us]: "messages.write_to_us.manage"
+} as const;
 
 @Injectable()
 export class MessagesService {
@@ -75,7 +81,7 @@ export class MessagesService {
     };
   }
 
-  async getAdminMessage(id: string) {
+  async getAdminMessage(id: string, admin?: User) {
     const message = await this.prisma.userMessage.findUnique({
       where: { id },
       include: MESSAGE_INCLUDE
@@ -85,11 +91,15 @@ export class MessagesService {
       throw new NotFoundException("Mesaj bulunamadı.");
     }
 
+    if (admin) {
+      await this.assertMessagePermission(admin, message.type);
+    }
+
     return message;
   }
 
   async updateAdminMessage(id: string, input: UpdateUserMessageDto, admin: User) {
-    await this.getAdminMessage(id);
+    await this.getAdminMessage(id, admin);
 
     return this.prisma.userMessage.update({
       where: { id },
@@ -107,5 +117,24 @@ export class MessagesService {
             },
       include: MESSAGE_INCLUDE
     });
+  }
+
+  private async assertMessagePermission(admin: User, type: UserMessageType) {
+    if (admin.role === "super_admin") {
+      return;
+    }
+
+    const adminUser = await this.prisma.user.findUnique({
+      where: { id: admin.id },
+      include: { adminRoleGroup: true }
+    });
+    const permissions = new Set(adminUser?.adminRoleGroup?.permissions ?? []);
+    const requiredPermission = MESSAGE_PERMISSION_BY_TYPE[type];
+
+    if (permissions.has(requiredPermission) || permissions.has("messages.manage")) {
+      return;
+    }
+
+    throw new UnauthorizedException("Bu mesaj grubu için yetki gerekli.");
   }
 }
