@@ -4,26 +4,29 @@ import { PrismaClient } from "@prisma/client";
 
 function resolveDatabaseUrl() {
   if (process.env.DATABASE_URL) {
-    return;
+    return process.env.DATABASE_URL;
   }
 
   if (process.env.NETLIFY_DB_URL) {
     process.env.DATABASE_URL = process.env.NETLIFY_DB_URL;
-    return;
+    return process.env.NETLIFY_DB_URL;
   }
 
   try {
-    process.env.DATABASE_URL = getConnectionString();
+    const databaseUrl = getConnectionString();
+    process.env.DATABASE_URL = databaseUrl;
+    return databaseUrl;
   } catch {
     // Prisma will surface the missing DATABASE_URL error with schema context.
+    return undefined;
   }
 }
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
-    resolveDatabaseUrl();
-    super();
+    const databaseUrl = resolveDatabaseUrl();
+    super(databaseUrl ? { datasourceUrl: databaseUrl } : undefined);
   }
 
   async onModuleInit() {

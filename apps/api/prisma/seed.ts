@@ -2,19 +2,28 @@ import { getConnectionString } from "@netlify/database";
 import { PrismaClient, UserMessageStatus, UserMessageType } from "@prisma/client";
 import { hash } from "bcryptjs";
 
-if (!process.env.DATABASE_URL && process.env.NETLIFY_DB_URL) {
-  process.env.DATABASE_URL = process.env.NETLIFY_DB_URL;
-}
+function resolveDatabaseUrl() {
+  if (process.env.DATABASE_URL) {
+    return process.env.DATABASE_URL;
+  }
 
-if (!process.env.DATABASE_URL) {
+  if (process.env.NETLIFY_DB_URL) {
+    process.env.DATABASE_URL = process.env.NETLIFY_DB_URL;
+    return process.env.NETLIFY_DB_URL;
+  }
+
   try {
-    process.env.DATABASE_URL = getConnectionString();
+    const databaseUrl = getConnectionString();
+    process.env.DATABASE_URL = databaseUrl;
+    return databaseUrl;
   } catch {
     // Prisma will report the missing DATABASE_URL with schema context.
+    return undefined;
   }
 }
 
-const prisma = new PrismaClient();
+const databaseUrl = resolveDatabaseUrl();
+const prisma = new PrismaClient(databaseUrl ? { datasourceUrl: databaseUrl } : undefined);
 
 async function main() {
   const admin = await prisma.user.upsert({
