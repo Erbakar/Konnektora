@@ -1,8 +1,17 @@
+import { getConnectionString } from "@netlify/database";
 import { PrismaClient, UserMessageStatus, UserMessageType } from "@prisma/client";
 import { hash } from "bcryptjs";
 
 if (!process.env.DATABASE_URL && process.env.NETLIFY_DB_URL) {
   process.env.DATABASE_URL = process.env.NETLIFY_DB_URL;
+}
+
+if (!process.env.DATABASE_URL) {
+  try {
+    process.env.DATABASE_URL = getConnectionString();
+  } catch {
+    // Prisma will report the missing DATABASE_URL with schema context.
+  }
 }
 
 const prisma = new PrismaClient();

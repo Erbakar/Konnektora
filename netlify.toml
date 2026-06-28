@@ -1,5 +1,5 @@
 [build]
-  command = "export DATABASE_URL=\"${DATABASE_URL:-${NETLIFY_DB_URL:-postgresql://konnektora:konnektora@localhost:5432/konnektora}}\" && npm run db:generate && if [ -n \"$NETLIFY_DB_URL\" ]; then npm run db:deploy; else echo \"Skipping db:deploy because NETLIFY_DB_URL is not available\"; fi && npm run build -w packages/shared && npm run build -w apps/api && npm run build -w apps/web"
+  command = "node scripts/with-database-url.cjs npm run db:generate && node scripts/with-database-url.cjs --skip-if-missing npm run db:deploy && npm run build -w packages/shared && npm run build -w apps/api && npm run build -w apps/web"
   publish = "apps/web/dist"
   functions = "netlify/functions"
 

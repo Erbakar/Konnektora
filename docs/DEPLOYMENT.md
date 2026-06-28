@@ -39,9 +39,9 @@ EMAIL_FROM=Konnektora <noreply@your-domain.com>
 RESEND_API_KEY=<resend-api-key>
 ```
 
-Netlify Database aktif edildiğinde connection string `NETLIFY_DB_URL` olarak sağlanır. API runtime bu değeri otomatik `DATABASE_URL` fallback'i olarak kullanır; harici Postgres kullanılmayacaksa `DATABASE_URL` manuel tanımlamak gerekmez.
+Netlify Database aktif edildiğinde connection string `@netlify/database` üzerinden sağlanır. API runtime bunu otomatik `DATABASE_URL` fallback'i olarak kullanır; harici Postgres kullanılmayacaksa `DATABASE_URL` manuel tanımlamak gerekmez.
 
-Build sırasında `NETLIFY_DB_URL` varsa Prisma migration otomatik çalışır. İlk seed için Netlify Functions tek başına iyi bir one-off job ortamı değildir. En pratik seçenek lokalden veya Netlify CLI ile production database URL'ine karşı çalıştırmaktır:
+Build sırasında Netlify Database connection string'i alınabiliyorsa Prisma migration otomatik çalışır. İlk seed için Netlify Functions tek başına iyi bir one-off job ortamı değildir. En pratik seçenek lokalden veya Netlify CLI ile production database URL'ine karşı çalıştırmaktır:
 
 ```bash
 NETLIFY_DB_URL="<production-postgres-url>" npm run db:seed
