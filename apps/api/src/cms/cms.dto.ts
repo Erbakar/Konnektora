@@ -1,4 +1,5 @@
-import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
+import { CmsCategoryType } from "@prisma/client";
+import { IsEnum, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
 
 export class CreateCmsCategoryDto {
   @IsString()
@@ -10,6 +11,10 @@ export class CreateCmsCategoryDto {
   @IsString()
   @MaxLength(500)
   description?: string;
+
+  @IsOptional()
+  @IsEnum(CmsCategoryType)
+  type?: CmsCategoryType;
 }
 
 export class UpdateCmsCategoryDto {
@@ -23,6 +28,10 @@ export class UpdateCmsCategoryDto {
   @IsString()
   @MaxLength(500)
   description?: string;
+
+  @IsOptional()
+  @IsEnum(CmsCategoryType)
+  type?: CmsCategoryType;
 
   @IsOptional()
   @IsString()

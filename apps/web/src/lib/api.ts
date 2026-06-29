@@ -3,6 +3,10 @@ import {
   adminManagedUserDetailSchema,
   adminManagedUserListSchema,
   adminManagedUserSchema,
+  adminCommentSchema,
+  adminMediaSchema,
+  adminPlaceSchema,
+  adminPrivateMessageSchema,
   adminTagDetailSchema,
   adminRoleGroupSchema,
   announcementListSchema,
@@ -24,10 +28,14 @@ import {
   userMessageListSchema,
   userMessageSchema,
   type AdminDashboard,
+  type AdminComment,
   type AdminManagedUser,
   type AdminManagedUserDetail,
   type AdminManagedUserList,
+  type AdminMedia,
   type AdminPermission,
+  type AdminPlace,
+  type AdminPrivateMessage,
   type AdminRoleGroup,
   type AdminTagDetail,
   type Announcement,
@@ -85,6 +93,10 @@ const MOCK_FAQS_KEY = "konnektora_mock_faqs";
 const MOCK_ANNOUNCEMENTS_KEY = "konnektora_mock_announcements";
 const MOCK_POLICIES_KEY = "konnektora_mock_policies";
 const MOCK_USER_MESSAGES_KEY = "konnektora_mock_user_messages";
+const MOCK_PLACES_KEY = "konnektora_mock_places";
+const MOCK_MEDIA_KEY = "konnektora_mock_media";
+const MOCK_COMMENTS_KEY = "konnektora_mock_comments";
+const MOCK_PRIVATE_MESSAGES_KEY = "konnektora_mock_private_messages";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -95,25 +107,57 @@ type MockUser = {
   name: string;
   email: string;
   password: string;
-  status?: "active" | "invited" | "pending" | "disabled";
+  username?: string | null;
+  status?: AdminManagedUser["status"];
   role?: "user" | "admin" | "super_admin";
   adminRoleGroupId?: string | null;
+  accountType?: string;
+  phone?: string | null;
+  country?: string | null;
+  city?: string | null;
+  district?: string | null;
+  address?: string | null;
+  gender?: string | null;
+  birthDate?: string | null;
+  website?: string | null;
+  companyName?: string | null;
+  tradeName?: string | null;
+  companyType?: string | null;
+  businessCategory?: string | null;
+  followerCount?: number;
+  followingCount?: number;
+  lastOnlineAt?: string | null;
+  emailVerified?: boolean;
+  invitedById?: string | null;
+  penaltyScoreLastYear?: number;
+  penaltyScoreAllTime?: number;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export const adminPermissionOptions: Array<{ value: AdminPermission; label: string }> = [
-  { value: "cms.manage", label: "CMS" },
-  { value: "reports.manage", label: "Şikayetler" },
-  { value: "users.manage", label: "Üyeler" },
-  { value: "roles.manage", label: "Rol/Yetki" },
-  { value: "tags.manage", label: "İlgi alanları" },
-  { value: "events.manage", label: "Etkinlikler" },
-  { value: "messages.faq.manage", label: "Kullanıcı mesajları - FAQ" },
-  { value: "messages.account_freeze.manage", label: "Kullanıcı mesajları - Hesap dondurma" },
-  { value: "messages.write_to_us.manage", label: "Kullanıcı mesajları - Write to us" },
-  { value: "places.manage", label: "Mekanlar" },
-  { value: "comments.manage", label: "Yorumlar" },
-  { value: "media.manage", label: "Medya" }
+  { value: "cms.categories.manage", label: "CMS Kategori Yönetimi" },
+  { value: "cms.faq.manage", label: "CMS SSS Yönetimi" },
+  { value: "cms.announcements.manage", label: "CMS Duyuru Yönetimi" },
+  { value: "cms.policies.manage", label: "CMS Diğer İçeriklerin Yönetimi" },
+  { value: "reports.manage", label: "Şikayetlerin Yönetimi" },
+  { value: "users.manage", label: "Üyelerin Yönetimi" },
+  { value: "roles.manage", label: "Üyelerin Rol Yönetimi" },
+  { value: "tags.manage", label: "İlgi Alanı Yönetimi" },
+  { value: "events.manage", label: "Etkinlik Yönetimi" },
+  { value: "places.manage", label: "Mekan Yönetimi" },
+  { value: "comments.manage", label: "Yorum Yönetimi" },
+  { value: "media.manage", label: "Medya Yönetimi" },
+  { value: "messages.faq.manage", label: "Kullanıcılardan Mesajlar - FAQ mesajları" },
+  { value: "messages.account_freeze.manage", label: "Kullanıcılardan Mesajlar - Hesap dondurma mesajları" },
+  { value: "messages.write_to_us.manage", label: "Kullanıcılardan Mesajlar - Write to us mesajları" }
 ];
+
+type CmsCategoryInput = {
+  name: string;
+  description?: string;
+  type?: CmsCategory["type"];
+};
 
 type RequestOptions = RequestInit & {
   auth?: AuthMode;
@@ -306,6 +350,54 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(updateMockUserMessage(pathname.slice("/admin/messages/".length), parseBody<{ status: UserMessageStatus }>(options)));
   }
 
+  if (pathname === "/admin/content/places" && method === "GET") {
+    return schema.parse(listMockPlaces(new URLSearchParams(queryString)));
+  }
+
+  if (pathname.startsWith("/admin/content/places/") && method === "GET") {
+    return schema.parse(getMockPlace(pathname.slice("/admin/content/places/".length)));
+  }
+
+  if (pathname.startsWith("/admin/content/places/") && method === "PATCH") {
+    return schema.parse(updateMockContentItem(MOCK_PLACES_KEY, pathname.slice("/admin/content/places/".length), parseBody<{ status: string }>(options)));
+  }
+
+  if (pathname === "/admin/content/media" && method === "GET") {
+    return schema.parse(listMockMedia(new URLSearchParams(queryString)));
+  }
+
+  if (pathname.startsWith("/admin/content/media/") && method === "GET") {
+    return schema.parse(getMockMedia(pathname.slice("/admin/content/media/".length)));
+  }
+
+  if (pathname.startsWith("/admin/content/media/") && method === "PATCH") {
+    return schema.parse(updateMockContentItem(MOCK_MEDIA_KEY, pathname.slice("/admin/content/media/".length), parseBody<{ status: string }>(options)));
+  }
+
+  if (pathname === "/admin/content/comments" && method === "GET") {
+    return schema.parse(listMockComments(new URLSearchParams(queryString)));
+  }
+
+  if (pathname.startsWith("/admin/content/comments/") && method === "GET") {
+    return schema.parse(getMockComment(pathname.slice("/admin/content/comments/".length)));
+  }
+
+  if (pathname.startsWith("/admin/content/comments/") && method === "PATCH") {
+    return schema.parse(updateMockContentItem(MOCK_COMMENTS_KEY, pathname.slice("/admin/content/comments/".length), parseBody<{ status: string }>(options)));
+  }
+
+  if (pathname === "/admin/content/private-messages" && method === "GET") {
+    return schema.parse(listMockPrivateMessages(new URLSearchParams(queryString)));
+  }
+
+  if (pathname.startsWith("/admin/content/private-messages/") && method === "GET") {
+    return schema.parse(getMockPrivateMessage(pathname.slice("/admin/content/private-messages/".length)));
+  }
+
+  if (pathname.startsWith("/admin/content/private-messages/") && method === "PATCH") {
+    return schema.parse(updateMockContentItem(MOCK_PRIVATE_MESSAGES_KEY, pathname.slice("/admin/content/private-messages/".length), parseBody<{ status: string }>(options)));
+  }
+
   if (pathname === "/tags" && method === "POST" && options.auth === "user") {
     return schema.parse(createMockTag(parseBody<{ name: string; description?: string }>(options)));
   }
@@ -366,13 +458,18 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   }
 
   if (pathname === "/admin/cms/categories" && method === "POST") {
-    return schema.parse(createMockCmsCategory(parseBody<{ name: string; description?: string }>(options)));
+    return schema.parse(createMockCmsCategory(parseBody<CmsCategoryInput>(options)));
   }
 
   if (pathname.startsWith("/admin/cms/categories/") && method === "PATCH") {
     return schema.parse(
       updateMockCmsCategory(pathname.slice("/admin/cms/categories/".length), parseBody<Partial<CmsCategory>>(options))
     );
+  }
+
+  if (pathname.startsWith("/admin/cms/categories/") && method === "DELETE") {
+    deleteMockCmsCategory(pathname.slice("/admin/cms/categories/".length));
+    return schema.parse({ ok: true });
   }
 
   if (pathname === "/admin/cms/faqs" && method === "GET") {
@@ -385,6 +482,11 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname.startsWith("/admin/cms/faqs/") && method === "PATCH") {
     return schema.parse(updateMockFaq(pathname.slice("/admin/cms/faqs/".length), parseBody<Partial<FaqInput> & { status?: string }>(options)));
+  }
+
+  if (pathname.startsWith("/admin/cms/faqs/") && method === "DELETE") {
+    deleteMockFaq(pathname.slice("/admin/cms/faqs/".length));
+    return schema.parse({ ok: true });
   }
 
   if (pathname === "/admin/cms/announcements" && method === "GET") {
@@ -821,6 +923,144 @@ function updateMockUserMessage(id: string, input: { status: UserMessageStatus })
   return updatedMessage;
 }
 
+function basicMockUser(id?: string | null) {
+  const user = id ? getAllMockUsers().find((item) => item.id === id) : null;
+  return user ? { id: user.id, email: user.email, name: user.name, role: user.role ?? "user", status: user.status ?? "active" } : null;
+}
+
+function defaultMockPlaces(): AdminPlace[] {
+  const now = new Date().toISOString();
+  return [
+    {
+      id: "60000000-6000-4000-8000-000000000001",
+      name: "Konnektora Hub Berlin",
+      slug: "konnektora-hub-berlin",
+      description: "Community meetup venue",
+      status: "active",
+      coverImageUrl: null,
+      country: "Germany",
+      city: "Berlin",
+      address: "Mitte",
+      followerCount: 42,
+      inviteCount: 8,
+      createdById: "88888888-8888-4888-8888-888888888888",
+      updatedById: null,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: basicMockUser("88888888-8888-4888-8888-888888888888"),
+      updatedBy: null,
+      reportCount: 0
+    }
+  ];
+}
+
+function filterMockAdminContent<T extends { status: string }>(items: T[], params: URLSearchParams): T[] {
+  const q = params.get("q")?.toLowerCase().trim();
+  const status = params.get("status");
+  return items.filter((item) => (!status || item.status === status) && (!q || JSON.stringify(item).toLowerCase().includes(q)));
+}
+
+function listMockPlaces(params: URLSearchParams): AdminPlace[] {
+  const stored = readStorage<AdminPlace[]>(MOCK_PLACES_KEY, []);
+  return filterMockAdminContent(stored.length ? stored : defaultMockPlaces(), params);
+}
+
+function getMockPlace(id: string): AdminPlace {
+  const item = listMockPlaces(new URLSearchParams()).find((place) => place.id === id);
+  if (!item) throw new Error("Mock place not found");
+  return { ...item, reportCount: listMockReports().filter((report) => report.targetType === "place" && report.targetId === id).length };
+}
+
+function listMockMedia(params: URLSearchParams): AdminMedia[] {
+  const now = new Date().toISOString();
+  const items = readStorage<AdminMedia[]>(MOCK_MEDIA_KEY, [
+    {
+      id: "61000000-6000-4000-8000-000000000001",
+      url: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622",
+      type: "image",
+      status: "active",
+      contentType: "event",
+      contentId: "mock-event",
+      uploadedById: "88888888-8888-4888-8888-888888888888",
+      createdAt: now,
+      updatedAt: now,
+      uploadedBy: basicMockUser("88888888-8888-4888-8888-888888888888"),
+      reportCount: 0
+    }
+  ]);
+  return filterMockAdminContent(items, params);
+}
+
+function getMockMedia(id: string): AdminMedia {
+  const item = listMockMedia(new URLSearchParams()).find((media) => media.id === id);
+  if (!item) throw new Error("Mock media not found");
+  return { ...item, reportCount: listMockReports().filter((report) => report.targetType === "media" && report.targetId === id).length };
+}
+
+function listMockComments(params: URLSearchParams): AdminComment[] {
+  const now = new Date().toISOString();
+  const items = readStorage<AdminComment[]>(MOCK_COMMENTS_KEY, [
+    {
+      id: "62000000-6000-4000-8000-000000000001",
+      targetType: "event",
+      targetId: "mock-event",
+      parentId: null,
+      authorId: "88888888-8888-4888-8888-888888888888",
+      body: "Harika bir etkinlik gibi görünüyor.",
+      status: "active",
+      likeCount: 3,
+      createdAt: now,
+      updatedAt: now,
+      author: basicMockUser("88888888-8888-4888-8888-888888888888"),
+      parent: null,
+      _count: { replies: 0 },
+      reportCount: 0
+    }
+  ]);
+  return filterMockAdminContent(items, params);
+}
+
+function getMockComment(id: string): AdminComment {
+  const item = listMockComments(new URLSearchParams()).find((comment) => comment.id === id);
+  if (!item) throw new Error("Mock comment not found");
+  return { ...item, reportCount: listMockReports().filter((report) => ["tag_comment", "event_comment", "place_comment", "comment_reply"].includes(report.targetType) && report.targetId === id).length };
+}
+
+function listMockPrivateMessages(params: URLSearchParams): AdminPrivateMessage[] {
+  const now = new Date().toISOString();
+  const items = readStorage<AdminPrivateMessage[]>(MOCK_PRIVATE_MESSAGES_KEY, [
+    {
+      id: "63000000-6000-4000-8000-000000000001",
+      senderId: "88888888-8888-4888-8888-888888888888",
+      recipientId: "99999999-9999-4999-8999-999999999999",
+      body: "Merhaba, etkinlik hakkında konuşabilir miyiz?",
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+      sender: basicMockUser("88888888-8888-4888-8888-888888888888"),
+      recipient: basicMockUser("99999999-9999-4999-8999-999999999999"),
+      reportCount: 0
+    }
+  ]);
+  return filterMockAdminContent(items, params);
+}
+
+function getMockPrivateMessage(id: string): AdminPrivateMessage {
+  const item = listMockPrivateMessages(new URLSearchParams()).find((message) => message.id === id);
+  if (!item) throw new Error("Mock private message not found");
+  return { ...item, reportCount: listMockReports().filter((report) => report.targetType === "private_message" && report.targetId === id).length };
+}
+
+function updateMockContentItem<T extends { id: string; status: string; updatedAt?: string }>(key: string, id: string, input: { status: string }): T {
+  const fallback = key === MOCK_PLACES_KEY ? defaultMockPlaces() : [];
+  const items = readStorage<T[]>(key, fallback as unknown as T[]);
+  const updated = items.map((item) => (item.id === id ? { ...item, status: input.status, updatedAt: new Date().toISOString() } : item));
+  const item = updated.find((entry) => entry.id === id);
+  if (!item) throw new Error("Mock content item not found");
+  writeStorage(key, updated);
+  return item;
+}
+
 function requestMockAttendance(eventId: string): EventParticipant {
   const user = getUserSession();
 
@@ -1110,7 +1350,7 @@ function applyMockModerationAction(targetType: ReportTargetType, targetId: strin
     const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
     writeStorage(
       MOCK_USERS_KEY,
-      users.map((user) => (user.id === targetId ? { ...user, status: "disabled" } : user))
+      users.map((user) => (user.id === targetId ? { ...user, status: action === "ban_user" ? "banned" : "suspended" } : user))
     );
   }
 }
@@ -1232,17 +1472,36 @@ function getAllMockUsers(): MockUser[] {
       id: "99999999-9999-4999-8999-999999999999",
       email: "admin@konnektora.local",
       name: "Konnektora Admin",
+      username: "konnektora_admin",
       password: "ChangeMe123!",
       role: "super_admin",
-      status: "active"
+      status: "active",
+      accountType: "individual",
+      country: "Türkiye",
+      city: "Istanbul",
+      phone: "+90 555 000 0001",
+      emailVerified: true,
+      followerCount: 12,
+      followingCount: 4,
+      lastOnlineAt: new Date().toISOString()
     },
     {
       id: "88888888-8888-4888-8888-888888888888",
       email: "user@konnektora.local",
       name: "Konnektora User",
+      username: "konnektora_user",
       password: "ChangeMe123!",
       role: "user",
-      status: "active"
+      status: "active",
+      accountType: "individual",
+      country: "Germany",
+      city: "Berlin",
+      gender: "Belirtilmemis",
+      phone: "+49 555 000 0002",
+      emailVerified: true,
+      followerCount: 8,
+      followingCount: 21,
+      lastOnlineAt: new Date().toISOString()
     }
   ];
   const storedIds = new Set(storedUsers.map((user) => user.id));
@@ -1307,17 +1566,19 @@ function listMockCmsCategories(): CmsCategory[] {
 
   return readStorage<CmsCategory[]>(MOCK_CMS_CATEGORIES_KEY, []).map((category) => ({
     ...category,
+    type: category.type ?? "faq",
     _count: { faqs: faqs.filter((faq) => faq.categoryId === category.id).length }
   }));
 }
 
-function createMockCmsCategory(input: { name: string; description?: string }): CmsCategory {
+function createMockCmsCategory(input: CmsCategoryInput): CmsCategory {
   const categories = listMockCmsCategories();
   const category: CmsCategory = {
     id: createId(),
     name: input.name.trim(),
     slug: uniqueSlug(input.name, categories.map((item) => item.slug)),
     description: input.description?.trim() || null,
+    type: input.type ?? "faq",
     status: "active",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -1337,6 +1598,7 @@ function updateMockCmsCategory(id: string, input: Partial<CmsCategory>): CmsCate
           name: input.name?.trim() ?? category.name,
           slug: input.name ? uniqueSlug(input.name, categories.filter((item) => item.id !== id).map((item) => item.slug)) : category.slug,
           description: input.description === undefined ? category.description : input.description?.trim() || null,
+          type: input.type ?? category.type,
           status: parseCmsStatus(input.status, category.status),
           updatedAt: new Date().toISOString()
         }
@@ -1350,6 +1612,12 @@ function updateMockCmsCategory(id: string, input: Partial<CmsCategory>): CmsCate
 
   writeStorage(MOCK_CMS_CATEGORIES_KEY, updatedCategories);
   return updatedCategory;
+}
+
+function deleteMockCmsCategory(id: string) {
+  const categories = listMockCmsCategories();
+  writeStorage(MOCK_CMS_CATEGORIES_KEY, categories.filter((category) => category.id !== id));
+  writeStorage(MOCK_FAQS_KEY, readStorage<Faq[]>(MOCK_FAQS_KEY, []).filter((faq) => faq.categoryId !== id));
 }
 
 function listMockFaqs(): Faq[] {
@@ -1412,6 +1680,10 @@ function updateMockFaq(id: string, input: Partial<FaqInput> & { status?: string 
 
   writeStorage(MOCK_FAQS_KEY, updatedFaqs);
   return updatedFaq;
+}
+
+function deleteMockFaq(id: string) {
+  writeStorage(MOCK_FAQS_KEY, readStorage<Faq[]>(MOCK_FAQS_KEY, []).filter((faq) => faq.id !== id));
 }
 
 function listMockAnnouncements(): Announcement[] {
@@ -1556,12 +1828,33 @@ function toAdminManagedUser(user: MockUser): AdminManagedUser {
     id: user.id,
     email: user.email,
     name: user.name,
+    username: user.username ?? user.name.toLowerCase().replaceAll(" ", "_"),
     role: user.role ?? "user",
     status: user.status ?? "active",
+    accountType: user.accountType ?? "individual",
+    phone: user.phone ?? null,
+    country: user.country ?? null,
+    city: user.city ?? null,
+    district: user.district ?? null,
+    address: user.address ?? null,
+    gender: user.gender ?? null,
+    birthDate: user.birthDate ?? null,
+    website: user.website ?? null,
+    companyName: user.companyName ?? null,
+    tradeName: user.tradeName ?? null,
+    companyType: user.companyType ?? null,
+    businessCategory: user.businessCategory ?? null,
+    followerCount: user.followerCount ?? 0,
+    followingCount: user.followingCount ?? 0,
+    lastOnlineAt: user.lastOnlineAt ?? null,
+    emailVerified: user.emailVerified ?? false,
+    invitedById: user.invitedById ?? null,
+    penaltyScoreLastYear: user.penaltyScoreLastYear ?? 0,
+    penaltyScoreAllTime: user.penaltyScoreAllTime ?? 0,
     adminRoleGroupId: user.adminRoleGroupId ?? null,
     adminRoleGroup,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: user.createdAt ?? new Date().toISOString(),
+    updatedAt: user.updatedAt ?? new Date().toISOString(),
     _count: {
       createdEvents: events.length,
       eventParticipations: participants.length,
@@ -1574,15 +1867,27 @@ function listMockAdminUsers(params: URLSearchParams): AdminManagedUserList {
   const q = params.get("q")?.toLowerCase().trim();
   const status = params.get("status");
   const role = params.get("role");
+  const accountType = params.get("accountType");
+  const country = params.get("country")?.toLowerCase().trim();
+  const city = params.get("city")?.toLowerCase().trim();
+  const gender = params.get("gender");
+  const email = params.get("email")?.toLowerCase().trim();
+  const phone = params.get("phone")?.toLowerCase().trim();
   const page = Math.max(Number(params.get("page") || "1"), 1);
   const pageSize = Math.min(Math.max(Number(params.get("pageSize") || "25"), 1), 100);
   const users = getAllMockUsers()
     .map(toAdminManagedUser)
     .filter(
       (user) =>
-        (!q || [user.name, user.email].join(" ").toLowerCase().includes(q)) &&
+        (!q || [user.username, user.name, user.email, user.phone, user.country, user.city, user.companyName, user.tradeName].join(" ").toLowerCase().includes(q)) &&
         (!status || user.status === status) &&
-        (!role || user.role === role)
+        (!role || user.role === role) &&
+        (!accountType || user.accountType === accountType) &&
+        (!country || (user.country ?? "").toLowerCase().includes(country)) &&
+        (!city || (user.city ?? "").toLowerCase().includes(city)) &&
+        (!gender || user.gender === gender) &&
+        (!email || user.email.toLowerCase().includes(email)) &&
+        (!phone || (user.phone ?? "").toLowerCase().includes(phone))
     );
   const start = (page - 1) * pageSize;
 
@@ -1613,7 +1918,15 @@ function getMockAdminUser(id: string): AdminManagedUserDetail {
       submittedReports: managedUser._count?.submittedReports ?? 0,
       resolvedReports: readStorage<ContentReport[]>(MOCK_REPORTS_KEY, []).filter((report) => report.resolvedById === id).length
     },
-    interestTags: getTagsByIds(allInterests[id] ?? [])
+    interestTags: getTagsByIds(allInterests[id] ?? []),
+    invitedBy: (() => {
+      const inviter = managedUser.invitedById ? getAllMockUsers().find((item) => item.id === managedUser.invitedById) : null;
+      return inviter ? { id: inviter.id, email: inviter.email, name: inviter.name, role: inviter.role ?? "user", status: inviter.status ?? "active" } : null;
+    })(),
+    invitedUsers: getAllMockUsers()
+      .filter((item) => item.invitedById === id)
+      .slice(0, 20)
+      .map((item) => ({ id: item.id, email: item.email, name: item.name, role: item.role ?? "user", status: item.status ?? "active" }))
   };
 }
 
@@ -1627,10 +1940,31 @@ function updateMockAdminUser(id: string, input: Partial<AdminManagedUser>): Admi
 
   const updatedUser: MockUser = {
     ...existing,
+    username: input.username === undefined ? existing.username : input.username ?? null,
+    name: input.name ?? existing.name,
+    email: input.email ?? existing.email,
     status: input.status ?? existing.status,
     role: input.role ?? existing.role,
+    accountType: input.accountType ?? existing.accountType,
+    phone: input.phone === undefined ? existing.phone : input.phone ?? null,
+    country: input.country === undefined ? existing.country : input.country ?? null,
+    city: input.city === undefined ? existing.city : input.city ?? null,
+    district: input.district === undefined ? existing.district : input.district ?? null,
+    address: input.address === undefined ? existing.address : input.address ?? null,
+    gender: input.gender === undefined ? existing.gender : input.gender ?? null,
+    birthDate: input.birthDate === undefined ? existing.birthDate : input.birthDate ? String(input.birthDate) : null,
+    website: input.website === undefined ? existing.website : input.website ?? null,
+    companyName: input.companyName === undefined ? existing.companyName : input.companyName ?? null,
+    tradeName: input.tradeName === undefined ? existing.tradeName : input.tradeName ?? null,
+    companyType: input.companyType === undefined ? existing.companyType : input.companyType ?? null,
+    businessCategory: input.businessCategory === undefined ? existing.businessCategory : input.businessCategory ?? null,
+    followerCount: input.followerCount ?? existing.followerCount,
+    followingCount: input.followingCount ?? existing.followingCount,
+    penaltyScoreLastYear: input.penaltyScoreLastYear ?? existing.penaltyScoreLastYear,
+    penaltyScoreAllTime: input.penaltyScoreAllTime ?? existing.penaltyScoreAllTime,
     adminRoleGroupId:
-      input.adminRoleGroupId === undefined ? existing.adminRoleGroupId ?? null : input.adminRoleGroupId ?? null
+      input.adminRoleGroupId === undefined ? existing.adminRoleGroupId ?? null : input.adminRoleGroupId ?? null,
+    updatedAt: new Date().toISOString()
   };
   const nextUsers = users.some((user) => user.id === id)
     ? users.map((user) => (user.id === id ? updatedUser : user))
@@ -1715,7 +2049,11 @@ function defaultMockResolutionNote(action: ResolveReportActionInput["action"]) {
     return "Rapor sonucunda tag arşivlendi.";
   }
 
-  return "Rapor sonucunda kullanıcı disable edildi.";
+  if (action === "disable_user") {
+    return "Rapor sonucunda kullanıcı disable edildi.";
+  }
+
+  return `${action} aksiyonu uygulandı.`;
 }
 
 function parseParticipantPath(pathname: string, marker: string) {
@@ -1901,6 +2239,7 @@ function getMockAdminTag(id: string): AdminTagDetail {
 
   const reports = listMockReports().filter((report) => report.targetType === "tag" && report.targetId === id);
   const interestedUsers = readStorage<Record<string, string[]>>(USER_INTEREST_TAGS_KEY, {});
+  const interestedUserCount = Object.values(interestedUsers).filter((tagIds) => tagIds.includes(id)).length;
 
   return {
     ...tag,
@@ -1908,9 +2247,17 @@ function getMockAdminTag(id: string): AdminTagDetail {
     createdBy: null,
     updatedBy: null,
     reportCount: reports.length,
+    likeCount: Math.max(Math.floor(interestedUserCount * 0.4), 0),
+    okCount: interestedUserCount,
+    dislikeCount: Math.max(Math.floor(reports.length * 0.5), 0),
+    commentCount: reports.length,
+    viewCount: interestedUserCount * 12,
+    viewerCount: interestedUserCount * 4,
+    firstCommenter: null,
+    firstProfileUser: null,
     _count: {
       events: getStoredEvents().filter((event) => event.tags.some((item) => item.id === id)).length,
-      interestedUsers: Object.values(interestedUsers).filter((tagIds) => tagIds.includes(id)).length
+      interestedUsers: interestedUserCount
     }
   };
 }
@@ -2109,7 +2456,21 @@ function parsePolicyType(value?: string): PolicyType {
 }
 
 function parseReportTargetType(value?: string): ReportTargetType {
-  return value === "tag" || value === "user" ? value : "event";
+  const allowed: ReportTargetType[] = [
+    "event",
+    "tag",
+    "user",
+    "media",
+    "place",
+    "username",
+    "website_url",
+    "tag_comment",
+    "event_comment",
+    "place_comment",
+    "comment_reply",
+    "private_message"
+  ];
+  return allowed.includes(value as ReportTargetType) ? (value as ReportTargetType) : "event";
 }
 
 function resolveEventSummary(input: Pick<AdminEventInput, "title" | "summary" | "description">) {
@@ -2256,11 +2617,7 @@ export function getAdminUser(id: string): Promise<AdminManagedUserDetail> {
 
 export function updateAdminUser(
   id: string,
-  input: {
-    status?: "active" | "invited" | "pending" | "disabled";
-    role?: "user" | "admin" | "super_admin";
-    adminRoleGroupId?: string | null;
-  }
+  input: Partial<AdminManagedUser>
 ): Promise<AdminManagedUser> {
   return requestJson(`/admin/users/${id}`, adminManagedUserSchema, {
     auth: true,
@@ -2330,11 +2687,63 @@ export function updateAdminMessage(id: string, status: UserMessageStatus): Promi
   });
 }
 
+export function listAdminPlaces(params?: URLSearchParams): Promise<AdminPlace[]> {
+  const query = params?.toString();
+  return requestJson(`/admin/content/places${query ? `?${query}` : ""}`, z.array(adminPlaceSchema), { auth: true });
+}
+
+export function getAdminPlace(id: string): Promise<AdminPlace> {
+  return requestJson(`/admin/content/places/${id}`, adminPlaceSchema, { auth: true });
+}
+
+export function updateAdminPlace(id: string, status: string): Promise<AdminPlace> {
+  return requestJson(`/admin/content/places/${id}`, adminPlaceSchema, { auth: true, method: "PATCH", body: JSON.stringify({ status }) });
+}
+
+export function listAdminMedia(params?: URLSearchParams): Promise<AdminMedia[]> {
+  const query = params?.toString();
+  return requestJson(`/admin/content/media${query ? `?${query}` : ""}`, z.array(adminMediaSchema), { auth: true });
+}
+
+export function getAdminMedia(id: string): Promise<AdminMedia> {
+  return requestJson(`/admin/content/media/${id}`, adminMediaSchema, { auth: true });
+}
+
+export function updateAdminMedia(id: string, status: string): Promise<AdminMedia> {
+  return requestJson(`/admin/content/media/${id}`, adminMediaSchema, { auth: true, method: "PATCH", body: JSON.stringify({ status }) });
+}
+
+export function listAdminComments(params?: URLSearchParams): Promise<AdminComment[]> {
+  const query = params?.toString();
+  return requestJson(`/admin/content/comments${query ? `?${query}` : ""}`, z.array(adminCommentSchema), { auth: true });
+}
+
+export function getAdminComment(id: string): Promise<AdminComment> {
+  return requestJson(`/admin/content/comments/${id}`, adminCommentSchema, { auth: true });
+}
+
+export function updateAdminComment(id: string, status: string): Promise<AdminComment> {
+  return requestJson(`/admin/content/comments/${id}`, adminCommentSchema, { auth: true, method: "PATCH", body: JSON.stringify({ status }) });
+}
+
+export function listAdminPrivateMessages(params?: URLSearchParams): Promise<AdminPrivateMessage[]> {
+  const query = params?.toString();
+  return requestJson(`/admin/content/private-messages${query ? `?${query}` : ""}`, z.array(adminPrivateMessageSchema), { auth: true });
+}
+
+export function getAdminPrivateMessage(id: string): Promise<AdminPrivateMessage> {
+  return requestJson(`/admin/content/private-messages/${id}`, adminPrivateMessageSchema, { auth: true });
+}
+
+export function updateAdminPrivateMessage(id: string, status: string): Promise<AdminPrivateMessage> {
+  return requestJson(`/admin/content/private-messages/${id}`, adminPrivateMessageSchema, { auth: true, method: "PATCH", body: JSON.stringify({ status }) });
+}
+
 export function listAdminCmsCategories(): Promise<CmsCategory[]> {
   return requestJson("/admin/cms/categories", z.array(cmsCategorySchema), { auth: true });
 }
 
-export function createAdminCmsCategory(input: { name: string; description?: string }): Promise<CmsCategory> {
+export function createAdminCmsCategory(input: CmsCategoryInput): Promise<CmsCategory> {
   return requestJson("/admin/cms/categories", cmsCategorySchema, {
     auth: true,
     method: "POST",
@@ -2347,6 +2756,13 @@ export function updateAdminCmsCategory(id: string, input: Partial<CmsCategory>):
     auth: true,
     method: "PATCH",
     body: JSON.stringify(input)
+  });
+}
+
+export function deleteAdminCmsCategory(id: string): Promise<{ ok: true }> {
+  return requestJson(`/admin/cms/categories/${id}`, z.object({ ok: z.literal(true) }), {
+    auth: true,
+    method: "DELETE"
   });
 }
 
@@ -2367,6 +2783,13 @@ export function updateAdminFaq(id: string, input: Partial<FaqInput> & { status?:
     auth: true,
     method: "PATCH",
     body: JSON.stringify(input)
+  });
+}
+
+export function deleteAdminFaq(id: string): Promise<{ ok: true }> {
+  return requestJson(`/admin/cms/faqs/${id}`, z.object({ ok: z.literal(true) }), {
+    auth: true,
+    method: "DELETE"
   });
 }
 
@@ -2490,7 +2913,7 @@ export type AdminEventInput = {
 };
 
 export type CreateReportInput = {
-  targetType: "event" | "tag" | "user";
+  targetType: ReportTargetType;
   targetId: string;
   ruleId?: string;
   reason: string;
@@ -2503,7 +2926,16 @@ export type UpdateReportInput = {
 };
 
 export type ResolveReportActionInput = {
-  action: "archive_event" | "archive_tag" | "disable_user";
+  action:
+    | "archive_event"
+    | "archive_tag"
+    | "remove_media"
+    | "archive_place"
+    | "remove_comment"
+    | "reset_username"
+    | "remove_website"
+    | "remove_private_messages"
+    | "disable_user";
   resolutionNote?: string;
 };
 
@@ -2533,7 +2965,19 @@ export type ReportRuleInput = {
 
 export type ModerationDecisionInput = {
   decision: "violation" | "no_violation";
-  action: "none" | "warn_user" | "suspend_user" | "ban_user" | "archive_event" | "archive_tag";
+  action:
+    | "none"
+    | "warn_user"
+    | "suspend_user"
+    | "ban_user"
+    | "archive_event"
+    | "archive_tag"
+    | "remove_media"
+    | "archive_place"
+    | "remove_comment"
+    | "reset_username"
+    | "remove_website"
+    | "remove_private_messages";
   penaltyScore: number;
   note?: string;
   suspensionEndsAt?: string;

@@ -18,6 +18,10 @@ enum UserStatus {
   pending
   active
   disabled
+  frozen
+  deleted
+  suspended
+  banned
 }
 
 enum TagStatus {
@@ -64,6 +68,15 @@ enum ReportTargetType {
   event
   tag
   user
+  media
+  place
+  username
+  website_url
+  tag_comment
+  event_comment
+  place_comment
+  comment_reply
+  private_message
 }
 
 enum ReportStatus {
@@ -84,18 +97,46 @@ enum UserMessageStatus {
   read
 }
 
+enum CmsCategoryType {
+  faq
+  write_to_us
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
   name         String
+  username     String?    @unique
   passwordHash String     @map("password_hash")
   role         UserRole   @default(user)
   adminRoleGroupId String? @map("admin_role_group_id")
   status       UserStatus @default(active)
+  accountType  String     @default("individual") @map("account_type")
+  phone        String?
+  country      String?
+  city         String?
+  district     String?
+  address      String?
+  gender       String?
+  birthDate    DateTime?  @map("birth_date")
+  website      String?
+  companyName  String?    @map("company_name")
+  tradeName    String?    @map("trade_name")
+  companyType  String?    @map("company_type")
+  businessCategory String? @map("business_category")
+  followerCount Int       @default(0) @map("follower_count")
+  followingCount Int      @default(0) @map("following_count")
+  lastOnlineAt DateTime?  @map("last_online_at")
+  emailVerified Boolean   @default(false) @map("email_verified")
+  invitedById  String?    @map("invited_by")
+  penaltyScoreLastYear Int @default(0) @map("penalty_score_last_year")
+  penaltyScoreAllTime Int  @default(0) @map("penalty_score_all_time")
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
   adminRoleGroup AdminRoleGroup? @relation(fields: [adminRoleGroupId], references: [id], onDelete: SetNull)
+  invitedBy User? @relation("UserInvites", fields: [invitedById], references: [id], onDelete: SetNull)
+  invitedUsers User[] @relation("UserInvites")
   createdTags  Tag[]   @relation("TagCreatedBy")
   updatedTags  Tag[]   @relation("TagUpdatedBy")
   createdEvents Event[] @relation("EventCreatedBy")
@@ -110,8 +151,19 @@ model User {
   emailTokens EmailToken[]
   userMessages UserMessage[] @relation("UserMessageUser")
   readUserMessages UserMessage[] @relation("UserMessageReadBy")
+  createdPlaces Place[] @relation("PlaceCreatedBy")
+  updatedPlaces Place[] @relation("PlaceUpdatedBy")
+  uploadedMedia MediaFile[] @relation("MediaUploadedBy")
+  authoredComments ContentComment[] @relation("CommentAuthor")
+  sentPrivateMessages PrivateMessage[] @relation("PrivateMessageSender")
+  receivedPrivateMessages PrivateMessage[] @relation("PrivateMessageRecipient")
+  contentReactions ContentReaction[]
+  contentViews ContentView[]
 
   @@map("users")
+  @@index([accountType, status])
+  @@index([country, city])
+  @@index([lastOnlineAt])
 }
 
 model AdminRoleGroup {
@@ -133,6 +185,7 @@ model CmsCategory {
   name        String
   slug        String   @unique
   description String?
+  type        CmsCategoryType @default(faq)
   status      String   @default("active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -140,6 +193,7 @@ model CmsCategory {
   faqs Faq[]
 
   @@index([status])
+  @@index([type, status])
   @@map("cms_categories")
 }
 
@@ -292,6 +346,117 @@ model EventMedia {
 
   @@index([eventId])
   @@map("event_media")
+}
+
+model Place {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  status      String   @default("active")
+  coverImageUrl String? @map("cover_image_url")
+  country     String?
+  city        String?
+  address     String?
+  followerCount Int    @default(0) @map("follower_count")
+  inviteCount Int      @default(0) @map("invite_count")
+  createdById String?  @map("created_by")
+  updatedById String?  @map("updated_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  createdBy User? @relation("PlaceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("PlaceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([country, city])
+  @@map("places")
+}
+
+model MediaFile {
+  id          String   @id @default(uuid())
+  url         String
+  type        String   @default("image")
+  status      String   @default("active")
+  contentType ReportTargetType @map("content_type")
+  contentId   String   @map("content_id")
+  uploadedById String? @map("uploaded_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  uploadedBy User? @relation("MediaUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([contentType, contentId])
+  @@index([status, createdAt])
+  @@map("media_files")
+}
+
+model ContentComment {
+  id          String   @id @default(uuid())
+  targetType  ReportTargetType @map("target_type")
+  targetId    String   @map("target_id")
+  parentId    String?  @map("parent_id")
+  authorId    String?  @map("author_id")
+  body        String
+  status      String   @default("active")
+  likeCount   Int      @default(0) @map("like_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  parent ContentComment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies ContentComment[] @relation("CommentReplies")
+  author User? @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([targetType, targetId])
+  @@index([parentId])
+  @@index([status, createdAt])
+  @@map("content_comments")
+}
+
+model PrivateMessage {
+  id          String   @id @default(uuid())
+  senderId    String?  @map("sender_id")
+  recipientId String?  @map("recipient_id")
+  body        String
+  status      String   @default("active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  sender User? @relation("PrivateMessageSender", fields: [senderId], references: [id], onDelete: SetNull)
+  recipient User? @relation("PrivateMessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+
+  @@index([senderId, recipientId])
+  @@index([status, createdAt])
+  @@map("private_messages")
+}
+
+model ContentReaction {
+  id          String   @id @default(uuid())
+  targetType  ReportTargetType @map("target_type")
+  targetId    String   @map("target_id")
+  userId      String   @map("user_id")
+  reaction    String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([targetType, targetId, userId, reaction])
+  @@index([targetType, targetId])
+  @@map("content_reactions")
+}
+
+model ContentView {
+  id          String   @id @default(uuid())
+  targetType  ReportTargetType @map("target_type")
+  targetId    String   @map("target_id")
+  userId      String?  @map("user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([targetType, targetId])
+  @@index([userId])
+  @@map("content_views")
 }
 
 model EventTag {

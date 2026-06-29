@@ -18,10 +18,16 @@ describe("ReportsService", () => {
       $transaction: jest.fn((callback: (transaction: typeof tx) => unknown) => callback(tx))
     };
 
+    const mailService = {
+      sendModerationDecisionEmail: jest.fn(),
+      sendReportFeedbackEmail: jest.fn()
+    };
+
     return {
-      service: new ReportsService(prisma as never),
+      service: new ReportsService(prisma as never, mailService as never),
       prisma,
-      tx
+      tx,
+      mailService
     };
   };
 

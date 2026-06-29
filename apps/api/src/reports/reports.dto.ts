@@ -4,6 +4,12 @@ import { IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min,
 export enum ModerationAction {
   archive_event = "archive_event",
   archive_tag = "archive_tag",
+  remove_media = "remove_media",
+  archive_place = "archive_place",
+  remove_comment = "remove_comment",
+  reset_username = "reset_username",
+  remove_website = "remove_website",
+  remove_private_messages = "remove_private_messages",
   disable_user = "disable_user"
 }
 
@@ -109,7 +115,20 @@ export class CreateModerationDecisionDto {
   decision!: string;
 
   @IsString()
-  @IsIn(["none", "warn_user", "suspend_user", "ban_user", "archive_event", "archive_tag"])
+  @IsIn([
+    "none",
+    "warn_user",
+    "suspend_user",
+    "ban_user",
+    "archive_event",
+    "archive_tag",
+    "remove_media",
+    "archive_place",
+    "remove_comment",
+    "reset_username",
+    "remove_website",
+    "remove_private_messages"
+  ])
   action!: string;
 
   @IsInt()

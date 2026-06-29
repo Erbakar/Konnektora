@@ -18,6 +18,52 @@ export class AdminUserQueryDto {
   role?: UserRole;
 
   @IsOptional()
+  @IsString()
+  @IsIn(["individual", "corporate"])
+  accountType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  country?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  gender?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  joinedFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  joinedTo?: string;
+
+  @IsOptional()
+  @IsString()
+  lastOnlineFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  lastOnlineTo?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -43,6 +89,109 @@ export class UpdateAdminUserDto {
   @IsOptional()
   @IsUUID()
   adminRoleGroupId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  username?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  country?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  district?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(240)
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  gender?: string;
+
+  @IsOptional()
+  @IsString()
+  birthDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(240)
+  website?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["individual", "corporate"])
+  accountType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  companyName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  tradeName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  companyType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  businessCategory?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  followerCount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  followingCount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  penaltyScoreLastYear?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  penaltyScoreAllTime?: number;
 }
 
 export class CreateAdminRoleGroupDto {

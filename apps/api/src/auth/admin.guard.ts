@@ -62,8 +62,18 @@ export class AdminGuard extends JwtAuthGuard implements CanActivate {
       return true;
     }
 
+    if (permission.startsWith("cms.") && permissions.has("cms.manage")) {
+      return true;
+    }
+
     if (permission === "messages.manage") {
       return ["messages.faq.manage", "messages.account_freeze.manage", "messages.write_to_us.manage"].some((item) =>
+        permissions.has(item)
+      );
+    }
+
+    if (permission === "cms.manage") {
+      return ["cms.categories.manage", "cms.faq.manage", "cms.announcements.manage", "cms.policies.manage"].some((item) =>
         permissions.has(item)
       );
     }

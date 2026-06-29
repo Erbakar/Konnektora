@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { EventStatus, ReportStatus, ReportTargetType, TagStatus, User, UserStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { MailService } from "../mail/mail.service";
 import {
   CreateReportDto,
   CreateReportRuleDto,
@@ -20,7 +21,10 @@ const REPORT_INCLUDE = {
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService
+  ) {}
 
   async createReport(input: CreateReportDto, reporter: User) {
     await this.ensureTargetExists(input.targetType, input.targetId);
@@ -132,10 +136,64 @@ export class ReportsService {
         userId = tag.createdById;
       }
 
+      if (targetType === ReportTargetType.place && input.action === "archive_place") {
+        const place = await tx.place.update({
+          where: { id: targetId },
+          data: { status: "archived", updatedBy: { connect: { id: admin.id } } },
+          select: { createdById: true }
+        });
+        userId = place.createdById;
+      }
+
+      if (targetType === ReportTargetType.media && input.action === "remove_media") {
+        const media = await tx.mediaFile.update({
+          where: { id: targetId },
+          data: { status: "hidden" },
+          select: { uploadedById: true }
+        });
+        userId = media.uploadedById;
+      }
+
+      if (["tag_comment", "event_comment", "place_comment", "comment_reply"].includes(targetType) && input.action === "remove_comment") {
+        const comment = await tx.contentComment.update({
+          where: { id: targetId },
+          data: { status: "hidden" },
+          select: { authorId: true }
+        });
+        userId = comment.authorId;
+      }
+
+      if (targetType === ReportTargetType.private_message && input.action === "remove_private_messages") {
+        const message = await tx.privateMessage.update({
+          where: { id: targetId },
+          data: { status: "hidden" },
+          select: { senderId: true }
+        });
+        userId = message.senderId;
+      }
+
+      if (targetType === ReportTargetType.username && input.action === "reset_username") {
+        const user = await tx.user.update({
+          where: { id: targetId },
+          data: { username: `User${Date.now().toString().slice(-8)}` },
+          select: { id: true }
+        });
+        userId = user.id;
+      }
+
+      if (targetType === ReportTargetType.website_url && input.action === "remove_website") {
+        const user = await tx.user.update({
+          where: { id: targetId },
+          data: { website: null },
+          select: { id: true }
+        });
+        userId = user.id;
+      }
+
       if (targetType === ReportTargetType.user && (input.action === "suspend_user" || input.action === "ban_user")) {
         await tx.user.update({
           where: { id: targetId },
-          data: { status: UserStatus.disabled }
+          data: { status: input.action === "ban_user" ? UserStatus.banned : UserStatus.suspended }
         });
       }
 
@@ -166,6 +224,32 @@ export class ReportsService {
           resolvedAt: new Date()
         }
       });
+
+      const affectedReports = await tx.contentReport.findMany({
+        where: { targetType, targetId },
+        include: { reporter: { select: { email: true, name: true } } }
+      });
+      const uniqueReporters = new Map(affectedReports.map((report) => [report.reporter.email, report.reporter]));
+
+      await Promise.all([
+        decision.user
+          ? this.mailService.sendModerationDecisionEmail({
+              to: decision.user.email,
+              name: decision.user.name,
+              decision: input.decision,
+              action: input.action,
+              note: input.note
+            })
+          : Promise.resolve(),
+        ...[...uniqueReporters.values()].map((reporter) =>
+          this.mailService.sendReportFeedbackEmail({
+            to: reporter.email,
+            name: reporter.name,
+            decision: input.decision,
+            note: input.note
+          })
+        )
+      ]);
 
       return decision;
     });
@@ -323,7 +407,37 @@ export class ReportsService {
       return;
     }
 
-    throw new BadRequestException("Desteklenmeyen rapor hedefi.");
+    if (targetType === ReportTargetType.place) {
+      const place = await this.prisma.place.findUnique({ where: { id: targetId }, select: { id: true } });
+      if (!place) throw new NotFoundException("Raporlanacak mekan bulunamadı.");
+      return;
+    }
+
+    if (targetType === ReportTargetType.media) {
+      const media = await this.prisma.mediaFile.findUnique({ where: { id: targetId }, select: { id: true } });
+      if (!media) throw new NotFoundException("Raporlanacak medya bulunamadı.");
+      return;
+    }
+
+    if (["tag_comment", "event_comment", "place_comment", "comment_reply"].includes(targetType)) {
+      const comment = await this.prisma.contentComment.findUnique({ where: { id: targetId }, select: { id: true } });
+      if (!comment) throw new NotFoundException("Raporlanacak yorum bulunamadı.");
+      return;
+    }
+
+    if (targetType === ReportTargetType.private_message) {
+      const message = await this.prisma.privateMessage.findUnique({ where: { id: targetId }, select: { id: true } });
+      if (!message) throw new NotFoundException("Raporlanacak özel mesaj bulunamadı.");
+      return;
+    }
+
+    if (targetType === ReportTargetType.username || targetType === ReportTargetType.website_url) {
+      const user = await this.prisma.user.findUnique({ where: { id: targetId }, select: { id: true } });
+      if (!user) throw new NotFoundException("Raporlanacak profil alanı bulunamadı.");
+      return;
+    }
+
+    return;
   }
 
   private async buildReportGroups(reports: any[]) {
@@ -429,6 +543,17 @@ export class ReportsService {
     }
 
     if (targetType === ReportTargetType.user && (action === "warn_user" || action === "suspend_user" || action === "ban_user")) {
+      return;
+    }
+
+    if (
+      (targetType === ReportTargetType.media && action === "remove_media") ||
+      (targetType === ReportTargetType.place && action === "archive_place") ||
+      (["tag_comment", "event_comment", "place_comment", "comment_reply"].includes(targetType) && action === "remove_comment") ||
+      (targetType === ReportTargetType.username && action === "reset_username") ||
+      (targetType === ReportTargetType.website_url && action === "remove_website") ||
+      (targetType === ReportTargetType.private_message && action === "remove_private_messages")
+    ) {
       return;
     }
 

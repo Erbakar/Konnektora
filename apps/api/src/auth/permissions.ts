@@ -2,6 +2,10 @@ import { SetMetadata } from "@nestjs/common";
 
 export const ADMIN_PERMISSIONS = [
   "cms.manage",
+  "cms.categories.manage",
+  "cms.faq.manage",
+  "cms.announcements.manage",
+  "cms.policies.manage",
   "reports.manage",
   "users.manage",
   "roles.manage",

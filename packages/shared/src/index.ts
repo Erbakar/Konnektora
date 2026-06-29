@@ -5,7 +5,7 @@ export const eventFormatSchema = z.enum(["online", "offline", "hybrid"]);
 export const eventVisibilitySchema = z.enum(["open", "approval_required", "invite_only"]);
 export const tagStatusSchema = z.enum(["active", "hidden", "archived"]);
 export const userRoleSchema = z.enum(["user", "admin", "super_admin"]);
-export const userStatusSchema = z.enum(["invited", "pending", "active", "disabled"]);
+export const userStatusSchema = z.enum(["invited", "pending", "active", "disabled", "frozen", "deleted", "suspended", "banned"]);
 export const eventParticipantStatusSchema = z.enum([
   "invited",
   "requested",
@@ -15,12 +15,30 @@ export const eventParticipantStatusSchema = z.enum([
   "attended"
 ]);
 export const eventParticipantRoleSchema = z.enum(["attendee", "organizer", "manager"]);
-export const reportTargetTypeSchema = z.enum(["event", "tag", "user"]);
+export const reportTargetTypeSchema = z.enum([
+  "event",
+  "tag",
+  "user",
+  "media",
+  "place",
+  "username",
+  "website_url",
+  "tag_comment",
+  "event_comment",
+  "place_comment",
+  "comment_reply",
+  "private_message"
+]);
 export const reportStatusSchema = z.enum(["open", "reviewing", "resolved", "dismissed"]);
 export const userMessageTypeSchema = z.enum(["faq", "account_freeze", "write_to_us"]);
 export const userMessageStatusSchema = z.enum(["unread", "read"]);
+export const cmsCategoryTypeSchema = z.enum(["faq", "write_to_us"]);
 export const adminPermissionSchema = z.enum([
   "cms.manage",
+  "cms.categories.manage",
+  "cms.faq.manage",
+  "cms.announcements.manage",
+  "cms.policies.manage",
   "reports.manage",
   "users.manage",
   "roles.manage",
@@ -57,6 +75,7 @@ export const cmsCategorySchema = z.object({
   name: z.string().min(2).max(120),
   slug: slugSchema,
   description: z.string().max(500).nullable(),
+  type: cmsCategoryTypeSchema,
   status: z.enum(["active", "passive"]),
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional(),
@@ -170,6 +189,14 @@ export const adminTagDetailSchema = tagSchema.extend({
   createdBy: adminUserSchema.optional().nullable(),
   updatedBy: adminUserSchema.optional().nullable(),
   reportCount: z.number().int().nonnegative(),
+  likeCount: z.number().int().nonnegative(),
+  okCount: z.number().int().nonnegative(),
+  dislikeCount: z.number().int().nonnegative(),
+  commentCount: z.number().int().nonnegative(),
+  viewCount: z.number().int().nonnegative(),
+  viewerCount: z.number().int().nonnegative(),
+  firstCommenter: adminUserSchema.optional().nullable(),
+  firstProfileUser: adminUserSchema.optional().nullable(),
   _count: z
     .object({
       events: z.number().int().nonnegative(),
@@ -180,6 +207,27 @@ export const adminTagDetailSchema = tagSchema.extend({
 
 export const adminManagedUserSchema = adminUserSchema.extend({
   status: userStatusSchema,
+  username: z.string().nullable().optional(),
+  accountType: z.string(),
+  phone: z.string().nullable().optional(),
+  country: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  district: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  gender: z.string().nullable().optional(),
+  birthDate: z.string().datetime().or(z.date()).nullable().optional(),
+  website: z.string().nullable().optional(),
+  companyName: z.string().nullable().optional(),
+  tradeName: z.string().nullable().optional(),
+  companyType: z.string().nullable().optional(),
+  businessCategory: z.string().nullable().optional(),
+  followerCount: z.number().int().nonnegative(),
+  followingCount: z.number().int().nonnegative(),
+  lastOnlineAt: z.string().datetime().or(z.date()).nullable().optional(),
+  emailVerified: z.boolean(),
+  invitedById: z.string().uuid().nullable().optional(),
+  penaltyScoreLastYear: z.number().int().nonnegative(),
+  penaltyScoreAllTime: z.number().int().nonnegative(),
   adminRoleGroupId: z.string().uuid().nullable().optional(),
   adminRoleGroup: adminRoleGroupSchema.nullable().optional(),
   createdAt: z.string().datetime().or(z.date()).optional(),
@@ -202,6 +250,8 @@ export const adminManagedUserListSchema = z.object({
 });
 
 export const adminManagedUserDetailSchema = adminManagedUserSchema.extend({
+  invitedBy: adminUserSchema.nullable().optional(),
+  invitedUsers: z.array(adminUserSchema).optional(),
   stats: z.object({
     createdEvents: z.number().int().nonnegative(),
     eventParticipations: z.number().int().nonnegative(),
@@ -286,7 +336,20 @@ export const moderationDecisionSchema = z.object({
   targetType: reportTargetTypeSchema,
   targetId: z.string().uuid(),
   decision: z.enum(["violation", "no_violation"]),
-  action: z.enum(["none", "warn_user", "suspend_user", "ban_user", "archive_event", "archive_tag"]),
+  action: z.enum([
+    "none",
+    "warn_user",
+    "suspend_user",
+    "ban_user",
+    "archive_event",
+    "archive_tag",
+    "remove_media",
+    "archive_place",
+    "remove_comment",
+    "reset_username",
+    "remove_website",
+    "remove_private_messages"
+  ]),
   penaltyScore: z.number().int().nonnegative(),
   note: z.string().max(2000).nullable(),
   userId: z.string().uuid().nullable().optional(),
@@ -295,6 +358,71 @@ export const moderationDecisionSchema = z.object({
   createdAt: z.string().datetime().or(z.date()).optional(),
   user: adminUserSchema.optional().nullable(),
   issuedBy: adminUserSchema.optional().nullable()
+});
+
+export const adminPlaceSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  slug: slugSchema,
+  description: z.string().nullable(),
+  status: z.string(),
+  coverImageUrl: z.string().nullable(),
+  country: z.string().nullable(),
+  city: z.string().nullable(),
+  address: z.string().nullable(),
+  followerCount: z.number().int().nonnegative(),
+  inviteCount: z.number().int().nonnegative(),
+  createdById: z.string().uuid().nullable(),
+  updatedById: z.string().uuid().nullable(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+  createdBy: adminUserSchema.optional().nullable(),
+  updatedBy: adminUserSchema.optional().nullable(),
+  reportCount: z.number().int().nonnegative().optional()
+});
+
+export const adminMediaSchema = z.object({
+  id: z.string().uuid(),
+  url: z.string(),
+  type: z.string(),
+  status: z.string(),
+  contentType: reportTargetTypeSchema,
+  contentId: z.string(),
+  uploadedById: z.string().uuid().nullable(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+  uploadedBy: adminUserSchema.optional().nullable(),
+  reportCount: z.number().int().nonnegative().optional()
+});
+
+export const adminCommentSchema = z.object({
+  id: z.string().uuid(),
+  targetType: reportTargetTypeSchema,
+  targetId: z.string(),
+  parentId: z.string().uuid().nullable(),
+  authorId: z.string().uuid().nullable(),
+  body: z.string(),
+  status: z.string(),
+  likeCount: z.number().int().nonnegative(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+  author: adminUserSchema.optional().nullable(),
+  parent: z.object({ id: z.string().uuid(), body: z.string(), author: adminUserSchema.optional().nullable() }).optional().nullable(),
+  _count: z.object({ replies: z.number().int().nonnegative() }).optional(),
+  reportCount: z.number().int().nonnegative().optional()
+});
+
+export const adminPrivateMessageSchema = z.object({
+  id: z.string().uuid(),
+  senderId: z.string().uuid().nullable(),
+  recipientId: z.string().uuid().nullable(),
+  body: z.string(),
+  status: z.string(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+  sender: adminUserSchema.optional().nullable(),
+  recipient: adminUserSchema.optional().nullable(),
+  reportCount: z.number().int().nonnegative().optional()
 });
 
 export const userMessageSchema = z.object({
@@ -372,6 +500,10 @@ export type ContentReport = z.infer<typeof contentReportSchema>;
 export type ReportRule = z.infer<typeof reportRuleSchema>;
 export type ReportGroupNote = z.infer<typeof reportGroupNoteSchema>;
 export type ModerationDecision = z.infer<typeof moderationDecisionSchema>;
+export type AdminPlace = z.infer<typeof adminPlaceSchema>;
+export type AdminMedia = z.infer<typeof adminMediaSchema>;
+export type AdminComment = z.infer<typeof adminCommentSchema>;
+export type AdminPrivateMessage = z.infer<typeof adminPrivateMessageSchema>;
 export type UserMessage = z.infer<typeof userMessageSchema>;
 export type UserMessageList = z.infer<typeof userMessageListSchema>;
 export type ReportGroup = z.infer<typeof reportGroupSchema>;

@@ -48,7 +48,15 @@ export class TagsService {
 
     return {
       ...tag,
-      reportCount
+      reportCount,
+      likeCount: 0,
+      okCount: tag._count.interestedUsers,
+      dislikeCount: 0,
+      commentCount: 0,
+      viewCount: 0,
+      viewerCount: 0,
+      firstCommenter: null,
+      firstProfileUser: tag.createdBy
     };
   }
 

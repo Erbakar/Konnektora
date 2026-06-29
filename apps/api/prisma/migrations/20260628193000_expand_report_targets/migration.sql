@@ -1,0 +1,9 @@
+ALTER TYPE "ReportTargetType" ADD VALUE IF NOT EXISTS 'media';
+ALTER TYPE "ReportTargetType" ADD VALUE IF NOT EXISTS 'place';
+ALTER TYPE "ReportTargetType" ADD VALUE IF NOT EXISTS 'username';
+ALTER TYPE "ReportTargetType" ADD VALUE IF NOT EXISTS 'website_url';
+ALTER TYPE "ReportTargetType" ADD VALUE IF NOT EXISTS 'tag_comment';
+ALTER TYPE "ReportTargetType" ADD VALUE IF NOT EXISTS 'event_comment';
+ALTER TYPE "ReportTargetType" ADD VALUE IF NOT EXISTS 'place_comment';
+ALTER TYPE "ReportTargetType" ADD VALUE IF NOT EXISTS 'comment_reply';
+ALTER TYPE "ReportTargetType" ADD VALUE IF NOT EXISTS 'private_message';

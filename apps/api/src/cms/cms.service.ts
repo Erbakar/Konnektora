@@ -63,7 +63,8 @@ export class CmsService {
       data: {
         name: input.name.trim(),
         slug,
-        description: input.description?.trim() || null
+        description: input.description?.trim() || null,
+        type: input.type ?? "faq"
       },
       include: { _count: { select: { faqs: true } } }
     });
@@ -76,9 +77,10 @@ export class CmsService {
       throw new NotFoundException("CMS kategorisi bulunamadı.");
     }
 
-    const data: { name?: string; slug?: string; description?: string | null; status?: string } = {
+    const data: { name?: string; slug?: string; description?: string | null; status?: string; type?: "faq" | "write_to_us" } = {
       description: input.description === undefined ? undefined : input.description?.trim() || null,
-      status: input.status
+      status: input.status,
+      type: input.type
     };
 
     if (input.name && input.name !== existing.name) {
@@ -93,6 +95,17 @@ export class CmsService {
       data,
       include: { _count: { select: { faqs: true } } }
     });
+  }
+
+  async deleteCategory(id: string) {
+    const existing = await this.prisma.cmsCategory.findUnique({ where: { id }, select: { id: true } });
+
+    if (!existing) {
+      throw new NotFoundException("CMS kategorisi bulunamadı.");
+    }
+
+    await this.prisma.cmsCategory.delete({ where: { id } });
+    return { ok: true };
   }
 
   listFaqs() {
@@ -136,6 +149,17 @@ export class CmsService {
       },
       include: { category: true }
     });
+  }
+
+  async deleteFaq(id: string) {
+    const existing = await this.prisma.faq.findUnique({ where: { id }, select: { id: true } });
+
+    if (!existing) {
+      throw new NotFoundException("SSS bulunamadı.");
+    }
+
+    await this.prisma.faq.delete({ where: { id } });
+    return { ok: true };
   }
 
   listAnnouncements() {

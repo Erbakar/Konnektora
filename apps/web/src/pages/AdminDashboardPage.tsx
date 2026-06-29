@@ -16,12 +16,13 @@ import {
   Users,
   X
 } from "lucide-react";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useRef, useState } from "react";
 import {
   type AdminEventInput,
   type AnnouncementInput,
   type ModerationDecisionInput,
   type PolicyInput,
+  type ResolveReportActionInput,
   type ReportRuleInput,
   adminLogin,
   adminPermissionOptions,
@@ -36,6 +37,8 @@ import {
   createAdminModerationDecision,
   createAdminReportRule,
   createAdminRoleGroup,
+  deleteAdminCmsCategory,
+  deleteAdminFaq,
   getAdminReportGroup,
   getAdminDashboard,
   getAdminMessage,
@@ -51,6 +54,10 @@ import {
   listAdminEvents,
   listAdminFaqs,
   listAdminMessages,
+  listAdminComments,
+  listAdminMedia,
+  listAdminPlaces,
+  listAdminPrivateMessages,
   listAdminPolicies,
   listAdminReportGroups,
   listAdminReportRules,
@@ -66,6 +73,10 @@ import {
   updateAdminCmsCategory,
   updateAdminFaq,
   updateAdminMessage,
+  updateAdminComment,
+  updateAdminMedia,
+  updateAdminPlace,
+  updateAdminPrivateMessage,
   updateAdminRoleGroup,
   updateEventParticipantStatus,
   updateAdminReport,
@@ -76,9 +87,13 @@ import {
   upsertAdminPolicy
 } from "../lib/api";
 import type {
+  AdminComment,
   AdminManagedUser,
   AdminManagedUserDetail,
+  AdminMedia,
   AdminPermission,
+  AdminPlace,
+  AdminPrivateMessage,
   AdminRoleGroup,
   AdminTagDetail,
   Announcement,
@@ -104,6 +119,10 @@ type AdminSection =
   | "users"
   | "roles"
   | "events"
+  | "places"
+  | "media"
+  | "comments"
+  | "private-messages"
   | "tags"
   | "reports"
   | "messages"
@@ -129,6 +148,9 @@ const NAV_GROUPS: Array<{
     label: "İçerik",
     items: [
       { id: "events", label: "Etkinlikler", Icon: CalendarCheck },
+      { id: "places", label: "Mekanlar", Icon: LayoutDashboard },
+      { id: "media", label: "Medya", Icon: FileText },
+      { id: "comments", label: "Yorumlar", Icon: MessageSquare },
       { id: "tags", label: "İlgi Alanları", Icon: Tags }
     ]
   },
@@ -136,6 +158,7 @@ const NAV_GROUPS: Array<{
     label: "Moderasyon",
     items: [
       { id: "reports", label: "Şikayetler", Icon: AlertTriangle },
+      { id: "private-messages", label: "Özel Mesajlar", Icon: MessageSquare },
       { id: "messages", label: "Kullanıcı Mesajları", Icon: MessageSquare }
     ]
   },
@@ -153,6 +176,10 @@ const SECTION_TITLES: Record<AdminSection, string> = {
   users: "Üye Yönetimi",
   roles: "Rol / Yetkiler",
   events: "Etkinlikler",
+  places: "Mekanlar",
+  media: "Medya",
+  comments: "Yorumlar",
+  "private-messages": "Özel Mesajlar",
   tags: "İlgi Alanları",
   reports: "Şikayetler",
   messages: "Kullanıcı Mesajları",
@@ -168,8 +195,32 @@ const REPORT_RULE_TITLE_OPTIONS: Record<ReportTargetType, string[]> = {
     "Güvenlik riski taşıyan etkinlik"
   ],
   tag: ["Spam tag", "Yanıltıcı tag", "Uygunsuz tag adı", "Tekrarlayan / mükerrer tag"],
-  user: ["Spam kullanıcı", "Taciz veya kötüye kullanım", "Sahte profil", "Topluluk kurallarını ihlal"]
+  user: ["Spam kullanıcı", "Taciz veya kötüye kullanım", "Sahte profil", "Topluluk kurallarını ihlal"],
+  media: ["Uygunsuz medya", "Telif / hak ihlali", "Şiddet veya hassas medya", "Yanıltıcı medya"],
+  place: ["Yanıltıcı mekan bilgisi", "Uygunsuz mekan içeriği", "Spam mekan", "Güvenlik riski taşıyan mekan"],
+  username: ["Uygunsuz kullanıcı adı", "Taklit kullanıcı adı", "Marka/kişi hakkı ihlali", "Yanıltıcı kullanıcı adı"],
+  website_url: ["Zararlı web adresi", "Spam web adresi", "Yanıltıcı web adresi", "Uygunsuz web adresi"],
+  tag_comment: ["Uygunsuz tag yorumu", "Spam tag yorumu", "Taciz içeren tag yorumu", "Yanıltıcı tag yorumu"],
+  event_comment: ["Uygunsuz etkinlik yorumu", "Spam etkinlik yorumu", "Taciz içeren etkinlik yorumu", "Yanıltıcı etkinlik yorumu"],
+  place_comment: ["Uygunsuz mekan yorumu", "Spam mekan yorumu", "Taciz içeren mekan yorumu", "Yanıltıcı mekan yorumu"],
+  comment_reply: ["Uygunsuz yorum cevabı", "Spam yorum cevabı", "Taciz içeren yorum cevabı", "Yanıltıcı yorum cevabı"],
+  private_message: ["Uygunsuz özel mesaj", "Spam özel mesaj", "Taciz içeren özel mesaj", "Güvenlik riski taşıyan özel mesaj"]
 };
+
+const REPORT_TARGET_OPTIONS: Array<{ value: ReportTargetType; label: string }> = [
+  { value: "media", label: "Medya" },
+  { value: "tag", label: "Etiket" },
+  { value: "event", label: "Etkinlik" },
+  { value: "place", label: "Mekan" },
+  { value: "username", label: "Kullanıcı adı" },
+  { value: "website_url", label: "Web sitesi adresi" },
+  { value: "tag_comment", label: "Etiket yorumu" },
+  { value: "event_comment", label: "Etkinlik yorumu" },
+  { value: "place_comment", label: "Mekan yorumu" },
+  { value: "comment_reply", label: "Yorum yorumu" },
+  { value: "private_message", label: "Özel mesaj" },
+  { value: "user", label: "Kullanıcı hesabı" }
+];
 
 const USER_MESSAGE_TYPE_META: Record<UserMessageType, { label: string; description: string; categories: string[] }> = {
   faq: {
@@ -189,6 +240,66 @@ const USER_MESSAGE_TYPE_META: Record<UserMessageType, { label: string; descripti
   }
 };
 
+const CMS_CATEGORY_TYPE_OPTIONS: Array<{ value: CmsCategory["type"]; label: string; description: string }> = [
+  {
+    value: "faq",
+    label: "SSS kategorisi",
+    description: "Public yardım/SSS içerikleri için kullanılır."
+  },
+  {
+    value: "write_to_us",
+    label: "Write to us kategorisi",
+    description: "Kullanıcı mesajlarındaki iletişim konuları için kullanılır."
+  }
+];
+
+const CMS_CATEGORY_TYPE_LABELS: Record<CmsCategory["type"], string> = {
+  faq: "SSS kategorisi",
+  write_to_us: "Write to us kategorisi"
+};
+
+const ADMIN_PERMISSION_GROUPS: Array<{ label: string; description: string; permissions: AdminPermission[] }> = [
+  {
+    label: "CMS",
+    description: "Kategori, SSS, duyuru ve politika içerikleri.",
+    permissions: ["cms.categories.manage", "cms.faq.manage", "cms.announcements.manage", "cms.policies.manage"]
+  },
+  {
+    label: "Moderasyon",
+    description: "Şikayetler, müdahale akışları ve kullanıcı mesajları.",
+    permissions: ["reports.manage", "messages.faq.manage", "messages.account_freeze.manage", "messages.write_to_us.manage"]
+  },
+  {
+    label: "Üyeler",
+    description: "Üye listesi, detayları ve rol grubu atamaları.",
+    permissions: ["users.manage", "roles.manage"]
+  },
+  {
+    label: "İçerik",
+    description: "İlgi alanları, etkinlikler ve sonraki faz içerik modülleri.",
+    permissions: ["tags.manage", "events.manage", "places.manage", "comments.manage", "media.manage"]
+  }
+];
+
+const ADMIN_PERMISSION_LABELS = new Map<string, string>([
+  ...adminPermissionOptions.map((permission) => [permission.value, permission.label] as const),
+  ["cms.manage", "CMS (legacy tüm CMS yetkileri)"],
+  ["messages.manage", "Kullanıcı mesajları (legacy tüm mesaj yetkileri)"]
+]);
+
+const USER_STATUS_OPTIONS: Array<{ value: AdminManagedUser["status"]; label: string }> = [
+  { value: "active", label: "Aktif" },
+  { value: "frozen", label: "Dondurulmuş" },
+  { value: "deleted", label: "Silinmiş" },
+  { value: "suspended", label: "Hesabı askıda" },
+  { value: "banned", label: "Yasaklı" },
+  { value: "invited", label: "Davet edildi" },
+  { value: "pending", label: "Beklemede" },
+  { value: "disabled", label: "Pasif" }
+];
+
+const GENDER_OPTIONS = ["Erkek", "Kadin", "Belirtilmemis"];
+
 export function AdminDashboardPage() {
   const queryClient = useQueryClient();
   const [token, setToken] = useState(() => getAdminToken());
@@ -207,6 +318,26 @@ export function AdminDashboardPage() {
   const eventsQuery = useQuery({
     queryKey: ["admin-events"],
     queryFn: listAdminEvents,
+    enabled: Boolean(token)
+  });
+  const placesQuery = useQuery({
+    queryKey: ["admin-places"],
+    queryFn: () => listAdminPlaces(),
+    enabled: Boolean(token)
+  });
+  const mediaQuery = useQuery({
+    queryKey: ["admin-media"],
+    queryFn: () => listAdminMedia(),
+    enabled: Boolean(token)
+  });
+  const commentsQuery = useQuery({
+    queryKey: ["admin-comments"],
+    queryFn: () => listAdminComments(),
+    enabled: Boolean(token)
+  });
+  const privateMessagesQuery = useQuery({
+    queryKey: ["admin-private-messages"],
+    queryFn: () => listAdminPrivateMessages(),
     enabled: Boolean(token)
   });
   const tagsQuery = useQuery({
@@ -332,6 +463,22 @@ export function AdminDashboardPage() {
     },
     onError: () => setEventNotice({ tone: "error", message: "Etkinlik arşivlenemedi. Lütfen tekrar dene." })
   });
+  const updatePlaceMutation = useMutation({
+    mutationFn: (input: { id: string; status: string }) => updateAdminPlace(input.id, input.status),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-places"] })
+  });
+  const updateMediaMutation = useMutation({
+    mutationFn: (input: { id: string; status: string }) => updateAdminMedia(input.id, input.status),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-media"] })
+  });
+  const updateCommentMutation = useMutation({
+    mutationFn: (input: { id: string; status: string }) => updateAdminComment(input.id, input.status),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-comments"] })
+  });
+  const updatePrivateMessageMutation = useMutation({
+    mutationFn: (input: { id: string; status: string }) => updateAdminPrivateMessage(input.id, input.status),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-private-messages"] })
+  });
 
   const updateEventMutation = useMutation({
     mutationFn: (input: { id: string; status: string }) => updateAdminEvent(input.id, { status: input.status }),
@@ -370,7 +517,7 @@ export function AdminDashboardPage() {
   const resolveReportActionMutation = useMutation({
     mutationFn: (input: {
       id: string;
-      action: "archive_event" | "archive_tag" | "disable_user";
+      action: ResolveReportActionInput["action"];
       resolutionNote?: string;
     }) => resolveAdminReportAction(input.id, { action: input.action, resolutionNote: input.resolutionNote }),
     onSuccess: () => {
@@ -446,6 +593,13 @@ export function AdminDashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-faqs"] });
     }
   });
+  const deleteCmsCategoryMutation = useMutation({
+    mutationFn: deleteAdminCmsCategory,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-cms-categories"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-faqs"] });
+    }
+  });
   const createFaqMutation = useMutation({
     mutationFn: createAdminFaq,
     onSuccess: () => {
@@ -456,6 +610,13 @@ export function AdminDashboardPage() {
   const updateFaqMutation = useMutation({
     mutationFn: (input: { id: string; data: Partial<{ categoryId: string; title: string; body: string; status: string }> }) =>
       updateAdminFaq(input.id, input.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-faqs"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-cms-categories"] });
+    }
+  });
+  const deleteFaqMutation = useMutation({
+    mutationFn: deleteAdminFaq,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin-faqs"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-cms-categories"] });
@@ -621,6 +782,10 @@ export function AdminDashboardPage() {
               <MetricCard icon={<CalendarCheck size={24} />} label="Taslak etkinlikler" value={dashboard?.draftEvents ?? 0} />
               <MetricCard icon={<AlertTriangle size={24} />} label="Açık şikayetler" value={openReports} />
               <MetricCard icon={<Megaphone size={24} />} label="Aktif duyurular" value={announcements.filter((a) => a.status === "active").length} />
+              <MetricCard icon={<LayoutDashboard size={24} />} label="Mekanlar" value={placesQuery.data?.length ?? 0} />
+              <MetricCard icon={<FileText size={24} />} label="Medya" value={mediaQuery.data?.length ?? 0} />
+              <MetricCard icon={<MessageSquare size={24} />} label="Yorumlar" value={commentsQuery.data?.length ?? 0} />
+              <MetricCard icon={<MessageSquare size={24} />} label="Özel mesajlar" value={privateMessagesQuery.data?.length ?? 0} />
             </div>
 
             <p className="admin-dashboard-subtitle">Modüller</p>
@@ -660,6 +825,33 @@ export function AdminDashboardPage() {
                   { label: "Toplam tag", value: tags.length },
                   { label: "Aktif", value: tags.filter((t) => t.status === "active").length },
                   { label: "Arşiv", value: tags.filter((t) => t.status === "archived").length }
+                ]}
+              />
+              <DashboardModuleCard
+                Icon={LayoutDashboard}
+                label="Mekanlar"
+                onClick={() => setActiveSection("places")}
+                stats={[{ label: "Toplam", value: placesQuery.data?.length ?? 0 }]}
+              />
+              <DashboardModuleCard
+                Icon={FileText}
+                label="Medya"
+                onClick={() => setActiveSection("media")}
+                stats={[{ label: "Toplam", value: mediaQuery.data?.length ?? 0 }]}
+              />
+              <DashboardModuleCard
+                Icon={MessageSquare}
+                label="Yorumlar"
+                onClick={() => setActiveSection("comments")}
+                stats={[{ label: "Toplam", value: commentsQuery.data?.length ?? 0 }]}
+              />
+              <DashboardModuleCard
+                Icon={MessageSquare}
+                label="Özel Mesajlar"
+                onClick={() => setActiveSection("private-messages")}
+                stats={[
+                  { label: "Toplam", value: privateMessagesQuery.data?.length ?? 0 },
+                  { label: "Aktif", value: privateMessagesQuery.data?.filter((message) => message.status === "active").length ?? 0 }
                 ]}
               />
               <DashboardModuleCard
@@ -723,6 +915,58 @@ export function AdminDashboardPage() {
           />
         )}
 
+        {activeSection === "places" && (
+          <AdminContentPanel
+            title="Mekan Yönetimi"
+            description="Mekanları listele, detaylarını incele ve yayından kaldırma/arşivleme müdahalelerini uygula."
+            items={placesQuery.data ?? []}
+            isPending={updatePlaceMutation.isPending}
+            onStatusChange={(id, status) => updatePlaceMutation.mutate({ id, status })}
+            renderPrimary={(item: AdminPlace) => item.name}
+            renderSecondary={(item: AdminPlace) => [item.city, item.country].filter(Boolean).join(" - ") || item.address || "Konum yok"}
+            renderMeta={(item: AdminPlace) => `${item.followerCount} takipçi · ${item.inviteCount} davet · ${item.reportCount ?? 0} şikayet`}
+          />
+        )}
+
+        {activeSection === "media" && (
+          <AdminContentPanel
+            title="Medya Yönetimi"
+            description="Profil, etkinlik, mekan ve yorumlarda kullanılan medya dosyalarını yönet."
+            items={mediaQuery.data ?? []}
+            isPending={updateMediaMutation.isPending}
+            onStatusChange={(id, status) => updateMediaMutation.mutate({ id, status })}
+            renderPrimary={(item: AdminMedia) => item.url}
+            renderSecondary={(item: AdminMedia) => `${item.contentType} · ${item.contentId}`}
+            renderMeta={(item: AdminMedia) => `${item.type} · ${item.reportCount ?? 0} şikayet`}
+          />
+        )}
+
+        {activeSection === "comments" && (
+          <AdminContentPanel
+            title="Yorum Yönetimi"
+            description="Etiket, etkinlik, mekan ve yorum cevabı içeriklerini yönet."
+            items={commentsQuery.data ?? []}
+            isPending={updateCommentMutation.isPending}
+            onStatusChange={(id, status) => updateCommentMutation.mutate({ id, status })}
+            renderPrimary={(item: AdminComment) => item.body}
+            renderSecondary={(item: AdminComment) => `${item.targetType} · ${item.author?.email ?? "Anonim"}`}
+            renderMeta={(item: AdminComment) => `${item.likeCount} beğeni · ${item._count?.replies ?? 0} cevap · ${item.reportCount ?? 0} şikayet`}
+          />
+        )}
+
+        {activeSection === "private-messages" && (
+          <AdminContentPanel
+            title="Özel Mesaj Yönetimi"
+            description="Kullanıcılar arasındaki raporlanabilir özel mesaj içeriklerini yönet."
+            items={privateMessagesQuery.data ?? []}
+            isPending={updatePrivateMessageMutation.isPending}
+            onStatusChange={(id, status) => updatePrivateMessageMutation.mutate({ id, status })}
+            renderPrimary={(item: AdminPrivateMessage) => item.body}
+            renderSecondary={(item: AdminPrivateMessage) => `${item.sender?.email ?? "Bilinmiyor"} → ${item.recipient?.email ?? "Bilinmiyor"}`}
+            renderMeta={(item: AdminPrivateMessage) => `${item.reportCount ?? 0} şikayet · ${formatDateTime(item.createdAt)}`}
+          />
+        )}
+
         {activeSection === "tags" && (
           <TagAdminPanel
             detail={tagDetail}
@@ -772,8 +1016,10 @@ export function AdminDashboardPage() {
             isPending={
               createCmsCategoryMutation.isPending ||
               updateCmsCategoryMutation.isPending ||
+              deleteCmsCategoryMutation.isPending ||
               createFaqMutation.isPending ||
               updateFaqMutation.isPending ||
+              deleteFaqMutation.isPending ||
               createAnnouncementMutation.isPending ||
               updateAnnouncementMutation.isPending ||
               upsertPolicyMutation.isPending
@@ -781,6 +1027,8 @@ export function AdminDashboardPage() {
             onCreateAnnouncement={(input) => createAnnouncementMutation.mutate(input)}
             onCreateCategory={(input) => createCmsCategoryMutation.mutate(input)}
             onCreateFaq={(input) => createFaqMutation.mutate(input)}
+            onDeleteCategory={(id) => deleteCmsCategoryMutation.mutate(id)}
+            onDeleteFaq={(id) => deleteFaqMutation.mutate(id)}
             onSavePolicy={(input) => upsertPolicyMutation.mutate(input)}
             onUpdateAnnouncement={(id, data) => updateAnnouncementMutation.mutate({ id, data })}
             onUpdateCategory={(id, data) => updateCmsCategoryMutation.mutate({ id, data })}
@@ -844,6 +1092,30 @@ function defaultModerationAction(targetType: ReportTargetType): ModerationDecisi
     return "archive_tag";
   }
 
+  if (targetType === "media") {
+    return "remove_media";
+  }
+
+  if (targetType === "place") {
+    return "archive_place";
+  }
+
+  if (["tag_comment", "event_comment", "place_comment", "comment_reply"].includes(targetType)) {
+    return "remove_comment";
+  }
+
+  if (targetType === "username") {
+    return "reset_username";
+  }
+
+  if (targetType === "website_url") {
+    return "remove_website";
+  }
+
+  if (targetType === "private_message") {
+    return "remove_private_messages";
+  }
+
   return "warn_user";
 }
 
@@ -876,6 +1148,8 @@ function CmsAdminPanel({
   onCreateAnnouncement,
   onCreateCategory,
   onCreateFaq,
+  onDeleteCategory,
+  onDeleteFaq,
   onSavePolicy,
   onUpdateAnnouncement,
   onUpdateCategory,
@@ -887,21 +1161,27 @@ function CmsAdminPanel({
   faqs: Faq[];
   isPending: boolean;
   onCreateAnnouncement: (input: AnnouncementInput) => void;
-  onCreateCategory: (input: { name: string; description?: string }) => void;
+  onCreateCategory: (input: { name: string; description?: string; type?: CmsCategory["type"] }) => void;
   onCreateFaq: (input: { categoryId: string; title: string; body: string }) => void;
+  onDeleteCategory: (id: string) => void;
+  onDeleteFaq: (id: string) => void;
   onSavePolicy: (input: PolicyInput) => void;
   onUpdateAnnouncement: (id: string, input: Partial<AnnouncementInput> & { status?: string }) => void;
   onUpdateCategory: (id: string, input: Partial<CmsCategory>) => void;
   onUpdateFaq: (id: string, input: Partial<{ categoryId: string; title: string; body: string; status: string }>) => void;
   policies: CmsPolicy[];
 }) {
+  const [categoryFilters, setCategoryFilters] = useState({ q: "", type: "" });
+  const [faqQuery, setFaqQuery] = useState("");
+
   function handleCategorySubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
 
     onCreateCategory({
       name: String(form.get("name")),
-      description: String(form.get("description") || "") || undefined
+      description: String(form.get("description") || "") || undefined,
+      type: String(form.get("type") || "faq") as CmsCategory["type"]
     });
     event.currentTarget.reset();
   }
@@ -946,6 +1226,24 @@ function CmsAdminPanel({
     });
   }
 
+  const faqCategories = categories.filter((category) => category.type === "faq");
+  const activeFaqCategories = faqCategories.filter((category) => category.status === "active");
+  const writeToUsCategories = categories.filter((category) => category.type === "write_to_us");
+  const visibleCategories = categories.filter(
+    (category) =>
+      (!categoryFilters.type || category.type === categoryFilters.type) &&
+      (!categoryFilters.q ||
+        [category.name, category.description, category.status, CMS_CATEGORY_TYPE_LABELS[category.type]]
+          .join(" ")
+          .toLowerCase()
+          .includes(categoryFilters.q.toLowerCase()))
+  );
+  const visibleFaqs = faqs.filter(
+    (faq) =>
+      !faqQuery ||
+      [faq.title, faq.body, faq.category?.name, faq.status].join(" ").toLowerCase().includes(faqQuery.toLowerCase())
+  );
+
   return (
     <section className="admin-panel">
       <div className="section-header compact">
@@ -967,14 +1265,33 @@ function CmsAdminPanel({
         <div className="admin-create-section">
           <span className="admin-create-section-label"><Plus size={11} /> Yeni kategori</span>
           <form className="admin-form" onSubmit={handleCategorySubmit}>
-            <label>
-              Kategori adı
-              <input name="name" placeholder="Örn. Hesap & Gizlilik, Etkinlikler, Ödeme..." required minLength={2} />
-            </label>
+            <div className="admin-form-grid">
+              <label>
+                Kategori türü
+                <select name="type" defaultValue="faq" required>
+                  {CMS_CATEGORY_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Kategori adı
+                <input name="name" placeholder="Örn. Account, Events, Hata, Reklam..." required minLength={2} />
+              </label>
+            </div>
             <label>
               Açıklama
               <textarea name="description" placeholder="Bu kategori hangi konuları kapsar? (opsiyonel)" rows={2} />
             </label>
+            <div className="profile-tag-row">
+              {CMS_CATEGORY_TYPE_OPTIONS.map((option) => (
+                <span key={option.value}>
+                  {option.label}: {option.description}
+                </span>
+              ))}
+            </div>
             <button className="secondary-action" disabled={isPending} type="submit">
               <Plus size={18} />
               Kategori ekle
@@ -983,7 +1300,24 @@ function CmsAdminPanel({
         </div>
         <div className="admin-manage-section-label">
           <span>Mevcut kategoriler</span>
-          <span>{categories.length} kayıt</span>
+          <span>{visibleCategories.length} / {categories.length} kayıt</span>
+        </div>
+        <div className="guest-invite-form">
+          <label>
+            Kategori arama
+            <input value={categoryFilters.q} onChange={(event) => setCategoryFilters((current) => ({ ...current, q: event.target.value }))} placeholder="Kategori adı veya açıklama" />
+          </label>
+          <label>
+            Tür filtresi
+            <select value={categoryFilters.type} onChange={(event) => setCategoryFilters((current) => ({ ...current, type: event.target.value }))}>
+              <option value="">Tümü</option>
+              {CMS_CATEGORY_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         {categories.length === 0 ? (
           <div className="admin-empty-state">
@@ -992,12 +1326,12 @@ function CmsAdminPanel({
           </div>
         ) : (
           <div className="admin-list">
-            {categories.map((category) => (
+            {visibleCategories.map((category) => (
               <div className="admin-list-row" key={category.id}>
                 <div>
                   <strong>{category.name}</strong>
                   <span>
-                    {category.status} · {category._count?.faqs ?? 0} SSS
+                    {CMS_CATEGORY_TYPE_LABELS[category.type]} · {category.status} · {category._count?.faqs ?? 0} SSS
                   </span>
                 </div>
                 <button
@@ -1007,6 +1341,18 @@ function CmsAdminPanel({
                   type="button"
                 >
                   {category.status === "active" ? "Pasif yap" : "Aktif yap"}
+                </button>
+                <button
+                  className="danger-action"
+                  disabled={isPending}
+                  onClick={() => {
+                    if (window.confirm("Bu kategori ve bağlı SSS kayıtları kaldırılacak. Devam edilsin mi?")) {
+                      onDeleteCategory(category.id);
+                    }
+                  }}
+                  type="button"
+                >
+                  Kaldır
                 </button>
               </div>
             ))}
@@ -1020,10 +1366,10 @@ function CmsAdminPanel({
           <h3>Sık Sorulan Sorular</h3>
           <span>{faqs.length} soru</span>
         </div>
-        {categories.filter((c) => c.status === "active").length === 0 ? (
+        {activeFaqCategories.length === 0 ? (
           <div className="admin-empty-state">
-            <strong>Önce bir kategori oluşturman gerekiyor</strong>
-            <p>Aktif kategori olmadan SSS ekleyemezsin. Yukarıdaki Kategoriler bölümünden başla.</p>
+            <strong>Önce aktif bir SSS kategorisi oluşturman gerekiyor</strong>
+            <p>Write to us kategorileri kullanıcı mesajları içindir; SSS eklemek için kategori türünü SSS seç.</p>
           </div>
         ) : (
           <>
@@ -1034,13 +1380,11 @@ function CmsAdminPanel({
                   Kategori
                   <select name="categoryId" required>
                     <option value="">Kategori seç</option>
-                    {categories
-                      .filter((category) => category.status === "active")
-                      .map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name}
-                        </option>
-                      ))}
+                    {activeFaqCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label>
@@ -1049,7 +1393,7 @@ function CmsAdminPanel({
                 </label>
                 <label>
                   Cevap
-                  <textarea name="body" placeholder="Kullanıcının bu sorusuna net ve kısa bir cevap yaz..." required minLength={3} rows={4} />
+                  <RichTextTextarea name="body" placeholder="Kullanıcının bu sorusuna net ve kısa bir cevap yaz..." required minLength={3} rows={4} />
                 </label>
                 <button className="secondary-action" disabled={isPending} type="submit">
                   <Plus size={18} />
@@ -1059,7 +1403,13 @@ function CmsAdminPanel({
             </div>
             <div className="admin-manage-section-label">
               <span>Mevcut SSS'ler</span>
-              <span>{faqs.length} kayıt</span>
+              <span>{visibleFaqs.length} / {faqs.length} kayıt</span>
+            </div>
+            <div className="guest-invite-form">
+              <label>
+                SSS arama
+                <input value={faqQuery} onChange={(event) => setFaqQuery(event.target.value)} placeholder="Başlık, açıklama veya kategori" />
+              </label>
             </div>
             {faqs.length === 0 ? (
               <div className="admin-empty-state">
@@ -1068,7 +1418,7 @@ function CmsAdminPanel({
               </div>
             ) : (
               <div className="admin-list">
-                {faqs.map((faq) => (
+                {visibleFaqs.map((faq) => (
                   <div className="admin-list-item" key={faq.id}>
                     <div className="admin-list-row">
                       <div>
@@ -1085,6 +1435,18 @@ function CmsAdminPanel({
                       >
                         {faq.status === "active" ? "Pasif yap" : "Aktif yap"}
                       </button>
+                      <button
+                        className="danger-action"
+                        disabled={isPending}
+                        onClick={() => {
+                          if (window.confirm("Bu SSS kaydı kaldırılacak. Devam edilsin mi?")) {
+                            onDeleteFaq(faq.id);
+                          }
+                        }}
+                        type="button"
+                      >
+                        Kaldır
+                      </button>
                     </div>
                     <p className="form-help">{faq.body}</p>
                   </div>
@@ -1093,6 +1455,21 @@ function CmsAdminPanel({
             )}
           </>
         )}
+      </div>
+
+      <div className="admin-subsection">
+        <div className="admin-subsection-header">
+          <h3>Write to us Kategorileri</h3>
+          <span>{writeToUsCategories.length} kategori</span>
+        </div>
+        <p className="admin-section-desc" style={{ margin: "0 0 14px" }}>
+          Dokümandaki Hata, Oneriler, Sikayet, Reklam, Is birligi ve Diger başlıkları kullanıcı mesajları filtrelerinde kullanılır.
+        </p>
+        <div className="profile-tag-row">
+          {USER_MESSAGE_TYPE_META.write_to_us.categories.map((category) => (
+            <span key={category}>{category}</span>
+          ))}
+        </div>
       </div>
 
       {/* ── 3. Duyurular ── */}
@@ -1110,7 +1487,7 @@ function CmsAdminPanel({
             </label>
             <label>
               İçerik
-              <textarea name="body" placeholder="Duyurunun detaylarını buraya yaz..." required minLength={3} rows={4} />
+              <RichTextTextarea name="body" placeholder="Duyurunun detaylarını buraya yaz..." required minLength={3} rows={4} />
             </label>
             <div className="admin-form-grid">
               <label>
@@ -1204,7 +1581,7 @@ function CmsAdminPanel({
                 </label>
                 <label>
                   İçerik
-                  <textarea name="body" defaultValue={policy?.body ?? policyType.defaultBody} required minLength={10} rows={8} />
+                  <RichTextTextarea name="body" defaultValue={policy?.body ?? policyType.defaultBody} required minLength={10} rows={8} />
                 </label>
                 <button className="secondary-action" disabled={isPending} type="submit">
                   <Check size={18} />
@@ -1290,6 +1667,63 @@ function EmailTokenInfoPanel() {
         </div>
       </div>
     </section>
+  );
+}
+
+function RichTextTextarea({
+  defaultValue,
+  maxLength,
+  minLength,
+  name,
+  placeholder,
+  required,
+  rows = 4
+}: {
+  defaultValue?: string;
+  maxLength?: number;
+  minLength?: number;
+  name: string;
+  placeholder?: string;
+  required?: boolean;
+  rows?: number;
+}) {
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  function syncInput() {
+    if (inputRef.current && editorRef.current) {
+      inputRef.current.value = editorRef.current.innerHTML;
+    }
+  }
+
+  function command(name: string, value?: string) {
+    editorRef.current?.focus();
+    document.execCommand(name, false, value);
+    syncInput();
+  }
+
+  return (
+    <div className="rich-text-editor">
+      <div className="rich-text-toolbar">
+        <button onClick={() => command("bold")} type="button">B</button>
+        <button onClick={() => command("insertUnorderedList")} type="button">•</button>
+        <button onClick={() => command("createLink", window.prompt("Link URL") || "")} type="button">Link</button>
+        <button onClick={() => command("insertImage", window.prompt("Medya URL") || "")} type="button">Medya</button>
+      </div>
+      <input name={name} ref={inputRef} required={required} type="hidden" defaultValue={defaultValue ?? ""} />
+      <div
+        className="rich-text-surface"
+        contentEditable
+        data-placeholder={placeholder}
+        onInput={syncInput}
+        ref={editorRef}
+        role="textbox"
+        style={{ minHeight: `${rows * 24}px` }}
+        suppressContentEditableWarning
+        dangerouslySetInnerHTML={{ __html: defaultValue ?? "" }}
+      />
+      <span className="sr-only">{maxLength ?? minLength ?? ""}</span>
+    </div>
   );
 }
 
@@ -1585,12 +2019,20 @@ function RoleGroupAdminPanel({
           </label>
           <fieldset className="tag-fieldset">
             <legend>Yetkiler</legend>
-            {adminPermissionOptions.map((permission) => (
-              <label key={permission.value}>
-                <input name="permissions" type="checkbox" value={permission.value} />
-                {permission.label}
-              </label>
-            ))}
+            <div className="permission-group-grid">
+              {ADMIN_PERMISSION_GROUPS.map((group) => (
+                <div className="permission-group" key={group.label}>
+                  <strong>{group.label}</strong>
+                  <span>{group.description}</span>
+                  {group.permissions.map((permission) => (
+                    <label key={permission}>
+                      <input name="permissions" type="checkbox" value={permission} />
+                      {ADMIN_PERMISSION_LABELS.get(permission) ?? permission}
+                    </label>
+                  ))}
+                </div>
+              ))}
+            </div>
           </fieldset>
           <button className="secondary-action" disabled={isPending} type="submit">
             <Plus size={18} />
@@ -1630,7 +2072,7 @@ function RoleGroupAdminPanel({
             </div>
             <div className="profile-tag-row">
               {roleGroup.permissions.map((permission) => (
-                <span key={permission}>{adminPermissionOptions.find((item) => item.value === permission)?.label ?? permission}</span>
+                <span key={permission}>{ADMIN_PERMISSION_LABELS.get(permission) ?? permission}</span>
               ))}
             </div>
           </div>
@@ -1643,7 +2085,22 @@ function RoleGroupAdminPanel({
 
 function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState({ q: "", status: "", role: "", page: 1 });
+  const [filters, setFilters] = useState({
+    q: "",
+    status: "",
+    role: "",
+    accountType: "individual",
+    country: "",
+    city: "",
+    gender: "",
+    email: "",
+    phone: "",
+    joinedFrom: "",
+    joinedTo: "",
+    lastOnlineFrom: "",
+    lastOnlineTo: "",
+    page: 1
+  });
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const usersQuery = useQuery({
     queryKey: ["admin-users", filters],
@@ -1662,6 +2119,17 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
         params.set("role", filters.role);
       }
 
+      if (filters.accountType) {
+        params.set("accountType", filters.accountType);
+      }
+
+      ["country", "city", "gender", "email", "phone", "joinedFrom", "joinedTo", "lastOnlineFrom", "lastOnlineTo"].forEach((key) => {
+        const value = filters[key as keyof typeof filters];
+        if (value) {
+          params.set(key, String(value));
+        }
+      });
+
       params.set("page", String(filters.page));
       params.set("pageSize", "25");
       return listAdminUsers(params);
@@ -1675,10 +2143,13 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
   const updateMutation = useMutation({
     mutationFn: (input: {
       id: string;
-      status?: "active" | "invited" | "pending" | "disabled";
+      status?: AdminManagedUser["status"];
       role?: "user" | "admin" | "super_admin";
       adminRoleGroupId?: string | null;
-    }) => updateAdminUser(input.id, { status: input.status, role: input.role, adminRoleGroupId: input.adminRoleGroupId }),
+    } & Partial<AdminManagedUser>) => {
+      const { id, ...data } = input;
+      return updateAdminUser(id, data);
+    },
     onSuccess: (_, input) => {
       void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-users-total"] });
@@ -1695,6 +2166,16 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
       q: String(form.get("q") || ""),
       status: String(form.get("status") || ""),
       role: String(form.get("role") || ""),
+      accountType: String(form.get("accountType") || "individual"),
+      country: String(form.get("country") || ""),
+      city: String(form.get("city") || ""),
+      gender: String(form.get("gender") || ""),
+      email: String(form.get("email") || ""),
+      phone: String(form.get("phone") || ""),
+      joinedFrom: String(form.get("joinedFrom") || ""),
+      joinedTo: String(form.get("joinedTo") || ""),
+      lastOnlineFrom: String(form.get("lastOnlineFrom") || ""),
+      lastOnlineTo: String(form.get("lastOnlineTo") || ""),
       page: 1
     });
   }
@@ -1708,19 +2189,29 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
       <p className="admin-section-desc">
         Tüm üyeleri ara, filtrele ve yönet. Statü değiştirebilir, rol atayabilir, admin rol grubu belirleyebilirsin.
       </p>
+      <div className="segmented-control">
+        <button className={filters.accountType === "individual" ? "active" : ""} onClick={() => setFilters((current) => ({ ...current, accountType: "individual", page: 1 }))} type="button">
+          Bireysel Üyeler
+        </button>
+        <button className={filters.accountType === "corporate" ? "active" : ""} onClick={() => setFilters((current) => ({ ...current, accountType: "corporate", page: 1 }))} type="button">
+          Kurumsal Üyeler
+        </button>
+      </div>
       <form className="guest-invite-form" onSubmit={handleFilterSubmit}>
+        <input name="accountType" type="hidden" value={filters.accountType} />
         <label>
           Arama
-          <input name="q" placeholder="Ad veya email" defaultValue={filters.q} />
+          <input name="q" placeholder="Kullanıcı adı, ad, email, telefon, şirket" defaultValue={filters.q} />
         </label>
         <label>
           Statü
           <select name="status" defaultValue={filters.status}>
             <option value="">Tümü</option>
-            <option value="active">Active</option>
-            <option value="invited">Invited</option>
-            <option value="pending">Pending</option>
-            <option value="disabled">Disabled</option>
+            {USER_STATUS_OPTIONS.map((status) => (
+              <option key={status.value} value={status.value}>
+                {status.label}
+              </option>
+            ))}
           </select>
         </label>
         <label>
@@ -1731,6 +2222,49 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
             <option value="admin">Admin</option>
             <option value="super_admin">Super admin</option>
           </select>
+        </label>
+        <label>
+          Ülke
+          <input name="country" placeholder="Ülke" defaultValue={filters.country} />
+        </label>
+        <label>
+          Şehir
+          <input name="city" placeholder="Şehir" defaultValue={filters.city} />
+        </label>
+        <label>
+          Cinsiyet
+          <select name="gender" defaultValue={filters.gender}>
+            <option value="">Tümü</option>
+            {GENDER_OPTIONS.map((gender) => (
+              <option key={gender} value={gender}>
+                {gender}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Eposta
+          <input name="email" placeholder="email@..." defaultValue={filters.email} />
+        </label>
+        <label>
+          Telefon
+          <input name="phone" placeholder="+90..." defaultValue={filters.phone} />
+        </label>
+        <label>
+          Üyelik başlangıç
+          <input name="joinedFrom" type="date" defaultValue={filters.joinedFrom} />
+        </label>
+        <label>
+          Üyelik bitiş
+          <input name="joinedTo" type="date" defaultValue={filters.joinedTo} />
+        </label>
+        <label>
+          Son online başlangıç
+          <input name="lastOnlineFrom" type="date" defaultValue={filters.lastOnlineFrom} />
+        </label>
+        <label>
+          Son online bitiş
+          <input name="lastOnlineTo" type="date" defaultValue={filters.lastOnlineTo} />
         </label>
         <button className="secondary-action" type="submit">
           Filtrele
@@ -1797,7 +2331,7 @@ function UserAdminRow({
   isPending: boolean;
   onSelect: () => void;
   onUpdate: (input: {
-    status?: "active" | "invited" | "pending" | "disabled";
+    status?: AdminManagedUser["status"];
     role?: "user" | "admin" | "super_admin";
     adminRoleGroupId?: string | null;
   }) => void;
@@ -1808,9 +2342,15 @@ function UserAdminRow({
     <div className="admin-list-item">
       <div className="admin-list-row">
         <div>
-          <strong>{user.name}</strong>
-          <span>{user.email}</span>
+          <strong>{user.username ? `@${user.username}` : user.name}</strong>
+          <span>
+            {user.accountType === "corporate" ? user.companyName || user.tradeName || user.name : user.name} · {user.email}
+          </span>
         </div>
+        <span className="muted">{[user.city, user.country].filter(Boolean).join(" - ") || "Konum yok"}</span>
+        <span className="muted">{user.followerCount ?? 0} takipçi</span>
+        <span className="muted">{user.followingCount ?? 0} takip</span>
+        <span className="muted">{user.lastOnlineAt ? formatDateTime(user.lastOnlineAt) : "Son online yok"}</span>
         <span className={`status-pill status-${user.status}`}>{user.status}</span>
         <span className="muted">{user.role}</span>
         <select
@@ -1832,7 +2372,7 @@ function UserAdminRow({
               </option>
             ))}
         </select>
-        <span className="muted">{user._count?.createdEvents ?? 0} event</span>
+        <span className="muted">{user.createdAt ? formatDateTime(user.createdAt) : "Üyelik tarihi yok"}</span>
         <div className="row-actions">
           <button className="secondary-action" onClick={onSelect} type="button">
             Detay
@@ -1870,13 +2410,47 @@ function UserDetailCard({
 }: {
   isPending: boolean;
   onUpdate: (input: {
-    status?: "active" | "invited" | "pending" | "disabled";
+    status?: AdminManagedUser["status"];
     role?: "user" | "admin" | "super_admin";
     adminRoleGroupId?: string | null;
-  }) => void;
+  } & Partial<AdminManagedUser>) => void;
   roleGroups: AdminRoleGroup[];
   user: AdminManagedUserDetail;
 }) {
+  function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+
+    onUpdate({
+      username: String(form.get("username") || "") || null,
+      name: String(form.get("name") || user.name),
+      email: String(form.get("email") || user.email),
+      phone: String(form.get("phone") || "") || null,
+      country: String(form.get("country") || "") || null,
+      city: String(form.get("city") || "") || null,
+      district: String(form.get("district") || "") || null,
+      address: String(form.get("address") || "") || null,
+      gender: String(form.get("gender") || "") || null,
+      birthDate: String(form.get("birthDate") || "") || null,
+      website: String(form.get("website") || "") || null,
+      accountType: String(form.get("accountType") || "individual"),
+      companyName: String(form.get("companyName") || "") || null,
+      tradeName: String(form.get("tradeName") || "") || null,
+      companyType: String(form.get("companyType") || "") || null,
+      businessCategory: String(form.get("businessCategory") || "") || null,
+      followerCount: Number(form.get("followerCount") || 0),
+      followingCount: Number(form.get("followingCount") || 0),
+      penaltyScoreLastYear: Number(form.get("penaltyScoreLastYear") || 0),
+      penaltyScoreAllTime: Number(form.get("penaltyScoreAllTime") || 0)
+    });
+  }
+
+  function handleInterventionSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    onUpdate({ status: String(form.get("status") || user.status) as AdminManagedUser["status"] });
+  }
+
   return (
     <div className="admin-list-item">
       <div className="section-header compact">
@@ -1888,12 +2462,13 @@ function UserDetailCard({
       </div>
       <div className="admin-list-row">
         <div>
-          <strong>Hesap bilgileri</strong>
+          <strong>Temel Bilgiler</strong>
           <span>
             Rol: {user.role} · Rol grubu: {user.adminRoleGroup?.name ?? "Yok"}
           </span>
           <span>
-            Oluşturulma: {user.createdAt ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date(user.createdAt)) : "Bilinmiyor"}
+            Üyelik: {user.createdAt ? formatDateTime(user.createdAt) : "Bilinmiyor"} · Son online:{" "}
+            {user.lastOnlineAt ? formatDateTime(user.lastOnlineAt) : "Bilinmiyor"}
           </span>
         </div>
         <label className="inline-select-label">
@@ -1940,16 +2515,246 @@ function UserDetailCard({
           )}
         </div>
       </div>
+      <form className="admin-form" onSubmit={handleProfileSubmit}>
+        <div className="admin-form-grid">
+          <label>
+            Üye tipi
+            <select name="accountType" defaultValue={user.accountType ?? "individual"}>
+              <option value="individual">Bireysel</option>
+              <option value="corporate">Kurumsal</option>
+            </select>
+          </label>
+          <label>
+            Kullanıcı adı
+            <input name="username" defaultValue={user.username ?? ""} placeholder="username" />
+          </label>
+          <label>
+            Adı Soyadı
+            <input name="name" defaultValue={user.name} required />
+          </label>
+          <label>
+            Eposta
+            <input name="email" defaultValue={user.email} required type="email" />
+          </label>
+          <label>
+            GSM No
+            <input name="phone" defaultValue={user.phone ?? ""} />
+          </label>
+          <label>
+            Ülke
+            <input name="country" defaultValue={user.country ?? ""} />
+          </label>
+          <label>
+            Şehir
+            <input name="city" defaultValue={user.city ?? ""} />
+          </label>
+          <label>
+            İlçe
+            <input name="district" defaultValue={user.district ?? ""} />
+          </label>
+          <label>
+            Adres
+            <input name="address" defaultValue={user.address ?? ""} />
+          </label>
+          <label>
+            Cinsiyet
+            <select name="gender" defaultValue={user.gender ?? ""}>
+              <option value="">Tümü / Belirtilmemiş</option>
+              {GENDER_OPTIONS.map((gender) => (
+                <option key={gender} value={gender}>
+                  {gender}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Doğum tarihi
+            <input name="birthDate" defaultValue={user.birthDate ? new Date(user.birthDate).toISOString().slice(0, 10) : ""} type="date" />
+          </label>
+          <label>
+            Web sitesi
+            <input name="website" defaultValue={user.website ?? ""} />
+          </label>
+          <label>
+            İşletme adı
+            <input name="companyName" defaultValue={user.companyName ?? ""} />
+          </label>
+          <label>
+            Ticari unvan
+            <input name="tradeName" defaultValue={user.tradeName ?? ""} />
+          </label>
+          <label>
+            Şirket türü
+            <input name="companyType" defaultValue={user.companyType ?? ""} />
+          </label>
+          <label>
+            İşletme kategorisi
+            <input name="businessCategory" defaultValue={user.businessCategory ?? ""} />
+          </label>
+          <label>
+            Takip eden
+            <input name="followerCount" defaultValue={user.followerCount ?? 0} min={0} type="number" />
+          </label>
+          <label>
+            Takip ettiği
+            <input name="followingCount" defaultValue={user.followingCount ?? 0} min={0} type="number" />
+          </label>
+          <label>
+            Ceza puanı son 1 yıl
+            <input name="penaltyScoreLastYear" defaultValue={user.penaltyScoreLastYear ?? 0} min={0} type="number" />
+          </label>
+          <label>
+            Ceza puanı tüm zamanlar
+            <input name="penaltyScoreAllTime" defaultValue={user.penaltyScoreAllTime ?? 0} min={0} type="number" />
+          </label>
+        </div>
+        <div className="row-actions">
+          <button className="secondary-action" disabled={isPending} type="submit">
+            <Check size={18} />
+            Temel bilgileri kaydet
+          </button>
+          <button className="ghost-action" disabled={isPending} onClick={() => onUpdate({ username: `User${Date.now().toString().slice(-6)}` })} type="button">
+            Kullanıcı adını resetle
+          </button>
+          <button className="ghost-action" disabled={isPending} onClick={() => onUpdate({ website: null })} type="button">
+            Web sitesini sil
+          </button>
+        </div>
+      </form>
       <div className="metric-grid compact-metrics">
         <MetricCard icon={<CalendarCheck size={20} />} label="Oluşturduğu event" value={user.stats.createdEvents} />
         <MetricCard icon={<Users size={20} />} label="Katılım" value={user.stats.eventParticipations} />
         <MetricCard icon={<AlertTriangle size={20} />} label="Bildirdiği şikayet" value={user.stats.submittedReports} />
         <MetricCard icon={<Check size={20} />} label="Çözdüğü rapor" value={user.stats.resolvedReports} />
+        <MetricCard icon={<Users size={20} />} label="Takip eden" value={user.followerCount ?? 0} />
+        <MetricCard icon={<Users size={20} />} label="Takip ettiği" value={user.followingCount ?? 0} />
+        <MetricCard icon={<AlertTriangle size={20} />} label="Ceza son 1 yıl" value={user.penaltyScoreLastYear ?? 0} />
+        <MetricCard icon={<AlertTriangle size={20} />} label="Ceza tüm zamanlar" value={user.penaltyScoreAllTime ?? 0} />
+      </div>
+      <div className="admin-list-row">
+        <div>
+          <strong>Davet ilişkileri</strong>
+          <span>Davet eden: {user.invitedBy?.name ?? "Yok"}</span>
+          <span>Davet ettiği kullanıcılar: {(user.invitedUsers ?? []).map((item) => item.name).join(", ") || "Yok"}</span>
+        </div>
       </div>
       <div className="profile-tag-row">
         {user.interestTags.length > 0 ? user.interestTags.map((tag) => <span key={tag.id}>{tag.name}</span>) : <span>İlgi alanı yok</span>}
       </div>
+      <form className="admin-form" onSubmit={handleInterventionSubmit}>
+        <h3>Müdahale</h3>
+        <div className="admin-form-grid">
+          <label>
+            Müdahale / Statü
+            <select name="status" defaultValue={user.status}>
+              {USER_STATUS_OPTIONS.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Mesaj
+            <textarea name="message" placeholder="Kullanıcıya gönderilecek bildirim/e-posta metni için hazırlık alanı" rows={2} />
+          </label>
+        </div>
+        <button className="secondary-action" disabled={isPending} type="submit">
+          Uygula
+        </button>
+      </form>
     </div>
+  );
+}
+
+function AdminContentPanel<T extends { id: string; status: string; createdAt?: string | Date }>({
+  description,
+  isPending,
+  items,
+  onStatusChange,
+  renderMeta,
+  renderPrimary,
+  renderSecondary,
+  title
+}: {
+  description: string;
+  isPending: boolean;
+  items: T[];
+  onStatusChange: (id: string, status: string) => void;
+  renderMeta: (item: T) => string;
+  renderPrimary: (item: T) => string;
+  renderSecondary: (item: T) => string;
+  title: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const statusOptions = Array.from(new Set(items.map((item) => item.status))).sort();
+  const visibleItems = items.filter((item) => {
+    const matchesQuery = !query || JSON.stringify(item).toLowerCase().includes(query.toLowerCase());
+    const matchesStatus = !statusFilter || item.status === statusFilter;
+
+    return matchesQuery && matchesStatus;
+  });
+
+  return (
+    <section className="admin-panel">
+      <div className="section-header compact">
+        <h2>{title}</h2>
+        <span>{visibleItems.length} / {items.length} kayıt</span>
+      </div>
+      <p className="admin-section-desc">{description}</p>
+      <div className="admin-toolbar">
+        <label className="admin-search-field">
+          Arama
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ad, içerik, kullanıcı veya durum" />
+        </label>
+        {statusOptions.length > 0 ? (
+          <div className="segmented-control compact">
+            <button className={!statusFilter ? "active" : ""} onClick={() => setStatusFilter("")} type="button">
+              Tümü
+            </button>
+            {statusOptions.map((status) => (
+              <button className={statusFilter === status ? "active" : ""} key={status} onClick={() => setStatusFilter(status)} type="button">
+                {status}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      {visibleItems.length === 0 ? (
+        <div className="admin-empty-state">
+          <strong>Kayıt bulunamadı</strong>
+          <p>Filtreyi temizleyebilir veya ürün akışından yeni içerik oluşmasını bekleyebilirsin.</p>
+        </div>
+      ) : (
+        <div className="admin-list admin-record-list">
+          {visibleItems.map((item) => (
+            <div className="admin-list-item" key={item.id}>
+              <div className="admin-list-row admin-record-row">
+                <div className="admin-record-main">
+                  <strong>{renderPrimary(item)}</strong>
+                  <span>{renderSecondary(item)}</span>
+                  <span>{renderMeta(item)}</span>
+                </div>
+                <span className={`status-pill status-${item.status}`}>{item.status}</span>
+                <span className="muted admin-record-date">{item.createdAt ? formatDateTime(item.createdAt) : ""}</span>
+                <div className="row-actions admin-record-actions">
+                  <button className="secondary-action" disabled={isPending || item.status === "active"} onClick={() => onStatusChange(item.id, "active")} type="button">
+                    Aktif yap
+                  </button>
+                  <button className="ghost-action" disabled={isPending || item.status === "hidden"} onClick={() => onStatusChange(item.id, "hidden")} type="button">
+                    Yayından kaldır
+                  </button>
+                  <button className="danger-action" disabled={isPending || item.status === "banned"} onClick={() => onStatusChange(item.id, "banned")} type="button">
+                    Yasakla
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1977,7 +2782,7 @@ function ReportAdminPanel({
   onCreateRule: (input: ReportRuleInput) => void;
   onResolve: (input: {
     id: string;
-    action: "archive_event" | "archive_tag" | "disable_user";
+    action: ResolveReportActionInput["action"];
     resolutionNote?: string;
   }) => void;
   onSaveGroupNote: (input: { targetType: ReportTargetType; targetId: string; note: string }) => void;
@@ -2062,6 +2867,30 @@ function ReportAdminPanel({
       return { action: "archive_tag" as const, label: "Tag'i arşivle" };
     }
 
+    if (report.targetType === "media") {
+      return { action: "remove_media" as const, label: "Medyayı yayından kaldır" };
+    }
+
+    if (report.targetType === "place") {
+      return { action: "archive_place" as const, label: "Mekanı yayından kaldır" };
+    }
+
+    if (["tag_comment", "event_comment", "place_comment", "comment_reply"].includes(report.targetType)) {
+      return { action: "remove_comment" as const, label: "Yorumu yayından kaldır" };
+    }
+
+    if (report.targetType === "username") {
+      return { action: "reset_username" as const, label: "Kullanıcı adını değiştir" };
+    }
+
+    if (report.targetType === "website_url") {
+      return { action: "remove_website" as const, label: "Web sitesini sil" };
+    }
+
+    if (report.targetType === "private_message") {
+      return { action: "remove_private_messages" as const, label: "Özel mesajları yayından kaldır" };
+    }
+
     return { action: "disable_user" as const, label: "Kullanıcıyı disable et" };
   }
 
@@ -2076,15 +2905,20 @@ function ReportAdminPanel({
       <p className="admin-section-desc">
         Şikayet kuralları tanımla, bildirilen içerikleri incele ve moderasyon kararları uygula. Açık şikayetler acil dikkat gerektirir.
       </p>
+      <div className="form-help">
+        Kural ve rapor hedefleri: {REPORT_TARGET_OPTIONS.map((option) => option.label).join(", ")}.
+      </div>
       <form className="admin-form" onSubmit={handleRuleSubmit}>
         <h3>Şikayet kuralı oluştur</h3>
         <div className="admin-form-grid">
           <label>
             Kategori
             <select name="targetType" value={ruleTargetType} onChange={(event) => setRuleTargetType(event.target.value as ReportTargetType)}>
-              <option value="event">Etkinlik</option>
-              <option value="tag">Tag</option>
-              <option value="user">Kullanıcı</option>
+              {REPORT_TARGET_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
           <label>
@@ -2198,6 +3032,12 @@ function ReportAdminPanel({
                   <option value="ban_user">Kullanıcıyı yasakla</option>
                   <option value="archive_event">Etkinliği arşivle</option>
                   <option value="archive_tag">Tag'i arşivle</option>
+                  <option value="remove_media">Medyayı yayından kaldır</option>
+                  <option value="archive_place">Mekanı yayından kaldır</option>
+                  <option value="remove_comment">Yorumu yayından kaldır</option>
+                  <option value="reset_username">Kullanıcı adını değiştir</option>
+                  <option value="remove_website">Web sitesini sil</option>
+                  <option value="remove_private_messages">Özel mesajları yayından kaldır</option>
                 </select>
               </label>
               <label>
@@ -2447,6 +3287,12 @@ function TagAdminPanel({
           <div className="metric-grid compact-metrics">
             <MetricCard icon={<CalendarCheck size={20} />} label="Event" value={detail._count?.events ?? 0} />
             <MetricCard icon={<Users size={20} />} label="İlgilenen üye" value={detail._count?.interestedUsers ?? 0} />
+            <MetricCard icon={<Check size={20} />} label="Like" value={detail.likeCount} />
+            <MetricCard icon={<Check size={20} />} label="OK" value={detail.okCount} />
+            <MetricCard icon={<X size={20} />} label="Dislike" value={detail.dislikeCount} />
+            <MetricCard icon={<MessageSquare size={20} />} label="Yorum" value={detail.commentCount} />
+            <MetricCard icon={<Users size={20} />} label="Görüntülenme" value={detail.viewCount} />
+            <MetricCard icon={<Users size={20} />} label="Görüntüleyen" value={detail.viewerCount} />
             <MetricCard icon={<AlertTriangle size={20} />} label="Şikayet" value={detail.reportCount} />
           </div>
           <div className="admin-list-row">
@@ -2457,6 +3303,14 @@ function TagAdminPanel({
             <div>
               <strong>Son güncelleyen</strong>
               <span>{detail.updatedBy?.email ?? "Bilinmiyor"}</span>
+            </div>
+            <div>
+              <strong>İlk yorum yazan</strong>
+              <span>{detail.firstCommenter?.email ?? "Henüz yok"}</span>
+            </div>
+            <div>
+              <strong>İlk profiline ekleyen</strong>
+              <span>{detail.firstProfileUser?.email ?? "Henüz yok"}</span>
             </div>
           </div>
           <form className="admin-form compact-form" onSubmit={handleMergeSubmit}>

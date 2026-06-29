@@ -69,6 +69,24 @@ export class MailService {
     });
   }
 
+  async sendModerationDecisionEmail(input: { to: string; name: string; decision: string; action: string; note?: string | null }) {
+    await this.send({
+      to: input.to,
+      subject: "Konnektora moderasyon kararı",
+      text: `Merhaba ${input.name}, içerikle ilgili moderasyon kararı: ${input.decision}. Aksiyon: ${input.action}. ${input.note ?? ""}`,
+      html: `<p>Merhaba ${input.name},</p><p>İçerikle ilgili moderasyon kararı: <strong>${input.decision}</strong>.</p><p>Aksiyon: <strong>${input.action}</strong></p>${input.note ? `<p>${input.note}</p>` : ""}`
+    });
+  }
+
+  async sendReportFeedbackEmail(input: { to: string; name: string; decision: string; note?: string | null }) {
+    await this.send({
+      to: input.to,
+      subject: "Konnektora şikayet geri bildirimi",
+      text: `Merhaba ${input.name}, bildirdiğin içerik incelendi. Karar: ${input.decision}. ${input.note ?? ""}`,
+      html: `<p>Merhaba ${input.name},</p><p>Bildirdiğin içerik incelendi. Karar: <strong>${input.decision}</strong>.</p>${input.note ? `<p>${input.note}</p>` : ""}`
+    });
+  }
+
   private async send(message: MailMessage) {
     const apiKey = this.configService.get<string>("RESEND_API_KEY");
     const from = this.configService.get<string>("EMAIL_FROM");

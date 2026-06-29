@@ -35,8 +35,14 @@ export class AdminService {
 
     if (query.q) {
       where.OR = [
+        { username: { contains: query.q, mode: "insensitive" } },
         { name: { contains: query.q, mode: "insensitive" } },
-        { email: { contains: query.q, mode: "insensitive" } }
+        { email: { contains: query.q, mode: "insensitive" } },
+        { phone: { contains: query.q, mode: "insensitive" } },
+        { city: { contains: query.q, mode: "insensitive" } },
+        { country: { contains: query.q, mode: "insensitive" } },
+        { companyName: { contains: query.q, mode: "insensitive" } },
+        { tradeName: { contains: query.q, mode: "insensitive" } }
       ];
     }
 
@@ -46,6 +52,44 @@ export class AdminService {
 
     if (query.role) {
       where.role = query.role;
+    }
+
+    if (query.accountType) {
+      where.accountType = query.accountType;
+    }
+
+    if (query.country) {
+      where.country = { contains: query.country, mode: "insensitive" };
+    }
+
+    if (query.city) {
+      where.city = { contains: query.city, mode: "insensitive" };
+    }
+
+    if (query.gender) {
+      where.gender = query.gender;
+    }
+
+    if (query.email) {
+      where.email = { contains: query.email, mode: "insensitive" };
+    }
+
+    if (query.phone) {
+      where.phone = { contains: query.phone, mode: "insensitive" };
+    }
+
+    if (query.joinedFrom || query.joinedTo) {
+      where.createdAt = {
+        gte: query.joinedFrom ? new Date(query.joinedFrom) : undefined,
+        lte: query.joinedTo ? new Date(query.joinedTo) : undefined
+      };
+    }
+
+    if (query.lastOnlineFrom || query.lastOnlineTo) {
+      where.lastOnlineAt = {
+        gte: query.lastOnlineFrom ? new Date(query.lastOnlineFrom) : undefined,
+        lte: query.lastOnlineTo ? new Date(query.lastOnlineTo) : undefined
+      };
     }
 
     const [total, users] = await Promise.all([
@@ -78,7 +122,9 @@ export class AdminService {
         eventParticipations: { select: { id: true } },
         submittedReports: { select: { id: true } },
         resolvedReports: { select: { id: true } },
-        interestTags: { select: { tag: true } }
+        interestTags: { select: { tag: true } },
+        invitedBy: { select: this.basicUserSelect() },
+        invitedUsers: { take: 20, orderBy: { createdAt: "desc" }, select: this.basicUserSelect() }
       }
     });
 
@@ -122,6 +168,26 @@ export class AdminService {
       data: {
         status: input.status,
         role: input.role,
+        username: input.username === undefined ? undefined : input.username.trim() || null,
+        name: input.name?.trim(),
+        email: input.email?.trim(),
+        phone: input.phone === undefined ? undefined : input.phone.trim() || null,
+        country: input.country === undefined ? undefined : input.country.trim() || null,
+        city: input.city === undefined ? undefined : input.city.trim() || null,
+        district: input.district === undefined ? undefined : input.district.trim() || null,
+        address: input.address === undefined ? undefined : input.address.trim() || null,
+        gender: input.gender === undefined ? undefined : input.gender.trim() || null,
+        birthDate: input.birthDate === undefined ? undefined : input.birthDate ? new Date(input.birthDate) : null,
+        website: input.website === undefined ? undefined : input.website.trim() || null,
+        accountType: input.accountType,
+        companyName: input.companyName === undefined ? undefined : input.companyName.trim() || null,
+        tradeName: input.tradeName === undefined ? undefined : input.tradeName.trim() || null,
+        companyType: input.companyType === undefined ? undefined : input.companyType.trim() || null,
+        businessCategory: input.businessCategory === undefined ? undefined : input.businessCategory.trim() || null,
+        followerCount: input.followerCount,
+        followingCount: input.followingCount,
+        penaltyScoreLastYear: input.penaltyScoreLastYear,
+        penaltyScoreAllTime: input.penaltyScoreAllTime,
         adminRoleGroup:
           input.adminRoleGroupId !== undefined
             ? input.adminRoleGroupId
@@ -175,8 +241,29 @@ export class AdminService {
       id: true,
       email: true,
       name: true,
+      username: true,
       role: true,
       status: true,
+      accountType: true,
+      phone: true,
+      country: true,
+      city: true,
+      district: true,
+      address: true,
+      gender: true,
+      birthDate: true,
+      website: true,
+      companyName: true,
+      tradeName: true,
+      companyType: true,
+      businessCategory: true,
+      followerCount: true,
+      followingCount: true,
+      lastOnlineAt: true,
+      emailVerified: true,
+      invitedById: true,
+      penaltyScoreLastYear: true,
+      penaltyScoreAllTime: true,
       createdAt: true,
       updatedAt: true,
       adminRoleGroupId: true,
@@ -188,6 +275,16 @@ export class AdminService {
           submittedReports: true
         }
       }
+    } satisfies Prisma.UserSelect;
+  }
+
+  private basicUserSelect() {
+    return {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      status: true
     } satisfies Prisma.UserSelect;
   }
 }

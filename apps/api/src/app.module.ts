@@ -3,6 +3,8 @@ import { ConfigModule } from "@nestjs/config";
 import { AdminModule } from "./admin/admin.module";
 import { AuthModule } from "./auth/auth.module";
 import { CmsModule } from "./cms/cms.module";
+import { ContentAdminModule } from "./content-admin/content-admin.module";
+import { ContentModule } from "./content/content.module";
 import { EventsModule } from "./events/events.module";
 import { HealthController } from "./health.controller";
 import { MessagesModule } from "./messages/messages.module";
@@ -17,6 +19,8 @@ import { TagsModule } from "./tags/tags.module";
     PrismaModule,
     AuthModule,
     CmsModule,
+    ContentAdminModule,
+    ContentModule,
     AdminModule,
     EventsModule,
     MessagesModule,
