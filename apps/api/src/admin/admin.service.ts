@@ -1,11 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, User, UserStatus } from "@prisma/client";
+import { AuthService } from "../auth/auth.service";
+import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { AdminUserQueryDto, CreateAdminRoleGroupDto, UpdateAdminRoleGroupDto, UpdateAdminUserDto } from "./admin.dto";
+import { AdminUserActionDto, AdminUserQueryDto, CreateAdminRoleGroupDto, UpdateAdminRoleGroupDto, UpdateAdminUserDto } from "./admin.dto";
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly authService: AuthService,
+    private readonly mailService: MailService
+  ) {}
 
   async getDashboard() {
     const [publishedEvents, draftEvents, activeTags, upcomingEvents] = await Promise.all([
@@ -92,11 +98,21 @@ export class AdminService {
       };
     }
 
+    if (query.ageFrom !== undefined || query.ageTo !== undefined) {
+      const now = new Date();
+      where.birthDate = {
+        lte: query.ageFrom !== undefined ? this.birthDateForAge(now, query.ageFrom) : undefined,
+        gte: query.ageTo !== undefined ? this.birthDateForAge(now, query.ageTo + 1) : undefined
+      };
+    }
+
+    const orderBy = this.resolveUserOrderBy(query.sortBy, query.sortDir);
+
     const [total, users] = await Promise.all([
       this.prisma.user.count({ where }),
       this.prisma.user.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: this.userListSelect()
@@ -199,6 +215,61 @@ export class AdminService {
     });
   }
 
+  async runUserAction(id: string, input: AdminUserActionDto, admin: User) {
+    if (id === admin.id && ["suspend_7_days", "suspend_30_days", "ban_user"].includes(input.action)) {
+      throw new BadRequestException("Admin kendi hesabına bu müdahaleyi uygulayamaz.");
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id } });
+
+    if (!user) {
+      throw new NotFoundException("Üye bulunamadı.");
+    }
+
+    if (input.action === "send_verification_email") {
+      await this.authService.sendVerificationForUser(id);
+      await this.createAdminActivity(admin.id, "send_verification_email", "user", id, input.note);
+      return this.getUser(id);
+    }
+
+    if (input.action === "send_password_reset") {
+      await this.authService.sendPasswordResetForUser(id);
+      await this.createAdminActivity(admin.id, "send_password_reset", "user", id, input.note);
+      return this.getUser(id);
+    }
+
+    const actionData = this.resolveUserActionData(input.action);
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: actionData.data,
+      select: this.userListSelect()
+    });
+
+    if (actionData.shouldNotify) {
+      await (this.prisma as any).notification.create({
+        data: {
+          userId: id,
+          type: "admin_user_action",
+          title: "Hesap müdahalesi",
+          body: input.note?.trim() || input.action,
+          targetType: "user",
+          targetId: id
+        }
+      });
+      await this.mailService.sendAdminUserInterventionEmail({
+        to: user.email,
+        name: user.name,
+        action: input.action,
+        note: input.note,
+        until: actionData.until
+      });
+    }
+
+    await this.createAdminActivity(admin.id, input.action, "user", id, input.note, { status: updated.status });
+
+    return updated;
+  }
+
   listRoleGroups() {
     return this.prisma.adminRoleGroup.findMany({
       orderBy: [{ status: "asc" }, { name: "asc" }],
@@ -286,5 +357,94 @@ export class AdminService {
       role: true,
       status: true
     } satisfies Prisma.UserSelect;
+  }
+
+  private resolveUserActionData(action: AdminUserActionDto["action"]) {
+    if (action === "reset_username") {
+      return {
+        data: { username: `User${Date.now().toString().slice(-8)}` },
+        shouldNotify: true,
+        until: null
+      };
+    }
+
+    if (action === "remove_website") {
+      return {
+        data: { website: null },
+        shouldNotify: true,
+        until: null
+      };
+    }
+
+    if (action === "suspend_7_days" || action === "suspend_30_days") {
+      const days = action === "suspend_7_days" ? 7 : 30;
+      return {
+        data: { status: UserStatus.suspended },
+        shouldNotify: true,
+        until: new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+      };
+    }
+
+    if (action === "ban_user") {
+      return {
+        data: { status: UserStatus.banned },
+        shouldNotify: true,
+        until: null
+      };
+    }
+
+    if (action === "activate_user") {
+      return {
+        data: { status: UserStatus.active },
+        shouldNotify: true,
+        until: null
+      };
+    }
+
+    throw new BadRequestException("Desteklenmeyen üye aksiyonu.");
+  }
+
+  private birthDateForAge(now: Date, age: number) {
+    return new Date(Date.UTC(now.getUTCFullYear() - age, now.getUTCMonth(), now.getUTCDate()));
+  }
+
+  private resolveUserOrderBy(sortBy?: string, sortDir: "asc" | "desc" = "desc"): Prisma.UserOrderByWithRelationInput {
+    if (sortBy === "username") {
+      return { username: sortDir };
+    }
+
+    if (sortBy === "followers") {
+      return { followerCount: sortDir };
+    }
+
+    if (sortBy === "following") {
+      return { followingCount: sortDir };
+    }
+
+    if (sortBy === "lastOnlineAt") {
+      return { lastOnlineAt: sortDir };
+    }
+
+    return { createdAt: sortDir };
+  }
+
+  private createAdminActivity(
+    actorId: string,
+    action: string,
+    targetType: string,
+    targetId: string,
+    note?: string | null,
+    metadata?: Record<string, unknown>
+  ) {
+    return (this.prisma as any).adminActivityLog.create({
+      data: {
+        actorId,
+        action,
+        targetType,
+        targetId,
+        note: note?.trim() || null,
+        metadata: metadata ?? undefined
+      }
+    });
   }
 }

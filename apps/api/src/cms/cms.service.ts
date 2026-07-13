@@ -174,6 +174,12 @@ export class CmsService {
         title: input.title.trim(),
         body: input.body.trim(),
         target: input.target ?? "all",
+        targetLastLoginFrom: input.targetLastLoginFrom ? new Date(input.targetLastLoginFrom) : null,
+        targetLastLoginTo: input.targetLastLoginTo ? new Date(input.targetLastLoginTo) : null,
+        targetJoinedFrom: input.targetJoinedFrom ? new Date(input.targetJoinedFrom) : null,
+        targetJoinedTo: input.targetJoinedTo ? new Date(input.targetJoinedTo) : null,
+        targetAppVersion: input.targetAppVersion?.trim() || null,
+        publishMode: input.publishMode ?? "scheduled",
         publishAt: input.publishAt ? new Date(input.publishAt) : new Date(),
         expiresAt: input.expiresAt ? new Date(input.expiresAt) : null
       }
@@ -193,6 +199,15 @@ export class CmsService {
         title: input.title?.trim(),
         body: input.body?.trim(),
         target: input.target,
+        targetLastLoginFrom:
+          input.targetLastLoginFrom === undefined ? undefined : input.targetLastLoginFrom ? new Date(input.targetLastLoginFrom) : null,
+        targetLastLoginTo:
+          input.targetLastLoginTo === undefined ? undefined : input.targetLastLoginTo ? new Date(input.targetLastLoginTo) : null,
+        targetJoinedFrom:
+          input.targetJoinedFrom === undefined ? undefined : input.targetJoinedFrom ? new Date(input.targetJoinedFrom) : null,
+        targetJoinedTo: input.targetJoinedTo === undefined ? undefined : input.targetJoinedTo ? new Date(input.targetJoinedTo) : null,
+        targetAppVersion: input.targetAppVersion === undefined ? undefined : input.targetAppVersion?.trim() || null,
+        publishMode: input.publishMode,
         status: input.status,
         publishAt: input.publishAt ? new Date(input.publishAt) : undefined,
         expiresAt: input.expiresAt === undefined ? undefined : input.expiresAt ? new Date(input.expiresAt) : null

@@ -7,6 +7,7 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RequirePermissions } from "../auth/permissions";
 import {
   CreateReportDto,
+  CreateReportGroupCommentDto,
   CreateModerationDecisionDto,
   CreateReportRuleDto,
   ResolveReportActionDto,
@@ -57,6 +58,18 @@ export class ReportsController {
     @CurrentUser() user: User
   ) {
     return this.reportsService.updateGroupNote(targetType, targetId, body, user);
+  }
+
+  @Post("admin/report-groups/:targetType/:targetId/comments")
+  @UseGuards(AdminGuard)
+  @RequirePermissions("reports.manage")
+  createReportGroupComment(
+    @Param("targetType") targetType: ReportTargetType,
+    @Param("targetId") targetId: string,
+    @Body() body: CreateReportGroupCommentDto,
+    @CurrentUser() user: User
+  ) {
+    return this.reportsService.createGroupComment(targetType, targetId, body, user);
   }
 
   @Post("admin/report-groups/:targetType/:targetId/decisions")

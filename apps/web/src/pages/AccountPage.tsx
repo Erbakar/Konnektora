@@ -13,9 +13,11 @@ import {
   getUserSession,
   inviteEventParticipant,
   isMockApiMode,
+  listMyNotifications,
   listEventParticipants,
   listMyEvents,
   listTags,
+  markMyNotificationRead,
   registerUser,
   requestEmailVerification,
   requestPasswordReset,
@@ -40,6 +42,11 @@ export function AccountPage() {
   const interestsQuery = useQuery({
     queryKey: ["profile-interests", user?.id],
     queryFn: getProfileInterests,
+    enabled: Boolean(user)
+  });
+  const notificationsQuery = useQuery({
+    queryKey: ["my-notifications", user?.id],
+    queryFn: listMyNotifications,
     enabled: Boolean(user)
   });
   const interestTagIds = interestsQuery.data?.map((tag) => tag.id) ?? [];
@@ -103,6 +110,10 @@ export function AccountPage() {
       setNotice({ tone: "success", message: "İlgi alanların kaydedildi." });
     },
     onError: () => setNotice({ tone: "error", message: "İlgi alanları kaydedilemedi. Lütfen tekrar dene." })
+  });
+  const readNotificationMutation = useMutation({
+    mutationFn: markMyNotificationRead,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["my-notifications", user?.id] })
   });
 
   function handleLogout() {
@@ -266,6 +277,35 @@ export function AccountPage() {
             )}
           </aside>
           <div className="account-stack">
+            <section className="admin-form">
+              <div className="section-header compact">
+                <h2>Bildirimler</h2>
+                <span>{notificationsQuery.data?.filter((item) => !item.readAt).length ?? 0} okunmamış</span>
+              </div>
+              {notificationsQuery.data?.length ? (
+                <div className="admin-list">
+                  {notificationsQuery.data.map((notification) => (
+                    <div className="admin-list-row" key={notification.id}>
+                      <div>
+                        <strong>{notification.title}</strong>
+                        <span>{notification.body}</span>
+                        <span>{notification.createdAt ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(notification.createdAt)) : ""}</span>
+                      </div>
+                      <span className={`status-pill status-${notification.readAt ? "resolved" : "open"}`}>
+                        {notification.readAt ? "Okundu" : "Yeni"}
+                      </span>
+                      {!notification.readAt ? (
+                        <button className="secondary-action" disabled={readNotificationMutation.isPending} onClick={() => readNotificationMutation.mutate(notification.id)} type="button">
+                          Okundu yap
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">Henüz bildirim yok.</p>
+              )}
+            </section>
             <form className="admin-form" onSubmit={handleTagSubmit}>
               <h2>Tag oluştur</h2>
               <p className="form-help">Var olan tag'leri önce arayıp öneriyoruz; yeni ihtiyaç varsa kullanıcılar direkt aktif tag oluşturabilir.</p>

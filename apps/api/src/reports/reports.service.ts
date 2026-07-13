@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { EventStatus, ReportStatus, ReportTargetType, TagStatus, User, UserStatus } from "@prisma/client";
+import { EventStatus, Prisma, ReportStatus, ReportTargetType, TagStatus, User, UserStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { MailService } from "../mail/mail.service";
 import {
   CreateReportDto,
+  CreateReportGroupCommentDto,
   CreateReportRuleDto,
   CreateModerationDecisionDto,
   ModerationAction,
@@ -18,6 +19,46 @@ const REPORT_INCLUDE = {
   resolvedBy: { select: { id: true, email: true, name: true, role: true, status: true } },
   rule: true
 };
+
+const ADMIN_USER_SELECT = {
+  id: true,
+  email: true,
+  name: true,
+  username: true,
+  role: true,
+  status: true,
+  accountType: true,
+  phone: true,
+  country: true,
+  city: true,
+  district: true,
+  address: true,
+  gender: true,
+  birthDate: true,
+  website: true,
+  companyName: true,
+  tradeName: true,
+  companyType: true,
+  businessCategory: true,
+  followerCount: true,
+  followingCount: true,
+  lastOnlineAt: true,
+  emailVerified: true,
+  invitedById: true,
+  penaltyScoreLastYear: true,
+  penaltyScoreAllTime: true,
+  adminRoleGroupId: true,
+  createdAt: true,
+  updatedAt: true,
+  adminRoleGroup: true,
+  _count: {
+    select: {
+      createdEvents: true,
+      eventParticipations: true,
+      submittedReports: true
+    }
+  }
+} satisfies Prisma.UserSelect;
 
 @Injectable()
 export class ReportsService {
@@ -84,7 +125,7 @@ export class ReportsService {
   async updateGroupNote(targetType: ReportTargetType, targetId: string, input: UpdateReportGroupNoteDto, admin: User) {
     await this.ensureTargetExists(targetType, targetId);
 
-    return (this.prisma as any).reportGroupNote.upsert({
+    const note = await (this.prisma as any).reportGroupNote.upsert({
       where: { targetType_targetId: { targetType, targetId } },
       create: {
         targetType,
@@ -100,6 +141,42 @@ export class ReportsService {
         updatedBy: { select: { id: true, email: true, name: true, role: true, status: true } }
       }
     });
+
+    await this.createActivityLog({
+      actorId: admin.id,
+      action: "report_group_note_updated",
+      targetType,
+      targetId,
+      note: input.note.trim()
+    });
+
+    return note;
+  }
+
+  async createGroupComment(targetType: ReportTargetType, targetId: string, input: CreateReportGroupCommentDto, admin: User) {
+    await this.ensureTargetExists(targetType, targetId);
+
+    const comment = await (this.prisma as any).reportGroupComment.create({
+      data: {
+        targetType,
+        targetId,
+        body: input.body.trim(),
+        createdBy: { connect: { id: admin.id } }
+      },
+      include: {
+        createdBy: { select: { id: true, email: true, name: true, role: true, status: true } }
+      }
+    });
+
+    await this.createActivityLog({
+      actorId: admin.id,
+      action: "report_group_comment_created",
+      targetType,
+      targetId,
+      note: input.body.trim()
+    });
+
+    return comment;
   }
 
   async createModerationDecision(
@@ -125,6 +202,7 @@ export class ReportsService {
           select: { createdById: true }
         });
         userId = event.createdById;
+        await this.createSimulatedRefunds(tx, targetId, admin.id, input.note);
       }
 
       if (targetType === ReportTargetType.tag && input.action === "archive_tag") {
@@ -230,6 +308,50 @@ export class ReportsService {
         include: { reporter: { select: { email: true, name: true } } }
       });
       const uniqueReporters = new Map(affectedReports.map((report) => [report.reporter.email, report.reporter]));
+
+      const notificationRows = [
+        ...(decision.userId
+          ? [
+              {
+                userId: decision.userId,
+                type: "moderation_decision",
+                title: "Moderasyon kararı",
+                body: input.note?.trim() || this.defaultDecisionNote(input),
+                targetType,
+                targetId
+              }
+            ]
+          : []),
+        ...affectedReports.map((report) => ({
+          userId: report.reporterId,
+          type: "report_feedback",
+          title: "Şikayet geri bildirimi",
+          body: input.note?.trim() || this.defaultDecisionNote(input),
+          targetType,
+          targetId
+        }))
+      ];
+
+      if (notificationRows.length > 0 && (tx as any).notification) {
+        await (tx as any).notification.createMany({ data: notificationRows, skipDuplicates: true });
+      }
+
+      if ((tx as any).adminActivityLog) {
+        await (tx as any).adminActivityLog.create({
+        data: {
+          actorId: admin.id,
+          action: "moderation_decision_created",
+          targetType,
+          targetId,
+          note: input.note?.trim() || this.defaultDecisionNote(input),
+          metadata: {
+            decision: input.decision,
+            action: input.action,
+            penaltyScore: input.penaltyScore
+          }
+        }
+        });
+      }
 
       await Promise.all([
         decision.user
@@ -344,6 +466,7 @@ export class ReportsService {
             updatedBy: { connect: { id: admin.id } }
           }
         });
+        await this.createSimulatedRefunds(tx, report.targetId, admin.id, input.resolutionNote);
       }
 
       if (input.action === ModerationAction.archive_tag) {
@@ -360,6 +483,19 @@ export class ReportsService {
         await tx.user.update({
           where: { id: report.targetId },
           data: { status: UserStatus.disabled }
+        });
+      }
+
+      if ((tx as any).adminActivityLog) {
+        await (tx as any).adminActivityLog.create({
+        data: {
+          actorId: admin.id,
+          action: "report_action_resolved",
+          targetType: report.targetType,
+          targetId: report.targetId,
+          note: input.resolutionNote?.trim() || this.defaultResolutionNote(input.action),
+          metadata: { action: input.action }
+        }
         });
       }
 
@@ -465,14 +601,31 @@ export class ReportsService {
             issuedBy: { select: { id: true, email: true, name: true, role: true, status: true } }
           }
         });
+        const comments = await (this.prisma as any).reportGroupComment.findMany({
+          where: { targetType, targetId },
+          orderBy: [{ createdAt: "desc" }],
+          include: {
+            createdBy: { select: { id: true, email: true, name: true, role: true, status: true } }
+          }
+        });
+        const activityLogs = await (this.prisma as any).adminActivityLog.findMany({
+          where: { targetType: String(targetType), targetId },
+          orderBy: [{ createdAt: "desc" }],
+          take: 50,
+          include: {
+            actor: { select: { id: true, email: true, name: true, role: true, status: true } }
+          }
+        });
         const activeStatuses = new Set([ReportStatus.open, ReportStatus.reviewing]);
         const activeCount = groupReports.filter((report) => activeStatuses.has(report.status)).length;
         const oldCount = groupReports.length - activeCount;
         const violationScore = groupReports.reduce((total, report) => total + (report.rule?.violationScore ?? 0), 0);
+        const targetSummary = await this.resolveTargetSummary(targetType, targetId);
 
         return {
           targetType,
           targetId,
+          targetSummary,
           totalReports: groupReports.length,
           activeReports: activeCount,
           oldReports: oldCount,
@@ -481,6 +634,8 @@ export class ReportsService {
           statuses: [...new Set(groupReports.map((report) => report.status))],
           reasons: [...new Set(groupReports.map((report) => report.reason))],
           note,
+          comments,
+          activityLogs,
           decisions
         };
       })
@@ -493,6 +648,167 @@ export class ReportsService {
 
       return new Date(second.latestReportAt).getTime() - new Date(first.latestReportAt).getTime();
     });
+  }
+
+  private async resolveTargetSummary(targetType: ReportTargetType, targetId: string) {
+    if (targetType === ReportTargetType.event) {
+      const event = await this.prisma.event.findUnique({
+        where: { id: targetId },
+        include: {
+          createdBy: { select: ADMIN_USER_SELECT },
+          _count: { select: { participants: true, media: true } }
+        } as any
+      });
+      if (!event) return null;
+      const eventCounts = (event as any)._count ?? {};
+      const refundCount = (this.prisma as any).ticketRefund
+        ? await (this.prisma as any).ticketRefund.count({ where: { eventId: targetId } })
+        : 0;
+      return {
+        title: event.title,
+        subtitle: [event.locationName, event.city, event.country].filter(Boolean).join(" - ") || event.format,
+        status: event.status,
+        owner: event.createdBy,
+        metrics: {
+          participants: eventCounts.participants ?? 0,
+          media: eventCounts.media ?? 0,
+          simulatedRefunds: refundCount
+        },
+        payload: {
+          startsAt: event.startsAt,
+          timezone: event.timezone,
+          coverImageUrl: event.coverImageUrl
+        }
+      };
+    }
+
+    if (targetType === ReportTargetType.tag) {
+      const tag = await this.prisma.tag.findUnique({
+        where: { id: targetId },
+        include: {
+          createdBy: { select: ADMIN_USER_SELECT },
+          _count: { select: { events: true, interestedUsers: true } }
+        } as any
+      });
+      if (!tag) return null;
+      const [commentCount, viewCount, viewerCount] = await Promise.all([
+        this.prisma.contentComment.count({ where: { targetType: "tag" as any, targetId } }),
+        this.prisma.contentView.count({ where: { targetType: "tag" as any, targetId } }),
+        this.prisma.contentView
+          .findMany({ where: { targetType: "tag" as any, targetId, userId: { not: null } }, distinct: ["userId"], select: { userId: true } })
+          .then((items) => items.length)
+      ]);
+      const tagCounts = (tag as any)._count ?? {};
+      return {
+        title: tag.name,
+        subtitle: tag.slug,
+        status: tag.status,
+        owner: tag.createdBy,
+        metrics: {
+          interestedUsers: tagCounts.interestedUsers ?? 0,
+          events: tagCounts.events ?? 0,
+          comments: commentCount,
+          views: viewCount,
+          viewers: viewerCount
+        }
+      };
+    }
+
+    if (targetType === ReportTargetType.user || targetType === ReportTargetType.username || targetType === ReportTargetType.website_url) {
+      const user = await this.prisma.user.findUnique({ where: { id: targetId }, select: ADMIN_USER_SELECT });
+      if (!user) return null;
+      return {
+        title: user.username ? `@${user.username}` : user.name,
+        subtitle: [user.city, user.country].filter(Boolean).join(" - ") || user.email,
+        status: user.status,
+        owner: user,
+        metrics: {
+          followers: user.followerCount,
+          following: user.followingCount,
+          penaltyLastYear: user.penaltyScoreLastYear,
+          penaltyAllTime: user.penaltyScoreAllTime
+        }
+      };
+    }
+
+    if (targetType === ReportTargetType.place) {
+      const place = await this.prisma.place.findUnique({
+        where: { id: targetId },
+        include: { createdBy: { select: ADMIN_USER_SELECT } } as any
+      });
+      if (!place) return null;
+      return {
+        title: place.name,
+        subtitle: [place.city, place.country].filter(Boolean).join(" - ") || place.address,
+        status: place.status,
+        owner: place.createdBy,
+        metrics: {
+          followers: place.followerCount,
+          invites: place.inviteCount
+        },
+        payload: { coverImageUrl: place.coverImageUrl }
+      };
+    }
+
+    if (targetType === ReportTargetType.media) {
+      const media = await this.prisma.mediaFile.findUnique({
+        where: { id: targetId },
+        include: { uploadedBy: { select: ADMIN_USER_SELECT } } as any
+      });
+      if (!media) return null;
+      return {
+        title: media.url,
+        subtitle: `${media.contentType} · ${media.contentId}`,
+        status: media.status,
+        owner: media.uploadedBy,
+        metrics: {},
+        payload: { type: media.type, url: media.url }
+      };
+    }
+
+    if (["tag_comment", "event_comment", "place_comment", "comment_reply"].includes(targetType)) {
+      const comment = await this.prisma.contentComment.findUnique({
+        where: { id: targetId },
+        include: {
+          author: { select: ADMIN_USER_SELECT },
+          parent: { select: { id: true, body: true, author: { select: ADMIN_USER_SELECT } } },
+          _count: { select: { replies: true } }
+        } as any
+      });
+      if (!comment) return null;
+      const commentCounts = (comment as any)._count ?? {};
+      return {
+        title: comment.body,
+        subtitle: `${comment.targetType} · ${comment.targetId}`,
+        status: comment.status,
+        owner: comment.author,
+        metrics: {
+          likes: comment.likeCount,
+          replies: commentCounts.replies ?? 0
+        },
+        payload: { parent: comment.parent }
+      };
+    }
+
+    if (targetType === ReportTargetType.private_message) {
+      const message = await this.prisma.privateMessage.findUnique({
+        where: { id: targetId },
+        include: { sender: { select: ADMIN_USER_SELECT }, recipient: { select: ADMIN_USER_SELECT } } as any
+      });
+      if (!message) return null;
+      const sender = (message as any).sender;
+      const recipient = (message as any).recipient;
+      return {
+        title: message.body,
+        subtitle: `${sender?.email ?? "Bilinmiyor"} - ${recipient?.email ?? "Bilinmiyor"}`,
+        status: message.status,
+        owner: sender,
+        metrics: {},
+        payload: { recipient }
+      };
+    }
+
+    return null;
   }
 
   private async ensureRuleMatchesTarget(ruleId: string, targetType: ReportTargetType, requireActive = false) {
@@ -578,5 +894,86 @@ export class ReportsService {
     }
 
     return "Rapor sonucunda kullanıcı disable edildi.";
+  }
+
+  private createActivityLog(input: {
+    actorId?: string | null;
+    action: string;
+    targetType: ReportTargetType | string;
+    targetId: string;
+    note?: string | null;
+    metadata?: Record<string, unknown>;
+  }) {
+    return (this.prisma as any).adminActivityLog.create({
+      data: {
+        actorId: input.actorId ?? null,
+        action: input.action,
+        targetType: String(input.targetType),
+        targetId: input.targetId,
+        note: input.note ?? null,
+        metadata: input.metadata ?? undefined
+      }
+    });
+  }
+
+  private async createSimulatedRefunds(tx: any, eventId: string, adminId: string, reason?: string | null) {
+    if (!tx.ticketRefund) {
+      return;
+    }
+
+    const participants = await tx.eventParticipant.findMany({
+      where: { eventId, status: { in: ["accepted", "attended"] } },
+      select: { userId: true }
+    });
+
+    if (participants.length === 0) {
+      await tx.adminActivityLog?.create({
+        data: {
+          actorId: adminId,
+          action: "simulated_ticket_refund_skipped",
+          targetType: "event",
+          targetId: eventId,
+          note: "İade edilecek kabul edilmiş katılımcı bulunamadı.",
+          metadata: { provider: "simulated" }
+        }
+      });
+      return;
+    }
+
+    await tx.ticketRefund.createMany({
+      data: participants.map((participant: { userId: string }) => ({
+        eventId,
+        userId: participant.userId,
+        amount: 0,
+        currency: "TRY",
+        provider: "simulated",
+        status: "simulated_refunded",
+        reason: reason?.trim() || "Etkinlik moderasyon kararıyla arşivlendi."
+      })),
+      skipDuplicates: true
+    });
+
+    await tx.notification?.createMany({
+      data: participants.map((participant: { userId: string }) => ({
+        userId: participant.userId,
+        type: "ticket_refund",
+        title: "Bilet iadesi işlendi",
+        body: "Etkinlik kaldırıldığı için bilet iaden simüle edildi.",
+        targetType: "event",
+        targetId: eventId
+      })),
+      skipDuplicates: true
+    });
+
+    await tx.adminActivityLog?.create({
+      data: {
+        actorId: adminId,
+        action: "simulated_ticket_refunds_created",
+        targetType: "event",
+        targetId: eventId,
+        note: `${participants.length} katılımcı için simüle iade kaydı oluşturuldu.`,
+        metadata: { provider: "simulated", count: participants.length }
+      }
+    });
   }
 }

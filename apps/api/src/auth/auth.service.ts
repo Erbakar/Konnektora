@@ -124,6 +124,30 @@ export class AuthService {
     return { ok: true };
   }
 
+  async sendVerificationForUser(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException("Kullanıcı bulunamadı.");
+    }
+
+    const token = await this.createEmailToken(user.id, "verify_email");
+    await this.mailService.sendVerificationEmail({ to: user.email, name: user.name, token });
+    return { ok: true };
+  }
+
+  async sendPasswordResetForUser(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException("Kullanıcı bulunamadı.");
+    }
+
+    const token = await this.createEmailToken(user.id, "password_reset");
+    await this.mailService.sendPasswordResetEmail({ to: user.email, name: user.name, token });
+    return { ok: true };
+  }
+
   async resetPassword(input: ResetPasswordDto) {
     const token = await this.consumeEmailToken(input.token, "password_reset");
     const user = await this.prisma.user.update({

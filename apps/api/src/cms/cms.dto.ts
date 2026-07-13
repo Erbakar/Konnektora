@@ -92,6 +92,32 @@ export class CreateAnnouncementDto {
 
   @IsOptional()
   @IsString()
+  targetLastLoginFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  targetLastLoginTo?: string;
+
+  @IsOptional()
+  @IsString()
+  targetJoinedFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  targetJoinedTo?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  targetAppVersion?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["scheduled", "after_signup", "login_window"])
+  publishMode?: string;
+
+  @IsOptional()
+  @IsString()
   publishAt?: string;
 
   @IsOptional()
@@ -115,6 +141,32 @@ export class UpdateAnnouncementDto {
   @IsString()
   @IsIn(["all", "members", "admins"])
   target?: string;
+
+  @IsOptional()
+  @IsString()
+  targetLastLoginFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  targetLastLoginTo?: string;
+
+  @IsOptional()
+  @IsString()
+  targetJoinedFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  targetJoinedTo?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  targetAppVersion?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["scheduled", "after_signup", "login_window"])
+  publishMode?: string;
 
   @IsOptional()
   @IsString()

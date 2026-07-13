@@ -42,20 +42,33 @@ export class TagsService {
       throw new NotFoundException("Tag bulunamadı.");
     }
 
-    const reportCount = await this.prisma.contentReport.count({
-      where: { targetType: "tag", targetId: id }
-    });
+    const [reportCount, likeCount, okCount, dislikeCount, commentCount, viewCount, viewerCount, firstComment] = await Promise.all([
+      this.prisma.contentReport.count({ where: { targetType: "tag", targetId: id } }),
+      this.prisma.contentReaction.count({ where: { targetType: "tag", targetId: id, reaction: "like" } }),
+      this.prisma.contentReaction.count({ where: { targetType: "tag", targetId: id, reaction: "ok" } }),
+      this.prisma.contentReaction.count({ where: { targetType: "tag", targetId: id, reaction: "dislike" } }),
+      this.prisma.contentComment.count({ where: { targetType: "tag" as any, targetId: id } }),
+      this.prisma.contentView.count({ where: { targetType: "tag" as any, targetId: id } }),
+      this.prisma.contentView
+        .findMany({ where: { targetType: "tag" as any, targetId: id, userId: { not: null } }, distinct: ["userId"], select: { userId: true } })
+        .then((items) => items.length),
+      this.prisma.contentComment.findFirst({
+        where: { targetType: "tag" as any, targetId: id },
+        orderBy: { createdAt: "asc" },
+        include: { author: { select: { id: true, email: true, name: true, role: true, status: true } } }
+      })
+    ]);
 
     return {
       ...tag,
       reportCount,
-      likeCount: 0,
-      okCount: tag._count.interestedUsers,
-      dislikeCount: 0,
-      commentCount: 0,
-      viewCount: 0,
-      viewerCount: 0,
-      firstCommenter: null,
+      likeCount,
+      okCount,
+      dislikeCount,
+      commentCount,
+      viewCount,
+      viewerCount,
+      firstCommenter: firstComment?.author ?? null,
       firstProfileUser: tag.createdBy
     };
   }
@@ -189,6 +202,39 @@ export class TagsService {
         where: { targetType: "tag", targetId: sourceTagId },
         data: { targetId: targetTagId }
       });
+
+      if ((tx as any).notification) {
+        await (tx as any).notification.createMany({
+          data: sourceInterestTags.map((interestTag) => ({
+            userId: interestTag.userId,
+            type: "tag_merge",
+            title: "İlgi alanı taşındı",
+            body: `${sourceTag.name} ilgi alanı ${targetTag.name} altında birleştirildi.`,
+            targetType: "tag",
+            targetId: targetTagId
+          })),
+          skipDuplicates: true
+        });
+      }
+
+      if ((tx as any).adminActivityLog) {
+        await (tx as any).adminActivityLog.create({
+          data: {
+            actorId: userId ?? null,
+            action: "tag_merged_with_simulated_notifications",
+            targetType: "tag",
+            targetId: sourceTagId,
+            note: `${sourceTag.name} -> ${targetTag.name}`,
+            metadata: {
+              sourceTagId,
+              targetTagId,
+              movedEvents: sourceEventTags.length,
+              movedInterests: sourceInterestTags.length,
+              notificationMode: "simulated"
+            }
+          }
+        });
+      }
 
       const usageCount = await tx.eventTag.count({ where: { tagId: targetTagId } });
 

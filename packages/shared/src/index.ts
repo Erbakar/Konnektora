@@ -98,6 +98,12 @@ export const announcementSchema = z.object({
   title: z.string().min(3).max(160),
   body: z.string().min(3),
   target: z.enum(["all", "members", "admins"]),
+  targetLastLoginFrom: z.string().datetime().or(z.date()).nullable().optional(),
+  targetLastLoginTo: z.string().datetime().or(z.date()).nullable().optional(),
+  targetJoinedFrom: z.string().datetime().or(z.date()).nullable().optional(),
+  targetJoinedTo: z.string().datetime().or(z.date()).nullable().optional(),
+  targetAppVersion: z.string().max(80).nullable().optional(),
+  publishMode: z.enum(["scheduled", "after_signup", "login_window"]).optional(),
   status: z.enum(["active", "passive"]),
   publishAt: z.string().datetime().or(z.date()),
   expiresAt: z.string().datetime().or(z.date()).nullable(),
@@ -331,6 +337,29 @@ export const reportGroupNoteSchema = z.object({
   updatedBy: adminUserSchema.optional().nullable()
 });
 
+export const reportGroupCommentSchema = z.object({
+  id: z.string().uuid(),
+  targetType: reportTargetTypeSchema,
+  targetId: z.string().uuid(),
+  body: z.string(),
+  createdById: z.string().uuid().nullable().optional(),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional(),
+  createdBy: adminUserSchema.optional().nullable()
+});
+
+export const adminActivityLogSchema = z.object({
+  id: z.string().uuid(),
+  actorId: z.string().uuid().nullable().optional(),
+  action: z.string(),
+  targetType: z.string(),
+  targetId: z.string(),
+  note: z.string().nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  actor: adminUserSchema.optional().nullable()
+});
+
 export const moderationDecisionSchema = z.object({
   id: z.string().uuid(),
   targetType: reportTargetTypeSchema,
@@ -453,9 +482,32 @@ export const userMessageListSchema = z.object({
   hasNextPage: z.boolean()
 });
 
+export const notificationSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  type: z.string(),
+  title: z.string(),
+  body: z.string(),
+  targetType: z.string().nullable().optional(),
+  targetId: z.string().nullable().optional(),
+  readAt: z.string().datetime().or(z.date()).nullable(),
+  createdAt: z.string().datetime().or(z.date()).optional()
+});
+
 export const reportGroupSchema = z.object({
   targetType: reportTargetTypeSchema,
   targetId: z.string().uuid(),
+  targetSummary: z
+    .object({
+      title: z.string(),
+      subtitle: z.string().nullable().optional(),
+      status: z.string().nullable().optional(),
+      owner: adminManagedUserSchema.nullable().optional(),
+      metrics: z.record(z.string(), z.number().int().nonnegative()).optional(),
+      payload: z.record(z.string(), z.unknown()).optional()
+    })
+    .nullable()
+    .optional(),
   totalReports: z.number().int().nonnegative(),
   activeReports: z.number().int().nonnegative(),
   oldReports: z.number().int().nonnegative(),
@@ -464,6 +516,8 @@ export const reportGroupSchema = z.object({
   statuses: z.array(reportStatusSchema),
   reasons: z.array(z.string()),
   note: reportGroupNoteSchema.nullable().optional(),
+  comments: z.array(reportGroupCommentSchema).optional(),
+  activityLogs: z.array(adminActivityLogSchema).optional(),
   decisions: z.array(moderationDecisionSchema).optional()
 });
 
@@ -499,6 +553,8 @@ export type EventParticipant = z.infer<typeof eventParticipantSchema>;
 export type ContentReport = z.infer<typeof contentReportSchema>;
 export type ReportRule = z.infer<typeof reportRuleSchema>;
 export type ReportGroupNote = z.infer<typeof reportGroupNoteSchema>;
+export type ReportGroupComment = z.infer<typeof reportGroupCommentSchema>;
+export type AdminActivityLog = z.infer<typeof adminActivityLogSchema>;
 export type ModerationDecision = z.infer<typeof moderationDecisionSchema>;
 export type AdminPlace = z.infer<typeof adminPlaceSchema>;
 export type AdminMedia = z.infer<typeof adminMediaSchema>;
@@ -506,6 +562,7 @@ export type AdminComment = z.infer<typeof adminCommentSchema>;
 export type AdminPrivateMessage = z.infer<typeof adminPrivateMessageSchema>;
 export type UserMessage = z.infer<typeof userMessageSchema>;
 export type UserMessageList = z.infer<typeof userMessageListSchema>;
+export type Notification = z.infer<typeof notificationSchema>;
 export type ReportGroup = z.infer<typeof reportGroupSchema>;
 export type ReportGroupDetail = z.infer<typeof reportGroupDetailSchema>;
 export type AdminManagedUser = z.infer<typeof adminManagedUserSchema>;

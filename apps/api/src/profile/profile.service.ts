@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
@@ -37,5 +37,26 @@ export class ProfileService {
     ]);
 
     return this.getInterests(userId);
+  }
+
+  getNotifications(userId: string) {
+    return (this.prisma as any).notification.findMany({
+      where: { userId },
+      orderBy: [{ readAt: "asc" }, { createdAt: "desc" }],
+      take: 100
+    });
+  }
+
+  async markNotificationRead(userId: string, id: string) {
+    const notification = await (this.prisma as any).notification.findFirst({ where: { id, userId } });
+
+    if (!notification) {
+      throw new NotFoundException("Bildirim bulunamadı.");
+    }
+
+    return (this.prisma as any).notification.update({
+      where: { id },
+      data: { readAt: new Date() }
+    });
   }
 }

@@ -109,6 +109,13 @@ export class UpdateReportGroupNoteDto {
   note!: string;
 }
 
+export class CreateReportGroupCommentDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  body!: string;
+}
+
 export class CreateModerationDecisionDto {
   @IsString()
   @IsIn(["violation", "no_violation"])

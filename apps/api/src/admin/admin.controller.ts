@@ -3,7 +3,7 @@ import { User } from "@prisma/client";
 import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { RequirePermissions } from "../auth/permissions";
-import { AdminUserQueryDto, CreateAdminRoleGroupDto, UpdateAdminRoleGroupDto, UpdateAdminUserDto } from "./admin.dto";
+import { AdminUserActionDto, AdminUserQueryDto, CreateAdminRoleGroupDto, UpdateAdminRoleGroupDto, UpdateAdminUserDto } from "./admin.dto";
 import { AdminService } from "./admin.service";
 
 @Controller("admin")
@@ -32,6 +32,12 @@ export class AdminController {
   @RequirePermissions("users.manage")
   updateUser(@Param("id") id: string, @Body() body: UpdateAdminUserDto, @CurrentUser() admin: User) {
     return this.adminService.updateUser(id, body, admin);
+  }
+
+  @Post("users/:id/actions")
+  @RequirePermissions("users.manage")
+  runUserAction(@Param("id") id: string, @Body() body: AdminUserActionDto, @CurrentUser() admin: User) {
+    return this.adminService.runUserAction(id, body, admin);
   }
 
   @Get("role-groups")
