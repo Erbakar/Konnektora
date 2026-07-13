@@ -10,12 +10,14 @@ import { EventDetailPage } from "./pages/EventDetailPage";
 import { EventsPage } from "./pages/EventsPage";
 import { HomePage } from "./pages/HomePage";
 import { ContactPage } from "./pages/ContactPage";
+import { MobileAppPage } from "./pages/MobileAppPage";
 import { PolicyPage } from "./pages/PolicyPage";
 import "./styles.css";
 
 const queryClient = new QueryClient();
 
 const router = createBrowserRouter([
+  { path: "/mobile", element: <MobileAppPage /> },
   {
     path: "/",
     element: <AppLayout />,
