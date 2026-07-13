@@ -66,6 +66,30 @@ export class AdminUserQueryDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(0)
+  @Max(130)
+  ageFrom?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(130)
+  ageTo?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["username", "followers", "following", "lastOnlineAt", "createdAt"])
+  sortBy?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["asc", "desc"])
+  sortDir?: "asc" | "desc";
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
   @Min(1)
   page?: number;
 
@@ -192,6 +216,26 @@ export class UpdateAdminUserDto {
   @IsInt()
   @Min(0)
   penaltyScoreAllTime?: number;
+}
+
+export class AdminUserActionDto {
+  @IsString()
+  @IsIn([
+    "reset_username",
+    "remove_website",
+    "send_verification_email",
+    "send_password_reset",
+    "suspend_7_days",
+    "suspend_30_days",
+    "ban_user",
+    "activate_user"
+  ])
+  action!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string;
 }
 
 export class CreateAdminRoleGroupDto {

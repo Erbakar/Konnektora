@@ -35,6 +35,7 @@ import {
   createAdminCmsCategory,
   createAdminFaq,
   createAdminModerationDecision,
+  createAdminReportGroupComment,
   createAdminReportRule,
   createAdminRoleGroup,
   deleteAdminCmsCategory,
@@ -67,6 +68,7 @@ import {
   listAdminUsers,
   mergeAdminTag,
   resolveAdminReportAction,
+  runAdminUserAction,
   setAdminToken,
   updateAdminAnnouncement,
   updateAdminEvent,
@@ -554,6 +556,14 @@ export function AdminDashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-report-group"] });
     }
   });
+  const createReportGroupCommentMutation = useMutation({
+    mutationFn: (input: { targetType: ReportTargetType; targetId: string; body: string }) =>
+      createAdminReportGroupComment(input.targetType, input.targetId, input.body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-groups"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-report-group"] });
+    }
+  });
   const createModerationDecisionMutation = useMutation({
     mutationFn: (input: { targetType: ReportTargetType; targetId: string; data: ModerationDecisionInput }) =>
       createAdminModerationDecision(input.targetType, input.targetId, input.data),
@@ -988,6 +998,7 @@ export function AdminDashboardPage() {
               createReportRuleMutation.isPending ||
               updateReportRuleMutation.isPending ||
               updateReportGroupNoteMutation.isPending ||
+              createReportGroupCommentMutation.isPending ||
               createModerationDecisionMutation.isPending
             }
             groupDetail={reportGroupDetail}
@@ -996,6 +1007,7 @@ export function AdminDashboardPage() {
             onCreateRule={(input) => createReportRuleMutation.mutate(input)}
             onResolve={(input) => resolveReportActionMutation.mutate(input)}
             onSaveGroupNote={(input) => updateReportGroupNoteMutation.mutate(input)}
+            onCreateGroupComment={(input) => createReportGroupCommentMutation.mutate(input)}
             onCreateDecision={(input) => createModerationDecisionMutation.mutate(input)}
             onSelectGroup={(group) => setSelectedReportGroup({ targetType: group.targetType, targetId: group.targetId })}
             onSetGroupScope={setReportGroupScope}
@@ -1081,6 +1093,10 @@ function formatDateTime(value: string | Date) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function dateInputToIso(value: string) {
+  return value ? new Date(`${value}T00:00:00`).toISOString() : undefined;
 }
 
 function defaultModerationAction(targetType: ReportTargetType): ModerationDecisionInput["action"] {
@@ -1208,6 +1224,12 @@ function CmsAdminPanel({
       title: String(form.get("title")),
       body: String(form.get("body")),
       target: String(form.get("target") || "all"),
+      targetLastLoginFrom: dateInputToIso(String(form.get("targetLastLoginFrom") || "")),
+      targetLastLoginTo: dateInputToIso(String(form.get("targetLastLoginTo") || "")),
+      targetJoinedFrom: dateInputToIso(String(form.get("targetJoinedFrom") || "")),
+      targetJoinedTo: dateInputToIso(String(form.get("targetJoinedTo") || "")),
+      targetAppVersion: String(form.get("targetAppVersion") || "") || undefined,
+      publishMode: String(form.get("publishMode") || "scheduled"),
       publishAt: publishAt ? new Date(publishAt).toISOString() : undefined,
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined
     });
@@ -1499,12 +1521,40 @@ function CmsAdminPanel({
                 </select>
               </label>
               <label>
+                Yayın modu
+                <select name="publishMode" defaultValue="scheduled">
+                  <option value="scheduled">Planlı yayın</option>
+                  <option value="after_signup">Üyelikten sonra</option>
+                  <option value="login_window">Login zaman aralığında</option>
+                </select>
+              </label>
+              <label>
                 Yayın zamanı
                 <input name="publishAt" type="datetime-local" />
               </label>
               <label>
                 Bitiş zamanı
                 <input name="expiresAt" type="datetime-local" />
+              </label>
+              <label>
+                Son login başlangıç
+                <input name="targetLastLoginFrom" type="date" />
+              </label>
+              <label>
+                Son login bitiş
+                <input name="targetLastLoginTo" type="date" />
+              </label>
+              <label>
+                Üyelik başlangıç
+                <input name="targetJoinedFrom" type="date" />
+              </label>
+              <label>
+                Üyelik bitiş
+                <input name="targetJoinedTo" type="date" />
+              </label>
+              <label>
+                App versiyonu
+                <input name="targetAppVersion" placeholder="Örn. 2.4.0" />
               </label>
             </div>
             <button className="secondary-action" disabled={isPending} type="submit">
@@ -1530,7 +1580,7 @@ function CmsAdminPanel({
                   <div>
                     <strong>{announcement.title}</strong>
                     <span>
-                      {announcement.status} · {announcement.target} · {formatDateTime(announcement.publishAt)}
+                      {announcement.status} · {announcement.target} · {announcement.publishMode ?? "scheduled"} · {formatDateTime(announcement.publishAt)}
                     </span>
                   </div>
                   <button
@@ -1705,10 +1755,16 @@ function RichTextTextarea({
   return (
     <div className="rich-text-editor">
       <div className="rich-text-toolbar">
+        <button onClick={() => command("formatBlock", "h2")} type="button">H2</button>
+        <button onClick={() => command("formatBlock", "p")} type="button">P</button>
         <button onClick={() => command("bold")} type="button">B</button>
+        <button onClick={() => command("italic")} type="button">I</button>
         <button onClick={() => command("insertUnorderedList")} type="button">•</button>
+        <button onClick={() => command("insertOrderedList")} type="button">1.</button>
+        <button onClick={() => command("formatBlock", "blockquote")} type="button">“”</button>
         <button onClick={() => command("createLink", window.prompt("Link URL") || "")} type="button">Link</button>
         <button onClick={() => command("insertImage", window.prompt("Medya URL") || "")} type="button">Medya</button>
+        <button onClick={() => command("removeFormat")} type="button">Tx</button>
       </div>
       <input name={name} ref={inputRef} required={required} type="hidden" defaultValue={defaultValue ?? ""} />
       <div
@@ -2099,6 +2155,10 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
     joinedTo: "",
     lastOnlineFrom: "",
     lastOnlineTo: "",
+    ageFrom: "",
+    ageTo: "",
+    sortBy: "createdAt",
+    sortDir: "desc",
     page: 1
   });
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -2123,7 +2183,7 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
         params.set("accountType", filters.accountType);
       }
 
-      ["country", "city", "gender", "email", "phone", "joinedFrom", "joinedTo", "lastOnlineFrom", "lastOnlineTo"].forEach((key) => {
+      ["country", "city", "gender", "email", "phone", "joinedFrom", "joinedTo", "lastOnlineFrom", "lastOnlineTo", "ageFrom", "ageTo", "sortBy", "sortDir"].forEach((key) => {
         const value = filters[key as keyof typeof filters];
         if (value) {
           params.set(key, String(value));
@@ -2156,6 +2216,13 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
       void queryClient.invalidateQueries({ queryKey: ["admin-user-detail", input.id] });
     }
   });
+  const actionMutation = useMutation({
+    mutationFn: (input: { id: string; action: Parameters<typeof runAdminUserAction>[1] }) => runAdminUserAction(input.id, input.action),
+    onSuccess: (updatedUser) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-user-detail", updatedUser.id] });
+    }
+  });
   const userList = usersQuery.data;
 
   function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
@@ -2176,6 +2243,10 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
       joinedTo: String(form.get("joinedTo") || ""),
       lastOnlineFrom: String(form.get("lastOnlineFrom") || ""),
       lastOnlineTo: String(form.get("lastOnlineTo") || ""),
+      ageFrom: String(form.get("ageFrom") || ""),
+      ageTo: String(form.get("ageTo") || ""),
+      sortBy: String(form.get("sortBy") || "createdAt"),
+      sortDir: String(form.get("sortDir") || "desc"),
       page: 1
     });
   }
@@ -2266,6 +2337,31 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
           Son online bitiş
           <input name="lastOnlineTo" type="date" defaultValue={filters.lastOnlineTo} />
         </label>
+        <label>
+          Yaş başlangıç
+          <input name="ageFrom" min={0} max={130} type="number" defaultValue={filters.ageFrom} />
+        </label>
+        <label>
+          Yaş bitiş
+          <input name="ageTo" min={0} max={130} type="number" defaultValue={filters.ageTo} />
+        </label>
+        <label>
+          Sırala
+          <select name="sortBy" defaultValue={filters.sortBy}>
+            <option value="createdAt">Üyelik zamanı</option>
+            <option value="username">Kullanıcı adı</option>
+            <option value="followers">Takipçi sayısı</option>
+            <option value="following">Takip edilen sayısı</option>
+            <option value="lastOnlineAt">Son online</option>
+          </select>
+        </label>
+        <label>
+          Sıra yönü
+          <select name="sortDir" defaultValue={filters.sortDir}>
+            <option value="desc">Büyük / yeni önce</option>
+            <option value="asc">Küçük / eski önce</option>
+          </select>
+        </label>
         <button className="secondary-action" type="submit">
           Filtrele
         </button>
@@ -2311,7 +2407,8 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
       ) : null}
       {detailQuery.data ? (
         <UserDetailCard
-          isPending={updateMutation.isPending}
+          isPending={updateMutation.isPending || actionMutation.isPending}
+          onAction={(input) => actionMutation.mutate({ id: detailQuery.data.id, action: input })}
           onUpdate={(input) => updateMutation.mutate({ id: detailQuery.data.id, ...input })}
           roleGroups={roleGroups}
           user={detailQuery.data}
@@ -2404,11 +2501,13 @@ function UserAdminRow({
 
 function UserDetailCard({
   isPending,
+  onAction,
   onUpdate,
   roleGroups,
   user
 }: {
   isPending: boolean;
+  onAction: (input: Parameters<typeof runAdminUserAction>[1]) => void;
   onUpdate: (input: {
     status?: AdminManagedUser["status"];
     role?: "user" | "admin" | "super_admin";
@@ -2448,7 +2547,10 @@ function UserDetailCard({
   function handleInterventionSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    onUpdate({ status: String(form.get("status") || user.status) as AdminManagedUser["status"] });
+    onAction({
+      action: String(form.get("action") || "activate_user") as Parameters<typeof runAdminUserAction>[1]["action"],
+      note: String(form.get("message") || "") || undefined
+    });
   }
 
   return (
@@ -2613,11 +2715,17 @@ function UserDetailCard({
             <Check size={18} />
             Temel bilgileri kaydet
           </button>
-          <button className="ghost-action" disabled={isPending} onClick={() => onUpdate({ username: `User${Date.now().toString().slice(-6)}` })} type="button">
+          <button className="ghost-action" disabled={isPending} onClick={() => onAction({ action: "reset_username" })} type="button">
             Kullanıcı adını resetle
           </button>
-          <button className="ghost-action" disabled={isPending} onClick={() => onUpdate({ website: null })} type="button">
+          <button className="ghost-action" disabled={isPending} onClick={() => onAction({ action: "remove_website" })} type="button">
             Web sitesini sil
+          </button>
+          <button className="ghost-action" disabled={isPending} onClick={() => onAction({ action: "send_verification_email" })} type="button">
+            Aktivasyon maili gönder
+          </button>
+          <button className="ghost-action" disabled={isPending} onClick={() => onAction({ action: "send_password_reset" })} type="button">
+            Şifre sıfırlama maili
           </button>
         </div>
       </form>
@@ -2645,13 +2753,12 @@ function UserDetailCard({
         <h3>Müdahale</h3>
         <div className="admin-form-grid">
           <label>
-            Müdahale / Statü
-            <select name="status" defaultValue={user.status}>
-              {USER_STATUS_OPTIONS.map((status) => (
-                <option key={status.value} value={status.value}>
-                  {status.label}
-                </option>
-              ))}
+            Müdahale
+            <select name="action" defaultValue="suspend_7_days">
+              <option value="activate_user">Hesabı aktif yap</option>
+              <option value="suspend_7_days">Hesabı 7 gün askıya al</option>
+              <option value="suspend_30_days">Hesabı 30 gün askıya al</option>
+              <option value="ban_user">Hesabı kapat / yasakla</option>
             </select>
           </label>
           <label>
@@ -2688,6 +2795,7 @@ function AdminContentPanel<T extends { id: string; status: string; createdAt?: s
 }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const statusOptions = Array.from(new Set(items.map((item) => item.status))).sort();
   const visibleItems = items.filter((item) => {
     const matchesQuery = !query || JSON.stringify(item).toLowerCase().includes(query.toLowerCase());
@@ -2739,6 +2847,9 @@ function AdminContentPanel<T extends { id: string; status: string; createdAt?: s
                 <span className={`status-pill status-${item.status}`}>{item.status}</span>
                 <span className="muted admin-record-date">{item.createdAt ? formatDateTime(item.createdAt) : ""}</span>
                 <div className="row-actions admin-record-actions">
+                  <button className="secondary-action" onClick={() => setSelectedId((current) => (current === item.id ? null : item.id))} type="button">
+                    Detay
+                  </button>
                   <button className="secondary-action" disabled={isPending || item.status === "active"} onClick={() => onStatusChange(item.id, "active")} type="button">
                     Aktif yap
                   </button>
@@ -2750,6 +2861,22 @@ function AdminContentPanel<T extends { id: string; status: string; createdAt?: s
                   </button>
                 </div>
               </div>
+              {selectedId === item.id ? (
+                <div className="admin-subsection">
+                  <div className="admin-subsection-header">
+                    <h3>Detay</h3>
+                    <span>{item.status}</span>
+                  </div>
+                  <div className="admin-list-row">
+                    <div>
+                      <strong>{renderPrimary(item)}</strong>
+                      <span>{renderSecondary(item)}</span>
+                      <span>{renderMeta(item)}</span>
+                    </div>
+                  </div>
+                  <pre className="admin-json-detail">{JSON.stringify(item, null, 2)}</pre>
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -2764,6 +2891,7 @@ function ReportAdminPanel({
   groups,
   isPending,
   onCreateDecision,
+  onCreateGroupComment,
   onCreateRule,
   onResolve,
   onSaveGroupNote,
@@ -2779,6 +2907,7 @@ function ReportAdminPanel({
   groups: ReportGroup[];
   isPending: boolean;
   onCreateDecision: (input: { targetType: ReportTargetType; targetId: string; data: ModerationDecisionInput }) => void;
+  onCreateGroupComment: (input: { targetType: ReportTargetType; targetId: string; body: string }) => void;
   onCreateRule: (input: ReportRuleInput) => void;
   onResolve: (input: {
     id: string;
@@ -2832,6 +2961,22 @@ function ReportAdminPanel({
       targetId: groupDetail.targetId,
       note: String(form.get("note") || "")
     });
+  }
+
+  function handleGroupCommentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!groupDetail) {
+      return;
+    }
+
+    const form = new FormData(event.currentTarget);
+    onCreateGroupComment({
+      targetType: groupDetail.targetType,
+      targetId: groupDetail.targetId,
+      body: String(form.get("body") || "")
+    });
+    event.currentTarget.reset();
   }
 
   function handleDecisionSubmit(event: FormEvent<HTMLFormElement>) {
@@ -2981,12 +3126,11 @@ function ReportAdminPanel({
         {groups.map((group) => (
           <button className="admin-list-row admin-list-button" key={`${group.targetType}-${group.targetId}`} onClick={() => onSelectGroup(group)} type="button">
             <div>
-              <strong>
-                {group.targetType} · {group.targetId.slice(0, 8)}
-              </strong>
+              <strong>{group.targetSummary?.title ?? `${group.targetType} · ${group.targetId.slice(0, 8)}`}</strong>
               <span>
-                {group.activeReports} aktif · {group.oldReports} eski · {group.violationScore} puan
+                {group.targetType} · {group.targetSummary?.status ?? "durum yok"} · {group.activeReports} aktif · {group.oldReports} eski · {group.violationScore} puan
               </span>
+              {group.targetSummary?.owner ? <span>Sorumlu: {group.targetSummary.owner.username ? `@${group.targetSummary.owner.username}` : group.targetSummary.owner.email}</span> : null}
             </div>
             <span className="status-pill status-reviewing">{group.totalReports} rapor</span>
           </button>
@@ -2997,12 +3141,53 @@ function ReportAdminPanel({
           <div className="admin-list-row">
             <div>
               <strong>
-                Detay · {groupDetail.targetType} · {groupDetail.targetId.slice(0, 8)}
+                Detay · {groupDetail.targetSummary?.title ?? `${groupDetail.targetType} · ${groupDetail.targetId.slice(0, 8)}`}
               </strong>
               <span>
-                {groupDetail.totalReports} rapor · {groupDetail.violationScore} ihlal puanı
+                {groupDetail.targetType} · {groupDetail.targetSummary?.status ?? "durum yok"} · {groupDetail.totalReports} rapor · {groupDetail.violationScore} ihlal puanı
               </span>
             </div>
+          </div>
+          <div className="admin-subsection">
+            <div className="admin-subsection-header">
+              <h3>Tab 1 · Şikayet edilen içerik</h3>
+              <span>{groupDetail.targetSummary?.status ?? "durum yok"}</span>
+            </div>
+            {groupDetail.targetSummary ? (
+              <div className="admin-list-row">
+                <div>
+                  <strong>{groupDetail.targetSummary.title}</strong>
+                  <span>{groupDetail.targetSummary.subtitle ?? "Ek açıklama yok"}</span>
+                  <span>Yayın/oluşturulma bilgileri payload içinde tutulur; hedef türü: {groupDetail.targetType}</span>
+                </div>
+                <div className="profile-tag-row">
+                  {Object.entries(groupDetail.targetSummary.metrics ?? {}).map(([label, value]) => (
+                    <span key={label}>
+                      {label}: {value}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="muted">Hedef içerik bulunamadı veya silinmiş.</p>
+            )}
+          </div>
+          <div className="admin-subsection">
+            <div className="admin-subsection-header">
+              <h3>Tab 2 · Sorumlusu hakkında</h3>
+              <span>{groupDetail.targetSummary?.owner?.status ?? "sorumlu yok"}</span>
+            </div>
+            {groupDetail.targetSummary?.owner ? (
+              <div className="admin-list-row">
+                <div>
+                  <strong>{groupDetail.targetSummary.owner.username ? `@${groupDetail.targetSummary.owner.username}` : groupDetail.targetSummary.owner.name}</strong>
+                  <span>{groupDetail.targetSummary.owner.email}</span>
+                  <span>Rol: {groupDetail.targetSummary.owner.role} · Statü: {groupDetail.targetSummary.owner.status}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="muted">Bu içerik için sorumlu kullanıcı bulunamadı.</p>
+            )}
           </div>
           <form className="admin-form compact-form" onSubmit={handleGroupNoteSubmit}>
             <label>
@@ -3013,8 +3198,34 @@ function ReportAdminPanel({
               Notu kaydet
             </button>
           </form>
+          <div className="admin-subsection">
+            <div className="admin-subsection-header">
+              <h3>Tab 3 · Şikayet kartları / Admin yorumları</h3>
+              <span>{groupDetail.reports.length} şikayet · {groupDetail.comments?.length ?? 0} admin yorumu</span>
+            </div>
+            <form className="admin-form compact-form" onSubmit={handleGroupCommentSubmit}>
+              <label>
+                Admin yorumu
+                <textarea name="body" rows={3} maxLength={2000} required />
+              </label>
+              <button className="secondary-action" disabled={isPending} type="submit">
+                Yorum ekle
+              </button>
+            </form>
+            <div className="admin-list">
+              {(groupDetail.comments ?? []).map((comment) => (
+                <div className="admin-list-row" key={comment.id}>
+                  <div>
+                    <strong>{comment.createdBy?.email ?? "Admin"}</strong>
+                    <span>{comment.body}</span>
+                  </div>
+                  <span className="status-pill status-reviewing">{comment.createdAt ? formatDateTime(comment.createdAt) : "yorum"}</span>
+                </div>
+              ))}
+            </div>
+          </div>
           <form className="admin-form compact-form" onSubmit={handleDecisionSubmit}>
-            <h3>Ceza / Müdahale Kararı</h3>
+            <h3>Tab 4-5 · İçeriğe Müdahale / Sorumlusuna Ceza</h3>
             <div className="admin-form-grid">
               <label>
                 Karar
@@ -3072,6 +3283,25 @@ function ReportAdminPanel({
                   <span className="status-pill status-resolved">{decision.createdAt ? formatDateTime(decision.createdAt) : "karar"}</span>
                 </div>
               ))}
+            </div>
+          ) : null}
+          {groupDetail.activityLogs?.length ? (
+            <div className="admin-subsection">
+              <div className="admin-subsection-header">
+                <h3>Activity Log</h3>
+                <span>{groupDetail.activityLogs.length} kayıt</span>
+              </div>
+              <div className="admin-list">
+                {groupDetail.activityLogs.map((item) => (
+                  <div className="admin-list-row" key={item.id}>
+                    <div>
+                      <strong>{item.action}</strong>
+                      <span>{item.actor?.email ?? "Sistem"} · {item.note ?? "Not yok"}</span>
+                    </div>
+                    <span className="muted">{item.createdAt ? formatDateTime(item.createdAt) : "tarih yok"}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
           <div className="admin-list">

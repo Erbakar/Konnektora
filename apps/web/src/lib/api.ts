@@ -20,6 +20,8 @@ import {
   faqSchema,
   loginResponseSchema,
   moderationDecisionSchema,
+  notificationSchema,
+  reportGroupCommentSchema,
   reportGroupDetailSchema,
   reportGroupNoteSchema,
   reportGroupSchema,
@@ -48,9 +50,11 @@ import {
   type Faq,
   type LoginResponse,
   type ModerationDecision,
+  type Notification,
   type PolicyType,
   type ReportRule,
   type ReportGroup,
+  type ReportGroupComment,
   type ReportGroupDetail,
   type ReportGroupNote,
   type ReportTargetType,
@@ -84,6 +88,7 @@ const MOCK_PARTICIPANTS_KEY = "konnektora_mock_participants";
 const MOCK_REPORTS_KEY = "konnektora_mock_reports";
 const MOCK_REPORT_RULES_KEY = "konnektora_mock_report_rules";
 const MOCK_REPORT_GROUP_NOTES_KEY = "konnektora_mock_report_group_notes";
+const MOCK_REPORT_GROUP_COMMENTS_KEY = "konnektora_mock_report_group_comments";
 const MOCK_MODERATION_DECISIONS_KEY = "konnektora_mock_moderation_decisions";
 const MOCK_EMAIL_TOKENS_KEY = "konnektora_mock_email_tokens";
 const MOCK_USER_EVENT_IDS_KEY = "konnektora_mock_user_event_ids";
@@ -97,6 +102,7 @@ const MOCK_PLACES_KEY = "konnektora_mock_places";
 const MOCK_MEDIA_KEY = "konnektora_mock_media";
 const MOCK_COMMENTS_KEY = "konnektora_mock_comments";
 const MOCK_PRIVATE_MESSAGES_KEY = "konnektora_mock_private_messages";
+const MOCK_NOTIFICATIONS_KEY = "konnektora_mock_notifications";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -220,6 +226,54 @@ export function setUserInterestTagIds(tagIds: string[]) {
   });
 }
 
+export function listMyNotifications(): Promise<Notification[]> {
+  return requestJson("/profile/notifications", z.array(notificationSchema), { auth: "user" });
+}
+
+export function markMyNotificationRead(id: string): Promise<Notification> {
+  return requestJson(`/profile/notifications/${id}/read`, notificationSchema, { auth: "user", method: "PATCH" });
+}
+
+function listMockNotifications(): Notification[] {
+  const user = getUserSession();
+  const notifications = readStorage<Notification[]>(MOCK_NOTIFICATIONS_KEY, []);
+
+  return notifications
+    .filter((notification) => !user || notification.userId === user.id)
+    .sort((first, second) => {
+      if (Boolean(first.readAt) !== Boolean(second.readAt)) {
+        return first.readAt ? 1 : -1;
+      }
+
+      return new Date(second.createdAt ?? 0).getTime() - new Date(first.createdAt ?? 0).getTime();
+    });
+}
+
+function createMockNotification(input: Omit<Notification, "id" | "createdAt" | "readAt">) {
+  const notifications = readStorage<Notification[]>(MOCK_NOTIFICATIONS_KEY, []);
+  const notification: Notification = {
+    ...input,
+    id: createId(),
+    readAt: null,
+    createdAt: new Date().toISOString()
+  };
+  writeStorage(MOCK_NOTIFICATIONS_KEY, [notification, ...notifications]);
+  return notification;
+}
+
+function markMockNotificationRead(id: string): Notification {
+  const notifications = readStorage<Notification[]>(MOCK_NOTIFICATIONS_KEY, []);
+  const updated = notifications.map((notification) =>
+    notification.id === id ? { ...notification, readAt: new Date().toISOString() } : notification
+  );
+  const notification = updated.find((item) => item.id === id);
+  if (!notification) {
+    throw new Error("Mock notification not found");
+  }
+  writeStorage(MOCK_NOTIFICATIONS_KEY, updated);
+  return notification;
+}
+
 async function requestJson<T>(path: string, schema: z.ZodType<T>, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
 
@@ -332,6 +386,15 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(getTagsByIds(input.tagIds));
   }
 
+  if (pathname === "/profile/notifications" && method === "GET") {
+    return schema.parse(listMockNotifications());
+  }
+
+  if (pathname.startsWith("/profile/notifications/") && pathname.endsWith("/read") && method === "PATCH") {
+    const id = pathname.slice("/profile/notifications/".length, -"/read".length);
+    return schema.parse(markMockNotificationRead(id));
+  }
+
   if ((pathname === "/messages" || pathname === "/me/messages") && method === "POST") {
     return schema.parse(createMockUserMessage(parseBody<UserMessageInput>(options), pathname === "/me/messages"));
   }
@@ -432,6 +495,11 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(getMockAdminUser(pathname.slice("/admin/users/".length)));
   }
 
+  if (pathname.startsWith("/admin/users/") && pathname.endsWith("/actions") && method === "POST") {
+    const userId = pathname.slice("/admin/users/".length, -"/actions".length);
+    return schema.parse(runMockAdminUserAction(userId, parseBody<AdminUserActionInput>(options)));
+  }
+
   if (pathname.startsWith("/admin/users/") && method === "PATCH") {
     return schema.parse(updateMockAdminUser(pathname.slice("/admin/users/".length), parseBody<Partial<AdminManagedUser>>(options)));
   }
@@ -526,6 +594,11 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   if (pathname.startsWith("/admin/report-groups/") && pathname.endsWith("/note") && method === "PATCH") {
     const { targetType, targetId } = parseReportGroupPath(pathname.slice(0, -"/note".length));
     return schema.parse(updateMockReportGroupNote(targetType, targetId, parseBody<{ note: string }>(options).note));
+  }
+
+  if (pathname.startsWith("/admin/report-groups/") && pathname.endsWith("/comments") && method === "POST") {
+    const { targetType, targetId } = parseReportGroupPath(pathname.slice(0, -"/comments".length));
+    return schema.parse(createMockReportGroupComment(targetType, targetId, parseBody<{ body: string }>(options).body));
   }
 
   if (pathname.startsWith("/admin/report-groups/") && pathname.endsWith("/decisions") && method === "POST") {
@@ -1237,6 +1310,7 @@ function getMockReportGroupDetail(targetType: ReportTargetType, targetId: string
 
 function buildMockReportGroups(reports: ContentReport[]): ReportGroup[] {
   const notes = readStorage<ReportGroupNote[]>(MOCK_REPORT_GROUP_NOTES_KEY, []);
+  const comments = readStorage<ReportGroupComment[]>(MOCK_REPORT_GROUP_COMMENTS_KEY, []);
   const decisions = readStorage<ModerationDecision[]>(MOCK_MODERATION_DECISIONS_KEY, []);
   const grouped = new Map<string, ContentReport[]>();
 
@@ -1261,6 +1335,8 @@ function buildMockReportGroups(reports: ContentReport[]): ReportGroup[] {
         statuses: [...new Set(groupReports.map((report) => report.status))],
         reasons: [...new Set(groupReports.map((report) => report.reason))],
         note: notes.find((note) => note.targetType === targetType && note.targetId === targetId) ?? null,
+        comments: comments.filter((comment) => comment.targetType === targetType && comment.targetId === targetId),
+        activityLogs: [],
         decisions: decisions.filter((decision) => decision.targetType === targetType && decision.targetId === targetId)
       };
     })
@@ -1271,6 +1347,29 @@ function buildMockReportGroups(reports: ContentReport[]): ReportGroup[] {
 
       return new Date(second.latestReportAt).getTime() - new Date(first.latestReportAt).getTime();
     });
+}
+
+function createMockReportGroupComment(targetType: ReportTargetType, targetId: string, body: string): ReportGroupComment {
+  const comments = readStorage<ReportGroupComment[]>(MOCK_REPORT_GROUP_COMMENTS_KEY, []);
+  const adminUser = {
+    id: "11111111-1111-4111-8111-111111111111",
+    email: "admin@konnektora.local",
+    name: "Demo Admin",
+    role: "admin" as const,
+    status: "active" as const
+  };
+  const comment: ReportGroupComment = {
+    id: createId(),
+    targetType,
+    targetId,
+    body: body.trim(),
+    createdById: adminUser.id,
+    createdBy: adminUser,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  writeStorage(MOCK_REPORT_GROUP_COMMENTS_KEY, [comment, ...comments]);
+  return comment;
 }
 
 function createMockModerationDecision(
@@ -1315,6 +1414,16 @@ function createMockModerationDecision(
 
   applyMockModerationAction(targetType, targetId, input.action);
   closeMockReportsForDecision(targetType, targetId, input);
+  if (targetUserId) {
+    createMockNotification({
+      userId: targetUserId,
+      type: "moderation_decision",
+      title: "Moderasyon kararı",
+      body: input.note?.trim() || `${input.action} aksiyonu uygulandı.`,
+      targetType,
+      targetId
+    });
+  }
   writeStorage(MOCK_MODERATION_DECISIONS_KEY, [decision, ...decisions]);
   return decision;
 }
@@ -1709,6 +1818,12 @@ function createMockAnnouncement(input: AnnouncementInput): Announcement {
     title: input.title.trim(),
     body: input.body.trim(),
     target: parseAnnouncementTarget(input.target),
+    targetLastLoginFrom: input.targetLastLoginFrom || null,
+    targetLastLoginTo: input.targetLastLoginTo || null,
+    targetJoinedFrom: input.targetJoinedFrom || null,
+    targetJoinedTo: input.targetJoinedTo || null,
+    targetAppVersion: input.targetAppVersion?.trim() || null,
+    publishMode: (input.publishMode as Announcement["publishMode"]) || "scheduled",
     status: "active",
     publishAt: input.publishAt || now,
     expiresAt: input.expiresAt || null,
@@ -1729,6 +1844,16 @@ function updateMockAnnouncement(id: string, input: Partial<AnnouncementInput> & 
           title: input.title?.trim() ?? announcement.title,
           body: input.body?.trim() ?? announcement.body,
           target: input.target ? parseAnnouncementTarget(input.target) : announcement.target,
+          targetLastLoginFrom:
+            input.targetLastLoginFrom === undefined ? announcement.targetLastLoginFrom ?? null : input.targetLastLoginFrom || null,
+          targetLastLoginTo:
+            input.targetLastLoginTo === undefined ? announcement.targetLastLoginTo ?? null : input.targetLastLoginTo || null,
+          targetJoinedFrom:
+            input.targetJoinedFrom === undefined ? announcement.targetJoinedFrom ?? null : input.targetJoinedFrom || null,
+          targetJoinedTo: input.targetJoinedTo === undefined ? announcement.targetJoinedTo ?? null : input.targetJoinedTo || null,
+          targetAppVersion:
+            input.targetAppVersion === undefined ? announcement.targetAppVersion ?? null : input.targetAppVersion?.trim() || null,
+          publishMode: (input.publishMode as Announcement["publishMode"]) ?? announcement.publishMode ?? "scheduled",
           status: parseCmsStatus(input.status, announcement.status),
           publishAt: input.publishAt ?? announcement.publishAt,
           expiresAt: input.expiresAt === undefined ? announcement.expiresAt : input.expiresAt || null,
@@ -1873,6 +1998,10 @@ function listMockAdminUsers(params: URLSearchParams): AdminManagedUserList {
   const gender = params.get("gender");
   const email = params.get("email")?.toLowerCase().trim();
   const phone = params.get("phone")?.toLowerCase().trim();
+  const ageFrom = params.get("ageFrom") ? Number(params.get("ageFrom")) : undefined;
+  const ageTo = params.get("ageTo") ? Number(params.get("ageTo")) : undefined;
+  const sortBy = params.get("sortBy") || "createdAt";
+  const sortDir = params.get("sortDir") === "asc" ? "asc" : "desc";
   const page = Math.max(Number(params.get("page") || "1"), 1);
   const pageSize = Math.min(Math.max(Number(params.get("pageSize") || "25"), 1), 100);
   const users = getAllMockUsers()
@@ -1887,8 +2016,11 @@ function listMockAdminUsers(params: URLSearchParams): AdminManagedUserList {
         (!city || (user.city ?? "").toLowerCase().includes(city)) &&
         (!gender || user.gender === gender) &&
         (!email || user.email.toLowerCase().includes(email)) &&
-        (!phone || (user.phone ?? "").toLowerCase().includes(phone))
-    );
+        (!phone || (user.phone ?? "").toLowerCase().includes(phone)) &&
+        (ageFrom === undefined || getAge(user.birthDate) >= ageFrom) &&
+        (ageTo === undefined || getAge(user.birthDate) <= ageTo)
+    )
+    .sort((first, second) => compareMockUsers(first, second, sortBy, sortDir));
   const start = (page - 1) * pageSize;
 
   return {
@@ -1898,6 +2030,37 @@ function listMockAdminUsers(params: URLSearchParams): AdminManagedUserList {
     pageSize,
     hasNextPage: page * pageSize < users.length
   };
+}
+
+function getAge(value?: string | Date | null) {
+  if (!value) return 0;
+  const birthDate = new Date(value);
+  const now = new Date();
+  let age = now.getFullYear() - birthDate.getFullYear();
+  const monthDelta = now.getMonth() - birthDate.getMonth();
+  if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < birthDate.getDate())) {
+    age -= 1;
+  }
+  return Math.max(age, 0);
+}
+
+function compareMockUsers(first: AdminManagedUser, second: AdminManagedUser, sortBy: string, sortDir: string) {
+  const direction = sortDir === "asc" ? 1 : -1;
+  const valueBySort = (user: AdminManagedUser) => {
+    if (sortBy === "username") return user.username ?? "";
+    if (sortBy === "followers") return user.followerCount ?? 0;
+    if (sortBy === "following") return user.followingCount ?? 0;
+    if (sortBy === "lastOnlineAt") return user.lastOnlineAt ? new Date(user.lastOnlineAt).getTime() : 0;
+    return user.createdAt ? new Date(user.createdAt).getTime() : 0;
+  };
+  const firstValue = valueBySort(first);
+  const secondValue = valueBySort(second);
+
+  if (typeof firstValue === "string" && typeof secondValue === "string") {
+    return firstValue.localeCompare(secondValue) * direction;
+  }
+
+  return (Number(firstValue) - Number(secondValue)) * direction;
 }
 
 function getMockAdminUser(id: string): AdminManagedUserDetail {
@@ -1972,6 +2135,55 @@ function updateMockAdminUser(id: string, input: Partial<AdminManagedUser>): Admi
 
   writeStorage(MOCK_USERS_KEY, nextUsers);
   return toAdminManagedUser(updatedUser);
+}
+
+function runMockAdminUserAction(id: string, input: AdminUserActionInput): AdminManagedUserDetail {
+  const notify = () =>
+    createMockNotification({
+      userId: id,
+      type: "admin_user_action",
+      title: "Hesap müdahalesi",
+      body: input.note?.trim() || input.action,
+      targetType: "user",
+      targetId: id
+    });
+
+  if (input.action === "send_verification_email" || input.action === "send_password_reset") {
+    notify();
+    return getMockAdminUser(id);
+  }
+
+  if (input.action === "reset_username") {
+    updateMockAdminUser(id, { username: `User${Date.now().toString().slice(-8)}` });
+    notify();
+    return getMockAdminUser(id);
+  }
+
+  if (input.action === "remove_website") {
+    updateMockAdminUser(id, { website: null });
+    notify();
+    return getMockAdminUser(id);
+  }
+
+  if (input.action === "suspend_7_days" || input.action === "suspend_30_days") {
+    updateMockAdminUser(id, { status: "suspended" });
+    notify();
+    return getMockAdminUser(id);
+  }
+
+  if (input.action === "ban_user") {
+    updateMockAdminUser(id, { status: "banned" });
+    notify();
+    return getMockAdminUser(id);
+  }
+
+  if (input.action === "activate_user") {
+    updateMockAdminUser(id, { status: "active" });
+    notify();
+    return getMockAdminUser(id);
+  }
+
+  return getMockAdminUser(id);
 }
 
 function updateMockReport(id: string, input: UpdateReportInput): ContentReport {
@@ -2293,10 +2505,20 @@ function mergeMockTag(sourceTagId: string, targetTagId: string): Tag {
   writeStorage(
     USER_INTEREST_TAGS_KEY,
     Object.fromEntries(
-      Object.entries(interests).map(([userId, tagIds]) => [
-        userId,
-        [...new Set(tagIds.map((tagId) => (tagId === sourceTagId ? targetTagId : tagId)))]
-      ])
+      Object.entries(interests).map(([userId, tagIds]) => {
+        if (tagIds.includes(sourceTagId)) {
+          createMockNotification({
+            userId,
+            type: "tag_merge",
+            title: "İlgi alanı taşındı",
+            body: `${sourceTag.name} ilgi alanı ${targetTag.name} altında birleştirildi.`,
+            targetType: "tag",
+            targetId: targetTagId
+          });
+        }
+
+        return [userId, [...new Set(tagIds.map((tagId) => (tagId === sourceTagId ? targetTagId : tagId)))]];
+      })
     )
   );
 
@@ -2622,6 +2844,27 @@ export function updateAdminUser(
   return requestJson(`/admin/users/${id}`, adminManagedUserSchema, {
     auth: true,
     method: "PATCH",
+    body: JSON.stringify(input)
+  });
+}
+
+export type AdminUserActionInput = {
+  action:
+    | "reset_username"
+    | "remove_website"
+    | "send_verification_email"
+    | "send_password_reset"
+    | "suspend_7_days"
+    | "suspend_30_days"
+    | "ban_user"
+    | "activate_user";
+  note?: string;
+};
+
+export function runAdminUserAction(id: string, input: AdminUserActionInput): Promise<AdminManagedUserDetail> {
+  return requestJson(`/admin/users/${id}/actions`, adminManagedUserDetailSchema, {
+    auth: true,
+    method: "POST",
     body: JSON.stringify(input)
   });
 }
@@ -2993,6 +3236,12 @@ export type AnnouncementInput = {
   title: string;
   body: string;
   target?: string;
+  targetLastLoginFrom?: string;
+  targetLastLoginTo?: string;
+  targetJoinedFrom?: string;
+  targetJoinedTo?: string;
+  targetAppVersion?: string;
+  publishMode?: string;
   publishAt?: string;
   expiresAt?: string;
 };
@@ -3087,6 +3336,18 @@ export function updateAdminReportGroupNote(
     auth: true,
     method: "PATCH",
     body: JSON.stringify({ note })
+  });
+}
+
+export function createAdminReportGroupComment(
+  targetType: ReportTargetType,
+  targetId: string,
+  body: string
+): Promise<ReportGroupComment> {
+  return requestJson(`/admin/report-groups/${targetType}/${targetId}/comments`, reportGroupCommentSchema, {
+    auth: true,
+    method: "POST",
+    body: JSON.stringify({ body })
   });
 }
 

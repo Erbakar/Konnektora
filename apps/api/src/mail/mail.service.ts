@@ -87,6 +87,17 @@ export class MailService {
     });
   }
 
+  async sendAdminUserInterventionEmail(input: { to: string; name: string; action: string; note?: string | null; until?: Date | null }) {
+    const untilText = input.until ? ` Bitiş zamanı: ${input.until.toISOString()}.` : "";
+
+    await this.send({
+      to: input.to,
+      subject: "Konnektora hesap müdahalesi",
+      text: `Merhaba ${input.name}, hesabınla ilgili admin müdahalesi uygulandı: ${input.action}.${untilText} ${input.note ?? ""}`,
+      html: `<p>Merhaba ${input.name},</p><p>Hesabınla ilgili admin müdahalesi uygulandı: <strong>${input.action}</strong>.</p>${input.until ? `<p>Bitiş zamanı: ${input.until.toISOString()}</p>` : ""}${input.note ? `<p>${input.note}</p>` : ""}`
+    });
+  }
+
   private async send(message: MailMessage) {
     const apiKey = this.configService.get<string>("RESEND_API_KEY");
     const from = this.configService.get<string>("EMAIL_FROM");
