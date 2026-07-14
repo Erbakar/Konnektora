@@ -1,18 +1,21 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
-import { AccountPage } from "./pages/AccountPage";
-import { AdminDashboardPage } from "./pages/AdminDashboardPage";
-import { AcceptInvitePage, ResetPasswordPage, VerifyEmailPage } from "./pages/AuthTokenPage";
-import { EventDetailPage } from "./pages/EventDetailPage";
-import { EventsPage } from "./pages/EventsPage";
-import { HomePage } from "./pages/HomePage";
-import { ContactPage } from "./pages/ContactPage";
-import { MobileAppPage } from "./pages/MobileAppPage";
-import { PolicyPage } from "./pages/PolicyPage";
 import "./styles.css";
+
+const AccountPage = lazy(() => import("./pages/AccountPage").then((module) => ({ default: module.AccountPage })));
+const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage").then((module) => ({ default: module.AdminDashboardPage })));
+const AcceptInvitePage = lazy(() => import("./pages/AuthTokenPage").then((module) => ({ default: module.AcceptInvitePage })));
+const ResetPasswordPage = lazy(() => import("./pages/AuthTokenPage").then((module) => ({ default: module.ResetPasswordPage })));
+const VerifyEmailPage = lazy(() => import("./pages/AuthTokenPage").then((module) => ({ default: module.VerifyEmailPage })));
+const ContactPage = lazy(() => import("./pages/ContactPage").then((module) => ({ default: module.ContactPage })));
+const EventDetailPage = lazy(() => import("./pages/EventDetailPage").then((module) => ({ default: module.EventDetailPage })));
+const EventsPage = lazy(() => import("./pages/EventsPage").then((module) => ({ default: module.EventsPage })));
+const HomePage = lazy(() => import("./pages/HomePage").then((module) => ({ default: module.HomePage })));
+const MobileAppPage = lazy(() => import("./pages/MobileAppPage").then((module) => ({ default: module.MobileAppPage })));
+const PolicyPage = lazy(() => import("./pages/PolicyPage").then((module) => ({ default: module.PolicyPage })));
 
 const queryClient = new QueryClient();
 
@@ -39,7 +42,9 @@ const router = createBrowserRouter([
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <Suspense fallback={<div className="page route-loading" role="status">Sayfa yükleniyor…</div>}>
+        <RouterProvider router={router} />
+      </Suspense>
     </QueryClientProvider>
   </React.StrictMode>
 );
