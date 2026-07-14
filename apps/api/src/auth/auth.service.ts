@@ -55,6 +55,10 @@ export class AuthService {
         data: {
           name: input.name.trim(),
           accountType: input.accountType ?? existing.accountType,
+          companyName: input.accountType === "corporate" ? input.companyName?.trim() : null,
+          tradeName: input.accountType === "corporate" ? input.tradeName?.trim() : null,
+          companyType: input.accountType === "corporate" ? input.companyType : null,
+          businessCategory: input.accountType === "corporate" ? input.businessCategory : null,
           passwordHash: await hash(input.password, 10),
           emailVerified: false,
           status: "pending"
@@ -77,6 +81,10 @@ export class AuthService {
         name: input.name.trim(),
         passwordHash: await hash(input.password, 10),
         accountType: input.accountType ?? "individual",
+        companyName: input.accountType === "corporate" ? input.companyName?.trim() : null,
+        tradeName: input.accountType === "corporate" ? input.tradeName?.trim() : null,
+        companyType: input.accountType === "corporate" ? input.companyType : null,
+        businessCategory: input.accountType === "corporate" ? input.businessCategory : null,
         role: "user",
         status: "pending"
       }

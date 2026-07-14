@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from "class-validator";
+import { IsEmail, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf } from "class-validator";
 
 const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).+$/;
 
@@ -31,6 +31,26 @@ export class RegisterDto extends StrongPasswordDto {
   @IsOptional()
   @IsIn(["individual", "corporate"])
   accountType?: "individual" | "corporate";
+
+  @ValidateIf((value: RegisterDto) => value.accountType === "corporate")
+  @IsString()
+  @MinLength(2)
+  @MaxLength(160)
+  companyName?: string;
+
+  @ValidateIf((value: RegisterDto) => value.accountType === "corporate")
+  @IsString()
+  @MinLength(2)
+  @MaxLength(160)
+  tradeName?: string;
+
+  @ValidateIf((value: RegisterDto) => value.accountType === "corporate")
+  @IsIn(["sole_proprietorship", "limited_or_corporation", "association", "foundation", "public_body", "other"])
+  companyType?: string;
+
+  @ValidateIf((value: RegisterDto) => value.accountType === "corporate")
+  @IsIn(["event_organizer", "restaurant_bar_cafe", "night_club", "university_club", "ngo", "brand", "tourism_company", "sports_club", "other"])
+  businessCategory?: string;
 }
 
 export class EmailDto {

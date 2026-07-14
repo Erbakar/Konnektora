@@ -30,4 +30,18 @@ describe("auth DTO password policy", () => {
 
     await expect(validate(dto)).resolves.toEqual([]);
   });
+
+  it("requires company details for corporate registration", async () => {
+    const dto = Object.assign(new RegisterDto(), {
+      accountType: "corporate",
+      email: "company@example.com",
+      name: "Authorized Person",
+      password: "StrongPass!123"
+    });
+
+    const errors = await validate(dto);
+    expect(errors.map((error) => error.property)).toEqual(
+      expect.arrayContaining(["companyName", "tradeName", "companyType", "businessCategory"])
+    );
+  });
 });

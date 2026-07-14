@@ -6,6 +6,18 @@ export const eventVisibilitySchema = z.enum(["open", "approval_required", "invit
 export const tagStatusSchema = z.enum(["active", "hidden", "archived"]);
 export const userRoleSchema = z.enum(["user", "admin", "super_admin"]);
 export const accountTypeSchema = z.enum(["individual", "corporate"]);
+export const companyTypeSchema = z.enum(["sole_proprietorship", "limited_or_corporation", "association", "foundation", "public_body", "other"]);
+export const businessCategorySchema = z.enum([
+  "event_organizer",
+  "restaurant_bar_cafe",
+  "night_club",
+  "university_club",
+  "ngo",
+  "brand",
+  "tourism_company",
+  "sports_club",
+  "other"
+]);
 export const passwordSchema = z
   .string()
   .min(8)
@@ -563,6 +575,8 @@ export type EventFormat = z.infer<typeof eventFormatSchema>;
 export type TagStatus = z.infer<typeof tagStatusSchema>;
 export type UserRole = z.infer<typeof userRoleSchema>;
 export type AccountType = z.infer<typeof accountTypeSchema>;
+export type CompanyType = z.infer<typeof companyTypeSchema>;
+export type BusinessCategory = z.infer<typeof businessCategorySchema>;
 export type UserStatus = z.infer<typeof userStatusSchema>;
 export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema>;
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;

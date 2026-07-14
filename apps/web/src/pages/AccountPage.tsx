@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import type { AccountType, Event, EventParticipant, Tag } from "@konnektora/shared";
 import {
   type AdminEventInput,
+  type RegistrationInput,
   archiveMyEvent,
   checkInEventParticipant,
   clearUserSession,
@@ -35,6 +36,7 @@ export function AccountPage() {
   const queryClient = useQueryClient();
   const [user, setUser] = useState(() => getUserSession());
   const [mode, setMode] = useState<"login" | "register">("register");
+  const [registrationAccountType, setRegistrationAccountType] = useState<AccountType>("individual");
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const { data: tags = [] } = useQuery({ queryKey: ["tags"], queryFn: listTags });
   const myEventsQuery = useQuery({
@@ -61,9 +63,9 @@ export function AccountPage() {
   const interestTags = tags.filter((tag) => interestTagIds.includes(tag.id));
 
   const authMutation = useMutation({
-    mutationFn: (input: { name?: string; email: string; password: string; accountType?: AccountType }) =>
+    mutationFn: (input: RegistrationInput) =>
       mode === "register"
-        ? registerUser({ name: input.name ?? "", email: input.email, password: input.password, accountType: input.accountType ?? "individual" })
+        ? registerUser(input)
         : userLogin(input.email, input.password),
     onSuccess: (response) => {
       setUserSession(response);
@@ -151,7 +153,11 @@ export function AccountPage() {
       name: String(form.get("name") || ""),
       email: String(form.get("email")),
       password: String(form.get("password")),
-      accountType: String(form.get("accountType") || "individual") as AccountType
+      accountType: String(form.get("accountType") || "individual") as AccountType,
+      companyName: String(form.get("companyName") || "") || undefined,
+      tradeName: String(form.get("tradeName") || "") || undefined,
+      companyType: String(form.get("companyType") || "") || undefined,
+      businessCategory: String(form.get("businessCategory") || "") || undefined
     });
   }
 
@@ -274,15 +280,54 @@ export function AccountPage() {
               <>
                 <label>
                   Hesap türü
-                  <select defaultValue="individual" name="accountType">
+                  <select name="accountType" onChange={(event) => setRegistrationAccountType(event.target.value as AccountType)} value={registrationAccountType}>
                     <option value="individual">Bireysel</option>
                     <option value="corporate">Kurumsal</option>
                   </select>
                 </label>
                 <label>
-                  Ad Soyad veya İşletme Adı
-                  <input autoComplete="name" name="name" placeholder="Kadir Erbakar / Konnektora" required minLength={2} />
+                  {registrationAccountType === "corporate" ? "Yetkili kişi adı soyadı" : "Ad Soyad"}
+                  <input autoComplete="name" name="name" placeholder="Kadir Erbakar" required minLength={2} />
                 </label>
+                {registrationAccountType === "corporate" ? (
+                  <>
+                    <label>
+                      İşletme adı
+                      <input name="companyName" placeholder="Konnektora" required minLength={2} maxLength={160} />
+                    </label>
+                    <label>
+                      Ticari unvan
+                      <input name="tradeName" placeholder="Konnektora Teknoloji Ltd." required minLength={2} maxLength={160} />
+                    </label>
+                    <label>
+                      Şirket türü
+                      <select name="companyType" required defaultValue="">
+                        <option disabled value="">Seçiniz</option>
+                        <option value="sole_proprietorship">Şahıs firması</option>
+                        <option value="limited_or_corporation">Limited / Anonim</option>
+                        <option value="association">Dernek</option>
+                        <option value="foundation">Vakıf</option>
+                        <option value="public_body">Kamu kurumu</option>
+                        <option value="other">Diğer</option>
+                      </select>
+                    </label>
+                    <label>
+                      İşletme kategorisi
+                      <select name="businessCategory" required defaultValue="">
+                        <option disabled value="">Seçiniz</option>
+                        <option value="event_organizer">Etkinlik organizatörü</option>
+                        <option value="restaurant_bar_cafe">Restoran / Bar / Kafe</option>
+                        <option value="night_club">Gece kulübü</option>
+                        <option value="university_club">Üniversite kulübü</option>
+                        <option value="ngo">STK</option>
+                        <option value="brand">Marka</option>
+                        <option value="tourism_company">Turizm şirketi</option>
+                        <option value="sports_club">Spor kulübü</option>
+                        <option value="other">Diğer</option>
+                      </select>
+                    </label>
+                  </>
+                ) : null}
               </>
             ) : null}
             <label>

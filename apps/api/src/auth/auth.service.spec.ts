@@ -128,11 +128,21 @@ describe("AuthService", () => {
       email: corporateUser.email,
       name: corporateUser.name,
       password: "StrongerPass123!",
-      accountType: "corporate"
+      accountType: "corporate",
+      companyName: "Example",
+      tradeName: "Example Company Ltd.",
+      companyType: "limited_or_corporation",
+      businessCategory: "event_organizer"
     });
 
     expect(prisma.user.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ accountType: "corporate" })
+      data: expect.objectContaining({
+        accountType: "corporate",
+        companyName: "Example",
+        tradeName: "Example Company Ltd.",
+        companyType: "limited_or_corporation",
+        businessCategory: "event_organizer"
+      })
     });
   });
 

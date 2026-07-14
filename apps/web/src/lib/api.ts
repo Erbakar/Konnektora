@@ -160,6 +160,17 @@ export type ProfileUpdateInput = {
   businessCategory?: string;
 };
 
+export type RegistrationInput = {
+  name: string;
+  email: string;
+  password: string;
+  accountType: "individual" | "corporate";
+  companyName?: string;
+  tradeName?: string;
+  companyType?: string;
+  businessCategory?: string;
+};
+
 export const adminPermissionOptions: Array<{ value: AdminPermission; label: string }> = [
   { value: "cms.categories.manage", label: "CMS Kategori Yönetimi" },
   { value: "cms.faq.manage", label: "CMS SSS Yönetimi" },
@@ -366,7 +377,7 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   }
 
   if (pathname === "/auth/register" && method === "POST") {
-    return schema.parse(registerMockUser(parseBody<{ name: string; email: string; password: string; accountType?: "individual" | "corporate" }>(options)));
+    return schema.parse(registerMockUser(parseBody<RegistrationInput>(options)));
   }
 
   if (pathname === "/auth/login" && method === "POST") {
@@ -2305,7 +2316,7 @@ function parseParticipantPath(pathname: string, marker: string) {
   return { eventId, userId };
 }
 
-function registerMockUser(input: { name: string; email: string; password: string; accountType?: "individual" | "corporate" }): LoginResponse {
+function registerMockUser(input: RegistrationInput): LoginResponse {
   const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
   const email = input.email.toLowerCase().trim();
   const existing = users.find((user) => user.email === email);
@@ -2316,6 +2327,10 @@ function registerMockUser(input: { name: string; email: string; password: string
       name: input.name.trim(),
       password: input.password,
       accountType: input.accountType ?? existing.accountType ?? "individual",
+      companyName: input.accountType === "corporate" ? input.companyName : null,
+      tradeName: input.accountType === "corporate" ? input.tradeName : null,
+      companyType: input.accountType === "corporate" ? input.companyType : null,
+      businessCategory: input.accountType === "corporate" ? input.businessCategory : null,
       emailVerified: false,
       status: "pending"
     };
@@ -2330,6 +2345,10 @@ function registerMockUser(input: { name: string; email: string; password: string
     email,
     password: input.password,
     accountType: input.accountType ?? "individual",
+    companyName: input.accountType === "corporate" ? input.companyName : null,
+    tradeName: input.accountType === "corporate" ? input.tradeName : null,
+    companyType: input.accountType === "corporate" ? input.companyType : null,
+    businessCategory: input.accountType === "corporate" ? input.businessCategory : null,
     emailVerified: false,
     status: "pending"
   };
@@ -2875,7 +2894,7 @@ export function userLogin(email: string, password: string): Promise<LoginRespons
   });
 }
 
-export function registerUser(input: { name: string; email: string; password: string; accountType: "individual" | "corporate" }): Promise<LoginResponse> {
+export function registerUser(input: RegistrationInput): Promise<LoginResponse> {
   return requestJson("/auth/register", loginResponseSchema, {
     method: "POST",
     body: JSON.stringify(input)
