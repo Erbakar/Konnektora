@@ -102,6 +102,12 @@ enum CmsCategoryType {
   write_to_us
 }
 
+enum PrivacyAudience {
+  everybody
+  following
+  network
+}
+
 model User {
   id                   String     @id @default(uuid())
   email                String     @unique
@@ -155,6 +161,7 @@ model User {
   adminActivityLogs         AdminActivityLog[]
   emailTokens               EmailToken[]
   phoneVerifications        PhoneVerification[]
+  privacySettings           PrivacySettings?
   userMessages              UserMessage[]        @relation("UserMessageUser")
   readUserMessages          UserMessage[]        @relation("UserMessageReadBy")
   createdPlaces             Place[]              @relation("PlaceCreatedBy")
@@ -170,6 +177,22 @@ model User {
   @@index([country, city])
   @@index([lastOnlineAt])
   @@map("users")
+}
+
+model PrivacySettings {
+  userId                 String          @id @map("user_id")
+  messageAudience        PrivacyAudience @default(everybody) @map("message_audience")
+  directoryDiscoverable  Boolean         @default(false) @map("directory_discoverable")
+  eventAudience          PrivacyAudience @default(everybody) @map("event_audience")
+  eventInviteAudience    PrivacyAudience @default(everybody) @map("event_invite_audience")
+  placeAudience          PrivacyAudience @default(everybody) @map("place_audience")
+  placeInviteAudience    PrivacyAudience @default(everybody) @map("place_invite_audience")
+  createdAt              DateTime        @default(now()) @map("created_at")
+  updatedAt              DateTime        @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("privacy_settings")
 }
 
 model PhoneVerification {

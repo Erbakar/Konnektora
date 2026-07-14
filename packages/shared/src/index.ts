@@ -31,6 +31,18 @@ export const phoneVerificationResponseSchema = z.object({
   expiresInSeconds: z.number().int().positive(),
   developmentCode: z.string().length(6).optional()
 });
+export const privacyAudienceSchema = z.enum(["everybody", "following", "network"]);
+export const privacySettingsSchema = z.object({
+  userId: z.string().uuid(),
+  messageAudience: privacyAudienceSchema,
+  directoryDiscoverable: z.boolean(),
+  eventAudience: privacyAudienceSchema,
+  eventInviteAudience: privacyAudienceSchema,
+  placeAudience: privacyAudienceSchema,
+  placeInviteAudience: privacyAudienceSchema,
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional()
+});
 export const userStatusSchema = z.enum(["invited", "pending", "active", "disabled", "frozen", "deleted", "suspended", "banned"]);
 export const eventParticipantStatusSchema = z.enum([
   "invited",
@@ -584,6 +596,8 @@ export type UserRole = z.infer<typeof userRoleSchema>;
 export type AccountType = z.infer<typeof accountTypeSchema>;
 export type CompanyType = z.infer<typeof companyTypeSchema>;
 export type BusinessCategory = z.infer<typeof businessCategorySchema>;
+export type PrivacyAudience = z.infer<typeof privacyAudienceSchema>;
+export type PrivacySettings = z.infer<typeof privacySettingsSchema>;
 export type UserStatus = z.infer<typeof userStatusSchema>;
 export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema>;
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;

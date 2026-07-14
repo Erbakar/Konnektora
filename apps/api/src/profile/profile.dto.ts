@@ -1,4 +1,4 @@
-import { IsArray, IsDateString, IsIn, IsOptional, IsString, IsUrl, IsUUID, Matches, MaxLength, MinLength } from "class-validator";
+import { IsArray, IsBoolean, IsDateString, IsIn, IsOptional, IsString, IsUrl, IsUUID, Matches, MaxLength, MinLength } from "class-validator";
 
 export class UpdateProfileDto {
   @IsString()
@@ -70,6 +70,26 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(120)
   businessCategory?: string;
+}
+
+export class UpdatePrivacySettingsDto {
+  @IsIn(["everybody", "following", "network"])
+  messageAudience!: "everybody" | "following" | "network";
+
+  @IsBoolean()
+  directoryDiscoverable!: boolean;
+
+  @IsIn(["everybody", "following", "network"])
+  eventAudience!: "everybody" | "following" | "network";
+
+  @IsIn(["everybody", "following", "network"])
+  eventInviteAudience!: "everybody" | "following" | "network";
+
+  @IsIn(["everybody", "following", "network"])
+  placeAudience!: "everybody" | "following" | "network";
+
+  @IsIn(["everybody", "following", "network"])
+  placeInviteAudience!: "everybody" | "following" | "network";
 }
 
 export class UpdateProfileInterestsDto {

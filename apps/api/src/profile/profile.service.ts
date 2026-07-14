@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { UpdateProfileDto } from "./profile.dto";
+import { UpdatePrivacySettingsDto, UpdateProfileDto } from "./profile.dto";
 
 const profileSelect = {
   id: true,
@@ -80,6 +80,27 @@ export class ProfileService {
         businessCategory: this.optionalText(input.businessCategory, current.businessCategory)
       },
       select: profileSelect
+    });
+  }
+
+  async getPrivacySettings(userId: string) {
+    const settings = await this.prisma.privacySettings.findUnique({ where: { userId } });
+    return settings ?? {
+      userId,
+      messageAudience: "everybody" as const,
+      directoryDiscoverable: false,
+      eventAudience: "everybody" as const,
+      eventInviteAudience: "everybody" as const,
+      placeAudience: "everybody" as const,
+      placeInviteAudience: "everybody" as const
+    };
+  }
+
+  updatePrivacySettings(userId: string, input: UpdatePrivacySettingsDto) {
+    return this.prisma.privacySettings.upsert({
+      where: { userId },
+      create: { userId, ...input },
+      update: input
     });
   }
 

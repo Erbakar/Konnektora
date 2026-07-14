@@ -32,6 +32,10 @@ describe("ProfileService", () => {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
         update: jest.fn()
+      },
+      privacySettings: {
+        findUnique: jest.fn(),
+        upsert: jest.fn()
       }
     };
 
@@ -95,5 +99,40 @@ describe("ProfileService", () => {
     prisma.user.findUnique.mockResolvedValue(null);
 
     await expect(service.getProfile("missing")).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("returns privacy-safe defaults before settings are created", async () => {
+    const { service, prisma } = createService();
+    prisma.privacySettings.findUnique.mockResolvedValue(null);
+
+    await expect(service.getPrivacySettings("user-1")).resolves.toEqual({
+      userId: "user-1",
+      messageAudience: "everybody",
+      directoryDiscoverable: false,
+      eventAudience: "everybody",
+      eventInviteAudience: "everybody",
+      placeAudience: "everybody",
+      placeInviteAudience: "everybody"
+    });
+  });
+
+  it("upserts all privacy settings atomically", async () => {
+    const { service, prisma } = createService();
+    const input = {
+      messageAudience: "following" as const,
+      directoryDiscoverable: true,
+      eventAudience: "network" as const,
+      eventInviteAudience: "following" as const,
+      placeAudience: "everybody" as const,
+      placeInviteAudience: "network" as const
+    };
+    prisma.privacySettings.upsert.mockResolvedValue({ userId: "user-1", ...input });
+
+    await service.updatePrivacySettings("user-1", input);
+    expect(prisma.privacySettings.upsert).toHaveBeenCalledWith({
+      where: { userId: "user-1" },
+      create: { userId: "user-1", ...input },
+      update: input
+    });
   });
 });

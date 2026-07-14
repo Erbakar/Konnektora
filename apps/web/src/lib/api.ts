@@ -24,6 +24,7 @@ import {
   phoneVerificationResponseSchema,
   phoneSchema,
   profileSchema,
+  privacySettingsSchema,
   reportGroupCommentSchema,
   reportGroupDetailSchema,
   reportGroupNoteSchema,
@@ -56,6 +57,7 @@ import {
   type Notification,
   type PolicyType,
   type Profile,
+  type PrivacySettings,
   type ReportRule,
   type ReportGroup,
   type ReportGroupComment,
@@ -108,6 +110,7 @@ const MOCK_COMMENTS_KEY = "konnektora_mock_comments";
 const MOCK_PRIVATE_MESSAGES_KEY = "konnektora_mock_private_messages";
 const MOCK_NOTIFICATIONS_KEY = "konnektora_mock_notifications";
 const MOCK_PHONE_VERIFICATIONS_KEY = "konnektora_mock_phone_verifications";
+const MOCK_PRIVACY_SETTINGS_KEY = "konnektora_mock_privacy_settings";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -436,6 +439,14 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname === "/profile" && method === "PUT") {
     return schema.parse(updateMockProfile(parseBody<ProfileUpdateInput>(options)));
+  }
+
+  if (pathname === "/profile/privacy" && method === "GET") {
+    return schema.parse(getMockPrivacySettings());
+  }
+
+  if (pathname === "/profile/privacy" && method === "PUT") {
+    return schema.parse(updateMockPrivacySettings(parseBody<Omit<PrivacySettings, "userId" | "createdAt" | "updatedAt">>(options)));
   }
 
   if (pathname === "/profile/interests" && method === "GET") {
@@ -2582,6 +2593,29 @@ function updateMockProfile(input: ProfileUpdateInput): Profile {
   return getMockProfile();
 }
 
+function getMockPrivacySettings(): PrivacySettings {
+  const session = getUserSession();
+  if (!session) throw new Error("User session required");
+  const settings = readStorage<Record<string, PrivacySettings>>(MOCK_PRIVACY_SETTINGS_KEY, {});
+  return settings[session.id] ?? {
+    userId: session.id,
+    messageAudience: "everybody",
+    directoryDiscoverable: false,
+    eventAudience: "everybody",
+    eventInviteAudience: "everybody",
+    placeAudience: "everybody",
+    placeInviteAudience: "everybody"
+  };
+}
+
+function updateMockPrivacySettings(input: Omit<PrivacySettings, "userId" | "createdAt" | "updatedAt">): PrivacySettings {
+  const current = getMockPrivacySettings();
+  const updated = privacySettingsSchema.parse({ ...current, ...input, updatedAt: new Date().toISOString() });
+  const settings = readStorage<Record<string, PrivacySettings>>(MOCK_PRIVACY_SETTINGS_KEY, {});
+  writeStorage(MOCK_PRIVACY_SETTINGS_KEY, { ...settings, [current.userId]: updated });
+  return updated;
+}
+
 function getMockDashboard(): AdminDashboard {
   const now = Date.now();
   const events = getStoredEvents();
@@ -2955,6 +2989,14 @@ export function getMyProfile(): Promise<Profile> {
 
 export function updateMyProfile(input: ProfileUpdateInput): Promise<Profile> {
   return requestJson("/profile", profileSchema, { auth: "user", method: "PUT", body: JSON.stringify(input) });
+}
+
+export function getPrivacySettings(): Promise<PrivacySettings> {
+  return requestJson("/profile/privacy", privacySettingsSchema, { auth: "user" });
+}
+
+export function updatePrivacySettings(input: Omit<PrivacySettings, "userId" | "createdAt" | "updatedAt">): Promise<PrivacySettings> {
+  return requestJson("/profile/privacy", privacySettingsSchema, { auth: "user", method: "PUT", body: JSON.stringify(input) });
 }
 
 export function updateProfileInterests(tagIds: string[]): Promise<Tag[]> {

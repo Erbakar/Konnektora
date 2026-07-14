@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ClipboardCheck, LogOut, Plus, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import type { AccountType, Event, EventParticipant, Tag } from "@konnektora/shared";
+import type { AccountType, Event, EventParticipant, PrivacyAudience, Tag } from "@konnektora/shared";
 import {
   type AdminEventInput,
   type RegistrationInput,
@@ -15,6 +15,7 @@ import {
   deactivateAccount,
   getProfileInterests,
   getMyProfile,
+  getPrivacySettings,
   getUserSession,
   getUserToken,
   inviteEventParticipant,
@@ -34,6 +35,7 @@ import {
   updateMyEvent,
   updateProfileInterests,
   updateMyProfile,
+  updatePrivacySettings,
   userLogin
 } from "../lib/api";
 
@@ -59,6 +61,11 @@ export function AccountPage() {
   const profileQuery = useQuery({
     queryKey: ["my-profile", user?.id],
     queryFn: getMyProfile,
+    enabled: Boolean(user)
+  });
+  const privacyQuery = useQuery({
+    queryKey: ["privacy-settings", user?.id],
+    queryFn: getPrivacySettings,
     enabled: Boolean(user)
   });
   const notificationsQuery = useQuery({
@@ -183,6 +190,14 @@ export function AccountPage() {
       setNotice({ tone: "success", message: "Telefon numaranız doğrulandı." });
     },
     onError: () => setNotice({ tone: "error", message: "Kod hatalı veya süresi dolmuş." })
+  });
+  const privacyMutation = useMutation({
+    mutationFn: updatePrivacySettings,
+    onSuccess: (settings) => {
+      queryClient.setQueryData(["privacy-settings", user?.id], settings);
+      setNotice({ tone: "success", message: "Gizlilik ayarları kaydedildi." });
+    },
+    onError: () => setNotice({ tone: "error", message: "Gizlilik ayarları kaydedilemedi." })
   });
   const readNotificationMutation = useMutation({
     mutationFn: markMyNotificationRead,
@@ -315,6 +330,20 @@ export function AccountPage() {
     event.preventDefault();
     if (!pendingPhone) return;
     confirmPhoneMutation.mutate({ phone: pendingPhone, code: String(new FormData(event.currentTarget).get("code") || "") });
+  }
+
+  function handlePrivacySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const audience = (name: string) => String(form.get(name)) as PrivacyAudience;
+    privacyMutation.mutate({
+      messageAudience: audience("messageAudience"),
+      directoryDiscoverable: form.get("directoryDiscoverable") === "on",
+      eventAudience: audience("eventAudience"),
+      eventInviteAudience: audience("eventInviteAudience"),
+      placeAudience: audience("placeAudience"),
+      placeInviteAudience: audience("placeInviteAudience")
+    });
   }
 
   return (
@@ -567,6 +596,24 @@ export function AccountPage() {
               </button>
               {pendingPhone ? <button className="ghost-action" onClick={() => { setPendingPhone(null); setDevelopmentPhoneCode(null); }} type="button">İptal</button> : null}
             </form>
+            {privacyQuery.data ? (
+              <form className="admin-form" key={String(privacyQuery.data.updatedAt ?? "privacy-defaults")} onSubmit={handlePrivacySubmit}>
+                <h2>Gizlilik ayarları</h2>
+                <p className="form-help">Network: takip ettikleriniz ve onların takip ettiği kişiler.</p>
+                <PrivacyAudienceField defaultValue={privacyQuery.data.messageAudience} label="Kimler özel mesaj gönderebilir?" name="messageAudience" />
+                <label>
+                  <input defaultChecked={privacyQuery.data.directoryDiscoverable} name="directoryDiscoverable" type="checkbox" />
+                  Rehberinde kayıtlı olduğum üyeler beni bulabilsin
+                </label>
+                <PrivacyAudienceField defaultValue={privacyQuery.data.eventAudience} label="Etkinliklerimi kimler görebilir?" name="eventAudience" />
+                <PrivacyAudienceField defaultValue={privacyQuery.data.eventInviteAudience} label="Kimler etkinliğe davet edebilir?" name="eventInviteAudience" />
+                <PrivacyAudienceField defaultValue={privacyQuery.data.placeAudience} label="Mekânlarımı kimler görebilir?" name="placeAudience" />
+                <PrivacyAudienceField defaultValue={privacyQuery.data.placeInviteAudience} label="Kimler mekâna davet edebilir?" name="placeInviteAudience" />
+                <button className="secondary-action" disabled={privacyMutation.isPending} type="submit">
+                  {privacyMutation.isPending ? "Kaydediliyor" : "Gizlilik ayarlarını kaydet"}
+                </button>
+              </form>
+            ) : null}
             <form className="admin-form" onSubmit={handleChangePassword}>
               <h2>Şifre değiştir</h2>
               <label>
@@ -732,6 +779,19 @@ export function AccountPage() {
         </div>
       )}
     </section>
+  );
+}
+
+function PrivacyAudienceField({ defaultValue, label, name }: { defaultValue: PrivacyAudience; label: string; name: string }) {
+  return (
+    <label>
+      {label}
+      <select defaultValue={defaultValue} name={name}>
+        <option value="everybody">Herkes</option>
+        <option value="following">Takip ettiklerim</option>
+        <option value="network">Takip ağım</option>
+      </select>
+    </label>
   );
 }
 

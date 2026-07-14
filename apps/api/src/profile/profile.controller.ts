@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Put, UseGuards } from "@nestjs/com
 import { User } from "@prisma/client";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { UpdateProfileDto, UpdateProfileInterestsDto } from "./profile.dto";
+import { UpdatePrivacySettingsDto, UpdateProfileDto, UpdateProfileInterestsDto } from "./profile.dto";
 import { ProfileService } from "./profile.service";
 
 @Controller("profile")
@@ -18,6 +18,16 @@ export class ProfileController {
   @Put()
   updateProfile(@CurrentUser() user: User, @Body() body: UpdateProfileDto) {
     return this.profileService.updateProfile(user.id, body);
+  }
+
+  @Get("privacy")
+  getPrivacySettings(@CurrentUser() user: User) {
+    return this.profileService.getPrivacySettings(user.id);
+  }
+
+  @Put("privacy")
+  updatePrivacySettings(@CurrentUser() user: User, @Body() body: UpdatePrivacySettingsDto) {
+    return this.profileService.updatePrivacySettings(user.id, body);
   }
 
   @Get("interests")
