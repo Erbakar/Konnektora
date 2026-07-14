@@ -1,5 +1,5 @@
 import { ReportTargetType } from "@prisma/client";
-import { IsEnum, IsOptional, IsString, IsUrl, MaxLength, MinLength } from "class-validator";
+import { ArrayMaxSize, IsArray, IsEnum, IsOptional, IsString, IsUrl, IsUUID, MaxLength, MinLength } from "class-validator";
 
 export class CreatePlaceDto {
   @IsString()
@@ -47,6 +47,13 @@ export class CreateMediaDto {
   @IsString()
   @MaxLength(160)
   contentId!: string;
+}
+
+export class ReorderProfileMediaDto {
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsUUID("4", { each: true })
+  mediaIds!: string[];
 }
 
 export class CreateCommentDto {

@@ -27,6 +27,8 @@ import {
   phoneVerificationResponseSchema,
   phoneSchema,
   profileSchema,
+  profileMediaListSchema,
+  profileMediaSchema,
   privacySettingsSchema,
   reportGroupCommentSchema,
   reportGroupDetailSchema,
@@ -68,6 +70,7 @@ import {
   type NotificationPreference,
   type PolicyType,
   type Profile,
+  type ProfileMedia,
   type PrivacySettings,
   type ReportRule,
   type ReportGroup,
@@ -132,6 +135,7 @@ const MOCK_NOTIFICATION_PREFERENCES_KEY = "konnektora_mock_notification_preferen
 const MOCK_USER_BLOCKS_KEY = "konnektora_mock_user_blocks";
 const MOCK_USER_FOLLOWS_KEY = "konnektora_mock_user_follows";
 const MOCK_TAG_COMMENTS_KEY = "konnektora_mock_tag_comments";
+const MOCK_PROFILE_MEDIA_KEY = "konnektora_mock_profile_media";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -357,7 +361,7 @@ function markMockNotificationRead(id: string): Notification {
 async function requestJson<T>(path: string, schema: z.ZodType<T>, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
 
-  if (!headers.has("Content-Type") && options.body) {
+  if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -482,6 +486,28 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname === "/profile" && method === "PUT") {
     return schema.parse(updateMockProfile(parseBody<ProfileUpdateInput>(options)));
+  }
+
+  if (pathname === "/profile/media" && method === "GET") {
+    return schema.parse(listMockProfileMedia());
+  }
+
+  if (pathname === "/profile/media/upload" && method === "POST") {
+    const file = options.body instanceof FormData ? options.body.get("file") : null;
+    if (!(file instanceof File)) throw new Error("Mock media file not found");
+    return schema.parse(createMockProfileMedia(file));
+  }
+
+  if (pathname.startsWith("/profile/media/") && pathname.endsWith("/profile-picture") && method === "PATCH") {
+    return schema.parse(makeMockProfilePicture(pathname.slice("/profile/media/".length, -"/profile-picture".length)));
+  }
+
+  if (pathname === "/profile/media/order" && method === "PUT") {
+    return schema.parse(reorderMockProfileMedia(parseBody<{ mediaIds: string[] }>(options).mediaIds));
+  }
+
+  if (pathname.startsWith("/profile/media/") && method === "DELETE") {
+    return schema.parse(deleteMockProfileMedia(pathname.slice("/profile/media/".length)));
   }
 
   if (pathname === "/profile/privacy" && method === "GET") {
@@ -1252,13 +1278,19 @@ function listMockMedia(params: URLSearchParams): AdminMedia[] {
       contentType: "event",
       contentId: "mock-event",
       uploadedById: "88888888-8888-4888-8888-888888888888",
+      sortOrder: 0,
+      isProfilePicture: false,
       createdAt: now,
       updatedAt: now,
       uploadedBy: basicMockUser("88888888-8888-4888-8888-888888888888"),
       reportCount: 0
     }
   ]);
-  return filterMockAdminContent(items, params);
+  return filterMockAdminContent(items.map((item) => ({
+    ...item,
+    sortOrder: item.sortOrder ?? 0,
+    isProfilePicture: item.isProfilePicture ?? false
+  })), params);
 }
 
 function getMockMedia(id: string): AdminMedia {
@@ -2747,6 +2779,76 @@ function getMockProfile(): Profile {
   });
 }
 
+function listMockProfileMedia(): ProfileMedia[] {
+  return readStorage<ProfileMedia[]>(MOCK_PROFILE_MEDIA_KEY, []).sort((left, right) => left.sortOrder - right.sortOrder);
+}
+
+function createMockProfileMedia(file: File): ProfileMedia {
+  const current = listMockProfileMedia();
+  const type = file.type.startsWith("image/") ? "image" : "video";
+  if (!current.some((item) => item.type === "image") && type !== "image") {
+    throw new Error("Profil albümündeki ilk medya bir fotoğraf olmalıdır.");
+  }
+  const user = getUserSession();
+  if (!user) throw new Error("Mock user session not found");
+  const isFirst = current.length === 0;
+  const shifted = current.map((item) => item.sortOrder >= 1 ? { ...item, sortOrder: item.sortOrder + 1 } : item);
+  const now = new Date().toISOString();
+  const media: ProfileMedia = {
+    id: createId(),
+    url: URL.createObjectURL(file),
+    type,
+    status: "active",
+    contentType: "user",
+    contentId: user.id,
+    uploadedById: user.id,
+    sortOrder: isFirst ? 0 : 1,
+    isProfilePicture: isFirst,
+    createdAt: now,
+    updatedAt: now
+  };
+  writeStorage(MOCK_PROFILE_MEDIA_KEY, [media, ...shifted]);
+  return media;
+}
+
+function makeMockProfilePicture(mediaId: string): ProfileMedia[] {
+  const current = listMockProfileMedia();
+  const target = current.find((item) => item.id === mediaId);
+  if (!target || target.type !== "image") throw new Error("Profile image not found");
+  const updated = current
+    .map((item) => ({ ...item, isProfilePicture: item.id === mediaId, sortOrder: item.id === mediaId ? 0 : item.sortOrder + 1 }))
+    .sort((left, right) => left.sortOrder - right.sortOrder);
+  writeStorage(MOCK_PROFILE_MEDIA_KEY, updated);
+  return updated;
+}
+
+function reorderMockProfileMedia(mediaIds: string[]): ProfileMedia[] {
+  const current = listMockProfileMedia();
+  if (mediaIds.length !== current.length || current.some((item) => !mediaIds.includes(item.id))) throw new Error("Invalid media order");
+  const profilePicture = current.find((item) => item.isProfilePicture);
+  if (profilePicture && mediaIds[0] !== profilePicture.id) throw new Error("Profile picture must remain first");
+  const updated = mediaIds.map((id, sortOrder) => ({ ...current.find((item) => item.id === id)!, sortOrder }));
+  writeStorage(MOCK_PROFILE_MEDIA_KEY, updated);
+  return updated;
+}
+
+function deleteMockProfileMedia(mediaId: string): ProfileMedia[] {
+  const current = listMockProfileMedia();
+  const target = current.find((item) => item.id === mediaId);
+  if (!target) throw new Error("Profile media not found");
+  if (target.type === "image" && current.filter((item) => item.type === "image").length === 1) {
+    throw new Error("Profilde en az bir fotoğraf bulunmalıdır.");
+  }
+  const remaining = current.filter((item) => item.id !== mediaId);
+  if (target.isProfilePicture) {
+    const next = remaining.find((item) => item.type === "image");
+    if (next) next.isProfilePicture = true;
+  }
+  const updated = remaining.sort((left, right) => Number(right.isProfilePicture) - Number(left.isProfilePicture)).map((item, sortOrder) => ({ ...item, sortOrder }));
+  writeStorage(MOCK_PROFILE_MEDIA_KEY, updated);
+  return updated;
+}
+
 function updateMockProfile(input: ProfileUpdateInput): Profile {
   const profile = getMockProfile();
   const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
@@ -3329,6 +3431,36 @@ export function getMyProfile(): Promise<Profile> {
 
 export function updateMyProfile(input: ProfileUpdateInput): Promise<Profile> {
   return requestJson("/profile", profileSchema, { auth: "user", method: "PUT", body: JSON.stringify(input) });
+}
+
+export function listProfileMedia(): Promise<ProfileMedia[]> {
+  return requestJson("/profile/media", profileMediaListSchema, { auth: "user" });
+}
+
+export function uploadProfileMedia(file: File): Promise<ProfileMedia> {
+  const body = new FormData();
+  body.append("file", file);
+  return requestJson("/profile/media/upload", profileMediaSchema, { auth: "user", method: "POST", body });
+}
+
+export function makeProfilePicture(mediaId: string): Promise<ProfileMedia[]> {
+  return requestJson(`/profile/media/${mediaId}/profile-picture`, profileMediaListSchema, { auth: "user", method: "PATCH" });
+}
+
+export function reorderProfileMedia(mediaIds: string[]): Promise<ProfileMedia[]> {
+  return requestJson("/profile/media/order", profileMediaListSchema, {
+    auth: "user",
+    method: "PUT",
+    body: JSON.stringify({ mediaIds })
+  });
+}
+
+export function deleteProfileMedia(mediaId: string): Promise<ProfileMedia[]> {
+  return requestJson(`/profile/media/${mediaId}`, profileMediaListSchema, { auth: "user", method: "DELETE" });
+}
+
+export function resolveMediaUrl(url: string) {
+  return url.startsWith("/") ? `${API_URL}${url}` : url;
 }
 
 export function getPrivacySettings(): Promise<PrivacySettings> {

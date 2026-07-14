@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ClipboardCheck, LogOut, Plus, UserRound, Users, X } from "lucide-react";
+import { Check, ClipboardCheck, Image, LogOut, Plus, Trash2, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import type { AccountType, Event, EventParticipant, MemberCard, NotificationPreference, PrivacyAudience, Tag, TagAffinity, TagSentiment } from "@konnektora/shared";
+import type { AccountType, Event, EventParticipant, MemberCard, NotificationPreference, PrivacyAudience, ProfileMedia, Tag, TagAffinity, TagSentiment } from "@konnektora/shared";
 import {
   type AdminEventInput,
   type RegistrationInput,
@@ -14,6 +14,7 @@ import {
   createUserTag,
   createTagComment,
   deactivateAccount,
+  deleteProfileMedia,
   deleteTagComment,
   getProfileAffinities,
   getMyProfile,
@@ -30,15 +31,19 @@ import {
   listMemberSuggestions,
   listEventParticipants,
   listMyEvents,
+  listProfileMedia,
   listTags,
   listTagComments,
   markMyNotificationRead,
+  makeProfilePicture,
   registerUser,
   reactivateAccount,
   removeBlock,
   requestEmailVerification,
   requestPhoneVerification,
   requestPasswordReset,
+  reorderProfileMedia,
+  resolveMediaUrl,
   scanEventTicket,
   setUserSession,
   updateEventParticipantStatus,
@@ -48,6 +53,7 @@ import {
   updateMyProfile,
   updateNotificationPreferences,
   updatePrivacySettings,
+  uploadProfileMedia,
   userLogin
 } from "../lib/api";
 
@@ -74,6 +80,11 @@ export function AccountPage() {
   const profileQuery = useQuery({
     queryKey: ["my-profile", user?.id],
     queryFn: getMyProfile,
+    enabled: Boolean(user)
+  });
+  const profileMediaQuery = useQuery({
+    queryKey: ["profile-media", user?.id],
+    queryFn: listProfileMedia,
     enabled: Boolean(user)
   });
   const privacyQuery = useQuery({
@@ -566,7 +577,15 @@ export function AccountPage() {
       ) : (
         <div className="account-grid">
           <aside className="account-summary">
-            <UserRound size={28} />
+            {profileMediaQuery.data?.find((media) => media.isProfilePicture) ? (
+              <img
+                alt={`${user.name} profil resmi`}
+                className="profile-avatar-image"
+                src={resolveMediaUrl(profileMediaQuery.data.find((media) => media.isProfilePicture)!.url)}
+              />
+            ) : (
+              <UserRound size={28} />
+            )}
             <strong>{user.name}</strong>
             <span>{user.email}</span>
             <span>Rol: {user.role}</span>
@@ -582,6 +601,7 @@ export function AccountPage() {
             )}
           </aside>
           <div className="account-stack">
+            <ProfileMediaPanel media={profileMediaQuery.data ?? []} userId={user.id} />
             <MemberList
               members={followingQuery.data ?? []}
               title="Takip ettiklerim"
@@ -1006,6 +1026,85 @@ function PrivacyAudienceField({ defaultValue, label, name }: { defaultValue: Pri
         <option value="network">Takip ağım</option>
       </select>
     </label>
+  );
+}
+
+function ProfileMediaPanel({ media, userId }: { media: ProfileMedia[]; userId: string }) {
+  const queryClient = useQueryClient();
+  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: ["profile-media", userId] });
+  const uploadMutation = useMutation({
+    mutationFn: uploadProfileMedia,
+    onSuccess: () => { setNotice({ tone: "success", message: "Medya albüme eklendi." }); refresh(); },
+    onError: () => setNotice({ tone: "error", message: "Medya yüklenemedi. Dosya türü ve 10 MB sınırını kontrol et." })
+  });
+  const profilePictureMutation = useMutation({
+    mutationFn: makeProfilePicture,
+    onSuccess: refresh,
+    onError: () => setNotice({ tone: "error", message: "Bu medya profil resmi yapılamadı." })
+  });
+  const deleteMutation = useMutation({
+    mutationFn: deleteProfileMedia,
+    onSuccess: refresh,
+    onError: () => setNotice({ tone: "error", message: "Son profil fotoğrafı silinemez." })
+  });
+  const reorderMutation = useMutation({
+    mutationFn: reorderProfileMedia,
+    onSuccess: refresh,
+    onError: () => setNotice({ tone: "error", message: "Albüm sırası değiştirilemedi." })
+  });
+  const isPending = uploadMutation.isPending || profilePictureMutation.isPending || deleteMutation.isPending || reorderMutation.isPending;
+
+  function moveMedia(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction;
+    if (targetIndex < 1 || targetIndex >= media.length) return;
+    const ids = media.map((item) => item.id);
+    [ids[index], ids[targetIndex]] = [ids[targetIndex]!, ids[index]!];
+    reorderMutation.mutate(ids);
+  }
+
+  return (
+    <section className="admin-form">
+      <div className="section-header compact"><h2>Profil fotoğrafları</h2><span>{media.length} / 50 medya</span></div>
+      <form className="guest-invite-form" onSubmit={(event) => {
+        event.preventDefault();
+        const input = event.currentTarget.elements.namedItem("profileMedia") as HTMLInputElement;
+        const file = input.files?.[0];
+        if (file) uploadMutation.mutate(file);
+        event.currentTarget.reset();
+      }}>
+        <label>
+          Yeni fotoğraf veya video
+          <input accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" name="profileMedia" required type="file" />
+        </label>
+        <button className="secondary-action" disabled={isPending || media.length >= 50} type="submit">
+          <Image size={16} />
+          {uploadMutation.isPending ? "Yükleniyor…" : "Albümüne yükle"}
+        </button>
+      </form>
+      {media.length === 0 ? <p className="form-help">Profilini tamamlamak için ilk olarak bir fotoğraf yükle.</p> : null}
+      {notice ? <p className={notice.tone === "success" ? "form-success" : "form-error"}>{notice.message}</p> : null}
+      <div className="profile-media-grid">
+        {media.map((item, index) => (
+          <article className="profile-media-item" key={item.id}>
+            {item.type === "image" ? <img alt={`Profil albümü ${index + 1}`} src={resolveMediaUrl(item.url)} /> : <video controls preload="metadata" src={resolveMediaUrl(item.url)} />}
+            <strong>{item.isProfilePicture ? "Profil resmi" : `${index + 1}. medya`}</strong>
+            <div className="row-actions">
+              {!item.isProfilePicture && item.type === "image" ? (
+                <button className="secondary-action" disabled={isPending} onClick={() => profilePictureMutation.mutate(item.id)} type="button">Profil resmi yap</button>
+              ) : null}
+              {!item.isProfilePicture ? (
+                <>
+                  <button className="ghost-action" disabled={isPending || index <= 1} onClick={() => moveMedia(index, -1)} type="button">←</button>
+                  <button className="ghost-action" disabled={isPending || index >= media.length - 1} onClick={() => moveMedia(index, 1)} type="button">→</button>
+                </>
+              ) : null}
+              <button className="danger-action" disabled={isPending} onClick={() => deleteMutation.mutate(item.id)} type="button"><Trash2 size={16} /> Sil</button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 

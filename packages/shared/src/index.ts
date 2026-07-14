@@ -555,11 +555,28 @@ export const adminMediaSchema = z.object({
   contentType: reportTargetTypeSchema,
   contentId: z.string(),
   uploadedById: z.string().uuid().nullable(),
+  sortOrder: z.number().int().nonnegative(),
+  isProfilePicture: z.boolean(),
   createdAt: z.string().datetime().or(z.date()),
   updatedAt: z.string().datetime().or(z.date()),
   uploadedBy: adminUserSchema.optional().nullable(),
   reportCount: z.number().int().nonnegative().optional()
 });
+
+export const profileMediaSchema = adminMediaSchema.pick({
+  id: true,
+  url: true,
+  type: true,
+  status: true,
+  contentType: true,
+  contentId: true,
+  uploadedById: true,
+  sortOrder: true,
+  isProfilePicture: true,
+  createdAt: true,
+  updatedAt: true
+});
+export const profileMediaListSchema = z.array(profileMediaSchema);
 
 export const adminCommentSchema = z.object({
   id: z.string().uuid(),
@@ -710,6 +727,7 @@ export type AdminActivityLog = z.infer<typeof adminActivityLogSchema>;
 export type ModerationDecision = z.infer<typeof moderationDecisionSchema>;
 export type AdminPlace = z.infer<typeof adminPlaceSchema>;
 export type AdminMedia = z.infer<typeof adminMediaSchema>;
+export type ProfileMedia = z.infer<typeof profileMediaSchema>;
 export type AdminComment = z.infer<typeof adminCommentSchema>;
 export type AdminPrivateMessage = z.infer<typeof adminPrivateMessageSchema>;
 export type UserMessage = z.infer<typeof userMessageSchema>;

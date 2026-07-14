@@ -534,12 +534,15 @@ model MediaFile {
   contentType  ReportTargetType @map("content_type")
   contentId    String           @map("content_id")
   uploadedById String?          @map("uploaded_by")
+  sortOrder    Int              @default(0) @map("sort_order")
+  isProfilePicture Boolean      @default(false) @map("is_profile_picture")
   createdAt    DateTime         @default(now()) @map("created_at")
   updatedAt    DateTime         @updatedAt @map("updated_at")
 
   uploadedBy User? @relation("MediaUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
 
   @@index([contentType, contentId])
+  @@index([uploadedById, contentType, contentId, sortOrder])
   @@index([status, createdAt])
   @@map("media_files")
 }

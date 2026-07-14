@@ -677,6 +677,36 @@ select {
   padding: 20px;
 }
 
+.profile-avatar-image {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.profile-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.profile-media-item {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #dfe5dc;
+  border-radius: 16px;
+}
+
+.profile-media-item img,
+.profile-media-item video {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #111;
+}
+
 .account-summary svg {
   color: #1f5f46;
 }

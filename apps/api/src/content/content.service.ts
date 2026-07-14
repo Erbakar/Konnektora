@@ -1,5 +1,7 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { ReportTargetType, User } from "@prisma/client";
+import { unlink } from "fs/promises";
+import { resolve } from "path";
 import { toSlug } from "../common/slug";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateCommentDto, CreateMediaDto, CreatePlaceDto, CreatePrivateMessageDto, CreateReactionDto } from "./content.dto";
@@ -51,6 +53,97 @@ export class ContentService {
         uploadedBy: { connect: { id: user.id } }
       }
     });
+  }
+
+  listProfileMedia(userId: string) {
+    return this.prisma.mediaFile.findMany({
+      where: { uploadedById: userId, contentType: ReportTargetType.user, contentId: userId, status: "active" },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
+    });
+  }
+
+  async createProfileMedia(userId: string, url: string, type: "image" | "video") {
+    const current = await this.listProfileMedia(userId);
+    if (current.length >= 50) throw new BadRequestException("Profil albümünde en fazla 50 medya bulunabilir.");
+    if (!current.some((item) => item.type === "image") && type !== "image") {
+      throw new BadRequestException("Profil albümündeki ilk medya bir fotoğraf olmalıdır.");
+    }
+    const isFirst = current.length === 0;
+    const insertOrder = isFirst ? 0 : 1;
+    return this.prisma.$transaction(async (tx) => {
+      if (!isFirst) {
+        await tx.mediaFile.updateMany({
+          where: { uploadedById: userId, contentType: ReportTargetType.user, contentId: userId, status: "active", sortOrder: { gte: insertOrder } },
+          data: { sortOrder: { increment: 1 } }
+        });
+      }
+      return tx.mediaFile.create({
+        data: {
+          url,
+          type,
+          contentType: ReportTargetType.user,
+          contentId: userId,
+          uploadedById: userId,
+          sortOrder: insertOrder,
+          isProfilePicture: isFirst
+        }
+      });
+    });
+  }
+
+  async makeProfilePicture(userId: string, mediaId: string) {
+    const media = await this.getOwnedProfileMedia(userId, mediaId);
+    if (media.type !== "image") throw new BadRequestException("Yalnız fotoğraflar profil resmi yapılabilir.");
+    await this.prisma.$transaction([
+      this.prisma.mediaFile.updateMany({
+        where: { uploadedById: userId, contentType: ReportTargetType.user, contentId: userId },
+        data: { isProfilePicture: false, sortOrder: { increment: 1 } }
+      }),
+      this.prisma.mediaFile.update({ where: { id: mediaId }, data: { isProfilePicture: true, sortOrder: 0 } })
+    ]);
+    return this.listProfileMedia(userId);
+  }
+
+  async reorderProfileMedia(userId: string, mediaIds: string[]) {
+    const current = await this.listProfileMedia(userId);
+    if (mediaIds.length !== current.length || new Set(mediaIds).size !== mediaIds.length || current.some((item) => !mediaIds.includes(item.id))) {
+      throw new BadRequestException("Sıralama albümdeki tüm medyaları tam olarak bir kez içermelidir.");
+    }
+    const profilePicture = current.find((item) => item.isProfilePicture);
+    if (profilePicture && mediaIds[0] !== profilePicture.id) {
+      throw new BadRequestException("Profil resmi albümün ilk sırasında kalmalıdır.");
+    }
+    await this.prisma.$transaction(mediaIds.map((id, sortOrder) => this.prisma.mediaFile.update({ where: { id }, data: { sortOrder } })));
+    return this.listProfileMedia(userId);
+  }
+
+  async deleteProfileMedia(userId: string, mediaId: string) {
+    const media = await this.getOwnedProfileMedia(userId, mediaId);
+    const current = await this.listProfileMedia(userId);
+    const images = current.filter((item) => item.type === "image");
+    if (media.type === "image" && images.length === 1) {
+      throw new BadRequestException("Profilde en az bir fotoğraf bulunmalıdır.");
+    }
+    const nextProfilePicture = media.isProfilePicture ? images.find((item) => item.id !== media.id) : undefined;
+    await this.prisma.$transaction([
+      this.prisma.mediaFile.update({ where: { id: mediaId }, data: { status: "deleted", isProfilePicture: false } }),
+      ...(nextProfilePicture
+        ? [this.prisma.mediaFile.update({ where: { id: nextProfilePicture.id }, data: { isProfilePicture: true, sortOrder: 0 } })]
+        : [])
+    ]);
+    if (media.url.startsWith("/uploads/")) {
+      await unlink(resolve(process.cwd(), media.url.slice(1))).catch(() => undefined);
+    }
+    return this.listProfileMedia(userId);
+  }
+
+  private async getOwnedProfileMedia(userId: string, mediaId: string) {
+    const media = await this.prisma.mediaFile.findUnique({ where: { id: mediaId } });
+    if (!media || media.contentType !== ReportTargetType.user || media.contentId !== userId || media.status !== "active") {
+      throw new NotFoundException("Profil medyası bulunamadı.");
+    }
+    if (media.uploadedById !== userId) throw new ForbiddenException("Bu medya üzerinde işlem yetkiniz yok.");
+    return media;
   }
 
   listComments(targetType: ReportTargetType, targetId: string) {
