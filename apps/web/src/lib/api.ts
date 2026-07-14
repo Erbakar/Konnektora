@@ -33,6 +33,7 @@ import {
   reportGroupSchema,
   reportRuleSchema,
   tagSchema,
+  tagAffinitiesSchema,
   userMessageListSchema,
   userMessageSchema,
   userBlocksSchema,
@@ -71,6 +72,8 @@ import {
   type ReportGroupNote,
   type ReportTargetType,
   type Tag,
+  type TagAffinity,
+  type TagSentiment,
   type UserMessage,
   type UserMessageList,
   type UserMessageStatus,
@@ -94,6 +97,7 @@ const TOKEN_KEY = "konnektora_admin_token";
 const USER_TOKEN_KEY = "konnektora_user_token";
 const USER_KEY = "konnektora_user";
 const USER_INTEREST_TAGS_KEY = "konnektora_user_interest_tags";
+const USER_TAG_SENTIMENTS_KEY = "konnektora_user_tag_sentiments";
 const MOCK_EVENTS_KEY = "konnektora_mock_events";
 const MOCK_TAGS_KEY = "konnektora_mock_tags";
 const MOCK_USERS_KEY = "konnektora_mock_users";
@@ -271,6 +275,28 @@ export function setUserInterestTagIds(tagIds: string[]) {
     ...allInterests,
     [user.id]: [...new Set(tagIds)]
   });
+}
+
+function getMockTagAffinities(): TagAffinity[] {
+  const user = getUserSession();
+  if (!user) return [];
+  const sentiments = readStorage<Record<string, Record<string, TagSentiment>>>(USER_TAG_SENTIMENTS_KEY, {});
+  return getTagsByIds(getUserInterestTagIds()).map((tag) => ({
+    tag,
+    sentiment: sentiments[user.id]?.[tag.id] ?? "like"
+  }));
+}
+
+function updateMockTagAffinities(affinities: Array<{ tagId: string; sentiment: TagSentiment }>) {
+  const user = getUserSession();
+  if (!user) throw new Error("User session required");
+  setUserInterestTagIds(affinities.map((affinity) => affinity.tagId));
+  const sentiments = readStorage<Record<string, Record<string, TagSentiment>>>(USER_TAG_SENTIMENTS_KEY, {});
+  writeStorage(USER_TAG_SENTIMENTS_KEY, {
+    ...sentiments,
+    [user.id]: Object.fromEntries(affinities.map((affinity) => [affinity.tagId, affinity.sentiment]))
+  });
+  return getMockTagAffinities();
 }
 
 export function listMyNotifications(): Promise<Notification[]> {
@@ -504,6 +530,15 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     const input = parseBody<{ tagIds: string[] }>(options);
     setUserInterestTagIds(input.tagIds);
     return schema.parse(getTagsByIds(input.tagIds));
+  }
+
+  if (pathname === "/profile/affinities" && method === "GET") {
+    return schema.parse(getMockTagAffinities());
+  }
+
+  if (pathname === "/profile/affinities" && method === "PUT") {
+    const input = parseBody<{ affinities: Array<{ tagId: string; sentiment: TagSentiment }> }>(options);
+    return schema.parse(updateMockTagAffinities(input.affinities));
   }
 
   if (pathname === "/profile/notifications" && method === "GET") {
@@ -3168,6 +3203,10 @@ export function getProfileInterests(): Promise<Tag[]> {
   return requestJson("/profile/interests", z.array(tagSchema), { auth: "user" });
 }
 
+export function getProfileAffinities(): Promise<TagAffinity[]> {
+  return requestJson("/profile/affinities", tagAffinitiesSchema, { auth: "user" });
+}
+
 export function getMyProfile(): Promise<Profile> {
   return requestJson("/profile", profileSchema, { auth: "user" });
 }
@@ -3236,6 +3275,14 @@ export function updateProfileInterests(tagIds: string[]): Promise<Tag[]> {
     auth: "user",
     method: "PUT",
     body: JSON.stringify({ tagIds })
+  });
+}
+
+export function updateProfileAffinities(affinities: Array<{ tagId: string; sentiment: TagSentiment }>): Promise<TagAffinity[]> {
+  return requestJson("/profile/affinities", tagAffinitiesSchema, {
+    auth: "user",
+    method: "PUT",
+    body: JSON.stringify({ affinities })
   });
 }
 

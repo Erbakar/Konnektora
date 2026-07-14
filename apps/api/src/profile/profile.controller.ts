@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Put, UseGuards } fro
 import { User } from "@prisma/client";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { CreateUserBlockDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto, UpdateProfileInterestsDto } from "./profile.dto";
+import { CreateUserBlockDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto, UpdateProfileInterestsDto, UpdateTagAffinitiesDto } from "./profile.dto";
 import { ProfileService } from "./profile.service";
 
 @Controller("profile")
@@ -58,6 +58,16 @@ export class ProfileController {
   @Get("interests")
   getInterests(@CurrentUser() user: User) {
     return this.profileService.getInterests(user.id);
+  }
+
+  @Get("affinities")
+  getAffinities(@CurrentUser() user: User) {
+    return this.profileService.getAffinities(user.id);
+  }
+
+  @Put("affinities")
+  updateAffinities(@CurrentUser() user: User, @Body() body: UpdateTagAffinitiesDto) {
+    return this.profileService.updateAffinities(user.id, body.affinities);
   }
 
   @Put("interests")

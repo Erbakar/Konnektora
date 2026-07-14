@@ -117,6 +117,21 @@ export class CreateUserBlockDto {
   targetId!: string;
 }
 
+export class TagAffinityInputDto {
+  @IsUUID()
+  tagId!: string;
+
+  @IsIn(["like", "ok", "dislike"])
+  sentiment!: "like" | "ok" | "dislike";
+}
+
+export class UpdateTagAffinitiesDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TagAffinityInputDto)
+  affinities!: TagAffinityInputDto[];
+}
+
 export class UpdateProfileInterestsDto {
   @IsArray()
   @IsUUID("4", { each: true })

@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { BlockedTargetType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import { CreateUserBlockDto, NotificationPreferenceDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto } from "./profile.dto";
+import { CreateUserBlockDto, NotificationPreferenceDto, TagAffinityInputDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto } from "./profile.dto";
 
 const notificationTopics: NotificationPreferenceDto["topic"][] = [
   "tag_request", "private_message", "mention", "comment", "password_changed", "email_changed", "phone_changed",
@@ -214,8 +214,9 @@ export class ProfileService {
   }
 
   async getInterests(userId: string) {
+    const blocked = await this.prisma.userBlock.findMany({ where: { userId, targetType: "tag" }, select: { targetId: true } });
     const interests = await this.prisma.userInterestTag.findMany({
-      where: { userId },
+      where: { userId, tagId: { notIn: blocked.map((item) => item.targetId) } },
       orderBy: { createdAt: "asc" },
       include: { tag: true }
     });
@@ -223,11 +224,42 @@ export class ProfileService {
     return interests.map((interest) => interest.tag);
   }
 
+  async getAffinities(userId: string) {
+    const blocked = await this.prisma.userBlock.findMany({ where: { userId, targetType: "tag" }, select: { targetId: true } });
+    const affinities = await this.prisma.userInterestTag.findMany({
+      where: { userId, tagId: { notIn: blocked.map((item) => item.targetId) } },
+      orderBy: { createdAt: "asc" },
+      include: { tag: true }
+    });
+    return affinities.map((affinity) => ({
+      tag: affinity.tag,
+      sentiment: affinity.sentiment,
+      createdAt: affinity.createdAt,
+      updatedAt: affinity.updatedAt
+    }));
+  }
+
   async updateInterests(userId: string, tagIds: string[]) {
-    const uniqueTagIds = [...new Set(tagIds)];
+    const existing = await this.prisma.userInterestTag.findMany({ where: { userId }, select: { tagId: true, sentiment: true } });
+    const sentiments = new Map(existing.map((item) => [item.tagId, item.sentiment]));
+    await this.updateAffinities(
+      userId,
+      [...new Set(tagIds)].map((tagId) => ({ tagId, sentiment: sentiments.get(tagId) ?? "like" }))
+    );
+    return this.getInterests(userId);
+  }
+
+  async updateAffinities(userId: string, affinities: TagAffinityInputDto[]) {
+    const unique = new Map(affinities.map((affinity) => [affinity.tagId, affinity]));
+    if (unique.size !== affinities.length) {
+      throw new BadRequestException("Aynı tag birden fazla kez seçilemez.");
+    }
+    const uniqueTagIds = [...unique.keys()];
+    const blocked = await this.prisma.userBlock.findMany({ where: { userId, targetType: "tag" }, select: { targetId: true } });
     const activeTagCount = await this.prisma.tag.count({
       where: {
         id: { in: uniqueTagIds },
+        NOT: { id: { in: blocked.map((item) => item.targetId) } },
         status: "active"
       }
     });
@@ -235,16 +267,24 @@ export class ProfileService {
     if (activeTagCount !== uniqueTagIds.length) {
       throw new BadRequestException("Geçersiz veya pasif tag seçimi var.");
     }
-
+    const existing = await this.prisma.userInterestTag.findMany({ where: { userId }, select: { tagId: true } });
+    const existingIds = new Set(existing.map((item) => item.tagId));
+    const nextIds = new Set(uniqueTagIds);
+    const added = uniqueTagIds.filter((tagId) => !existingIds.has(tagId));
+    const removed = [...existingIds].filter((tagId) => !nextIds.has(tagId));
     await this.prisma.$transaction([
-      this.prisma.userInterestTag.deleteMany({ where: { userId } }),
-      this.prisma.userInterestTag.createMany({
-        data: uniqueTagIds.map((tagId) => ({ userId, tagId })),
-        skipDuplicates: true
-      })
+      this.prisma.userInterestTag.deleteMany({ where: { userId, tagId: { in: removed } } }),
+      ...[...unique.values()].map((affinity) =>
+        this.prisma.userInterestTag.upsert({
+          where: { userId_tagId: { userId, tagId: affinity.tagId } },
+          create: { userId, tagId: affinity.tagId, sentiment: affinity.sentiment },
+          update: { sentiment: affinity.sentiment }
+        })
+      ),
+      this.prisma.tag.updateMany({ where: { id: { in: added } }, data: { usageCount: { increment: 1 } } }),
+      this.prisma.tag.updateMany({ where: { id: { in: removed }, usageCount: { gt: 0 } }, data: { usageCount: { decrement: 1 } } })
     ]);
-
-    return this.getInterests(userId);
+    return this.getAffinities(userId);
   }
 
   getNotifications(userId: string) {

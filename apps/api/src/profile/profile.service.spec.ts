@@ -35,7 +35,12 @@ describe("ProfileService", () => {
         update: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 })
       },
-      tag: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      tag: {
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 })
+      },
       event: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       place: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       userBlock: {
@@ -53,6 +58,11 @@ describe("ProfileService", () => {
       },
       notificationPreference: {
         findMany: jest.fn(),
+        upsert: jest.fn().mockResolvedValue({})
+      },
+      userInterestTag: {
+        findMany: jest.fn(),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
         upsert: jest.fn().mockResolvedValue({})
       },
       $transaction: jest.fn().mockImplementation((operations: unknown[]) => Promise.all(operations))
@@ -204,5 +214,34 @@ describe("ProfileService", () => {
         }
       })
     );
+  });
+
+  it("updates tag sentiments and usage counts atomically", async () => {
+    const { service, prisma } = createService();
+    prisma.tag.count.mockResolvedValue(2);
+    prisma.userInterestTag.findMany
+      .mockResolvedValueOnce([{ tagId: "tag-old" }])
+      .mockResolvedValueOnce([
+        { tag: { id: "tag-like" }, sentiment: "like", createdAt: new Date(), updatedAt: new Date() },
+        { tag: { id: "tag-ok" }, sentiment: "ok", createdAt: new Date(), updatedAt: new Date() }
+      ]);
+
+    const result = await service.updateAffinities("user-1", [
+      { tagId: "tag-like", sentiment: "like" },
+      { tagId: "tag-ok", sentiment: "ok" }
+    ]);
+
+    expect(result.map((item) => item.sentiment)).toEqual(["like", "ok"]);
+    expect(prisma.userInterestTag.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", tagId: { in: ["tag-old"] } }
+    });
+    expect(prisma.tag.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["tag-like", "tag-ok"] } },
+      data: { usageCount: { increment: 1 } }
+    });
+    expect(prisma.tag.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["tag-old"] }, usageCount: { gt: 0 } },
+      data: { usageCount: { decrement: 1 } }
+    });
   });
 });

@@ -216,6 +216,15 @@ export const tagSchema = z.object({
   usageCount: z.number().int().nonnegative()
 });
 
+export const tagSentimentSchema = z.enum(["like", "ok", "dislike"]);
+export const tagAffinitySchema = z.object({
+  tag: tagSchema,
+  sentiment: tagSentimentSchema,
+  createdAt: z.string().datetime().or(z.date()).optional(),
+  updatedAt: z.string().datetime().or(z.date()).optional()
+});
+export const tagAffinitiesSchema = z.array(tagAffinitySchema);
+
 export const eventSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(3).max(160),
@@ -646,6 +655,8 @@ export type NotificationPreference = z.infer<typeof notificationPreferenceSchema
 export type BlockedTargetType = z.infer<typeof blockedTargetTypeSchema>;
 export type UserBlock = z.infer<typeof userBlockSchema>;
 export type MemberCard = z.infer<typeof memberCardSchema>;
+export type TagSentiment = z.infer<typeof tagSentimentSchema>;
+export type TagAffinity = z.infer<typeof tagAffinitySchema>;
 export type UserStatus = z.infer<typeof userStatusSchema>;
 export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema>;
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;

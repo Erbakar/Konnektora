@@ -138,6 +138,12 @@ enum BlockedTargetType {
   place
 }
 
+enum TagSentiment {
+  like
+  ok
+  dislike
+}
+
 model User {
   id                   String     @id @default(uuid())
   email                String     @unique
@@ -616,9 +622,11 @@ model EventTag {
 }
 
 model UserInterestTag {
-  userId    String   @map("user_id")
-  tagId     String   @map("tag_id")
-  createdAt DateTime @default(now()) @map("created_at")
+  userId    String       @map("user_id")
+  tagId     String       @map("tag_id")
+  sentiment TagSentiment @default(like)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)

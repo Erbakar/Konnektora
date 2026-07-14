@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ClipboardCheck, LogOut, Plus, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import type { AccountType, Event, EventParticipant, MemberCard, NotificationPreference, PrivacyAudience, Tag } from "@konnektora/shared";
+import type { AccountType, Event, EventParticipant, MemberCard, NotificationPreference, PrivacyAudience, Tag, TagAffinity, TagSentiment } from "@konnektora/shared";
 import {
   type AdminEventInput,
   type RegistrationInput,
@@ -13,7 +13,7 @@ import {
   createUserEvent,
   createUserTag,
   deactivateAccount,
-  getProfileInterests,
+  getProfileAffinities,
   getMyProfile,
   getNotificationPreferences,
   getPrivacySettings,
@@ -39,7 +39,7 @@ import {
   setUserSession,
   updateEventParticipantStatus,
   updateMyEvent,
-  updateProfileInterests,
+  updateProfileAffinities,
   unfollowUser,
   updateMyProfile,
   updateNotificationPreferences,
@@ -63,7 +63,7 @@ export function AccountPage() {
   });
   const interestsQuery = useQuery({
     queryKey: ["profile-interests", user?.id],
-    queryFn: getProfileInterests,
+    queryFn: getProfileAffinities,
     enabled: Boolean(user)
   });
   const profileQuery = useQuery({
@@ -93,7 +93,8 @@ export function AccountPage() {
     queryFn: listMyNotifications,
     enabled: Boolean(user)
   });
-  const interestTagIds = interestsQuery.data?.map((tag) => tag.id) ?? [];
+  const interestTagIds = interestsQuery.data?.map((affinity) => affinity.tag.id) ?? [];
+  const interestSentiments = new Map(interestsQuery.data?.map((affinity) => [affinity.tag.id, affinity.sentiment]) ?? []);
   const interestTags = tags.filter((tag) => interestTagIds.includes(tag.id));
 
   const authMutation = useMutation({
@@ -154,12 +155,10 @@ export function AccountPage() {
     onError: () => setNotice({ tone: "error", message: "Tag oluşturulamadı. Aynı isimde sorunlu bir tag olabilir." })
   });
   const interestsMutation = useMutation({
-    mutationFn: updateProfileInterests,
-    onSuccess: (_, tagIds) => {
-      queryClient.setQueryData(
-        ["profile-interests", user?.id],
-        tags.filter((tag) => tagIds.includes(tag.id))
-      );
+    mutationFn: updateProfileAffinities,
+    onSuccess: (affinities) => {
+      queryClient.setQueryData<TagAffinity[]>(["profile-interests", user?.id], affinities);
+      void queryClient.invalidateQueries({ queryKey: ["member-suggestions", user?.id] });
       setNotice({ tone: "success", message: "İlgi alanların kaydedildi." });
     },
     onError: () => setNotice({ tone: "error", message: "İlgi alanları kaydedilemedi. Lütfen tekrar dene." })
@@ -316,8 +315,12 @@ export function AccountPage() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const selectedTagIds = form.getAll("interestTagIds").map(String);
-
-    interestsMutation.mutate(selectedTagIds);
+    interestsMutation.mutate(
+      selectedTagIds.map((tagId) => ({
+        tagId,
+        sentiment: String(form.get(`sentiment:${tagId}`) || "like") as TagSentiment
+      }))
+    );
   }
 
   function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
@@ -813,6 +816,11 @@ export function AccountPage() {
                       value={tag.id}
                     />
                     {tag.name}
+                    <select defaultValue={interestSentiments.get(tag.id) ?? "like"} name={`sentiment:${tag.id}`}>
+                      <option value="like">Like</option>
+                      <option value="ok">OK, no problem</option>
+                      <option value="dislike">Dislike</option>
+                    </select>
                   </label>
                 ))}
               </fieldset>
