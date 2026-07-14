@@ -49,16 +49,17 @@ password: ChangeMe123!
 
 ## Geliştirme
 
-API:
+Web ve API'yi birlikte çalıştırmak için:
 
 ```bash
-npm run dev -w apps/api
+npm run dev
 ```
 
-Web:
+Tek bir uygulamayı çalıştırmak için:
 
 ```bash
-npm run dev -w apps/web
+npm run dev:api
+npm run dev:web
 ```
 
 Varsayılan adresler:

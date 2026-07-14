@@ -347,7 +347,7 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   }
 
   if (pathname === "/auth/register" && method === "POST") {
-    return schema.parse(registerMockUser(parseBody<{ name: string; email: string; password: string }>(options)));
+    return schema.parse(registerMockUser(parseBody<{ name: string; email: string; password: string; accountType?: "individual" | "corporate" }>(options)));
   }
 
   if (pathname === "/auth/login" && method === "POST") {
@@ -2278,7 +2278,7 @@ function parseParticipantPath(pathname: string, marker: string) {
   return { eventId, userId };
 }
 
-function registerMockUser(input: { name: string; email: string; password: string }): LoginResponse {
+function registerMockUser(input: { name: string; email: string; password: string; accountType?: "individual" | "corporate" }): LoginResponse {
   const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
   const email = input.email.toLowerCase().trim();
   const existing = users.find((user) => user.email === email);
@@ -2288,6 +2288,7 @@ function registerMockUser(input: { name: string; email: string; password: string
       ...existing,
       name: input.name.trim(),
       password: input.password,
+      accountType: input.accountType ?? existing.accountType ?? "individual",
       status: "active"
     };
 
@@ -2300,6 +2301,7 @@ function registerMockUser(input: { name: string; email: string; password: string
     name: input.name.trim(),
     email,
     password: input.password,
+    accountType: input.accountType ?? "individual",
     status: "active"
   };
 
@@ -2380,7 +2382,7 @@ function loginMockUser(input: { email: string; password: string }): LoginRespons
   return createMockLoginResponse(user);
 }
 
-function createMockLoginResponse(user: { id: string; name: string; email: string }): LoginResponse {
+function createMockLoginResponse(user: { id: string; name: string; email: string; accountType?: string }): LoginResponse {
   return {
     accessToken: `mock-user-token-${user.id}`,
     user: {
@@ -2388,6 +2390,7 @@ function createMockLoginResponse(user: { id: string; name: string; email: string
       email: user.email,
       name: user.name,
       role: "user",
+      accountType: user.accountType === "corporate" ? "corporate" : "individual",
       status: "active"
     }
   };
@@ -2782,7 +2785,7 @@ export function userLogin(email: string, password: string): Promise<LoginRespons
   });
 }
 
-export function registerUser(input: { name: string; email: string; password: string }): Promise<LoginResponse> {
+export function registerUser(input: { name: string; email: string; password: string; accountType: "individual" | "corporate" }): Promise<LoginResponse> {
   return requestJson("/auth/register", loginResponseSchema, {
     method: "POST",
     body: JSON.stringify(input)

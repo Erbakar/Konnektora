@@ -54,6 +54,7 @@ export class AuthService {
         where: { id: existing.id },
         data: {
           name: input.name.trim(),
+          accountType: input.accountType ?? existing.accountType,
           passwordHash: await hash(input.password, 10),
           status: "pending"
         }
@@ -74,6 +75,7 @@ export class AuthService {
         email,
         name: input.name.trim(),
         passwordHash: await hash(input.password, 10),
+        accountType: input.accountType ?? "individual",
         role: "user",
         status: "pending"
       }
@@ -223,6 +225,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        accountType: user.accountType as "individual" | "corporate",
         status: user.status
       }
     };

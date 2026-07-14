@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, MinLength } from "class-validator";
+import { IsEmail, IsIn, IsOptional, IsString, MinLength } from "class-validator";
 
 export class LoginDto {
   @IsEmail()
@@ -13,6 +13,10 @@ export class RegisterDto extends LoginDto {
   @IsString()
   @MinLength(2)
   name!: string;
+
+  @IsOptional()
+  @IsIn(["individual", "corporate"])
+  accountType?: "individual" | "corporate";
 }
 
 export class EmailDto {

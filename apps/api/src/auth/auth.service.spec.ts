@@ -38,6 +38,7 @@ describe("AuthService", () => {
       name: "Invitee",
       passwordHash: "temporary-hash",
       role: "user",
+      accountType: "individual",
       status: "invited"
     };
     const pendingUser = {
@@ -70,6 +71,7 @@ describe("AuthService", () => {
         email: pendingUser.email,
         name: pendingUser.name,
         role: pendingUser.role,
+        accountType: pendingUser.accountType,
         status: pendingUser.status
       }
     });
@@ -100,5 +102,32 @@ describe("AuthService", () => {
       })
     ).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("persists the selected corporate account type for a new registration", async () => {
+    const { service, prisma } = createService();
+    const corporateUser = {
+      id: "user-3",
+      email: "team@example.com",
+      name: "Example Company",
+      passwordHash: "hash",
+      role: "user",
+      status: "pending",
+      accountType: "corporate"
+    };
+
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue(corporateUser);
+
+    await service.register({
+      email: corporateUser.email,
+      name: corporateUser.name,
+      password: "StrongerPass123",
+      accountType: "corporate"
+    });
+
+    expect(prisma.user.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ accountType: "corporate" })
+    });
   });
 });

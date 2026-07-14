@@ -5,6 +5,7 @@ export const eventFormatSchema = z.enum(["online", "offline", "hybrid"]);
 export const eventVisibilitySchema = z.enum(["open", "approval_required", "invite_only"]);
 export const tagStatusSchema = z.enum(["active", "hidden", "archived"]);
 export const userRoleSchema = z.enum(["user", "admin", "super_admin"]);
+export const accountTypeSchema = z.enum(["individual", "corporate"]);
 export const userStatusSchema = z.enum(["invited", "pending", "active", "disabled", "frozen", "deleted", "suspended", "banned"]);
 export const eventParticipantStatusSchema = z.enum([
   "invited",
@@ -178,6 +179,7 @@ export const adminUserSchema = z.object({
   email: z.string().email(),
   name: z.string(),
   role: userRoleSchema,
+  accountType: accountTypeSchema.optional(),
   status: userStatusSchema.optional()
 });
 
@@ -529,6 +531,7 @@ export type EventStatus = z.infer<typeof eventStatusSchema>;
 export type EventFormat = z.infer<typeof eventFormatSchema>;
 export type TagStatus = z.infer<typeof tagStatusSchema>;
 export type UserRole = z.infer<typeof userRoleSchema>;
+export type AccountType = z.infer<typeof accountTypeSchema>;
 export type UserStatus = z.infer<typeof userStatusSchema>;
 export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema>;
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;

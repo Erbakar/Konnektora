@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ClipboardCheck, LogOut, Plus, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import type { Event, EventParticipant, Tag } from "@konnektora/shared";
+import type { AccountType, Event, EventParticipant, Tag } from "@konnektora/shared";
 import {
   type AdminEventInput,
   archiveMyEvent,
@@ -53,9 +53,9 @@ export function AccountPage() {
   const interestTags = tags.filter((tag) => interestTagIds.includes(tag.id));
 
   const authMutation = useMutation({
-    mutationFn: (input: { name?: string; email: string; password: string }) =>
+    mutationFn: (input: { name?: string; email: string; password: string; accountType?: AccountType }) =>
       mode === "register"
-        ? registerUser({ name: input.name ?? "", email: input.email, password: input.password })
+        ? registerUser({ name: input.name ?? "", email: input.email, password: input.password, accountType: input.accountType ?? "individual" })
         : userLogin(input.email, input.password),
     onSuccess: (response) => {
       setUserSession(response);
@@ -128,7 +128,8 @@ export function AccountPage() {
     authMutation.mutate({
       name: String(form.get("name") || ""),
       email: String(form.get("email")),
-      password: String(form.get("password"))
+      password: String(form.get("password")),
+      accountType: String(form.get("accountType") || "individual") as AccountType
     });
   }
 
@@ -225,10 +226,19 @@ export function AccountPage() {
               </button>
             </div>
             {mode === "register" ? (
-              <label>
-                Ad Soyad
-                <input autoComplete="name" name="name" placeholder="Kadir Erbakar" required minLength={2} />
-              </label>
+              <>
+                <label>
+                  Hesap türü
+                  <select defaultValue="individual" name="accountType">
+                    <option value="individual">Bireysel</option>
+                    <option value="corporate">Kurumsal</option>
+                  </select>
+                </label>
+                <label>
+                  Ad Soyad veya İşletme Adı
+                  <input autoComplete="name" name="name" placeholder="Kadir Erbakar / Konnektora" required minLength={2} />
+                </label>
+              </>
             ) : null}
             <label>
               Email
@@ -266,6 +276,7 @@ export function AccountPage() {
             <strong>{user.name}</strong>
             <span>{user.email}</span>
             <span>Rol: {user.role}</span>
+            <span>Hesap: {user.accountType === "corporate" ? "Kurumsal" : "Bireysel"}</span>
             {interestTags.length > 0 ? (
               <div className="profile-tag-row">
                 {interestTags.map((tag) => (
