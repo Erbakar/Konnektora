@@ -8,9 +8,12 @@ import { CreateTagDto } from "./tags.dto";
 export class TagsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  listPublicTags() {
+  async listPublicTags(userId?: string) {
+    const blocks = userId
+      ? await this.prisma.userBlock.findMany({ where: { userId, targetType: "tag" }, select: { targetId: true } })
+      : [];
     return this.prisma.tag.findMany({
-      where: { status: "active" },
+      where: { status: "active", id: { notIn: blocks.map((block) => block.targetId) } },
       orderBy: [{ usageCount: "desc" }, { name: "asc" }]
     });
   }

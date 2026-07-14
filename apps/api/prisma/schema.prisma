@@ -131,6 +131,13 @@ enum DeliveryChannel {
   push
 }
 
+enum BlockedTargetType {
+  user
+  tag
+  event
+  place
+}
+
 model User {
   id                   String     @id @default(uuid())
   email                String     @unique
@@ -186,6 +193,7 @@ model User {
   phoneVerifications        PhoneVerification[]
   privacySettings           PrivacySettings?
   notificationPreferences  NotificationPreference[]
+  blocks                   UserBlock[]
   userMessages              UserMessage[]        @relation("UserMessageUser")
   readUserMessages          UserMessage[]        @relation("UserMessageReadBy")
   createdPlaces             Place[]              @relation("PlaceCreatedBy")
@@ -201,6 +209,19 @@ model User {
   @@index([country, city])
   @@index([lastOnlineAt])
   @@map("users")
+}
+
+model UserBlock {
+  userId     String            @map("user_id")
+  targetType BlockedTargetType @map("target_type")
+  targetId   String            @map("target_id")
+  createdAt  DateTime          @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, targetType, targetId])
+  @@index([targetType, targetId])
+  @@map("user_blocks")
 }
 
 model NotificationPreference {

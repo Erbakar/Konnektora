@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BlockedTargetType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import { NotificationPreferenceDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto } from "./profile.dto";
+import { CreateUserBlockDto, NotificationPreferenceDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto } from "./profile.dto";
 
 const notificationTopics: NotificationPreferenceDto["topic"][] = [
   "tag_request", "private_message", "mention", "comment", "password_changed", "email_changed", "phone_changed",
@@ -136,6 +137,52 @@ export class ProfileService {
     return this.getNotificationPreferences(userId);
   }
 
+  async listBlocks(userId: string) {
+    const blocks = await this.prisma.userBlock.findMany({ where: { userId }, orderBy: { createdAt: "desc" } });
+    const ids = (type: BlockedTargetType) => blocks.filter((block) => block.targetType === type).map((block) => block.targetId);
+    const [users, tags, events, places] = await Promise.all([
+      this.prisma.user.findMany({ where: { id: { in: ids("user") } }, select: { id: true, name: true, username: true, email: true } }),
+      this.prisma.tag.findMany({ where: { id: { in: ids("tag") } }, select: { id: true, name: true, slug: true } }),
+      this.prisma.event.findMany({ where: { id: { in: ids("event") } }, select: { id: true, title: true, slug: true } }),
+      this.prisma.place.findMany({ where: { id: { in: ids("place") } }, select: { id: true, name: true, slug: true } })
+    ]);
+    const details = new Map<string, { label: string; subtitle?: string | null }>();
+    users.forEach((item) => details.set(`user:${item.id}`, { label: item.username ? `@${item.username}` : item.name, subtitle: item.email }));
+    tags.forEach((item) => details.set(`tag:${item.id}`, { label: item.name, subtitle: item.slug }));
+    events.forEach((item) => details.set(`event:${item.id}`, { label: item.title, subtitle: item.slug }));
+    places.forEach((item) => details.set(`place:${item.id}`, { label: item.name, subtitle: item.slug }));
+    return blocks.map((block) => ({
+      targetType: block.targetType,
+      targetId: block.targetId,
+      label: details.get(`${block.targetType}:${block.targetId}`)?.label ?? "Silinmiş içerik",
+      subtitle: details.get(`${block.targetType}:${block.targetId}`)?.subtitle ?? null,
+      createdAt: block.createdAt
+    }));
+  }
+
+  async createBlock(userId: string, input: CreateUserBlockDto) {
+    if (input.targetType === "user" && input.targetId === userId) {
+      throw new BadRequestException("Kullanıcı kendisini engelleyemez.");
+    }
+    if (!(await this.blockTargetExists(input.targetType, input.targetId))) {
+      throw new NotFoundException("Engellenecek içerik bulunamadı.");
+    }
+    await this.prisma.userBlock.upsert({
+      where: { userId_targetType_targetId: { userId, targetType: input.targetType, targetId: input.targetId } },
+      create: { userId, targetType: input.targetType, targetId: input.targetId },
+      update: {}
+    });
+    return { ok: true as const };
+  }
+
+  async removeBlock(userId: string, targetType: string, targetId: string) {
+    if (!Object.values(BlockedTargetType).includes(targetType as BlockedTargetType)) {
+      throw new BadRequestException("Geçersiz engel türü.");
+    }
+    await this.prisma.userBlock.deleteMany({ where: { userId, targetType: targetType as BlockedTargetType, targetId } });
+    return { ok: true as const };
+  }
+
   async getInterests(userId: string) {
     const interests = await this.prisma.userInterestTag.findMany({
       where: { userId },
@@ -193,5 +240,12 @@ export class ProfileService {
 
   private optionalText(value: string | undefined, current: string | null) {
     return value === undefined ? current : value.trim() || null;
+  }
+
+  private async blockTargetExists(targetType: BlockedTargetType, targetId: string) {
+    if (targetType === "user") return Boolean(await this.prisma.user.findUnique({ where: { id: targetId }, select: { id: true } }));
+    if (targetType === "tag") return Boolean(await this.prisma.tag.findUnique({ where: { id: targetId }, select: { id: true } }));
+    if (targetType === "event") return Boolean(await this.prisma.event.findUnique({ where: { id: targetId }, select: { id: true } }));
+    return Boolean(await this.prisma.place.findUnique({ where: { id: targetId }, select: { id: true } }));
   }
 }

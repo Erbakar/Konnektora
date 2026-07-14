@@ -16,7 +16,7 @@ export class EventsService {
     private readonly authService: AuthService
   ) {}
 
-  async listPublicEvents(query: EventQueryDto) {
+  async listPublicEvents(query: EventQueryDto, userId?: string) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 24;
     const where: Prisma.EventWhereInput = {
@@ -25,6 +25,15 @@ export class EventsService {
         gte: query.dateFrom ? new Date(query.dateFrom) : new Date(Date.now() - 1000 * 60 * 60 * 24)
       }
     };
+    if (userId) {
+      const blocks = await this.prisma.userBlock.findMany({ where: { userId }, select: { targetType: true, targetId: true } });
+      const blocked = (type: "user" | "tag" | "event") => blocks.filter((item) => item.targetType === type).map((item) => item.targetId);
+      where.NOT = [
+        { id: { in: blocked("event") } },
+        { createdById: { in: blocked("user") } },
+        { tags: { some: { tagId: { in: blocked("tag") } } } }
+      ];
+    }
 
     if (query.dateTo) {
       where.startsAt = {
@@ -78,9 +87,21 @@ export class EventsService {
     };
   }
 
-  async getPublicEvent(slug: string) {
+  async getPublicEvent(slug: string, userId?: string) {
+    const blocks = userId
+      ? await this.prisma.userBlock.findMany({ where: { userId }, select: { targetType: true, targetId: true } })
+      : [];
+    const blocked = (type: "user" | "tag" | "event") => blocks.filter((item) => item.targetType === type).map((item) => item.targetId);
     const event = await this.prisma.event.findFirst({
-      where: { slug, status: "published" },
+      where: {
+        slug,
+        status: "published",
+        NOT: [
+          { id: { in: blocked("event") } },
+          { createdById: { in: blocked("user") } },
+          { tags: { some: { tagId: { in: blocked("tag") } } } }
+        ]
+      },
       include: { tags: { include: { tag: true } } }
     });
 

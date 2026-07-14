@@ -64,6 +64,15 @@ export const notificationPreferenceSchema = z.object({
   channel: deliveryChannelSchema
 });
 export const notificationPreferencesSchema = z.array(notificationPreferenceSchema);
+export const blockedTargetTypeSchema = z.enum(["user", "tag", "event", "place"]);
+export const userBlockSchema = z.object({
+  targetType: blockedTargetTypeSchema,
+  targetId: z.string().uuid(),
+  label: z.string(),
+  subtitle: z.string().nullable().optional(),
+  createdAt: z.string().datetime().or(z.date())
+});
+export const userBlocksSchema = z.array(userBlockSchema);
 export const userStatusSchema = z.enum(["invited", "pending", "active", "disabled", "frozen", "deleted", "suspended", "banned"]);
 export const eventParticipantStatusSchema = z.enum([
   "invited",
@@ -622,6 +631,8 @@ export type PrivacySettings = z.infer<typeof privacySettingsSchema>;
 export type NotificationTopic = z.infer<typeof notificationTopicSchema>;
 export type DeliveryChannel = z.infer<typeof deliveryChannelSchema>;
 export type NotificationPreference = z.infer<typeof notificationPreferenceSchema>;
+export type BlockedTargetType = z.infer<typeof blockedTargetTypeSchema>;
+export type UserBlock = z.infer<typeof userBlockSchema>;
 export type UserStatus = z.infer<typeof userStatusSchema>;
 export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema>;
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;

@@ -1,12 +1,14 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { CalendarDays, ExternalLink, Flag, MapPin, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Ban, CalendarDays, ExternalLink, Flag, MapPin, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { createContentReport, getEvent, getUserSession, listReportRules, requestEventAttendance } from "../lib/api";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { createBlock, createContentReport, getEvent, getUserSession, listReportRules, requestEventAttendance } from "../lib/api";
 
 export function EventDetailPage() {
   const { slug = "" } = useParams();
   const user = getUserSession();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [reportOpen, setReportOpen] = useState(false);
   const { data: event, isLoading } = useQuery({
     queryKey: ["event", slug],
@@ -23,6 +25,14 @@ export function EventDetailPage() {
   });
   const reportMutation = useMutation({
     mutationFn: createContentReport
+  });
+  const blockMutation = useMutation({
+    mutationFn: () => createBlock("event", event!.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["events"] });
+      void queryClient.invalidateQueries({ queryKey: ["blocks"] });
+      navigate("/events");
+    }
   });
 
   if (isLoading) {
@@ -93,6 +103,12 @@ export function EventDetailPage() {
           <button className="ghost-action" onClick={() => setReportOpen((current) => !current)} type="button">
             <Flag size={18} />
             Raporla
+          </button>
+        ) : null}
+        {user ? (
+          <button className="ghost-action" disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()} type="button">
+            <Ban size={18} />
+            Engelle
           </button>
         ) : null}
       </div>

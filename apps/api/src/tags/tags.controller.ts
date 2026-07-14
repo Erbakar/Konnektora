@@ -3,6 +3,7 @@ import { User } from "@prisma/client";
 import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 import { RequirePermissions } from "../auth/permissions";
 import { CreateTagDto, MergeTagDto } from "./tags.dto";
 import { TagsService } from "./tags.service";
@@ -12,8 +13,9 @@ export class TagsController {
   constructor(private readonly tagsService: TagsService) {}
 
   @Get("tags")
-  listPublicTags() {
-    return this.tagsService.listPublicTags();
+  @UseGuards(OptionalJwtAuthGuard)
+  listPublicTags(@CurrentUser() user?: User) {
+    return this.tagsService.listPublicTags(user?.id);
   }
 
   @Get("tag-categories")

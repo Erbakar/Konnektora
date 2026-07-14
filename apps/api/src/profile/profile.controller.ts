@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Put, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, UseGuards } from "@nestjs/common";
 import { User } from "@prisma/client";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto, UpdateProfileInterestsDto } from "./profile.dto";
+import { CreateUserBlockDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto, UpdateProfileInterestsDto } from "./profile.dto";
 import { ProfileService } from "./profile.service";
 
 @Controller("profile")
@@ -38,6 +38,21 @@ export class ProfileController {
   @Put("notification-preferences")
   updateNotificationPreferences(@CurrentUser() user: User, @Body() body: UpdateNotificationPreferencesDto) {
     return this.profileService.updateNotificationPreferences(user.id, body);
+  }
+
+  @Get("blocks")
+  listBlocks(@CurrentUser() user: User) {
+    return this.profileService.listBlocks(user.id);
+  }
+
+  @Post("blocks")
+  createBlock(@CurrentUser() user: User, @Body() body: CreateUserBlockDto) {
+    return this.profileService.createBlock(user.id, body);
+  }
+
+  @Delete("blocks/:targetType/:targetId")
+  removeBlock(@CurrentUser() user: User, @Param("targetType") targetType: string, @Param("targetId") targetId: string) {
+    return this.profileService.removeBlock(user.id, targetType, targetId);
   }
 
   @Get("interests")

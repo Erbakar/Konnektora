@@ -109,6 +109,14 @@ export class UpdateNotificationPreferencesDto {
   preferences!: NotificationPreferenceDto[];
 }
 
+export class CreateUserBlockDto {
+  @IsIn(["user", "tag", "event", "place"])
+  targetType!: "user" | "tag" | "event" | "place";
+
+  @IsUUID()
+  targetId!: string;
+}
+
 export class UpdateProfileInterestsDto {
   @IsArray()
   @IsUUID("4", { each: true })

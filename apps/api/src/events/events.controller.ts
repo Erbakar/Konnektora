@@ -3,6 +3,7 @@ import { User } from "@prisma/client";
 import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 import { RequirePermissions } from "../auth/permissions";
 import { CreateEventDto, EventQueryDto, InviteParticipantDto, UpdateParticipantDto } from "./events.dto";
 import { EventsService } from "./events.service";
@@ -12,13 +13,15 @@ export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
   @Get("events")
-  listPublicEvents(@Query() query: EventQueryDto) {
-    return this.eventsService.listPublicEvents(query);
+  @UseGuards(OptionalJwtAuthGuard)
+  listPublicEvents(@Query() query: EventQueryDto, @CurrentUser() user?: User) {
+    return this.eventsService.listPublicEvents(query, user?.id);
   }
 
   @Get("events/:slug")
-  getPublicEvent(@Param("slug") slug: string) {
-    return this.eventsService.getPublicEvent(slug);
+  @UseGuards(OptionalJwtAuthGuard)
+  getPublicEvent(@Param("slug") slug: string, @CurrentUser() user?: User) {
+    return this.eventsService.getPublicEvent(slug, user?.id);
   }
 
   @Post("events")

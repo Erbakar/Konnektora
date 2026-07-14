@@ -14,8 +14,11 @@ describe("EventsService", () => {
   const createService = () => {
     const prisma = {
       event: {
-        findUnique: jest.fn()
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn()
       },
+      userBlock: { findMany: jest.fn() },
       eventParticipant: {
         findMany: jest.fn(),
         findUnique: jest.fn()
@@ -91,5 +94,30 @@ describe("EventsService", () => {
     });
 
     await expect(service.listParticipants("event-1", actor as never)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("filters blocked events, organizers and tags from member discovery", async () => {
+    const { service, prisma } = createService();
+    prisma.userBlock.findMany.mockResolvedValue([
+      { targetType: "event", targetId: "event-2" },
+      { targetType: "user", targetId: "owner-2" },
+      { targetType: "tag", targetId: "tag-2" }
+    ]);
+    prisma.event.count.mockResolvedValue(0);
+    prisma.event.findMany.mockResolvedValue([]);
+
+    await service.listPublicEvents({}, actor.id);
+
+    expect(prisma.event.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          NOT: [
+            { id: { in: ["event-2"] } },
+            { createdById: { in: ["owner-2"] } },
+            { tags: { some: { tagId: { in: ["tag-2"] } } } }
+          ]
+        })
+      })
+    );
   });
 });

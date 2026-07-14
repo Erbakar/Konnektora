@@ -22,12 +22,14 @@ import {
   inviteEventParticipant,
   isMockApiMode,
   listMyNotifications,
+  listBlocks,
   listEventParticipants,
   listMyEvents,
   listTags,
   markMyNotificationRead,
   registerUser,
   reactivateAccount,
+  removeBlock,
   requestEmailVerification,
   requestPhoneVerification,
   requestPasswordReset,
@@ -73,6 +75,11 @@ export function AccountPage() {
   const notificationPreferencesQuery = useQuery({
     queryKey: ["notification-preferences", user?.id],
     queryFn: getNotificationPreferences,
+    enabled: Boolean(user)
+  });
+  const blocksQuery = useQuery({
+    queryKey: ["blocks", user?.id],
+    queryFn: listBlocks,
     enabled: Boolean(user)
   });
   const notificationsQuery = useQuery({
@@ -213,6 +220,15 @@ export function AccountPage() {
       setNotice({ tone: "success", message: "Bildirim tercihleri kaydedildi." });
     },
     onError: () => setNotice({ tone: "error", message: "Bildirim tercihleri kaydedilemedi." })
+  });
+  const removeBlockMutation = useMutation({
+    mutationFn: (input: { targetType: "user" | "tag" | "event" | "place"; targetId: string }) => removeBlock(input.targetType, input.targetId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["blocks", user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ["events"] });
+      void queryClient.invalidateQueries({ queryKey: ["tags"] });
+      setNotice({ tone: "success", message: "Engel kaldırıldı." });
+    }
   });
   const readNotificationMutation = useMutation({
     mutationFn: markMyNotificationRead,
@@ -639,6 +655,24 @@ export function AccountPage() {
                 </button>
               </form>
             ) : null}
+            <section className="admin-form">
+              <h2>Engellenenler</h2>
+              {blocksQuery.data?.length ? (
+                <div className="admin-list">
+                  {blocksQuery.data.map((block) => (
+                    <div className="admin-list-row" key={`${block.targetType}:${block.targetId}`}>
+                      <div>
+                        <strong>{block.label}</strong>
+                        <span>{block.targetType}{block.subtitle ? ` · ${block.subtitle}` : ""}</span>
+                      </div>
+                      <button className="ghost-action" disabled={removeBlockMutation.isPending} onClick={() => removeBlockMutation.mutate(block)} type="button">
+                        Engeli kaldır
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="muted">Engellenen kullanıcı veya içerik yok.</p>}
+            </section>
             {notificationPreferencesQuery.data ? (
               <form className="admin-form" onSubmit={handleNotificationPreferencesSubmit}>
                 <h2>Bildirim tercihleri</h2>

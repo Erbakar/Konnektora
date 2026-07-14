@@ -31,7 +31,16 @@ describe("ProfileService", () => {
       user: {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn()
+      },
+      tag: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      event: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      place: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      userBlock: {
+        findMany: jest.fn().mockResolvedValue([]),
+        upsert: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 })
       },
       privacySettings: {
         findUnique: jest.fn(),
@@ -162,5 +171,33 @@ describe("ProfileService", () => {
         ]
       })
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("prevents users from blocking themselves", async () => {
+    const { service, prisma } = createService();
+    await expect(service.createBlock("user-1", { targetType: "user", targetId: "user-1" })).rejects.toBeInstanceOf(
+      BadRequestException
+    );
+    expect(prisma.userBlock.upsert).not.toHaveBeenCalled();
+  });
+
+  it("creates an idempotent event block after validating the target", async () => {
+    const { service, prisma } = createService();
+    prisma.event.findUnique.mockResolvedValue({ id: "11111111-1111-4111-8111-111111111111" });
+
+    await expect(
+      service.createBlock("user-1", { targetType: "event", targetId: "11111111-1111-4111-8111-111111111111" })
+    ).resolves.toEqual({ ok: true });
+    expect(prisma.userBlock.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId_targetType_targetId: {
+            userId: "user-1",
+            targetType: "event",
+            targetId: "11111111-1111-4111-8111-111111111111"
+          }
+        }
+      })
+    );
   });
 });

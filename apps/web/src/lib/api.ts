@@ -34,6 +34,7 @@ import {
   tagSchema,
   userMessageListSchema,
   userMessageSchema,
+  userBlocksSchema,
   type AdminDashboard,
   type AdminComment,
   type AdminManagedUser,
@@ -46,6 +47,7 @@ import {
   type AdminRoleGroup,
   type AdminTagDetail,
   type Announcement,
+  type BlockedTargetType,
   type CmsPolicy,
   type CmsCategory,
   type ContentReport,
@@ -70,7 +72,8 @@ import {
   type UserMessage,
   type UserMessageList,
   type UserMessageStatus,
-  type UserMessageType
+  type UserMessageType,
+  type UserBlock
 } from "@konnektora/shared";
 import { z } from "zod";
 import { mockEvents, mockTags } from "./mockData";
@@ -114,6 +117,7 @@ const MOCK_NOTIFICATIONS_KEY = "konnektora_mock_notifications";
 const MOCK_PHONE_VERIFICATIONS_KEY = "konnektora_mock_phone_verifications";
 const MOCK_PRIVACY_SETTINGS_KEY = "konnektora_mock_privacy_settings";
 const MOCK_NOTIFICATION_PREFERENCES_KEY = "konnektora_mock_notification_preferences";
+const MOCK_USER_BLOCKS_KEY = "konnektora_mock_user_blocks";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -458,6 +462,19 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname === "/profile/notification-preferences" && method === "PUT") {
     return schema.parse(updateMockNotificationPreferences(parseBody<{ preferences: NotificationPreference[] }>(options).preferences));
+  }
+
+  if (pathname === "/profile/blocks" && method === "GET") {
+    return schema.parse(listMockBlocks());
+  }
+
+  if (pathname === "/profile/blocks" && method === "POST") {
+    return schema.parse(createMockBlock(parseBody<{ targetType: BlockedTargetType; targetId: string }>(options)));
+  }
+
+  if (pathname.startsWith("/profile/blocks/") && method === "DELETE") {
+    const [targetType, targetId] = pathname.slice("/profile/blocks/".length).split("/");
+    return schema.parse(removeMockBlock(targetType as BlockedTargetType, targetId ?? ""));
   }
 
   if (pathname === "/profile/interests" && method === "GET") {
@@ -812,7 +829,8 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   }
 
   if (pathname === "/tags") {
-    return schema.parse(getStoredTags().filter((tag) => tag.status === "active"));
+    const blockedTagIds = new Set(listMockBlocks().filter((block) => block.targetType === "tag").map((block) => block.targetId));
+    return schema.parse(getStoredTags().filter((tag) => tag.status === "active" && !blockedTagIds.has(tag.id)));
   }
 
   if (pathname === "/events") {
@@ -826,9 +844,14 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     const country = params.get("country")?.toLowerCase().trim();
     const page = Math.max(Number(params.get("page") || "1"), 1);
     const pageSize = Math.min(Math.max(Number(params.get("pageSize") || "24"), 1), 50);
+    const blocks = listMockBlocks();
+    const blockedEventIds = new Set(blocks.filter((block) => block.targetType === "event").map((block) => block.targetId));
+    const blockedTagIds = new Set(blocks.filter((block) => block.targetType === "tag").map((block) => block.targetId));
     const events = getStoredEvents().filter(
       (eventItem) =>
         eventItem.status === "published" &&
+        !blockedEventIds.has(eventItem.id) &&
+        !eventItem.tags.some((tag) => blockedTagIds.has(tag.id)) &&
         (!selectedTag || eventItem.tags.some((tagItem) => tagItem.slug === selectedTag)) &&
         (!selectedFormat || eventItem.format === selectedFormat) &&
         (!search ||
@@ -856,7 +879,9 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     const slug = decodeURIComponent(pathname.slice("/events/".length));
     const event = getStoredEvents().find((eventItem) => eventItem.status === "published" && eventItem.slug === slug);
 
-    return event ? schema.parse(event) : undefined;
+    const blocks = listMockBlocks();
+    const isBlocked = event && (blocks.some((block) => block.targetType === "event" && block.targetId === event.id) || event.tags.some((tag) => blocks.some((block) => block.targetType === "tag" && block.targetId === tag.id)));
+    return event && !isBlocked ? schema.parse(event) : undefined;
   }
 
   return undefined;
@@ -2651,6 +2676,47 @@ function updateMockNotificationPreferences(preferences: NotificationPreference[]
   return getMockNotificationPreferences();
 }
 
+function listMockBlocks(): UserBlock[] {
+  const session = getUserSession();
+  if (!session) return [];
+  const stored = readStorage<Record<string, UserBlock[]>>(MOCK_USER_BLOCKS_KEY, {});
+  return stored[session.id] ?? [];
+}
+
+function createMockBlock(input: { targetType: BlockedTargetType; targetId: string }) {
+  const session = getUserSession();
+  if (!session || (input.targetType === "user" && input.targetId === session.id)) throw new Error("Invalid block");
+  const detail =
+    input.targetType === "event"
+      ? getStoredEvents().find((item) => item.id === input.targetId)
+      : input.targetType === "tag"
+        ? getStoredTags().find((item) => item.id === input.targetId)
+        : input.targetType === "place"
+          ? listMockPlaces(new URLSearchParams()).find((item) => item.id === input.targetId)
+          : getAllMockUsers().find((item) => item.id === input.targetId);
+  if (!detail) throw new Error("Block target not found");
+  const label = "title" in detail ? String(detail.title) : "username" in detail && detail.username ? `@${detail.username}` : String(detail.name);
+  const block: UserBlock = { targetType: input.targetType, targetId: input.targetId, label, createdAt: new Date().toISOString() };
+  const stored = readStorage<Record<string, UserBlock[]>>(MOCK_USER_BLOCKS_KEY, {});
+  const current = stored[session.id] ?? [];
+  writeStorage(MOCK_USER_BLOCKS_KEY, {
+    ...stored,
+    [session.id]: [block, ...current.filter((item) => item.targetType !== input.targetType || item.targetId !== input.targetId)]
+  });
+  return { ok: true };
+}
+
+function removeMockBlock(targetType: BlockedTargetType, targetId: string) {
+  const session = getUserSession();
+  if (!session) throw new Error("User session required");
+  const stored = readStorage<Record<string, UserBlock[]>>(MOCK_USER_BLOCKS_KEY, {});
+  writeStorage(MOCK_USER_BLOCKS_KEY, {
+    ...stored,
+    [session.id]: (stored[session.id] ?? []).filter((item) => item.targetType !== targetType || item.targetId !== targetId)
+  });
+  return { ok: true };
+}
+
 function getMockDashboard(): AdminDashboard {
   const now = Date.now();
   const events = getStoredEvents();
@@ -2995,15 +3061,15 @@ function parseParticipantStatus(value?: string): EventParticipant["status"] {
 
 export function listEvents(params?: URLSearchParams): Promise<EventList> {
   const query = params?.toString();
-  return requestJson(`/events${query ? `?${query}` : ""}`, eventListSchema);
+  return requestJson(`/events${query ? `?${query}` : ""}`, eventListSchema, { auth: "user" });
 }
 
 export function getEvent(slug: string): Promise<Event> {
-  return requestJson(`/events/${slug}`, eventSchema);
+  return requestJson(`/events/${slug}`, eventSchema, { auth: "user" });
 }
 
 export function listTags(): Promise<Tag[]> {
-  return requestJson("/tags", z.array(tagSchema));
+  return requestJson("/tags", z.array(tagSchema), { auth: "user" });
 }
 
 export function createUserTag(input: { name: string; description?: string }): Promise<Tag> {
@@ -3043,6 +3109,25 @@ export function updateNotificationPreferences(preferences: NotificationPreferenc
     auth: "user",
     method: "PUT",
     body: JSON.stringify({ preferences })
+  });
+}
+
+export function listBlocks(): Promise<UserBlock[]> {
+  return requestJson("/profile/blocks", userBlocksSchema, { auth: "user" });
+}
+
+export function createBlock(targetType: BlockedTargetType, targetId: string): Promise<{ ok: boolean }> {
+  return requestJson("/profile/blocks", z.object({ ok: z.boolean() }), {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify({ targetType, targetId })
+  });
+}
+
+export function removeBlock(targetType: BlockedTargetType, targetId: string): Promise<{ ok: boolean }> {
+  return requestJson(`/profile/blocks/${targetType}/${targetId}`, z.object({ ok: z.boolean() }), {
+    auth: "user",
+    method: "DELETE"
   });
 }
 
