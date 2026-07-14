@@ -6,13 +6,15 @@ import { getPolicy } from "../lib/api";
 const policyRouteTypes: Record<string, PolicyType> = {
   privacy: "privacy",
   terms: "terms",
-  cookies: "cookies"
+  cookies: "cookies",
+  about: "about"
 };
 
 const fallbackTitles: Record<PolicyType, string> = {
   privacy: "Privacy Policy",
   terms: "Terms of Use",
-  cookies: "Cookie Policy"
+  cookies: "Cookie Policy",
+  about: "About Us"
 };
 
 export function PolicyPage() {
@@ -38,7 +40,7 @@ export function PolicyPage() {
         {policyQuery.isLoading ? (
           <p>Yükleniyor...</p>
         ) : policyQuery.data ? (
-          policyQuery.data.body.split("\n").map((paragraph, index) => <p key={`${policyType}-${index}`}>{paragraph}</p>)
+          <div dangerouslySetInnerHTML={{ __html: policyQuery.data.body }} />
         ) : (
           <div>
             <p>Bu policy sayfası henüz yayınlanmadı.</p>

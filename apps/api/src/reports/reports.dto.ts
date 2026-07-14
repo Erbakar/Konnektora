@@ -138,6 +138,11 @@ export class CreateModerationDecisionDto {
   ])
   action!: string;
 
+  @IsOptional()
+  @IsString()
+  @IsIn(["none", "warn_user", "suspend_user", "ban_user"])
+  userAction?: string;
+
   @IsInt()
   @Min(0)
   @Max(1000)

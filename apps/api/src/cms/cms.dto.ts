@@ -184,7 +184,7 @@ export class UpdateAnnouncementDto {
 
 export class UpsertPolicyDto {
   @IsString()
-  @IsIn(["privacy", "terms", "cookies"])
+  @IsIn(["privacy", "terms", "cookies", "about"])
   type!: string;
 
   @IsString()

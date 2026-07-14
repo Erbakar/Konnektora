@@ -1289,12 +1289,13 @@ function listMockReports(): ContentReport[] {
 }
 
 function listMockReportGroups(scope: "active" | "old"): ReportGroup[] {
-  const activeStatuses = new Set(["open", "reviewing"]);
-  const reports = listMockReports().filter((report) =>
-    scope === "active" ? activeStatuses.has(report.status) : !activeStatuses.has(report.status)
-  );
+  const groups = buildMockReportGroups(listMockReports());
 
-  return buildMockReportGroups(reports);
+  if (scope === "active") {
+    return groups.filter((group) => group.activeReports > 0);
+  }
+
+  return groups.filter((group) => group.activeReports === 0 && group.oldReports > 0);
 }
 
 function getMockReportGroupDetail(targetType: ReportTargetType, targetId: string): ReportGroupDetail {
@@ -1323,10 +1324,12 @@ function buildMockReportGroups(reports: ContentReport[]): ReportGroup[] {
     .map(([key, groupReports]) => {
       const [targetType, targetId] = key.split(":") as [ReportTargetType, string];
       const activeReports = groupReports.filter((report) => report.status === "open" || report.status === "reviewing").length;
+      const targetSummary = resolveMockTargetSummary(targetType, targetId);
 
       return {
         targetType,
         targetId,
+        targetSummary,
         totalReports: groupReports.length,
         activeReports,
         oldReports: groupReports.length - activeReports,
@@ -1347,6 +1350,98 @@ function buildMockReportGroups(reports: ContentReport[]): ReportGroup[] {
 
       return new Date(second.latestReportAt).getTime() - new Date(first.latestReportAt).getTime();
     });
+}
+
+function resolveMockTargetSummary(targetType: ReportTargetType, targetId: string): ReportGroup["targetSummary"] {
+  const users = getAllMockUsers();
+
+  if (targetType === "event") {
+    const event = getStoredEvents().find((item) => item.id === targetId);
+    if (!event) {
+      return null;
+    }
+
+    const owner =
+      users.find((user) => user.name === event.organizerName) ??
+      users.find((user) => user.role === "super_admin" || user.role === "admin") ??
+      null;
+
+    return {
+      title: event.title,
+      subtitle: [event.city, event.country].filter(Boolean).join(" - ") || event.format,
+      status: event.status,
+      owner: owner
+        ? {
+            id: owner.id,
+            email: owner.email,
+            name: owner.name,
+            role: owner.role ?? "user",
+            status: owner.status ?? "active",
+            accountType: "individual",
+            followerCount: 0,
+            followingCount: 0,
+            emailVerified: true,
+            penaltyScoreLastYear: 0,
+            penaltyScoreAllTime: 0,
+            username: owner.email.split("@")[0]
+          }
+        : null,
+      metrics: {},
+      payload: {
+        startsAt: event.startsAt,
+        coverImageUrl: event.coverImageUrl
+      }
+    };
+  }
+
+  if (targetType === "user" || targetType === "username" || targetType === "website_url") {
+    const user = users.find((item) => item.id === targetId);
+    if (!user) {
+      return null;
+    }
+
+    return {
+      title: user.name,
+      subtitle: user.email,
+      status: user.status ?? "active",
+      owner: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role ?? "user",
+        status: user.status ?? "active",
+        accountType: "individual",
+        followerCount: 0,
+        followingCount: 0,
+        emailVerified: true,
+        penaltyScoreLastYear: 0,
+        penaltyScoreAllTime: 0
+      },
+      metrics: {}
+    };
+  }
+
+  return {
+    title: `${targetType} · ${targetId.slice(0, 8)}`,
+    subtitle: "Mock hedef özeti",
+    status: "unknown",
+    owner: users[0]
+      ? {
+          id: users[0].id,
+          email: users[0].email,
+          name: users[0].name,
+          role: users[0].role ?? "user",
+          status: users[0].status ?? "active",
+          accountType: "individual",
+          followerCount: 0,
+          followingCount: 0,
+          emailVerified: true,
+          penaltyScoreLastYear: 0,
+          penaltyScoreAllTime: 0
+        }
+      : null,
+    metrics: {}
+  };
 }
 
 function createMockReportGroupComment(targetType: ReportTargetType, targetId: string, body: string): ReportGroupComment {
@@ -1413,6 +1508,12 @@ function createMockModerationDecision(
   };
 
   applyMockModerationAction(targetType, targetId, input.action);
+  if (input.userAction && input.userAction !== "none") {
+    const ownerId = resolveMockDecisionUserId(targetType, targetId, input.action);
+    if (ownerId && (input.userAction === "suspend_user" || input.userAction === "ban_user")) {
+      applyMockModerationAction("user", ownerId, input.userAction);
+    }
+  }
   closeMockReportsForDecision(targetType, targetId, input);
   if (targetUserId) {
     createMockNotification({
@@ -1933,6 +2034,16 @@ function defaultPolicies(): CmsPolicy[] {
       type: "cookies",
       title: "Cookie Policy",
       body: "Konnektora cookie policy content will be managed from the admin panel.",
+      status: "passive",
+      publishedAt: null,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "10000000-1000-4000-8000-100000000104",
+      type: "about",
+      title: "About Us",
+      body: "Konnektora about us content will be managed from the admin panel.",
       status: "passive",
       publishedAt: null,
       createdAt: now,
@@ -2674,7 +2785,7 @@ function parseAnnouncementTarget(value?: string): Announcement["target"] {
 }
 
 function parsePolicyType(value?: string): PolicyType {
-  return value === "terms" || value === "cookies" ? value : "privacy";
+  return value === "terms" || value === "cookies" || value === "about" ? value : "privacy";
 }
 
 function parseReportTargetType(value?: string): ReportTargetType {
@@ -3221,6 +3332,7 @@ export type ModerationDecisionInput = {
     | "reset_username"
     | "remove_website"
     | "remove_private_messages";
+  userAction?: "none" | "warn_user" | "suspend_user" | "ban_user";
   penaltyScore: number;
   note?: string;
   suspensionEndsAt?: string;
