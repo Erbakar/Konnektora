@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ClipboardCheck, LogOut, Plus, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import type { AccountType, Event, EventParticipant, NotificationPreference, PrivacyAudience, Tag } from "@konnektora/shared";
+import type { AccountType, Event, EventParticipant, MemberCard, NotificationPreference, PrivacyAudience, Tag } from "@konnektora/shared";
 import {
   type AdminEventInput,
   type RegistrationInput,
@@ -19,10 +19,13 @@ import {
   getPrivacySettings,
   getUserSession,
   getUserToken,
+  followUser,
   inviteEventParticipant,
   isMockApiMode,
   listMyNotifications,
   listBlocks,
+  listFollowing,
+  listMemberSuggestions,
   listEventParticipants,
   listMyEvents,
   listTags,
@@ -37,6 +40,7 @@ import {
   updateEventParticipantStatus,
   updateMyEvent,
   updateProfileInterests,
+  unfollowUser,
   updateMyProfile,
   updateNotificationPreferences,
   updatePrivacySettings,
@@ -82,6 +86,8 @@ export function AccountPage() {
     queryFn: listBlocks,
     enabled: Boolean(user)
   });
+  const followingQuery = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
+  const suggestionsQuery = useQuery({ queryKey: ["member-suggestions", user?.id], queryFn: listMemberSuggestions, enabled: Boolean(user) });
   const notificationsQuery = useQuery({
     queryKey: ["my-notifications", user?.id],
     queryFn: listMyNotifications,
@@ -228,6 +234,13 @@ export function AccountPage() {
       void queryClient.invalidateQueries({ queryKey: ["events"] });
       void queryClient.invalidateQueries({ queryKey: ["tags"] });
       setNotice({ tone: "success", message: "Engel kaldırıldı." });
+    }
+  });
+  const followMutation = useMutation({
+    mutationFn: (input: { userId: string; following: boolean }) => input.following ? unfollowUser(input.userId) : followUser(input.userId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["following", user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ["member-suggestions", user?.id] });
     }
   });
   const readNotificationMutation = useMutation({
@@ -537,6 +550,16 @@ export function AccountPage() {
             )}
           </aside>
           <div className="account-stack">
+            <MemberList
+              members={followingQuery.data ?? []}
+              title="Takip ettiklerim"
+              onToggle={(member) => followMutation.mutate({ userId: member.id, following: true })}
+            />
+            <MemberList
+              members={suggestionsQuery.data ?? []}
+              title="Sana benzer üyeler"
+              onToggle={(member) => followMutation.mutate({ userId: member.id, following: false })}
+            />
             {profileQuery.data ? (
               <form className="admin-form" key={String(profileQuery.data.updatedAt)} onSubmit={handleProfileSubmit}>
                 <h2>Profili düzenle</h2>
@@ -877,6 +900,30 @@ const notificationTopicLabels: Record<NotificationPreference["topic"], string> =
   place_invite: "Mekân daveti",
   place_manager: "Mekân yöneticisi atanma"
 };
+
+function MemberList({ members, onToggle, title }: { members: MemberCard[]; onToggle: (member: MemberCard) => void; title: string }) {
+  return (
+    <section className="admin-form">
+      <div className="section-header compact"><h2>{title}</h2><span>{members.length}</span></div>
+      {members.length ? (
+        <div className="admin-list">
+          {members.map((member) => (
+            <div className="admin-list-row" key={member.id}>
+              <div>
+                <strong>{member.username ? `@${member.username}` : member.name}</strong>
+                <span>{member.commonTagCount} ortak ilgi alanı · {member.followerCount} takipçi</span>
+                <span>{[member.city, member.country].filter(Boolean).join(", ")}</span>
+              </div>
+              <button className="secondary-action" onClick={() => onToggle(member)} type="button">
+                {member.following ? "Takibi bırak" : "Takip et"}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : <p className="muted">Gösterilecek üye yok.</p>}
+    </section>
+  );
+}
 
 function PrivacyAudienceField({ defaultValue, label, name }: { defaultValue: PrivacyAudience; label: string; name: string }) {
   return (

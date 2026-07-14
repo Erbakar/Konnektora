@@ -19,6 +19,7 @@ import {
   eventParticipantSchema,
   faqSchema,
   loginResponseSchema,
+  memberCardsSchema,
   moderationDecisionSchema,
   notificationSchema,
   notificationPreferencesSchema,
@@ -56,6 +57,7 @@ import {
   type EventParticipant,
   type Faq,
   type LoginResponse,
+  type MemberCard,
   type ModerationDecision,
   type Notification,
   type NotificationPreference,
@@ -118,6 +120,7 @@ const MOCK_PHONE_VERIFICATIONS_KEY = "konnektora_mock_phone_verifications";
 const MOCK_PRIVACY_SETTINGS_KEY = "konnektora_mock_privacy_settings";
 const MOCK_NOTIFICATION_PREFERENCES_KEY = "konnektora_mock_notification_preferences";
 const MOCK_USER_BLOCKS_KEY = "konnektora_mock_user_blocks";
+const MOCK_USER_FOLLOWS_KEY = "konnektora_mock_user_follows";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -475,6 +478,22 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   if (pathname.startsWith("/profile/blocks/") && method === "DELETE") {
     const [targetType, targetId] = pathname.slice("/profile/blocks/".length).split("/");
     return schema.parse(removeMockBlock(targetType as BlockedTargetType, targetId ?? ""));
+  }
+
+  if (pathname === "/social/suggestions" && method === "GET") {
+    return schema.parse(listMockMemberSuggestions());
+  }
+
+  if (pathname === "/social/following" && method === "GET") {
+    return schema.parse(listMockFollowing());
+  }
+
+  if (pathname.startsWith("/social/following/") && method === "POST") {
+    return schema.parse(followMockUser(pathname.slice("/social/following/".length)));
+  }
+
+  if (pathname.startsWith("/social/following/") && method === "DELETE") {
+    return schema.parse(unfollowMockUser(pathname.slice("/social/following/".length)));
   }
 
   if (pathname === "/profile/interests" && method === "GET") {
@@ -2703,6 +2722,16 @@ function createMockBlock(input: { targetType: BlockedTargetType; targetId: strin
     ...stored,
     [session.id]: [block, ...current.filter((item) => item.targetType !== input.targetType || item.targetId !== input.targetId)]
   });
+  if (input.targetType === "user") {
+    const follows = readStorage<Record<string, string[]>>(MOCK_USER_FOLLOWS_KEY, {});
+    const next = Object.fromEntries(
+      Object.entries(follows).map(([followerId, ids]) => [
+        followerId,
+        ids.filter((followingId) => !(followerId === session.id && followingId === input.targetId) && !(followerId === input.targetId && followingId === session.id))
+      ])
+    );
+    writeStorage(MOCK_USER_FOLLOWS_KEY, next);
+  }
   return { ok: true };
 }
 
@@ -2715,6 +2744,61 @@ function removeMockBlock(targetType: BlockedTargetType, targetId: string) {
     [session.id]: (stored[session.id] ?? []).filter((item) => item.targetType !== targetType || item.targetId !== targetId)
   });
   return { ok: true };
+}
+
+function mockFollowIds() {
+  const session = getUserSession();
+  const follows = readStorage<Record<string, string[]>>(MOCK_USER_FOLLOWS_KEY, {});
+  return session ? follows[session.id] ?? [] : [];
+}
+
+function toMockMemberCard(user: MockUser, following: boolean): MemberCard {
+  const ownTags = new Set(getUserInterestTagIds());
+  const interests = readStorage<Record<string, string[]>>(USER_INTEREST_TAGS_KEY, {});
+  return {
+    id: user.id,
+    name: user.name,
+    username: user.username ?? null,
+    accountType: user.accountType === "corporate" ? "corporate" : "individual",
+    city: user.city ?? null,
+    country: user.country ?? null,
+    followerCount: user.followerCount ?? 0,
+    commonTagCount: (interests[user.id] ?? []).filter((tagId) => ownTags.has(tagId)).length,
+    following
+  };
+}
+
+function listMockMemberSuggestions() {
+  const session = getUserSession();
+  if (!session) return [];
+  const followed = new Set(mockFollowIds());
+  const blocked = new Set(listMockBlocks().filter((block) => block.targetType === "user").map((block) => block.targetId));
+  return getAllMockUsers()
+    .filter((user) => user.id !== session.id && user.status !== "banned" && !followed.has(user.id) && !blocked.has(user.id))
+    .map((user) => toMockMemberCard(user, false))
+    .sort((a, b) => b.commonTagCount - a.commonTagCount || b.followerCount - a.followerCount)
+    .slice(0, 20);
+}
+
+function listMockFollowing() {
+  const followed = new Set(mockFollowIds());
+  return getAllMockUsers().filter((user) => followed.has(user.id)).map((user) => toMockMemberCard(user, true));
+}
+
+function followMockUser(targetUserId: string) {
+  const session = getUserSession();
+  if (!session || session.id === targetUserId || !getAllMockUsers().some((user) => user.id === targetUserId)) throw new Error("User cannot be followed");
+  const follows = readStorage<Record<string, string[]>>(MOCK_USER_FOLLOWS_KEY, {});
+  writeStorage(MOCK_USER_FOLLOWS_KEY, { ...follows, [session.id]: [...new Set([...(follows[session.id] ?? []), targetUserId])] });
+  return { ok: true, following: true };
+}
+
+function unfollowMockUser(targetUserId: string) {
+  const session = getUserSession();
+  if (!session) throw new Error("User session required");
+  const follows = readStorage<Record<string, string[]>>(MOCK_USER_FOLLOWS_KEY, {});
+  writeStorage(MOCK_USER_FOLLOWS_KEY, { ...follows, [session.id]: (follows[session.id] ?? []).filter((id) => id !== targetUserId) });
+  return { ok: true, following: false };
 }
 
 function getMockDashboard(): AdminDashboard {
@@ -3129,6 +3213,22 @@ export function removeBlock(targetType: BlockedTargetType, targetId: string): Pr
     auth: "user",
     method: "DELETE"
   });
+}
+
+export function listMemberSuggestions(): Promise<MemberCard[]> {
+  return requestJson("/social/suggestions", memberCardsSchema, { auth: "user" });
+}
+
+export function listFollowing(): Promise<MemberCard[]> {
+  return requestJson("/social/following", memberCardsSchema, { auth: "user" });
+}
+
+export function followUser(targetUserId: string): Promise<{ ok: boolean; following: boolean }> {
+  return requestJson(`/social/following/${targetUserId}`, z.object({ ok: z.boolean(), following: z.boolean() }), { auth: "user", method: "POST" });
+}
+
+export function unfollowUser(targetUserId: string): Promise<{ ok: boolean; following: boolean }> {
+  return requestJson(`/social/following/${targetUserId}`, z.object({ ok: z.boolean(), following: z.boolean() }), { auth: "user", method: "DELETE" });
 }
 
 export function updateProfileInterests(tagIds: string[]): Promise<Tag[]> {

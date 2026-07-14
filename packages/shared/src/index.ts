@@ -73,6 +73,18 @@ export const userBlockSchema = z.object({
   createdAt: z.string().datetime().or(z.date())
 });
 export const userBlocksSchema = z.array(userBlockSchema);
+export const memberCardSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  username: z.string().nullable(),
+  accountType: accountTypeSchema,
+  city: z.string().nullable(),
+  country: z.string().nullable(),
+  followerCount: z.number().int().nonnegative(),
+  commonTagCount: z.number().int().nonnegative(),
+  following: z.boolean()
+});
+export const memberCardsSchema = z.array(memberCardSchema);
 export const userStatusSchema = z.enum(["invited", "pending", "active", "disabled", "frozen", "deleted", "suspended", "banned"]);
 export const eventParticipantStatusSchema = z.enum([
   "invited",
@@ -633,6 +645,7 @@ export type DeliveryChannel = z.infer<typeof deliveryChannelSchema>;
 export type NotificationPreference = z.infer<typeof notificationPreferenceSchema>;
 export type BlockedTargetType = z.infer<typeof blockedTargetTypeSchema>;
 export type UserBlock = z.infer<typeof userBlockSchema>;
+export type MemberCard = z.infer<typeof memberCardSchema>;
 export type UserStatus = z.infer<typeof userStatusSchema>;
 export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema>;
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;

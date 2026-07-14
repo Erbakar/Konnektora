@@ -32,7 +32,8 @@ describe("ProfileService", () => {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
-        update: jest.fn()
+        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 })
       },
       tag: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       event: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
@@ -41,6 +42,10 @@ describe("ProfileService", () => {
         findMany: jest.fn().mockResolvedValue([]),
         upsert: jest.fn().mockResolvedValue({}),
         deleteMany: jest.fn().mockResolvedValue({ count: 1 })
+      },
+      userFollow: {
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 })
       },
       privacySettings: {
         findUnique: jest.fn(),

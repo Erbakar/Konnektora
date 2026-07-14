@@ -167,11 +167,41 @@ export class ProfileService {
     if (!(await this.blockTargetExists(input.targetType, input.targetId))) {
       throw new NotFoundException("Engellenecek içerik bulunamadı.");
     }
-    await this.prisma.userBlock.upsert({
+    const blockOperation = this.prisma.userBlock.upsert({
       where: { userId_targetType_targetId: { userId, targetType: input.targetType, targetId: input.targetId } },
       create: { userId, targetType: input.targetType, targetId: input.targetId },
       update: {}
     });
+    if (input.targetType !== "user") {
+      await blockOperation;
+      return { ok: true as const };
+    }
+
+    const relationships = await this.prisma.userFollow.findMany({
+      where: {
+        OR: [
+          { followerId: userId, followingId: input.targetId },
+          { followerId: input.targetId, followingId: userId }
+        ]
+      },
+      select: { followerId: true, followingId: true }
+    });
+    const countUpdates = relationships.flatMap((relationship) => [
+      this.prisma.user.updateMany({ where: { id: relationship.followerId, followingCount: { gt: 0 } }, data: { followingCount: { decrement: 1 } } }),
+      this.prisma.user.updateMany({ where: { id: relationship.followingId, followerCount: { gt: 0 } }, data: { followerCount: { decrement: 1 } } })
+    ]);
+    await this.prisma.$transaction([
+      blockOperation,
+      this.prisma.userFollow.deleteMany({
+        where: {
+          OR: [
+            { followerId: userId, followingId: input.targetId },
+            { followerId: input.targetId, followingId: userId }
+          ]
+        }
+      }),
+      ...countUpdates
+    ]);
     return { ok: true as const };
   }
 

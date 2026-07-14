@@ -194,6 +194,8 @@ model User {
   privacySettings           PrivacySettings?
   notificationPreferences  NotificationPreference[]
   blocks                   UserBlock[]
+  following                UserFollow[] @relation("Following")
+  followers                UserFollow[] @relation("Followers")
   userMessages              UserMessage[]        @relation("UserMessageUser")
   readUserMessages          UserMessage[]        @relation("UserMessageReadBy")
   createdPlaces             Place[]              @relation("PlaceCreatedBy")
@@ -209,6 +211,19 @@ model User {
   @@index([country, city])
   @@index([lastOnlineAt])
   @@map("users")
+}
+
+model UserFollow {
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower  User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followingId])
+  @@map("user_follows")
 }
 
 model UserBlock {

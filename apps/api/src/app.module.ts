@@ -12,6 +12,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { ProfileModule } from "./profile/profile.module";
 import { ReportsModule } from "./reports/reports.module";
 import { TagsModule } from "./tags/tags.module";
+import { SocialModule } from "./social/social.module";
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { TagsModule } from "./tags/tags.module";
     MessagesModule,
     ProfileModule,
     ReportsModule,
+    SocialModule,
     TagsModule
   ],
   controllers: [HealthController]
