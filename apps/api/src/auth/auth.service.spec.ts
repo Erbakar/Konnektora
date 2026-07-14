@@ -1,5 +1,6 @@
 import { ConflictException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import { hash } from "bcryptjs";
 import { AuthService } from "./auth.service";
 
 describe("AuthService", () => {
@@ -174,6 +175,20 @@ describe("AuthService", () => {
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: user.id },
       data: { status: "active", emailVerified: true }
+    });
+  });
+
+  it("changes the password after verifying the current password", async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue({ id: "user-5", passwordHash: await hash("CurrentPass!1", 4) });
+    prisma.user.update.mockResolvedValue({});
+
+    await expect(
+      service.changePassword("user-5", { currentPassword: "CurrentPass!1", newPassword: "NewStrongPass!2" })
+    ).resolves.toEqual({ ok: true });
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-5" },
+      data: { passwordHash: expect.any(String) }
     });
   });
 });

@@ -1,5 +1,8 @@
-import { Body, Controller, Post } from "@nestjs/common";
-import { AcceptInviteDto, EmailDto, LoginDto, RegisterDto, ResetPasswordDto, TokenDto } from "./auth.dto";
+import { Body, Controller, Post, UseGuards } from "@nestjs/common";
+import { User } from "@prisma/client";
+import { AcceptInviteDto, ChangePasswordDto, EmailDto, LoginDto, RegisterDto, ResetPasswordDto, TokenDto } from "./auth.dto";
+import { CurrentUser } from "./current-user.decorator";
+import { JwtAuthGuard } from "./jwt-auth.guard";
 import { AuthService } from "./auth.service";
 
 @Controller()
@@ -34,6 +37,12 @@ export class AuthController {
   @Post("auth/password/reset")
   resetPassword(@Body() body: ResetPasswordDto) {
     return this.authService.resetPassword(body);
+  }
+
+  @Post("auth/password/change")
+  @UseGuards(JwtAuthGuard)
+  changePassword(@CurrentUser() user: User, @Body() body: ChangePasswordDto) {
+    return this.authService.changePassword(user.id, body);
   }
 
   @Post("auth/invite/accept")

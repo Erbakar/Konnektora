@@ -5,7 +5,7 @@ import { compare, hash } from "bcryptjs";
 import { createHash, randomBytes } from "crypto";
 import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { AcceptInviteDto, EmailDto, LoginDto, RegisterDto, ResetPasswordDto, TokenDto } from "./auth.dto";
+import { AcceptInviteDto, ChangePasswordDto, EmailDto, LoginDto, RegisterDto, ResetPasswordDto, TokenDto } from "./auth.dto";
 
 const EMAIL_TOKEN_TTL_MS = {
   verify_email: 1000 * 60 * 60 * 24,
@@ -169,6 +169,23 @@ export class AuthService {
     });
 
     return this.createLoginResponse(user);
+  }
+
+  async changePassword(userId: string, input: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !(await compare(input.currentPassword, user.passwordHash))) {
+      throw new UnauthorizedException("Mevcut şifre hatalı.");
+    }
+
+    if (await compare(input.newPassword, user.passwordHash)) {
+      throw new ConflictException("Yeni şifre mevcut şifreden farklı olmalıdır.");
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: await hash(input.newPassword, 10) }
+    });
+    return { ok: true };
   }
 
   async createInviteAcceptToken(userId: string) {

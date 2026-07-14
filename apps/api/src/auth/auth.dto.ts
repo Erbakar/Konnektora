@@ -74,3 +74,16 @@ export class AcceptInviteDto extends ResetPasswordDto {
   @MinLength(2)
   name?: string;
 }
+
+export class ChangePasswordDto {
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  currentPassword!: string;
+
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  @Matches(strongPassword, { message: "Şifre en az bir büyük harf, bir küçük harf ve bir özel karakter içermelidir." })
+  newPassword!: string;
+}

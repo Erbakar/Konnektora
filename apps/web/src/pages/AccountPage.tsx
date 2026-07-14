@@ -7,6 +7,7 @@ import {
   type RegistrationInput,
   archiveMyEvent,
   checkInEventParticipant,
+  changePassword,
   clearUserSession,
   createUserEvent,
   createUserTag,
@@ -135,6 +136,11 @@ export function AccountPage() {
     },
     onError: () => setNotice({ tone: "error", message: "Profil kaydedilemedi. Kullanıcı adı ve zorunlu alanları kontrol et." })
   });
+  const changePasswordMutation = useMutation({
+    mutationFn: changePassword,
+    onSuccess: () => setNotice({ tone: "success", message: "Şifreniz değiştirildi." }),
+    onError: () => setNotice({ tone: "error", message: "Şifre değiştirilemedi. Mevcut şifrenizi kontrol edin." })
+  });
   const readNotificationMutation = useMutation({
     mutationFn: markMyNotificationRead,
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["my-notifications", user?.id] })
@@ -233,6 +239,19 @@ export function AccountPage() {
       companyType: value("companyType"),
       businessCategory: value("businessCategory")
     });
+  }
+
+  function handleChangePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const currentPassword = String(form.get("currentPassword") || "");
+    const newPassword = String(form.get("newPassword") || "");
+    const confirmation = String(form.get("newPasswordAgain") || "");
+    if (newPassword !== confirmation) {
+      setNotice({ tone: "error", message: "Yeni şifreler birbiriyle eşleşmiyor." });
+      return;
+    }
+    changePasswordMutation.mutate({ currentPassword, newPassword });
   }
 
   return (
@@ -464,6 +483,26 @@ export function AccountPage() {
                 </button>
               </form>
             ) : null}
+            <form className="admin-form" onSubmit={handleChangePassword}>
+              <h2>Şifre değiştir</h2>
+              <label>
+                Mevcut şifre
+                <input autoComplete="current-password" minLength={8} name="currentPassword" required type="password" />
+              </label>
+              <div className="form-grid">
+                <label>
+                  Yeni şifre
+                  <input autoComplete="new-password" maxLength={128} minLength={8} name="newPassword" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" required type="password" />
+                </label>
+                <label>
+                  Yeni şifre tekrar
+                  <input autoComplete="new-password" maxLength={128} minLength={8} name="newPasswordAgain" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" required type="password" />
+                </label>
+              </div>
+              <button className="secondary-action" disabled={changePasswordMutation.isPending} type="submit">
+                {changePasswordMutation.isPending ? "Değiştiriliyor" : "Şifreyi değiştir"}
+              </button>
+            </form>
             <section className="admin-form">
               <div className="section-header compact">
                 <h2>Bildirimler</h2>

@@ -1,5 +1,5 @@
 import { validate } from "class-validator";
-import { LoginDto, RegisterDto, ResetPasswordDto } from "./auth.dto";
+import { ChangePasswordDto, LoginDto, RegisterDto, ResetPasswordDto } from "./auth.dto";
 
 describe("auth DTO password policy", () => {
   it("rejects weak passwords for registration", async () => {
@@ -43,5 +43,11 @@ describe("auth DTO password policy", () => {
     expect(errors.map((error) => error.property)).toEqual(
       expect.arrayContaining(["companyName", "tradeName", "companyType", "businessCategory"])
     );
+  });
+
+  it("enforces complexity on the new password when changing it", async () => {
+    const dto = Object.assign(new ChangePasswordDto(), { currentPassword: "CurrentPass!1", newPassword: "weakpass" });
+    const errors = await validate(dto);
+    expect(errors.some((error) => error.property === "newPassword")).toBe(true);
   });
 });

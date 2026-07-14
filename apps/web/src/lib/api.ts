@@ -401,6 +401,10 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(resetMockPassword(input.token, input.password));
   }
 
+  if (pathname === "/auth/password/change" && method === "POST") {
+    return schema.parse(changeMockPassword(parseBody<{ currentPassword: string; newPassword: string }>(options)));
+  }
+
   if (pathname === "/auth/invite/accept" && method === "POST") {
     const input = parseBody<{ token: string; name?: string; password: string }>(options);
     return schema.parse(acceptMockInvite(input.token, input.password, input.name));
@@ -2408,6 +2412,17 @@ function resetMockPassword(token: string, password: string): LoginResponse {
   return response;
 }
 
+function changeMockPassword(input: { currentPassword: string; newPassword: string }) {
+  const session = getUserSession();
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  const user = users.find((item) => item.id === session?.id);
+  if (!user || user.password !== input.currentPassword || user.password === input.newPassword) {
+    throw new Error("Current password does not match");
+  }
+  writeStorage(MOCK_USERS_KEY, [{ ...user, password: input.newPassword }, ...users.filter((item) => item.id !== user.id)]);
+  return { ok: true };
+}
+
 function acceptMockInvite(token: string, password: string, name?: string): LoginResponse {
   const response = consumeMockEmailToken(token, "invite_accept");
   const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
@@ -2926,6 +2941,14 @@ export function resetPassword(token: string, password: string): Promise<LoginRes
   return requestJson("/auth/password/reset", loginResponseSchema, {
     method: "POST",
     body: JSON.stringify({ token, password })
+  });
+}
+
+export function changePassword(input: { currentPassword: string; newPassword: string }): Promise<{ ok: boolean }> {
+  return requestJson("/auth/password/change", z.object({ ok: z.boolean() }), {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify(input)
   });
 }
 
