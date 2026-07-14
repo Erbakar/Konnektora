@@ -291,7 +291,16 @@ export function AccountPage() {
             </label>
             <label>
               Şifre
-              <input autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={8} name="password" required type="password" />
+              <input
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                maxLength={128}
+                minLength={8}
+                name="password"
+                pattern={mode === "register" ? "(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" : undefined}
+                required
+                title={mode === "register" ? "En az 8 karakter, bir büyük harf, bir küçük harf ve bir özel karakter kullanın." : undefined}
+                type="password"
+              />
             </label>
             <button className="primary-action" disabled={authMutation.isPending} type="submit">
               <UserRound size={18} />

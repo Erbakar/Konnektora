@@ -6,6 +6,13 @@ export const eventVisibilitySchema = z.enum(["open", "approval_required", "invit
 export const tagStatusSchema = z.enum(["active", "hidden", "archived"]);
 export const userRoleSchema = z.enum(["user", "admin", "super_admin"]);
 export const accountTypeSchema = z.enum(["individual", "corporate"]);
+export const passwordSchema = z
+  .string()
+  .min(8)
+  .max(128)
+  .regex(/[a-z]/, "Şifre en az bir küçük harf içermelidir.")
+  .regex(/[A-Z]/, "Şifre en az bir büyük harf içermelidir.")
+  .regex(/[^A-Za-z0-9]/, "Şifre en az bir özel karakter içermelidir.");
 export const userStatusSchema = z.enum(["invited", "pending", "active", "disabled", "frozen", "deleted", "suspended", "banned"]);
 export const eventParticipantStatusSchema = z.enum([
   "invited",
@@ -180,6 +187,7 @@ export const adminUserSchema = z.object({
   name: z.string(),
   role: userRoleSchema,
   accountType: accountTypeSchema.optional(),
+  emailVerified: z.boolean().optional(),
   status: userStatusSchema.optional()
 });
 

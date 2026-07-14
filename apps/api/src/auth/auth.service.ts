@@ -56,6 +56,7 @@ export class AuthService {
           name: input.name.trim(),
           accountType: input.accountType ?? existing.accountType,
           passwordHash: await hash(input.password, 10),
+          emailVerified: false,
           status: "pending"
         }
       });
@@ -107,7 +108,7 @@ export class AuthService {
     const token = await this.consumeEmailToken(input.token, "verify_email");
     const user = await this.prisma.user.update({
       where: { id: token.userId },
-      data: { status: "active" }
+      data: { status: "active", emailVerified: true }
     });
 
     await this.mailService.sendAccountActivatedEmail({ to: user.email, name: user.name });
@@ -117,7 +118,7 @@ export class AuthService {
   async requestPasswordReset(input: EmailDto) {
     const user = await this.prisma.user.findUnique({ where: { email: input.email.toLowerCase().trim() } });
 
-    if (!user || user.status === "disabled") {
+    if (!user || ["disabled", "suspended", "banned", "deleted"].includes(user.status)) {
       return { ok: true };
     }
 
@@ -155,8 +156,7 @@ export class AuthService {
     const user = await this.prisma.user.update({
       where: { id: token.userId },
       data: {
-        passwordHash: await hash(input.password, 10),
-        status: "active"
+        passwordHash: await hash(input.password, 10)
       }
     });
 
@@ -226,6 +226,7 @@ export class AuthService {
         name: user.name,
         role: user.role,
         accountType: user.accountType as "individual" | "corporate",
+        emailVerified: user.emailVerified,
         status: user.status
       }
     };

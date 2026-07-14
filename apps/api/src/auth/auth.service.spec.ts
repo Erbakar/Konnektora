@@ -11,7 +11,9 @@ describe("AuthService", () => {
         create: jest.fn()
       },
       emailToken: {
-        create: jest.fn().mockResolvedValue({})
+        create: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn(),
+        update: jest.fn()
       }
     };
     const jwtService = {
@@ -39,6 +41,7 @@ describe("AuthService", () => {
       passwordHash: "temporary-hash",
       role: "user",
       accountType: "individual",
+      emailVerified: false,
       status: "invited"
     };
     const pendingUser = {
@@ -54,7 +57,7 @@ describe("AuthService", () => {
     const result = await service.register({
       email: "INVITEE@example.com",
       name: "Active Invitee",
-      password: "StrongerPass123"
+      password: "StrongerPass123!"
     });
 
     expect(prisma.user.update).toHaveBeenCalledWith({
@@ -72,6 +75,7 @@ describe("AuthService", () => {
         name: pendingUser.name,
         role: pendingUser.role,
         accountType: pendingUser.accountType,
+        emailVerified: pendingUser.emailVerified,
         status: pendingUser.status
       }
     });
@@ -98,7 +102,7 @@ describe("AuthService", () => {
       service.register({
         email: "active@example.com",
         name: "Active User",
-        password: "StrongerPass123"
+        password: "StrongerPass123!"
       })
     ).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.user.update).not.toHaveBeenCalled();
@@ -113,7 +117,8 @@ describe("AuthService", () => {
       passwordHash: "hash",
       role: "user",
       status: "pending",
-      accountType: "corporate"
+      accountType: "corporate",
+      emailVerified: false
     };
 
     prisma.user.findUnique.mockResolvedValue(null);
@@ -122,12 +127,43 @@ describe("AuthService", () => {
     await service.register({
       email: corporateUser.email,
       name: corporateUser.name,
-      password: "StrongerPass123",
+      password: "StrongerPass123!",
       accountType: "corporate"
     });
 
     expect(prisma.user.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ accountType: "corporate" })
+    });
+  });
+
+  it("marks the email verified when a verification token is consumed", async () => {
+    const { service, prisma } = createService();
+    const user = {
+      id: "user-4",
+      email: "verified@example.com",
+      name: "Verified User",
+      passwordHash: "hash",
+      role: "user",
+      status: "active",
+      accountType: "individual",
+      emailVerified: true
+    };
+    prisma.emailToken.findUnique.mockResolvedValue({
+      id: "token-1",
+      userId: user.id,
+      type: "verify_email",
+      tokenHash: "hash",
+      expiresAt: new Date(Date.now() + 60_000),
+      consumedAt: null
+    });
+    prisma.emailToken.update.mockResolvedValue({ userId: user.id });
+    prisma.user.update.mockResolvedValue(user);
+
+    await service.confirmEmail({ token: "raw-token" });
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: user.id },
+      data: { status: "active", emailVerified: true }
     });
   });
 });

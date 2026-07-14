@@ -2316,7 +2316,8 @@ function registerMockUser(input: { name: string; email: string; password: string
       name: input.name.trim(),
       password: input.password,
       accountType: input.accountType ?? existing.accountType ?? "individual",
-      status: "active"
+      emailVerified: false,
+      status: "pending"
     };
 
     writeStorage(MOCK_USERS_KEY, [activatedUser, ...users.filter((user) => user.id !== existing.id)]);
@@ -2329,7 +2330,8 @@ function registerMockUser(input: { name: string; email: string; password: string
     email,
     password: input.password,
     accountType: input.accountType ?? "individual",
-    status: "active"
+    emailVerified: false,
+    status: "pending"
   };
 
   writeStorage(MOCK_USERS_KEY, [user, ...users]);
@@ -2365,7 +2367,11 @@ function consumeMockEmailToken(token: string, type: "verify_email" | "password_r
     throw new Error("Mock user not found");
   }
 
-  const user: MockUser = { ...existing, status: "active" };
+  const user: MockUser = {
+    ...existing,
+    status: type === "password_reset" ? existing.status : "active",
+    emailVerified: type === "verify_email" ? true : existing.emailVerified
+  };
   writeStorage(MOCK_USERS_KEY, [user, ...users.filter((item) => item.id !== user.id)]);
   writeStorage(MOCK_EMAIL_TOKENS_KEY, tokens.filter((item) => item.token !== token));
   return createMockLoginResponse(user);
@@ -2409,7 +2415,7 @@ function loginMockUser(input: { email: string; password: string }): LoginRespons
   return createMockLoginResponse(user);
 }
 
-function createMockLoginResponse(user: { id: string; name: string; email: string; accountType?: string }): LoginResponse {
+function createMockLoginResponse(user: { id: string; name: string; email: string; accountType?: string; emailVerified?: boolean; status?: AdminManagedUser["status"] }): LoginResponse {
   return {
     accessToken: `mock-user-token-${user.id}`,
     user: {
@@ -2418,7 +2424,8 @@ function createMockLoginResponse(user: { id: string; name: string; email: string
       name: user.name,
       role: "user",
       accountType: user.accountType === "corporate" ? "corporate" : "individual",
-      status: "active"
+      emailVerified: "emailVerified" in user ? Boolean(user.emailVerified) : false,
+      status: user.status ?? "active"
     }
   };
 }

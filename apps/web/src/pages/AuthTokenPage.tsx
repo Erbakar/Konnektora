@@ -58,7 +58,7 @@ export function ResetPasswordPage() {
       <form className="admin-form compact-form" onSubmit={handleSubmit}>
         <label>
           Yeni şifre
-          <input name="password" required minLength={8} type="password" />
+          <input maxLength={128} minLength={8} name="password" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" required title="En az 8 karakter, bir büyük harf, bir küçük harf ve bir özel karakter kullanın." type="password" />
         </label>
         <button className="primary-action" disabled={mutation.isPending || !token} type="submit">
           Şifreyi kaydet
@@ -98,7 +98,7 @@ export function AcceptInvitePage() {
         </label>
         <label>
           Şifre
-          <input name="password" required minLength={8} type="password" />
+          <input maxLength={128} minLength={8} name="password" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" required title="En az 8 karakter, bir büyük harf, bir küçük harf ve bir özel karakter kullanın." type="password" />
         </label>
         <button className="primary-action" disabled={mutation.isPending || !token} type="submit">
           Daveti kabul et
