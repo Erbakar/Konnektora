@@ -1,4 +1,5 @@
-import { IsArray, IsBoolean, IsDateString, IsIn, IsOptional, IsString, IsUrl, IsUUID, Matches, MaxLength, MinLength } from "class-validator";
+import { Type } from "class-transformer";
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsOptional, IsString, IsUrl, IsUUID, Matches, MaxLength, MinLength, ValidateNested } from "class-validator";
 
 export class UpdateProfileDto {
   @IsString()
@@ -90,6 +91,22 @@ export class UpdatePrivacySettingsDto {
 
   @IsIn(["everybody", "following", "network"])
   placeInviteAudience!: "everybody" | "following" | "network";
+}
+
+export class NotificationPreferenceDto {
+  @IsIn(["tag_request", "private_message", "mention", "comment", "password_changed", "email_changed", "phone_changed", "login", "admin_message", "event_invite", "event_manager", "place_invite", "place_manager"])
+  topic!: "tag_request" | "private_message" | "mention" | "comment" | "password_changed" | "email_changed" | "phone_changed" | "login" | "admin_message" | "event_invite" | "event_manager" | "place_invite" | "place_manager";
+
+  @IsIn(["none", "both", "email", "push"])
+  channel!: "none" | "both" | "email" | "push";
+}
+
+export class UpdateNotificationPreferencesDto {
+  @IsArray()
+  @ArrayMaxSize(13)
+  @ValidateNested({ each: true })
+  @Type(() => NotificationPreferenceDto)
+  preferences!: NotificationPreferenceDto[];
 }
 
 export class UpdateProfileInterestsDto {

@@ -1,6 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { UpdatePrivacySettingsDto, UpdateProfileDto } from "./profile.dto";
+import { NotificationPreferenceDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto } from "./profile.dto";
+
+const notificationTopics: NotificationPreferenceDto["topic"][] = [
+  "tag_request", "private_message", "mention", "comment", "password_changed", "email_changed", "phone_changed",
+  "login", "admin_message", "event_invite", "event_manager", "place_invite", "place_manager"
+];
+const emailOnlyTopics = new Set<NotificationPreferenceDto["topic"]>(["password_changed", "email_changed", "phone_changed", "login"]);
 
 const profileSelect = {
   id: true,
@@ -102,6 +108,32 @@ export class ProfileService {
       create: { userId, ...input },
       update: input
     });
+  }
+
+  async getNotificationPreferences(userId: string) {
+    const stored = await this.prisma.notificationPreference.findMany({ where: { userId } });
+    const channels = new Map(stored.map((item) => [item.topic, item.channel]));
+    return notificationTopics.map((topic) => ({
+      topic,
+      channel: channels.get(topic) ?? (emailOnlyTopics.has(topic) ? "email" : "both")
+    }));
+  }
+
+  async updateNotificationPreferences(userId: string, input: UpdateNotificationPreferencesDto) {
+    const unique = new Map(input.preferences.map((preference) => [preference.topic, preference]));
+    if (unique.size !== input.preferences.length) {
+      throw new BadRequestException("Aynı bildirim konusu birden fazla kez gönderilemez.");
+    }
+    await this.prisma.$transaction(
+      [...unique.values()].map((preference) =>
+        this.prisma.notificationPreference.upsert({
+          where: { userId_topic: { userId, topic: preference.topic } },
+          create: { userId, ...preference },
+          update: { channel: preference.channel }
+        })
+      )
+    );
+    return this.getNotificationPreferences(userId);
   }
 
   async getInterests(userId: string) {

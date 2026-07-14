@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ClipboardCheck, LogOut, Plus, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import type { AccountType, Event, EventParticipant, PrivacyAudience, Tag } from "@konnektora/shared";
+import type { AccountType, Event, EventParticipant, NotificationPreference, PrivacyAudience, Tag } from "@konnektora/shared";
 import {
   type AdminEventInput,
   type RegistrationInput,
@@ -15,6 +15,7 @@ import {
   deactivateAccount,
   getProfileInterests,
   getMyProfile,
+  getNotificationPreferences,
   getPrivacySettings,
   getUserSession,
   getUserToken,
@@ -35,6 +36,7 @@ import {
   updateMyEvent,
   updateProfileInterests,
   updateMyProfile,
+  updateNotificationPreferences,
   updatePrivacySettings,
   userLogin
 } from "../lib/api";
@@ -66,6 +68,11 @@ export function AccountPage() {
   const privacyQuery = useQuery({
     queryKey: ["privacy-settings", user?.id],
     queryFn: getPrivacySettings,
+    enabled: Boolean(user)
+  });
+  const notificationPreferencesQuery = useQuery({
+    queryKey: ["notification-preferences", user?.id],
+    queryFn: getNotificationPreferences,
     enabled: Boolean(user)
   });
   const notificationsQuery = useQuery({
@@ -198,6 +205,14 @@ export function AccountPage() {
       setNotice({ tone: "success", message: "Gizlilik ayarları kaydedildi." });
     },
     onError: () => setNotice({ tone: "error", message: "Gizlilik ayarları kaydedilemedi." })
+  });
+  const notificationPreferencesMutation = useMutation({
+    mutationFn: updateNotificationPreferences,
+    onSuccess: (preferences) => {
+      queryClient.setQueryData(["notification-preferences", user?.id], preferences);
+      setNotice({ tone: "success", message: "Bildirim tercihleri kaydedildi." });
+    },
+    onError: () => setNotice({ tone: "error", message: "Bildirim tercihleri kaydedilemedi." })
   });
   const readNotificationMutation = useMutation({
     mutationFn: markMyNotificationRead,
@@ -344,6 +359,16 @@ export function AccountPage() {
       placeAudience: audience("placeAudience"),
       placeInviteAudience: audience("placeInviteAudience")
     });
+  }
+
+  function handleNotificationPreferencesSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const preferences = (notificationPreferencesQuery.data ?? []).map((preference) => ({
+      topic: preference.topic,
+      channel: String(form.get(preference.topic)) as NotificationPreference["channel"]
+    }));
+    notificationPreferencesMutation.mutate(preferences);
   }
 
   return (
@@ -614,6 +639,27 @@ export function AccountPage() {
                 </button>
               </form>
             ) : null}
+            {notificationPreferencesQuery.data ? (
+              <form className="admin-form" onSubmit={handleNotificationPreferencesSubmit}>
+                <h2>Bildirim tercihleri</h2>
+                <div className="form-grid">
+                  {notificationPreferencesQuery.data.map((preference) => (
+                    <label key={preference.topic}>
+                      {notificationTopicLabels[preference.topic]}
+                      <select defaultValue={preference.channel} name={preference.topic}>
+                        <option value="none">Kapalı</option>
+                        <option value="both">E-posta ve push</option>
+                        <option value="email">Yalnız e-posta</option>
+                        <option value="push">Yalnız push</option>
+                      </select>
+                    </label>
+                  ))}
+                </div>
+                <button className="secondary-action" disabled={notificationPreferencesMutation.isPending} type="submit">
+                  {notificationPreferencesMutation.isPending ? "Kaydediliyor" : "Bildirim tercihlerini kaydet"}
+                </button>
+              </form>
+            ) : null}
             <form className="admin-form" onSubmit={handleChangePassword}>
               <h2>Şifre değiştir</h2>
               <label>
@@ -781,6 +827,22 @@ export function AccountPage() {
     </section>
   );
 }
+
+const notificationTopicLabels: Record<NotificationPreference["topic"], string> = {
+  tag_request: "Profilime tag ekleme talebi",
+  private_message: "Yeni özel mesaj",
+  mention: "Gönderi veya yorumda bahsedilme",
+  comment: "İçeriğime yeni yorum",
+  password_changed: "Şifre değişikliği",
+  email_changed: "E-posta değişikliği",
+  phone_changed: "Telefon değişikliği",
+  login: "Yeni giriş",
+  admin_message: "Konnektora yönetim mesajı",
+  event_invite: "Etkinlik daveti",
+  event_manager: "Etkinlik yöneticisi atanma",
+  place_invite: "Mekân daveti",
+  place_manager: "Mekân yöneticisi atanma"
+};
 
 function PrivacyAudienceField({ defaultValue, label, name }: { defaultValue: PrivacyAudience; label: string; name: string }) {
   return (

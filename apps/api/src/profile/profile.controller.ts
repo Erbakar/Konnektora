@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Put, UseGuards } from "@nestjs/com
 import { User } from "@prisma/client";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { UpdatePrivacySettingsDto, UpdateProfileDto, UpdateProfileInterestsDto } from "./profile.dto";
+import { UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto, UpdateProfileInterestsDto } from "./profile.dto";
 import { ProfileService } from "./profile.service";
 
 @Controller("profile")
@@ -28,6 +28,16 @@ export class ProfileController {
   @Put("privacy")
   updatePrivacySettings(@CurrentUser() user: User, @Body() body: UpdatePrivacySettingsDto) {
     return this.profileService.updatePrivacySettings(user.id, body);
+  }
+
+  @Get("notification-preferences")
+  getNotificationPreferences(@CurrentUser() user: User) {
+    return this.profileService.getNotificationPreferences(user.id);
+  }
+
+  @Put("notification-preferences")
+  updateNotificationPreferences(@CurrentUser() user: User, @Body() body: UpdateNotificationPreferencesDto) {
+    return this.profileService.updateNotificationPreferences(user.id, body);
   }
 
   @Get("interests")

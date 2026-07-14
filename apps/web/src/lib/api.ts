@@ -21,6 +21,7 @@ import {
   loginResponseSchema,
   moderationDecisionSchema,
   notificationSchema,
+  notificationPreferencesSchema,
   phoneVerificationResponseSchema,
   phoneSchema,
   profileSchema,
@@ -55,6 +56,7 @@ import {
   type LoginResponse,
   type ModerationDecision,
   type Notification,
+  type NotificationPreference,
   type PolicyType,
   type Profile,
   type PrivacySettings,
@@ -111,6 +113,7 @@ const MOCK_PRIVATE_MESSAGES_KEY = "konnektora_mock_private_messages";
 const MOCK_NOTIFICATIONS_KEY = "konnektora_mock_notifications";
 const MOCK_PHONE_VERIFICATIONS_KEY = "konnektora_mock_phone_verifications";
 const MOCK_PRIVACY_SETTINGS_KEY = "konnektora_mock_privacy_settings";
+const MOCK_NOTIFICATION_PREFERENCES_KEY = "konnektora_mock_notification_preferences";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -447,6 +450,14 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname === "/profile/privacy" && method === "PUT") {
     return schema.parse(updateMockPrivacySettings(parseBody<Omit<PrivacySettings, "userId" | "createdAt" | "updatedAt">>(options)));
+  }
+
+  if (pathname === "/profile/notification-preferences" && method === "GET") {
+    return schema.parse(getMockNotificationPreferences());
+  }
+
+  if (pathname === "/profile/notification-preferences" && method === "PUT") {
+    return schema.parse(updateMockNotificationPreferences(parseBody<{ preferences: NotificationPreference[] }>(options).preferences));
   }
 
   if (pathname === "/profile/interests" && method === "GET") {
@@ -2616,6 +2627,30 @@ function updateMockPrivacySettings(input: Omit<PrivacySettings, "userId" | "crea
   return updated;
 }
 
+const mockNotificationTopics: NotificationPreference["topic"][] = [
+  "tag_request", "private_message", "mention", "comment", "password_changed", "email_changed", "phone_changed",
+  "login", "admin_message", "event_invite", "event_manager", "place_invite", "place_manager"
+];
+
+function getMockNotificationPreferences(): NotificationPreference[] {
+  const session = getUserSession();
+  if (!session) throw new Error("User session required");
+  const stored = readStorage<Record<string, NotificationPreference[]>>(MOCK_NOTIFICATION_PREFERENCES_KEY, {});
+  const selected = new Map((stored[session.id] ?? []).map((item) => [item.topic, item.channel]));
+  return mockNotificationTopics.map((topic) => ({
+    topic,
+    channel: selected.get(topic) ?? (["password_changed", "email_changed", "phone_changed", "login"].includes(topic) ? "email" : "both")
+  }));
+}
+
+function updateMockNotificationPreferences(preferences: NotificationPreference[]) {
+  const session = getUserSession();
+  if (!session) throw new Error("User session required");
+  const stored = readStorage<Record<string, NotificationPreference[]>>(MOCK_NOTIFICATION_PREFERENCES_KEY, {});
+  writeStorage(MOCK_NOTIFICATION_PREFERENCES_KEY, { ...stored, [session.id]: preferences });
+  return getMockNotificationPreferences();
+}
+
 function getMockDashboard(): AdminDashboard {
   const now = Date.now();
   const events = getStoredEvents();
@@ -2997,6 +3032,18 @@ export function getPrivacySettings(): Promise<PrivacySettings> {
 
 export function updatePrivacySettings(input: Omit<PrivacySettings, "userId" | "createdAt" | "updatedAt">): Promise<PrivacySettings> {
   return requestJson("/profile/privacy", privacySettingsSchema, { auth: "user", method: "PUT", body: JSON.stringify(input) });
+}
+
+export function getNotificationPreferences(): Promise<NotificationPreference[]> {
+  return requestJson("/profile/notification-preferences", notificationPreferencesSchema, { auth: "user" });
+}
+
+export function updateNotificationPreferences(preferences: NotificationPreference[]): Promise<NotificationPreference[]> {
+  return requestJson("/profile/notification-preferences", notificationPreferencesSchema, {
+    auth: "user",
+    method: "PUT",
+    body: JSON.stringify({ preferences })
+  });
 }
 
 export function updateProfileInterests(tagIds: string[]): Promise<Tag[]> {

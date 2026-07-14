@@ -108,6 +108,29 @@ enum PrivacyAudience {
   network
 }
 
+enum NotificationTopic {
+  tag_request
+  private_message
+  mention
+  comment
+  password_changed
+  email_changed
+  phone_changed
+  login
+  admin_message
+  event_invite
+  event_manager
+  place_invite
+  place_manager
+}
+
+enum DeliveryChannel {
+  none
+  both
+  email
+  push
+}
+
 model User {
   id                   String     @id @default(uuid())
   email                String     @unique
@@ -162,6 +185,7 @@ model User {
   emailTokens               EmailToken[]
   phoneVerifications        PhoneVerification[]
   privacySettings           PrivacySettings?
+  notificationPreferences  NotificationPreference[]
   userMessages              UserMessage[]        @relation("UserMessageUser")
   readUserMessages          UserMessage[]        @relation("UserMessageReadBy")
   createdPlaces             Place[]              @relation("PlaceCreatedBy")
@@ -177,6 +201,19 @@ model User {
   @@index([country, city])
   @@index([lastOnlineAt])
   @@map("users")
+}
+
+model NotificationPreference {
+  userId    String            @map("user_id")
+  topic     NotificationTopic
+  channel   DeliveryChannel
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, topic])
+  @@map("notification_preferences")
 }
 
 model PrivacySettings {

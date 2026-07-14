@@ -36,7 +36,12 @@ describe("ProfileService", () => {
       privacySettings: {
         findUnique: jest.fn(),
         upsert: jest.fn()
-      }
+      },
+      notificationPreference: {
+        findMany: jest.fn(),
+        upsert: jest.fn().mockResolvedValue({})
+      },
+      $transaction: jest.fn().mockImplementation((operations: unknown[]) => Promise.all(operations))
     };
 
     return { service: new ProfileService(prisma as never), prisma };
@@ -134,5 +139,28 @@ describe("ProfileService", () => {
       create: { userId: "user-1", ...input },
       update: input
     });
+  });
+
+  it("returns notification defaults merged with stored choices", async () => {
+    const { service, prisma } = createService();
+    prisma.notificationPreference.findMany.mockResolvedValue([{ topic: "private_message", channel: "none" }]);
+
+    const preferences = await service.getNotificationPreferences("user-1");
+    expect(preferences).toContainEqual({ topic: "private_message", channel: "none" });
+    expect(preferences).toContainEqual({ topic: "password_changed", channel: "email" });
+    expect(preferences).toContainEqual({ topic: "event_invite", channel: "both" });
+    expect(preferences).toHaveLength(13);
+  });
+
+  it("rejects duplicate notification topics", async () => {
+    const { service } = createService();
+    await expect(
+      service.updateNotificationPreferences("user-1", {
+        preferences: [
+          { topic: "mention", channel: "push" },
+          { topic: "mention", channel: "email" }
+        ]
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

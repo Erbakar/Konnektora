@@ -43,6 +43,27 @@ export const privacySettingsSchema = z.object({
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional()
 });
+export const notificationTopicSchema = z.enum([
+  "tag_request",
+  "private_message",
+  "mention",
+  "comment",
+  "password_changed",
+  "email_changed",
+  "phone_changed",
+  "login",
+  "admin_message",
+  "event_invite",
+  "event_manager",
+  "place_invite",
+  "place_manager"
+]);
+export const deliveryChannelSchema = z.enum(["none", "both", "email", "push"]);
+export const notificationPreferenceSchema = z.object({
+  topic: notificationTopicSchema,
+  channel: deliveryChannelSchema
+});
+export const notificationPreferencesSchema = z.array(notificationPreferenceSchema);
 export const userStatusSchema = z.enum(["invited", "pending", "active", "disabled", "frozen", "deleted", "suspended", "banned"]);
 export const eventParticipantStatusSchema = z.enum([
   "invited",
@@ -598,6 +619,9 @@ export type CompanyType = z.infer<typeof companyTypeSchema>;
 export type BusinessCategory = z.infer<typeof businessCategorySchema>;
 export type PrivacyAudience = z.infer<typeof privacyAudienceSchema>;
 export type PrivacySettings = z.infer<typeof privacySettingsSchema>;
+export type NotificationTopic = z.infer<typeof notificationTopicSchema>;
+export type DeliveryChannel = z.infer<typeof deliveryChannelSchema>;
+export type NotificationPreference = z.infer<typeof notificationPreferenceSchema>;
 export type UserStatus = z.infer<typeof userStatusSchema>;
 export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema>;
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;
