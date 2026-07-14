@@ -15,7 +15,11 @@ describe("AuthService", () => {
         create: jest.fn().mockResolvedValue({}),
         findUnique: jest.fn(),
         update: jest.fn()
-      }
+      },
+      event: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      place: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      userMessage: { create: jest.fn().mockResolvedValue({}) },
+      $transaction: jest.fn().mockImplementation((operations: unknown[]) => Promise.all(operations))
     };
     const jwtService = {
       signAsync: jest.fn().mockResolvedValue("signed-token")
@@ -190,5 +194,47 @@ describe("AuthService", () => {
       where: { id: "user-5" },
       data: { passwordHash: expect.any(String) }
     });
+  });
+
+  it("freezes the account and archives content without another manager", async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue({
+      id: "user-6",
+      name: "Leaving User",
+      email: "leave@example.com",
+      phone: null,
+      passwordHash: await hash("CurrentPass!1", 4)
+    });
+    prisma.user.update.mockResolvedValue({});
+
+    await expect(
+      service.deactivate("user-6", { currentPassword: "CurrentPass!1", reason: "I need a break." })
+    ).resolves.toEqual({ ok: true });
+    expect(prisma.event.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ createdById: "user-6", participants: expect.any(Object) }) })
+    );
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: "user-6" }, data: { status: "frozen" } });
+    expect(prisma.userMessage.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ type: "account_freeze", body: "I need a break." })
+    });
+  });
+
+  it("reactivates only a frozen account with valid credentials", async () => {
+    const { service, prisma } = createService();
+    const frozenUser = {
+      id: "user-7",
+      email: "return@example.com",
+      name: "Returning User",
+      passwordHash: await hash("CurrentPass!1", 4),
+      role: "user",
+      status: "frozen",
+      accountType: "individual",
+      emailVerified: true
+    };
+    prisma.user.findUnique.mockResolvedValue(frozenUser);
+    prisma.user.update.mockResolvedValue({ ...frozenUser, status: "active" });
+
+    const result = await service.reactivate({ email: frozenUser.email, password: "CurrentPass!1" });
+    expect(result.user.status).toBe("active");
   });
 });

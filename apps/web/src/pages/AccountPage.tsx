@@ -11,6 +11,7 @@ import {
   clearUserSession,
   createUserEvent,
   createUserTag,
+  deactivateAccount,
   getProfileInterests,
   getMyProfile,
   getUserSession,
@@ -23,6 +24,7 @@ import {
   listTags,
   markMyNotificationRead,
   registerUser,
+  reactivateAccount,
   requestEmailVerification,
   requestPasswordReset,
   setUserSession,
@@ -87,6 +89,15 @@ export function AccountPage() {
     onSuccess: () => setNotice({ tone: "success", message: "Şifre sıfırlama linki email adresine gönderildi." }),
     onError: () => setNotice({ tone: "error", message: "Şifre sıfırlama isteği gönderilemedi." })
   });
+  const reactivateMutation = useMutation({
+    mutationFn: (input: { email: string; password: string }) => reactivateAccount(input.email, input.password),
+    onSuccess: (response) => {
+      setUserSession(response);
+      setUser(response.user);
+      setNotice({ tone: "success", message: "Hesabınız yeniden aktifleştirildi." });
+    },
+    onError: () => setNotice({ tone: "error", message: "Dondurulmuş hesap bulunamadı veya şifre hatalı." })
+  });
   const resendVerificationMutation = useMutation({
     mutationFn: requestEmailVerification,
     onSuccess: () => setNotice({ tone: "success", message: "Doğrulama emaili tekrar gönderildi." }),
@@ -140,6 +151,15 @@ export function AccountPage() {
     mutationFn: changePassword,
     onSuccess: () => setNotice({ tone: "success", message: "Şifreniz değiştirildi." }),
     onError: () => setNotice({ tone: "error", message: "Şifre değiştirilemedi. Mevcut şifrenizi kontrol edin." })
+  });
+  const deactivateMutation = useMutation({
+    mutationFn: deactivateAccount,
+    onSuccess: () => {
+      clearUserSession();
+      setUser(null);
+      setNotice({ tone: "success", message: "Hesabınız donduruldu. Dilediğiniz zaman yeniden aktifleştirebilirsiniz." });
+    },
+    onError: () => setNotice({ tone: "error", message: "Hesap dondurulamadı. Mevcut şifrenizi kontrol edin." })
   });
   const readNotificationMutation = useMutation({
     mutationFn: markMyNotificationRead,
@@ -252,6 +272,15 @@ export function AccountPage() {
       return;
     }
     changePasswordMutation.mutate({ currentPassword, newPassword });
+  }
+
+  function handleDeactivate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    deactivateMutation.mutate({
+      currentPassword: String(form.get("currentPassword") || ""),
+      reason: String(form.get("reason") || "").trim()
+    });
   }
 
   return (
@@ -371,19 +400,17 @@ export function AccountPage() {
               {mode === "register" ? "Üye ol" : "Giriş yap"}
             </button>
             {mode === "login" ? (
-              <button
-                className="ghost-action"
-                disabled={forgotPasswordMutation.isPending}
-                onClick={() => {
+              <>
+                <button className="ghost-action" disabled={forgotPasswordMutation.isPending} onClick={() => {
                   const emailInput = document.querySelector<HTMLInputElement>('input[name="email"]');
-                  if (emailInput?.value) {
-                    forgotPasswordMutation.mutate(emailInput.value);
-                  }
-                }}
-                type="button"
-              >
-                Şifremi unuttum
-              </button>
+                  if (emailInput?.value) forgotPasswordMutation.mutate(emailInput.value);
+                }} type="button">Şifremi unuttum</button>
+                <button className="ghost-action" disabled={reactivateMutation.isPending} onClick={() => {
+                  const email = document.querySelector<HTMLInputElement>('input[name="email"]')?.value;
+                  const password = document.querySelector<HTMLInputElement>('input[name="password"]')?.value;
+                  if (email && password) reactivateMutation.mutate({ email, password });
+                }} type="button">Dondurulmuş hesabı aktifleştir</button>
+              </>
             ) : null}
           </form>
         </div>
@@ -502,6 +529,19 @@ export function AccountPage() {
               <button className="secondary-action" disabled={changePasswordMutation.isPending} type="submit">
                 {changePasswordMutation.isPending ? "Değiştiriliyor" : "Şifreyi değiştir"}
               </button>
+            </form>
+            <form className="admin-form" onSubmit={handleDeactivate}>
+              <h2>Hesabı dondur</h2>
+              <p className="form-help">Profiliniz ve tek yöneticisi olduğunuz içerikler yayından kaldırılır. Giriş bilgilerinizle hesabı yeniden açabilirsiniz.</p>
+              <label>
+                Mevcut şifre
+                <input autoComplete="current-password" minLength={8} name="currentPassword" required type="password" />
+              </label>
+              <label>
+                Ayrılma nedeni
+                <textarea maxLength={1000} minLength={3} name="reason" required rows={3} />
+              </label>
+              <button className="secondary-action" disabled={deactivateMutation.isPending} type="submit">Hesabı dondur</button>
             </form>
             <section className="admin-form">
               <div className="section-header compact">

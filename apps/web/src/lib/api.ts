@@ -405,6 +405,14 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(changeMockPassword(parseBody<{ currentPassword: string; newPassword: string }>(options)));
   }
 
+  if (pathname === "/auth/deactivate" && method === "POST") {
+    return schema.parse(deactivateMockAccount(parseBody<{ currentPassword: string; reason: string }>(options)));
+  }
+
+  if (pathname === "/auth/reactivate" && method === "POST") {
+    return schema.parse(reactivateMockAccount(parseBody<{ email: string; password: string }>(options)));
+  }
+
   if (pathname === "/auth/invite/accept" && method === "POST") {
     const input = parseBody<{ token: string; name?: string; password: string }>(options);
     return schema.parse(acceptMockInvite(input.token, input.password, input.name));
@@ -2423,6 +2431,28 @@ function changeMockPassword(input: { currentPassword: string; newPassword: strin
   return { ok: true };
 }
 
+function deactivateMockAccount(input: { currentPassword: string; reason: string }) {
+  const session = getUserSession();
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  const user = users.find((item) => item.id === session?.id);
+  if (!user || user.password !== input.currentPassword || input.reason.trim().length < 3) {
+    throw new Error("Account cannot be deactivated");
+  }
+  writeStorage(MOCK_USERS_KEY, [{ ...user, status: "frozen" }, ...users.filter((item) => item.id !== user.id)]);
+  return { ok: true };
+}
+
+function reactivateMockAccount(input: { email: string; password: string }): LoginResponse {
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  const user = users.find((item) => item.email === input.email.toLowerCase().trim() && item.password === input.password && item.status === "frozen");
+  if (!user) {
+    throw new Error("Frozen account not found");
+  }
+  const activeUser: MockUser = { ...user, status: "active" };
+  writeStorage(MOCK_USERS_KEY, [activeUser, ...users.filter((item) => item.id !== user.id)]);
+  return createMockLoginResponse(activeUser);
+}
+
 function acceptMockInvite(token: string, password: string, name?: string): LoginResponse {
   const response = consumeMockEmailToken(token, "invite_accept");
   const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
@@ -2950,6 +2980,14 @@ export function changePassword(input: { currentPassword: string; newPassword: st
     method: "POST",
     body: JSON.stringify(input)
   });
+}
+
+export function deactivateAccount(input: { currentPassword: string; reason: string }): Promise<{ ok: boolean }> {
+  return requestJson("/auth/deactivate", z.object({ ok: z.boolean() }), { auth: "user", method: "POST", body: JSON.stringify(input) });
+}
+
+export function reactivateAccount(email: string, password: string): Promise<LoginResponse> {
+  return requestJson("/auth/reactivate", loginResponseSchema, { method: "POST", body: JSON.stringify({ email, password }) });
 }
 
 export function acceptInvite(input: { token: string; name?: string; password: string }): Promise<LoginResponse> {

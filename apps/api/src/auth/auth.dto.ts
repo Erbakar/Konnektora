@@ -87,3 +87,15 @@ export class ChangePasswordDto {
   @Matches(strongPassword, { message: "Şifre en az bir büyük harf, bir küçük harf ve bir özel karakter içermelidir." })
   newPassword!: string;
 }
+
+export class DeactivateAccountDto {
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  currentPassword!: string;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(1000)
+  reason!: string;
+}
