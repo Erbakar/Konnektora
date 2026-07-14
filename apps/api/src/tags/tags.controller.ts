@@ -5,7 +5,7 @@ import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 import { RequirePermissions } from "../auth/permissions";
-import { CreateTagDto, MergeTagDto } from "./tags.dto";
+import { CreateTagCommentDto, CreateTagDto, MergeTagDto } from "./tags.dto";
 import { TagsService } from "./tags.service";
 
 @Controller()
@@ -21,6 +21,24 @@ export class TagsController {
   @Get("tag-categories")
   listTagCategories() {
     return this.tagsService.listTagCategories();
+  }
+
+  @Get("tags/:tagId/comments")
+  @UseGuards(OptionalJwtAuthGuard)
+  listTagComments(@Param("tagId") tagId: string, @CurrentUser() user?: User) {
+    return this.tagsService.listTagComments(tagId, user?.id);
+  }
+
+  @Post("tags/:tagId/comments")
+  @UseGuards(JwtAuthGuard)
+  createTagComment(@Param("tagId") tagId: string, @Body() body: CreateTagCommentDto, @CurrentUser() user: User) {
+    return this.tagsService.createTagComment(tagId, body.body, user.id);
+  }
+
+  @Delete("tags/:tagId/comments/:commentId")
+  @UseGuards(JwtAuthGuard)
+  deleteTagComment(@Param("tagId") tagId: string, @Param("commentId") commentId: string, @CurrentUser() user: User) {
+    return this.tagsService.deleteTagComment(tagId, commentId, user);
   }
 
   @Post("tags")

@@ -34,6 +34,8 @@ import {
   reportRuleSchema,
   tagSchema,
   tagAffinitiesSchema,
+  tagCommentSchema,
+  tagCommentsSchema,
   userMessageListSchema,
   userMessageSchema,
   userBlocksSchema,
@@ -73,6 +75,7 @@ import {
   type ReportTargetType,
   type Tag,
   type TagAffinity,
+  type TagComment,
   type TagSentiment,
   type UserMessage,
   type UserMessageList,
@@ -125,6 +128,7 @@ const MOCK_PRIVACY_SETTINGS_KEY = "konnektora_mock_privacy_settings";
 const MOCK_NOTIFICATION_PREFERENCES_KEY = "konnektora_mock_notification_preferences";
 const MOCK_USER_BLOCKS_KEY = "konnektora_mock_user_blocks";
 const MOCK_USER_FOLLOWS_KEY = "konnektora_mock_user_follows";
+const MOCK_TAG_COMMENTS_KEY = "konnektora_mock_tag_comments";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -520,6 +524,20 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname.startsWith("/social/following/") && method === "DELETE") {
     return schema.parse(unfollowMockUser(pathname.slice("/social/following/".length)));
+  }
+
+  if (pathname.startsWith("/tags/") && pathname.endsWith("/comments") && method === "GET") {
+    return schema.parse(listMockTagComments(pathname.slice("/tags/".length, -"/comments".length)));
+  }
+
+  if (pathname.startsWith("/tags/") && pathname.endsWith("/comments") && method === "POST") {
+    const tagId = pathname.slice("/tags/".length, -"/comments".length);
+    return schema.parse(createMockTagComment(tagId, parseBody<{ body: string }>(options).body));
+  }
+
+  if (pathname.startsWith("/tags/") && pathname.includes("/comments/") && method === "DELETE") {
+    const [tagId, commentId] = pathname.slice("/tags/".length).split("/comments/");
+    return schema.parse(deleteMockTagComment(tagId ?? "", commentId ?? ""));
   }
 
   if (pathname === "/profile/interests" && method === "GET") {
@@ -2836,6 +2854,42 @@ function unfollowMockUser(targetUserId: string) {
   return { ok: true, following: false };
 }
 
+function listMockTagComments(tagId: string): TagComment[] {
+  const session = getUserSession();
+  const blockedUsers = new Set(listMockBlocks().filter((block) => block.targetType === "user").map((block) => block.targetId));
+  return readStorage<TagComment[]>(MOCK_TAG_COMMENTS_KEY, [])
+    .filter((comment) => comment.tagId === tagId && (!comment.author || !blockedUsers.has(comment.author.id)))
+    .map((comment) => ({ ...comment, canDelete: comment.author?.id === session?.id }));
+}
+
+function createMockTagComment(tagId: string, body: string): TagComment {
+  const session = getUserSession();
+  if (!session || !getStoredTags().some((tag) => tag.id === tagId)) throw new Error("Tag comment cannot be created");
+  const now = new Date().toISOString();
+  const comment: TagComment = {
+    id: createId(),
+    tagId,
+    body: body.trim(),
+    likeCount: 0,
+    createdAt: now,
+    updatedAt: now,
+    canDelete: true,
+    author: { id: session.id, name: session.name, username: null }
+  };
+  const comments = readStorage<TagComment[]>(MOCK_TAG_COMMENTS_KEY, []);
+  writeStorage(MOCK_TAG_COMMENTS_KEY, [comment, ...comments]);
+  return comment;
+}
+
+function deleteMockTagComment(tagId: string, commentId: string) {
+  const session = getUserSession();
+  const comments = readStorage<TagComment[]>(MOCK_TAG_COMMENTS_KEY, []);
+  const comment = comments.find((item) => item.id === commentId && item.tagId === tagId);
+  if (!session || comment?.author?.id !== session.id) throw new Error("Tag comment cannot be deleted");
+  writeStorage(MOCK_TAG_COMMENTS_KEY, comments.filter((item) => item.id !== commentId));
+  return { ok: true };
+}
+
 function getMockDashboard(): AdminDashboard {
   const now = Date.now();
   const events = getStoredEvents();
@@ -3284,6 +3338,18 @@ export function updateProfileAffinities(affinities: Array<{ tagId: string; senti
     method: "PUT",
     body: JSON.stringify({ affinities })
   });
+}
+
+export function listTagComments(tagId: string): Promise<TagComment[]> {
+  return requestJson(`/tags/${tagId}/comments`, tagCommentsSchema, { auth: "user" });
+}
+
+export function createTagComment(tagId: string, body: string): Promise<TagComment> {
+  return requestJson(`/tags/${tagId}/comments`, tagCommentSchema, { auth: "user", method: "POST", body: JSON.stringify({ body }) });
+}
+
+export function deleteTagComment(tagId: string, commentId: string): Promise<{ ok: boolean }> {
+  return requestJson(`/tags/${tagId}/comments/${commentId}`, z.object({ ok: z.boolean() }), { auth: "user", method: "DELETE" });
 }
 
 export function adminLogin(email: string, password: string): Promise<LoginResponse> {

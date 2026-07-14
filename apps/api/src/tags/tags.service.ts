@@ -1,5 +1,5 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, TagStatus } from "@prisma/client";
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma, TagStatus, User } from "@prisma/client";
 import { toSlug } from "../common/slug";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateTagDto } from "./tags.dto";
@@ -16,6 +16,66 @@ export class TagsService {
       where: { status: "active", id: { notIn: blocks.map((block) => block.targetId) } },
       orderBy: [{ usageCount: "desc" }, { name: "asc" }]
     });
+  }
+
+  async listTagComments(tagId: string, userId?: string) {
+    await this.ensureTagVisible(tagId, userId);
+    const blockedUserIds = userId
+      ? (await this.prisma.userBlock.findMany({ where: { userId, targetType: "user" }, select: { targetId: true } })).map((block) => block.targetId)
+      : [];
+    const comments = await this.prisma.contentComment.findMany({
+      where: {
+        targetType: "tag",
+        targetId: tagId,
+        parentId: null,
+        status: "active",
+        authorId: { notIn: blockedUserIds }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: { author: { select: { id: true, name: true, username: true } } }
+    });
+    return comments.map((comment) => ({
+      id: comment.id,
+      tagId,
+      body: comment.body,
+      likeCount: comment.likeCount,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+      canDelete: comment.authorId === userId,
+      author: comment.author
+    }));
+  }
+
+  async createTagComment(tagId: string, body: string, userId: string) {
+    await this.ensureTagVisible(tagId, userId);
+    const comment = await this.prisma.contentComment.create({
+      data: { targetType: "tag", targetId: tagId, authorId: userId, body: body.trim() },
+      include: { author: { select: { id: true, name: true, username: true } } }
+    });
+    return {
+      id: comment.id,
+      tagId,
+      body: comment.body,
+      likeCount: comment.likeCount,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+      canDelete: true,
+      author: comment.author
+    };
+  }
+
+  async deleteTagComment(tagId: string, commentId: string, user: User) {
+    const comment = await this.prisma.contentComment.findFirst({
+      where: { id: commentId, targetType: "tag", targetId: tagId, status: "active" },
+      select: { id: true, authorId: true }
+    });
+    if (!comment) throw new NotFoundException("Yorum bulunamadı.");
+    if (comment.authorId !== user.id && !["admin", "super_admin"].includes(user.role)) {
+      throw new ForbiddenException("Bu yorum kaldırılamaz.");
+    }
+    await this.prisma.contentComment.update({ where: { id: comment.id }, data: { status: "deleted" } });
+    return { ok: true as const };
   }
 
   listAdminTags() {
@@ -117,6 +177,18 @@ export class TagsService {
         updatedBy: { connect: { id: userId } }
       }
     });
+  }
+
+  private async ensureTagVisible(tagId: string, userId?: string) {
+    const tag = await this.prisma.tag.findFirst({ where: { id: tagId, status: "active" }, select: { id: true } });
+    if (!tag) throw new NotFoundException("Tag bulunamadı.");
+    if (userId) {
+      const block = await this.prisma.userBlock.findUnique({
+        where: { userId_targetType_targetId: { userId, targetType: "tag", targetId: tagId } },
+        select: { userId: true }
+      });
+      if (block) throw new NotFoundException("Tag bulunamadı.");
+    }
   }
 
   async updateTag(id: string, input: Partial<CreateTagDto>, userId?: string) {

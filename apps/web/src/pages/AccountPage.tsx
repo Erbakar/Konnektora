@@ -12,7 +12,9 @@ import {
   clearUserSession,
   createUserEvent,
   createUserTag,
+  createTagComment,
   deactivateAccount,
+  deleteTagComment,
   getProfileAffinities,
   getMyProfile,
   getNotificationPreferences,
@@ -29,6 +31,7 @@ import {
   listEventParticipants,
   listMyEvents,
   listTags,
+  listTagComments,
   markMyNotificationRead,
   registerUser,
   reactivateAccount,
@@ -54,6 +57,7 @@ export function AccountPage() {
   const [registrationAccountType, setRegistrationAccountType] = useState<AccountType>("individual");
   const [pendingPhone, setPendingPhone] = useState<string | null>(null);
   const [developmentPhoneCode, setDevelopmentPhoneCode] = useState<string | null>(null);
+  const [commentTagId, setCommentTagId] = useState("");
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const { data: tags = [] } = useQuery({ queryKey: ["tags"], queryFn: listTags });
   const myEventsQuery = useQuery({
@@ -92,6 +96,11 @@ export function AccountPage() {
     queryKey: ["my-notifications", user?.id],
     queryFn: listMyNotifications,
     enabled: Boolean(user)
+  });
+  const tagCommentsQuery = useQuery({
+    queryKey: ["tag-comments", commentTagId],
+    queryFn: () => listTagComments(commentTagId),
+    enabled: Boolean(user && commentTagId)
   });
   const interestTagIds = interestsQuery.data?.map((affinity) => affinity.tag.id) ?? [];
   const interestSentiments = new Map(interestsQuery.data?.map((affinity) => [affinity.tag.id, affinity.sentiment]) ?? []);
@@ -162,6 +171,18 @@ export function AccountPage() {
       setNotice({ tone: "success", message: "İlgi alanların kaydedildi." });
     },
     onError: () => setNotice({ tone: "error", message: "İlgi alanları kaydedilemedi. Lütfen tekrar dene." })
+  });
+  const createTagCommentMutation = useMutation({
+    mutationFn: (body: string) => createTagComment(commentTagId, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tag-comments", commentTagId] });
+      setNotice({ tone: "success", message: "Tag yorumunuz eklendi." });
+    },
+    onError: () => setNotice({ tone: "error", message: "Tag yorumu eklenemedi." })
+  });
+  const deleteTagCommentMutation = useMutation({
+    mutationFn: (commentId: string) => deleteTagComment(commentTagId, commentId),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["tag-comments", commentTagId] })
   });
   const profileMutation = useMutation({
     mutationFn: updateMyProfile,
@@ -321,6 +342,13 @@ export function AccountPage() {
         sentiment: String(form.get(`sentiment:${tagId}`) || "like") as TagSentiment
       }))
     );
+  }
+
+  function handleTagCommentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    createTagCommentMutation.mutate(String(form.get("body") || "").trim());
+    event.currentTarget.reset();
   }
 
   function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
@@ -828,6 +856,40 @@ export function AccountPage() {
                 {interestsMutation.isPending ? "Kaydediliyor" : "İlgi alanlarını kaydet"}
               </button>
             </form>
+            <section className="admin-form">
+              <h2>Tag yorumları</h2>
+              <label>
+                İlgi alanı
+                <select onChange={(event) => setCommentTagId(event.target.value)} value={commentTagId}>
+                  <option value="">Tag seçin</option>
+                  {interestTags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+                </select>
+              </label>
+              {commentTagId ? (
+                <>
+                  <form className="compact-form" onSubmit={handleTagCommentSubmit}>
+                    <label>
+                      Yorumunuz
+                      <textarea maxLength={1000} minLength={1} name="body" required rows={3} />
+                    </label>
+                    <button className="secondary-action" disabled={createTagCommentMutation.isPending} type="submit">Yorum ekle</button>
+                  </form>
+                  <div className="admin-list">
+                    {tagCommentsQuery.data?.map((comment) => (
+                      <div className="admin-list-row" key={comment.id}>
+                        <div>
+                          <strong>{comment.author?.username ? `@${comment.author.username}` : comment.author?.name ?? "Silinmiş kullanıcı"}</strong>
+                          <span>{comment.body}</span>
+                        </div>
+                        {comment.canDelete ? (
+                          <button className="ghost-action" onClick={() => deleteTagCommentMutation.mutate(comment.id)} type="button">Sil</button>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : <p className="muted">Yorumları görmek için bir tag seçin.</p>}
+            </section>
             <form className="admin-form" onSubmit={handleEventSubmit}>
               <h2>Etkinlik oluştur</h2>
               <label>

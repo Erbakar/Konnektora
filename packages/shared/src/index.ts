@@ -224,6 +224,21 @@ export const tagAffinitySchema = z.object({
   updatedAt: z.string().datetime().or(z.date()).optional()
 });
 export const tagAffinitiesSchema = z.array(tagAffinitySchema);
+export const tagCommentSchema = z.object({
+  id: z.string().uuid(),
+  tagId: z.string().uuid(),
+  body: z.string().min(1).max(1000),
+  likeCount: z.number().int().nonnegative(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+  canDelete: z.boolean(),
+  author: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    username: z.string().nullable()
+  }).nullable()
+});
+export const tagCommentsSchema = z.array(tagCommentSchema);
 
 export const eventSchema = z.object({
   id: z.string().uuid(),
@@ -657,6 +672,7 @@ export type UserBlock = z.infer<typeof userBlockSchema>;
 export type MemberCard = z.infer<typeof memberCardSchema>;
 export type TagSentiment = z.infer<typeof tagSentimentSchema>;
 export type TagAffinity = z.infer<typeof tagAffinitySchema>;
+export type TagComment = z.infer<typeof tagCommentSchema>;
 export type UserStatus = z.infer<typeof userStatusSchema>;
 export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema>;
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;

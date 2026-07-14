@@ -20,3 +20,10 @@ export class MergeTagDto {
   @IsUUID()
   targetTagId!: string;
 }
+
+export class CreateTagCommentDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(1000)
+  body!: string;
+}
