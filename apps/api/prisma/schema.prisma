@@ -455,6 +455,8 @@ model EventParticipant {
   status      EventParticipantStatus @default(requested)
   role        EventParticipantRole   @default(attendee)
   checkedInAt DateTime?              @map("checked_in_at")
+  checkInTokenHash String?           @unique @map("check_in_token_hash")
+  checkInTokenIssuedAt DateTime?     @map("check_in_token_issued_at")
   createdAt   DateTime               @default(now()) @map("created_at")
   updatedAt   DateTime               @updatedAt @map("updated_at")
 

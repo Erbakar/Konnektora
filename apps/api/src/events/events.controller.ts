@@ -5,7 +5,7 @@ import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 import { RequirePermissions } from "../auth/permissions";
-import { CreateEventDto, EventQueryDto, InviteParticipantDto, UpdateParticipantDto } from "./events.dto";
+import { CreateEventDto, EventQueryDto, InviteParticipantDto, ScanCheckInTicketDto, UpdateParticipantDto } from "./events.dto";
 import { EventsService } from "./events.service";
 
 @Controller()
@@ -58,6 +58,18 @@ export class EventsController {
   @UseGuards(JwtAuthGuard)
   requestAttendance(@Param("id") id: string, @CurrentUser() user: User) {
     return this.eventsService.requestAttendance(id, user.id);
+  }
+
+  @Get("events/:id/ticket")
+  @UseGuards(JwtAuthGuard)
+  issueTicket(@Param("id") id: string, @CurrentUser() user: User) {
+    return this.eventsService.issueCheckInTicket(id, user.id);
+  }
+
+  @Post("events/:id/check-in/scan")
+  @UseGuards(JwtAuthGuard)
+  scanTicket(@Param("id") id: string, @Body() body: ScanCheckInTicketDto, @CurrentUser() user: User) {
+    return this.eventsService.checkInWithTicket(id, body.token, user);
   }
 
   @Post("events/:id/invite")

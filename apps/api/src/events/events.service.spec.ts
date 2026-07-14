@@ -1,4 +1,4 @@
-import { ForbiddenException } from "@nestjs/common";
+import { ConflictException, ForbiddenException } from "@nestjs/common";
 import { EventParticipantRole, EventParticipantStatus } from "@prisma/client";
 import { EventsService } from "./events.service";
 
@@ -21,7 +21,8 @@ describe("EventsService", () => {
       userBlock: { findMany: jest.fn() },
       eventParticipant: {
         findMany: jest.fn(),
-        findUnique: jest.fn()
+        findUnique: jest.fn(),
+        update: jest.fn()
       }
     };
     const mailService = {
@@ -118,6 +119,38 @@ describe("EventsService", () => {
           ]
         })
       })
+    );
+  });
+
+  it("issues an opaque QR ticket only for an accepted participant", async () => {
+    const { service, prisma } = createService();
+    prisma.eventParticipant.findUnique.mockResolvedValue({
+      id: "participant-1",
+      status: EventParticipantStatus.accepted,
+      event: { id: "event-1", title: "Community Night", status: "published" }
+    });
+    prisma.eventParticipant.update.mockResolvedValue({});
+
+    const ticket = await service.issueCheckInTicket("event-1", actor.id);
+    expect(ticket.token).toMatch(/^[a-f0-9]{64}$/);
+    expect(ticket.qrPayload).toContain(ticket.token);
+    expect(prisma.eventParticipant.update).toHaveBeenCalledWith({
+      where: { id: "participant-1" },
+      data: { checkInTokenHash: expect.stringMatching(/^[a-f0-9]{64}$/), checkInTokenIssuedAt: expect.any(Date) }
+    });
+  });
+
+  it("rejects reuse of an already attended QR ticket", async () => {
+    const { service, prisma } = createService();
+    prisma.event.findUnique.mockResolvedValue({ createdById: actor.id });
+    prisma.eventParticipant.findUnique.mockResolvedValue({
+      id: "participant-1",
+      eventId: "event-1",
+      status: EventParticipantStatus.attended
+    });
+
+    await expect(service.checkInWithTicket("event-1", "a".repeat(64), actor as never)).rejects.toBeInstanceOf(
+      ConflictException
     );
   });
 });

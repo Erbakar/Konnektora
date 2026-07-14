@@ -95,6 +95,13 @@ export const eventParticipantStatusSchema = z.enum([
   "attended"
 ]);
 export const eventParticipantRoleSchema = z.enum(["attendee", "organizer", "manager"]);
+export const eventTicketSchema = z.object({
+  eventId: z.string().uuid(),
+  eventTitle: z.string(),
+  token: z.string().min(32),
+  qrPayload: z.string(),
+  issuedAt: z.string().datetime()
+});
 export const reportTargetTypeSchema = z.enum([
   "event",
   "tag",
@@ -676,6 +683,7 @@ export type TagComment = z.infer<typeof tagCommentSchema>;
 export type UserStatus = z.infer<typeof userStatusSchema>;
 export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema>;
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;
+export type EventTicket = z.infer<typeof eventTicketSchema>;
 export type ReportTargetType = z.infer<typeof reportTargetTypeSchema>;
 export type ReportStatus = z.infer<typeof reportStatusSchema>;
 export type UserMessageType = z.infer<typeof userMessageTypeSchema>;

@@ -17,6 +17,7 @@ import {
   eventListSchema,
   eventSchema,
   eventParticipantSchema,
+  eventTicketSchema,
   faqSchema,
   loginResponseSchema,
   memberCardsSchema,
@@ -58,6 +59,7 @@ import {
   type Event,
   type EventList,
   type EventParticipant,
+  type EventTicket,
   type Faq,
   type LoginResponse,
   type MemberCard,
@@ -105,6 +107,7 @@ const MOCK_EVENTS_KEY = "konnektora_mock_events";
 const MOCK_TAGS_KEY = "konnektora_mock_tags";
 const MOCK_USERS_KEY = "konnektora_mock_users";
 const MOCK_PARTICIPANTS_KEY = "konnektora_mock_participants";
+const MOCK_EVENT_TICKETS_KEY = "konnektora_mock_event_tickets";
 const MOCK_REPORTS_KEY = "konnektora_mock_reports";
 const MOCK_REPORT_RULES_KEY = "konnektora_mock_report_rules";
 const MOCK_REPORT_GROUP_NOTES_KEY = "konnektora_mock_report_group_notes";
@@ -850,6 +853,19 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(requestMockAttendance(pathname.slice("/events/".length, -"/attend".length)));
   }
 
+  if (pathname.startsWith("/events/") && pathname.endsWith("/ticket") && method === "GET") {
+    return schema.parse(issueMockEventTicket(pathname.slice("/events/".length, -"/ticket".length)));
+  }
+
+  if (pathname.startsWith("/events/") && pathname.endsWith("/check-in/scan") && method === "POST") {
+    return schema.parse(
+      scanMockEventTicket(
+        pathname.slice("/events/".length, -"/check-in/scan".length),
+        parseBody<{ token: string }>(options).token
+      )
+    );
+  }
+
   if (pathname.startsWith("/events/") && pathname.endsWith("/invite") && method === "POST") {
     return schema.parse(inviteMockParticipant(pathname.slice("/events/".length, -"/invite".length), parseBody(options)));
   }
@@ -1398,6 +1414,52 @@ function inviteMockParticipant(
 
 function listMockParticipants(eventId: string): EventParticipant[] {
   return readStorage<EventParticipant[]>(MOCK_PARTICIPANTS_KEY, []).filter((participant) => participant.eventId === eventId);
+}
+
+type MockEventTicket = Pick<EventTicket, "eventId" | "token" | "issuedAt"> & { userId: string };
+
+function issueMockEventTicket(eventId: string): EventTicket {
+  const user = getUserSession();
+  const event = getStoredEvents().find((item) => item.id === eventId);
+  const participant = readStorage<EventParticipant[]>(MOCK_PARTICIPANTS_KEY, []).find(
+    (item) => item.eventId === eventId && item.userId === user?.id
+  );
+
+  if (!user || !event || !participant || !["accepted", "invited"].includes(participant.status)) {
+    throw new Error("Aktif etkinlik bileti bulunamadı.");
+  }
+
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const issuedAt = new Date().toISOString();
+  const tickets = readStorage<MockEventTicket[]>(MOCK_EVENT_TICKETS_KEY, []);
+  writeStorage(MOCK_EVENT_TICKETS_KEY, [
+    { eventId, userId: user.id, token, issuedAt },
+    ...tickets.filter((ticket) => !(ticket.eventId === eventId && ticket.userId === user.id))
+  ]);
+
+  return {
+    eventId,
+    eventTitle: event.title,
+    token,
+    qrPayload: `konnektora://check-in?event=${encodeURIComponent(eventId)}&token=${token}`,
+    issuedAt
+  };
+}
+
+function scanMockEventTicket(eventId: string, token: string): EventParticipant {
+  const ticket = readStorage<MockEventTicket[]>(MOCK_EVENT_TICKETS_KEY, []).find(
+    (item) => item.eventId === eventId && item.token === token
+  );
+  if (!ticket) throw new Error("QR bilet geçersiz.");
+
+  const participant = readStorage<EventParticipant[]>(MOCK_PARTICIPANTS_KEY, []).find(
+    (item) => item.eventId === eventId && item.userId === ticket.userId
+  );
+  if (participant?.status === "attended") throw new Error("Bu bilet daha önce kullanılmış.");
+  if (!participant || !["accepted", "invited"].includes(participant.status)) {
+    throw new Error("QR bilet check-in için uygun değil.");
+  }
+  return updateMockParticipantStatus(eventId, ticket.userId, "attended", new Date().toISOString());
 }
 
 function updateMockParticipantStatus(
@@ -4026,6 +4088,18 @@ export function requestEventAttendance(eventId: string): Promise<EventParticipan
   return requestJson(`/events/${eventId}/attend`, eventParticipantSchema, {
     auth: "user",
     method: "POST"
+  });
+}
+
+export function getMyEventTicket(eventId: string): Promise<EventTicket> {
+  return requestJson(`/events/${eventId}/ticket`, eventTicketSchema, { auth: "user" });
+}
+
+export function scanEventTicket(eventId: string, token: string): Promise<EventParticipant> {
+  return requestJson(`/events/${eventId}/check-in/scan`, eventParticipantSchema, {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify({ token })
   });
 }
 

@@ -39,6 +39,7 @@ import {
   requestEmailVerification,
   requestPhoneVerification,
   requestPasswordReset,
+  scanEventTicket,
   setUserSession,
   updateEventParticipantStatus,
   updateMyEvent,
@@ -1132,6 +1133,14 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
       void queryClient.invalidateQueries({ queryKey: ["event-participants", eventId, "organizer"] });
     }
   });
+  const ticketScanMutation = useMutation({
+    mutationFn: (token: string) => scanEventTicket(eventId, token),
+    onSuccess: () => {
+      setNotice({ tone: "success", message: "QR bilet doğrulandı; katılımcı giriş yaptı." });
+      void queryClient.invalidateQueries({ queryKey: ["event-participants", eventId, "organizer"] });
+    },
+    onError: () => setNotice({ tone: "error", message: "QR bilet geçersiz, uygun değil veya daha önce kullanılmış." })
+  });
   const participants = participantsQuery.data ?? [];
 
   function handleInviteSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1143,6 +1152,19 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
       role: String(form.get("role") || "attendee")
     });
     event.currentTarget.reset();
+  }
+
+  function handleTicketScan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const rawValue = String(new FormData(formElement).get("ticket") || "").trim();
+    let token = rawValue;
+    try {
+      token = new URL(rawValue).searchParams.get("token") ?? rawValue;
+    } catch {
+      // Fiziksel tarayıcı yalnız token döndürüyorsa değer doğrudan kullanılabilir.
+    }
+    ticketScanMutation.mutate(token, { onSuccess: () => formElement.reset() });
   }
 
   return (
@@ -1170,6 +1192,16 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
         <button className="secondary-action" disabled={inviteMutation.isPending} type="submit">
           <Plus size={16} />
           Davet et
+        </button>
+      </form>
+      <form className="guest-invite-form" onSubmit={handleTicketScan}>
+        <label>
+          QR bilet verisi
+          <input name="ticket" placeholder="QR kodunu tara veya içeriğini yapıştır" required />
+        </label>
+        <button className="secondary-action" disabled={ticketScanMutation.isPending} type="submit">
+          <ClipboardCheck size={16} />
+          {ticketScanMutation.isPending ? "Doğrulanıyor" : "QR ile giriş"}
         </button>
       </form>
       {notice ? <p className={notice.tone === "success" ? "form-success" : "form-error"}>{notice.message}</p> : null}

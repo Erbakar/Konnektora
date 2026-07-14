@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { EventParticipantRole, EventParticipantStatus, EventStatus, Prisma, User } from "@prisma/client";
 import { hash } from "bcryptjs";
-import { randomUUID } from "crypto";
+import { createHash, randomBytes, randomUUID } from "crypto";
 import { AuthService } from "../auth/auth.service";
 import { toSlug } from "../common/slug";
 import { MailService } from "../mail/mail.service";
@@ -234,6 +234,55 @@ export class EventsService {
     });
   }
 
+  async issueCheckInTicket(eventId: string, userId: string) {
+    const participant = await this.prisma.eventParticipant.findUnique({
+      where: { eventId_userId: { eventId, userId } },
+      include: { event: { select: { id: true, title: true, status: true } } }
+    });
+    if (
+      !participant ||
+      participant.event.status !== EventStatus.published ||
+      (participant.status !== EventParticipantStatus.accepted && participant.status !== EventParticipantStatus.invited)
+    ) {
+      throw new NotFoundException("Aktif etkinlik bileti bulunamadı.");
+    }
+
+    const token = randomBytes(32).toString("hex");
+    const issuedAt = new Date();
+    await this.prisma.eventParticipant.update({
+      where: { id: participant.id },
+      data: { checkInTokenHash: this.hashCheckInToken(token), checkInTokenIssuedAt: issuedAt }
+    });
+    return {
+      eventId,
+      eventTitle: participant.event.title,
+      token,
+      qrPayload: `konnektora://check-in?event=${encodeURIComponent(eventId)}&token=${token}`,
+      issuedAt: issuedAt.toISOString()
+    };
+  }
+
+  async checkInWithTicket(eventId: string, token: string, actor: User) {
+    await this.ensureCanManageParticipants(eventId, actor);
+    const participant = await this.prisma.eventParticipant.findUnique({
+      where: { checkInTokenHash: this.hashCheckInToken(token) }
+    });
+    if (!participant || participant.eventId !== eventId) {
+      throw new NotFoundException("QR bilet geçersiz.");
+    }
+    if (participant.status === EventParticipantStatus.attended) {
+      throw new ConflictException("Bu bilet daha önce kullanılmış.");
+    }
+    if (participant.status !== EventParticipantStatus.accepted && participant.status !== EventParticipantStatus.invited) {
+      throw new NotFoundException("QR bilet check-in için uygun değil.");
+    }
+    return this.prisma.eventParticipant.update({
+      where: { id: participant.id },
+      data: { status: EventParticipantStatus.attended, checkedInAt: new Date() },
+      include: { user: { select: { id: true, email: true, name: true, role: true, status: true } } }
+    });
+  }
+
   async inviteParticipant(eventId: string, input: InviteParticipantDto, actor: User) {
     await this.ensureCanManageParticipants(eventId, actor);
     const event = await this.prisma.event.findUnique({
@@ -429,6 +478,10 @@ export class EventsService {
       endsAt: event.endsAt?.toISOString() ?? null,
       tags: event.tags.map((eventTag) => eventTag.tag)
     };
+  }
+
+  private hashCheckInToken(token: string) {
+    return createHash("sha256").update(token).digest("hex");
   }
 
   private resolveSummary(input: Pick<CreateEventDto, "title" | "summary" | "description">) {

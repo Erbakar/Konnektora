@@ -10,6 +10,7 @@ import {
   IsUrl,
   IsUUID,
   MaxLength,
+  Matches,
   Min,
   Max,
   MinLength
@@ -60,6 +61,14 @@ export class EventQueryDto {
   @Min(1)
   @Max(50)
   pageSize?: number;
+}
+
+export class ScanCheckInTicketDto {
+  @IsString()
+  @MinLength(64)
+  @MaxLength(64)
+  @Matches(/^[a-f0-9]{64}$/)
+  token!: string;
 }
 
 export class CreateEventDto {

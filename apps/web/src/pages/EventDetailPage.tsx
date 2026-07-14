@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, CalendarDays, ExternalLink, Flag, MapPin, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { Ban, CalendarDays, ExternalLink, Flag, MapPin, QrCode, ShieldCheck, UserPlus, Users } from "lucide-react";
+import QRCode from "qrcode";
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { createBlock, createContentReport, getEvent, getUserSession, listReportRules, requestEventAttendance } from "../lib/api";
+import { createBlock, createContentReport, getEvent, getMyEventTicket, getUserSession, listReportRules, requestEventAttendance } from "../lib/api";
 
 export function EventDetailPage() {
   const { slug = "" } = useParams();
@@ -10,6 +11,7 @@ export function EventDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [reportOpen, setReportOpen] = useState(false);
+  const [ticketQr, setTicketQr] = useState<string | null>(null);
   const { data: event, isLoading } = useQuery({
     queryKey: ["event", slug],
     queryFn: () => getEvent(slug),
@@ -22,6 +24,12 @@ export function EventDetailPage() {
   });
   const attendMutation = useMutation({
     mutationFn: requestEventAttendance
+  });
+  const ticketMutation = useMutation({
+    mutationFn: getMyEventTicket,
+    onSuccess: async (ticket) => {
+      setTicketQr(await QRCode.toDataURL(ticket.qrPayload, { width: 240, margin: 1 }));
+    }
   });
   const reportMutation = useMutation({
     mutationFn: createContentReport
@@ -106,6 +114,17 @@ export function EventDetailPage() {
           </button>
         ) : null}
         {user ? (
+          <button
+            className="secondary-action"
+            disabled={ticketMutation.isPending}
+            onClick={() => ticketMutation.mutate(event.id)}
+            type="button"
+          >
+            <QrCode size={18} />
+            {ticketMutation.isPending ? "Hazırlanıyor" : "QR Biletim"}
+          </button>
+        ) : null}
+        {user ? (
           <button className="ghost-action" disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()} type="button">
             <Ban size={18} />
             Engelle
@@ -166,6 +185,14 @@ export function EventDetailPage() {
         </p>
       ) : null}
       {attendMutation.isError ? <p className="form-error">Katılım talebi gönderilemedi. Lütfen tekrar dene.</p> : null}
+      {ticketMutation.data && ticketQr ? (
+        <section className="admin-form compact-form" aria-label="Etkinlik QR bileti">
+          <strong>{ticketMutation.data.eventTitle}</strong>
+          <img alt="Etkinlik giriş QR kodu" height="240" src={ticketQr} width="240" />
+          <p className="form-help">Bu tek kullanımlık kodu girişte organizatöre göster.</p>
+        </section>
+      ) : null}
+      {ticketMutation.isError ? <p className="form-error">Bilet yalnızca onaylanmış katılımcılar için oluşturulabilir.</p> : null}
       {reportMutation.data ? <p className="form-success">Rapor alındı. Admin panelde incelenecek.</p> : null}
       {reportMutation.isError ? <p className="form-error">Rapor gönderilemedi. Lütfen tekrar dene.</p> : null}
       <p className="detail-copy">{event.description}</p>
