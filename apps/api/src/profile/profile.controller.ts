@@ -2,13 +2,23 @@ import { Body, Controller, Get, Param, Patch, Put, UseGuards } from "@nestjs/com
 import { User } from "@prisma/client";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { UpdateProfileInterestsDto } from "./profile.dto";
+import { UpdateProfileDto, UpdateProfileInterestsDto } from "./profile.dto";
 import { ProfileService } from "./profile.service";
 
 @Controller("profile")
 @UseGuards(JwtAuthGuard)
 export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}
+
+  @Get()
+  getProfile(@CurrentUser() user: User) {
+    return this.profileService.getProfile(user.id);
+  }
+
+  @Put()
+  updateProfile(@CurrentUser() user: User, @Body() body: UpdateProfileDto) {
+    return this.profileService.updateProfile(user.id, body);
+  }
 
   @Get("interests")
   getInterests(@CurrentUser() user: User) {

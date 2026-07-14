@@ -183,6 +183,29 @@ export const adminUserSchema = z.object({
   status: userStatusSchema.optional()
 });
 
+export const profileSchema = z.object({
+  id: z.string().uuid(),
+  accountType: accountTypeSchema,
+  name: z.string().min(2).max(160),
+  username: z.string().min(2).max(80).nullable(),
+  email: z.string().email(),
+  phone: z.string().max(40).nullable(),
+  country: z.string().max(120).nullable(),
+  city: z.string().max(120).nullable(),
+  district: z.string().max(120).nullable(),
+  address: z.string().max(500).nullable(),
+  gender: z.enum(["male", "female"]).nullable(),
+  birthDate: z.string().datetime().or(z.date()).nullable(),
+  website: z.string().url().nullable(),
+  companyName: z.string().max(160).nullable(),
+  tradeName: z.string().max(160).nullable(),
+  companyType: z.string().max(80).nullable(),
+  businessCategory: z.string().max(120).nullable(),
+  emailVerified: z.boolean(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date())
+});
+
 export const adminTagDetailSchema = tagSchema.extend({
   category: z
     .object({
@@ -571,3 +594,4 @@ export type ReportGroupDetail = z.infer<typeof reportGroupDetailSchema>;
 export type AdminManagedUser = z.infer<typeof adminManagedUserSchema>;
 export type AdminManagedUserList = z.infer<typeof adminManagedUserListSchema>;
 export type AdminManagedUserDetail = z.infer<typeof adminManagedUserDetailSchema>;
+export type Profile = z.infer<typeof profileSchema>;

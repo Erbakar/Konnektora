@@ -21,6 +21,7 @@ import {
   loginResponseSchema,
   moderationDecisionSchema,
   notificationSchema,
+  profileSchema,
   reportGroupCommentSchema,
   reportGroupDetailSchema,
   reportGroupNoteSchema,
@@ -52,6 +53,7 @@ import {
   type ModerationDecision,
   type Notification,
   type PolicyType,
+  type Profile,
   type ReportRule,
   type ReportGroup,
   type ReportGroupComment,
@@ -139,6 +141,23 @@ type MockUser = {
   penaltyScoreAllTime?: number;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type ProfileUpdateInput = {
+  name: string;
+  username?: string;
+  phone?: string;
+  country?: string;
+  city?: string;
+  district?: string;
+  address?: string;
+  gender?: "male" | "female";
+  birthDate?: string;
+  website?: string;
+  companyName?: string;
+  tradeName?: string;
+  companyType?: string;
+  businessCategory?: string;
 };
 
 export const adminPermissionOptions: Array<{ value: AdminPermission; label: string }> = [
@@ -374,6 +393,14 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   if (pathname === "/auth/invite/accept" && method === "POST") {
     const input = parseBody<{ token: string; name?: string; password: string }>(options);
     return schema.parse(acceptMockInvite(input.token, input.password, input.name));
+  }
+
+  if (pathname === "/profile" && method === "GET") {
+    return schema.parse(getMockProfile());
+  }
+
+  if (pathname === "/profile" && method === "PUT") {
+    return schema.parse(updateMockProfile(parseBody<ProfileUpdateInput>(options)));
   }
 
   if (pathname === "/profile/interests" && method === "GET") {
@@ -2396,6 +2423,54 @@ function createMockLoginResponse(user: { id: string; name: string; email: string
   };
 }
 
+function getMockProfile(): Profile {
+  const session = getUserSession();
+  if (!session) {
+    throw new Error("Aktif kullanıcı oturumu bulunamadı.");
+  }
+
+  const stored = readStorage<MockUser[]>(MOCK_USERS_KEY, []).find((user) => user.id === session.id);
+  const now = new Date().toISOString();
+  return profileSchema.parse({
+    id: session.id,
+    accountType: stored?.accountType === "corporate" ? "corporate" : session.accountType ?? "individual",
+    name: stored?.name ?? session.name,
+    username: stored?.username ?? null,
+    email: stored?.email ?? session.email,
+    phone: stored?.phone ?? null,
+    country: stored?.country ?? null,
+    city: stored?.city ?? null,
+    district: stored?.district ?? null,
+    address: stored?.address ?? null,
+    gender: stored?.gender === "male" || stored?.gender === "female" ? stored.gender : null,
+    birthDate: stored?.birthDate ?? null,
+    website: stored?.website ?? null,
+    companyName: stored?.companyName ?? null,
+    tradeName: stored?.tradeName ?? null,
+    companyType: stored?.companyType ?? null,
+    businessCategory: stored?.businessCategory ?? null,
+    emailVerified: stored?.emailVerified ?? false,
+    createdAt: stored?.createdAt ?? now,
+    updatedAt: stored?.updatedAt ?? now
+  });
+}
+
+function updateMockProfile(input: ProfileUpdateInput): Profile {
+  const profile = getMockProfile();
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  const current = users.find((user) => user.id === profile.id);
+  const updated: MockUser = {
+    ...(current ?? { id: profile.id, email: profile.email, password: "", name: profile.name }),
+    ...input,
+    name: input.name.trim(),
+    username: input.username?.trim() || null,
+    updatedAt: new Date().toISOString()
+  };
+  writeStorage(MOCK_USERS_KEY, [updated, ...users.filter((user) => user.id !== profile.id)]);
+  setUserSession({ accessToken: getUserToken() ?? `mock-user-token-${profile.id}`, user: { ...getUserSession()!, name: updated.name } });
+  return getMockProfile();
+}
+
 function getMockDashboard(): AdminDashboard {
   const now = Date.now();
   const events = getStoredEvents();
@@ -2761,6 +2836,14 @@ export function createUserTag(input: { name: string; description?: string }): Pr
 
 export function getProfileInterests(): Promise<Tag[]> {
   return requestJson("/profile/interests", z.array(tagSchema), { auth: "user" });
+}
+
+export function getMyProfile(): Promise<Profile> {
+  return requestJson("/profile", profileSchema, { auth: "user" });
+}
+
+export function updateMyProfile(input: ProfileUpdateInput): Promise<Profile> {
+  return requestJson("/profile", profileSchema, { auth: "user", method: "PUT", body: JSON.stringify(input) });
 }
 
 export function updateProfileInterests(tagIds: string[]): Promise<Tag[]> {

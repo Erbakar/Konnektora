@@ -10,7 +10,9 @@ import {
   createUserEvent,
   createUserTag,
   getProfileInterests,
+  getMyProfile,
   getUserSession,
+  getUserToken,
   inviteEventParticipant,
   isMockApiMode,
   listMyNotifications,
@@ -25,6 +27,7 @@ import {
   updateEventParticipantStatus,
   updateMyEvent,
   updateProfileInterests,
+  updateMyProfile,
   userLogin
 } from "../lib/api";
 
@@ -42,6 +45,11 @@ export function AccountPage() {
   const interestsQuery = useQuery({
     queryKey: ["profile-interests", user?.id],
     queryFn: getProfileInterests,
+    enabled: Boolean(user)
+  });
+  const profileQuery = useQuery({
+    queryKey: ["my-profile", user?.id],
+    queryFn: getMyProfile,
     enabled: Boolean(user)
   });
   const notificationsQuery = useQuery({
@@ -110,6 +118,20 @@ export function AccountPage() {
       setNotice({ tone: "success", message: "İlgi alanların kaydedildi." });
     },
     onError: () => setNotice({ tone: "error", message: "İlgi alanları kaydedilemedi. Lütfen tekrar dene." })
+  });
+  const profileMutation = useMutation({
+    mutationFn: updateMyProfile,
+    onSuccess: (profile) => {
+      const session = getUserSession();
+      if (session) {
+        const response = { accessToken: getUserToken() ?? "", user: { ...session, name: profile.name, accountType: profile.accountType } };
+        setUserSession(response);
+        setUser(response.user);
+      }
+      queryClient.setQueryData(["my-profile", profile.id], profile);
+      setNotice({ tone: "success", message: "Profil bilgileri kaydedildi." });
+    },
+    onError: () => setNotice({ tone: "error", message: "Profil kaydedilemedi. Kullanıcı adı ve zorunlu alanları kontrol et." })
   });
   const readNotificationMutation = useMutation({
     mutationFn: markMyNotificationRead,
@@ -182,6 +204,29 @@ export function AccountPage() {
     const selectedTagIds = form.getAll("interestTagIds").map(String);
 
     interestsMutation.mutate(selectedTagIds);
+  }
+
+  function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const value = (name: string) => String(form.get(name) || "").trim() || undefined;
+    const birthDate = value("birthDate");
+    profileMutation.mutate({
+      name: String(form.get("name") || "").trim(),
+      username: value("username"),
+      phone: value("phone"),
+      country: value("country"),
+      city: value("city"),
+      district: value("district"),
+      address: value("address"),
+      gender: value("gender") as "male" | "female" | undefined,
+      birthDate: birthDate ? new Date(`${birthDate}T00:00:00.000Z`).toISOString() : undefined,
+      website: value("website"),
+      companyName: value("companyName"),
+      tradeName: value("tradeName"),
+      companyType: value("companyType"),
+      businessCategory: value("businessCategory")
+    });
   }
 
   return (
@@ -288,6 +333,83 @@ export function AccountPage() {
             )}
           </aside>
           <div className="account-stack">
+            {profileQuery.data ? (
+              <form className="admin-form" key={String(profileQuery.data.updatedAt)} onSubmit={handleProfileSubmit}>
+                <h2>Profili düzenle</h2>
+                <div className="form-grid">
+                  <label>
+                    {profileQuery.data.accountType === "corporate" ? "Yetkili kişi / görünen ad" : "Ad Soyad"}
+                    <input defaultValue={profileQuery.data.name} name="name" required minLength={2} maxLength={160} />
+                  </label>
+                  <label>
+                    Kullanıcı adı
+                    <input defaultValue={profileQuery.data.username ?? ""} name="username" minLength={2} maxLength={80} pattern="[A-Za-zÀ-ž0-9 .-]+" />
+                  </label>
+                  <label>
+                    Telefon
+                    <input defaultValue={profileQuery.data.phone ?? ""} name="phone" type="tel" />
+                  </label>
+                  <label>
+                    Web sitesi
+                    <input defaultValue={profileQuery.data.website ?? ""} name="website" placeholder="https://" type="url" />
+                  </label>
+                  <label>
+                    Ülke
+                    <input defaultValue={profileQuery.data.country ?? ""} name="country" />
+                  </label>
+                  <label>
+                    Şehir
+                    <input defaultValue={profileQuery.data.city ?? ""} name="city" />
+                  </label>
+                  {profileQuery.data.accountType === "individual" ? (
+                    <>
+                      <label>
+                        Doğum tarihi
+                        <input defaultValue={profileQuery.data.birthDate ? new Date(profileQuery.data.birthDate).toISOString().slice(0, 10) : ""} name="birthDate" type="date" />
+                      </label>
+                      <label>
+                        Cinsiyet
+                        <select defaultValue={profileQuery.data.gender ?? ""} name="gender">
+                          <option value="">Belirtmek istemiyorum</option>
+                          <option value="female">Kadın</option>
+                          <option value="male">Erkek</option>
+                        </select>
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <label>
+                        İşletme adı
+                        <input defaultValue={profileQuery.data.companyName ?? ""} name="companyName" required />
+                      </label>
+                      <label>
+                        Ticari unvan
+                        <input defaultValue={profileQuery.data.tradeName ?? ""} name="tradeName" required />
+                      </label>
+                      <label>
+                        Şirket türü
+                        <input defaultValue={profileQuery.data.companyType ?? ""} name="companyType" />
+                      </label>
+                      <label>
+                        İşletme kategorisi
+                        <input defaultValue={profileQuery.data.businessCategory ?? ""} name="businessCategory" />
+                      </label>
+                      <label>
+                        İlçe
+                        <input defaultValue={profileQuery.data.district ?? ""} name="district" />
+                      </label>
+                      <label>
+                        Adres
+                        <input defaultValue={profileQuery.data.address ?? ""} name="address" />
+                      </label>
+                    </>
+                  )}
+                </div>
+                <button className="secondary-action" disabled={profileMutation.isPending} type="submit">
+                  {profileMutation.isPending ? "Kaydediliyor" : "Profili kaydet"}
+                </button>
+              </form>
+            ) : null}
             <section className="admin-form">
               <div className="section-header compact">
                 <h2>Bildirimler</h2>
