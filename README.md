@@ -134,6 +134,7 @@ WEB_ORIGIN=https://konnektora.netlify.app
 - Kullanıcı üyelik/giriş ve event oluşturma UI
 - Kullanıcı profilinde ilgi alanı/tag seçimi
 - Profil ilgi alanlarının PostgreSQL'e kalıcı kaydı
+- E.164 telefon numarası için 6 haneli ve süreli SMS doğrulama akışı
 - Event detayında kullanıcı Attend akışı
 - Admin/organizer guest list görüntüleme, kabul/ret, ban ve check-in UI
 - Organizer email ile kullanıcı davet etme ve invited kullanıcı oluşturma akışı
@@ -154,6 +155,7 @@ WEB_ORIGIN=https://konnektora.netlify.app
 
 1. Deploy ortamında `npm run db:deploy` ve `npm run db:generate` komutlarını Node 22 ile çalıştır.
 2. Resend veya seçilecek mail provider için `EMAIL_FROM` ve `RESEND_API_KEY` değerlerini production'a gir.
-3. Profil, event, moderation ve email token akışları için e2e/smoke testleri ekle.
-4. Harita/distance filtrelerini veri modelindeki koordinatlarla bağla.
-5. Production seed/admin şifresi stratejisini gerçek operasyon sürecine göre sertleştir.
+3. SMS sağlayıcısı için `SMS_WEBHOOK_URL` ve gerekiyorsa `SMS_API_KEY` değerlerini production'a gir.
+4. Profil, event, moderation ve doğrulama akışları için e2e/smoke testleri ekle.
+5. Harita/distance filtrelerini veri modelindeki koordinatlarla bağla.
+6. Production seed/admin şifresi stratejisini gerçek operasyon sürecine göre sertleştir.

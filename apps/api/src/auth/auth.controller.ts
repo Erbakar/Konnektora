@@ -1,6 +1,6 @@
 import { Body, Controller, Post, UseGuards } from "@nestjs/common";
 import { User } from "@prisma/client";
-import { AcceptInviteDto, ChangePasswordDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, ResetPasswordDto, TokenDto } from "./auth.dto";
+import { AcceptInviteDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, TokenDto } from "./auth.dto";
 import { CurrentUser } from "./current-user.decorator";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { AuthService } from "./auth.service";
@@ -54,6 +54,18 @@ export class AuthController {
   @Post("auth/reactivate")
   reactivate(@Body() body: LoginDto) {
     return this.authService.reactivate(body);
+  }
+
+  @Post("auth/phone/verification/request")
+  @UseGuards(JwtAuthGuard)
+  requestPhoneVerification(@CurrentUser() user: User, @Body() body: RequestPhoneVerificationDto) {
+    return this.authService.requestPhoneVerification(user.id, body);
+  }
+
+  @Post("auth/phone/verification/confirm")
+  @UseGuards(JwtAuthGuard)
+  confirmPhoneVerification(@CurrentUser() user: User, @Body() body: ConfirmPhoneVerificationDto) {
+    return this.authService.confirmPhoneVerification(user.id, body);
   }
 
   @Post("auth/invite/accept")

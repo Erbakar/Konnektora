@@ -1,6 +1,7 @@
 import { ConflictException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { hash } from "bcryptjs";
+import { createHash } from "crypto";
 import { AuthService } from "./auth.service";
 
 describe("AuthService", () => {
@@ -8,6 +9,7 @@ describe("AuthService", () => {
     const prisma = {
       user: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         update: jest.fn(),
         create: jest.fn()
       },
@@ -19,6 +21,11 @@ describe("AuthService", () => {
       event: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       place: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       userMessage: { create: jest.fn().mockResolvedValue({}) },
+      phoneVerification: {
+        findFirst: jest.fn(),
+        create: jest.fn().mockResolvedValue({}),
+        update: jest.fn()
+      },
       $transaction: jest.fn().mockImplementation((operations: unknown[]) => Promise.all(operations))
     };
     const jwtService = {
@@ -29,11 +36,13 @@ describe("AuthService", () => {
       sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
       sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined)
     };
+    const smsService = { sendVerificationCode: jest.fn().mockResolvedValue(undefined) };
 
     return {
-      service: new AuthService(prisma as never, jwtService, mailService as never),
+      service: new AuthService(prisma as never, jwtService, mailService as never, smsService as never),
       prisma,
-      mailService
+      mailService,
+      smsService
     };
   };
 
@@ -236,5 +245,39 @@ describe("AuthService", () => {
 
     const result = await service.reactivate({ email: frozenUser.email, password: "CurrentPass!1" });
     expect(result.user.status).toBe("active");
+  });
+
+  it("creates and sends a six-digit phone verification code", async () => {
+    const { service, prisma, smsService } = createService();
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.phoneVerification.findFirst.mockResolvedValue(null);
+
+    const result = await service.requestPhoneVerification("user-8", { phone: "+905551112233" });
+
+    expect(result.expiresInSeconds).toBe(120);
+    expect(result.developmentCode).toMatch(/^\d{6}$/);
+    expect(prisma.phoneVerification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: "user-8", phone: "+905551112233", codeHash: expect.any(String) })
+    });
+    expect(smsService.sendVerificationCode).toHaveBeenCalledWith("+905551112233", result.developmentCode);
+  });
+
+  it("verifies the code and assigns the phone to the user", async () => {
+    const { service, prisma } = createService();
+    const code = "123456";
+    prisma.phoneVerification.findFirst.mockResolvedValue({
+      id: "verification-1",
+      codeHash: createHash("sha256").update(code).digest("hex"),
+      attempts: 0,
+      expiresAt: new Date(Date.now() + 60_000)
+    });
+    prisma.phoneVerification.update.mockResolvedValue({});
+    prisma.user.update.mockResolvedValue({ phone: "+905551112233", phoneVerified: true });
+
+    await expect(service.confirmPhoneVerification("user-8", { phone: "+905551112233", code })).resolves.toEqual({
+      ok: true,
+      phone: "+905551112233",
+      phoneVerified: true
+    });
   });
 });

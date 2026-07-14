@@ -103,71 +103,90 @@ enum CmsCategoryType {
 }
 
 model User {
-  id           String     @id @default(uuid())
-  email        String     @unique
-  name         String
-  username     String?    @unique
-  passwordHash String     @map("password_hash")
-  role         UserRole   @default(user)
-  adminRoleGroupId String? @map("admin_role_group_id")
-  status       UserStatus @default(active)
-  accountType  String     @default("individual") @map("account_type")
-  phone        String?
-  country      String?
-  city         String?
-  district     String?
-  address      String?
-  gender       String?
-  birthDate    DateTime?  @map("birth_date")
-  website      String?
-  companyName  String?    @map("company_name")
-  tradeName    String?    @map("trade_name")
-  companyType  String?    @map("company_type")
-  businessCategory String? @map("business_category")
-  followerCount Int       @default(0) @map("follower_count")
-  followingCount Int      @default(0) @map("following_count")
-  lastOnlineAt DateTime?  @map("last_online_at")
-  emailVerified Boolean   @default(false) @map("email_verified")
-  invitedById  String?    @map("invited_by")
-  penaltyScoreLastYear Int @default(0) @map("penalty_score_last_year")
-  penaltyScoreAllTime Int  @default(0) @map("penalty_score_all_time")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
+  id                   String     @id @default(uuid())
+  email                String     @unique
+  name                 String
+  username             String?    @unique
+  passwordHash         String     @map("password_hash")
+  role                 UserRole   @default(user)
+  adminRoleGroupId     String?    @map("admin_role_group_id")
+  status               UserStatus @default(active)
+  accountType          String     @default("individual") @map("account_type")
+  phone                String?    @unique
+  phoneVerified        Boolean    @default(false) @map("phone_verified")
+  country              String?
+  city                 String?
+  district             String?
+  address              String?
+  gender               String?
+  birthDate            DateTime?  @map("birth_date")
+  website              String?
+  companyName          String?    @map("company_name")
+  tradeName            String?    @map("trade_name")
+  companyType          String?    @map("company_type")
+  businessCategory     String?    @map("business_category")
+  followerCount        Int        @default(0) @map("follower_count")
+  followingCount       Int        @default(0) @map("following_count")
+  lastOnlineAt         DateTime?  @map("last_online_at")
+  emailVerified        Boolean    @default(false) @map("email_verified")
+  invitedById          String?    @map("invited_by")
+  penaltyScoreLastYear Int        @default(0) @map("penalty_score_last_year")
+  penaltyScoreAllTime  Int        @default(0) @map("penalty_score_all_time")
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
 
-  adminRoleGroup AdminRoleGroup? @relation(fields: [adminRoleGroupId], references: [id], onDelete: SetNull)
-  invitedBy User? @relation("UserInvites", fields: [invitedById], references: [id], onDelete: SetNull)
-  invitedUsers User[] @relation("UserInvites")
-  createdTags  Tag[]   @relation("TagCreatedBy")
-  updatedTags  Tag[]   @relation("TagUpdatedBy")
-  createdEvents Event[] @relation("EventCreatedBy")
-  updatedEvents Event[] @relation("EventUpdatedBy")
-  eventParticipations EventParticipant[]
-  ticketRefunds TicketRefund[]
-  interestTags UserInterestTag[]
-  submittedReports ContentReport[] @relation("ReportSubmittedBy")
-  resolvedReports ContentReport[] @relation("ReportResolvedBy")
-  updatedReportGroupNotes ReportGroupNote[]
-  reportGroupComments ReportGroupComment[]
-  moderationDecisions ModerationDecision[] @relation("ModerationDecisionUser")
+  adminRoleGroup            AdminRoleGroup?      @relation(fields: [adminRoleGroupId], references: [id], onDelete: SetNull)
+  invitedBy                 User?                @relation("UserInvites", fields: [invitedById], references: [id], onDelete: SetNull)
+  invitedUsers              User[]               @relation("UserInvites")
+  createdTags               Tag[]                @relation("TagCreatedBy")
+  updatedTags               Tag[]                @relation("TagUpdatedBy")
+  createdEvents             Event[]              @relation("EventCreatedBy")
+  updatedEvents             Event[]              @relation("EventUpdatedBy")
+  eventParticipations       EventParticipant[]
+  ticketRefunds             TicketRefund[]
+  interestTags              UserInterestTag[]
+  submittedReports          ContentReport[]      @relation("ReportSubmittedBy")
+  resolvedReports           ContentReport[]      @relation("ReportResolvedBy")
+  updatedReportGroupNotes   ReportGroupNote[]
+  reportGroupComments       ReportGroupComment[]
+  moderationDecisions       ModerationDecision[] @relation("ModerationDecisionUser")
   issuedModerationDecisions ModerationDecision[] @relation("ModerationDecisionActor")
-  notifications Notification[]
-  adminActivityLogs AdminActivityLog[]
-  emailTokens EmailToken[]
-  userMessages UserMessage[] @relation("UserMessageUser")
-  readUserMessages UserMessage[] @relation("UserMessageReadBy")
-  createdPlaces Place[] @relation("PlaceCreatedBy")
-  updatedPlaces Place[] @relation("PlaceUpdatedBy")
-  uploadedMedia MediaFile[] @relation("MediaUploadedBy")
-  authoredComments ContentComment[] @relation("CommentAuthor")
-  sentPrivateMessages PrivateMessage[] @relation("PrivateMessageSender")
-  receivedPrivateMessages PrivateMessage[] @relation("PrivateMessageRecipient")
-  contentReactions ContentReaction[]
-  contentViews ContentView[]
+  notifications             Notification[]
+  adminActivityLogs         AdminActivityLog[]
+  emailTokens               EmailToken[]
+  phoneVerifications        PhoneVerification[]
+  userMessages              UserMessage[]        @relation("UserMessageUser")
+  readUserMessages          UserMessage[]        @relation("UserMessageReadBy")
+  createdPlaces             Place[]              @relation("PlaceCreatedBy")
+  updatedPlaces             Place[]              @relation("PlaceUpdatedBy")
+  uploadedMedia             MediaFile[]          @relation("MediaUploadedBy")
+  authoredComments          ContentComment[]     @relation("CommentAuthor")
+  sentPrivateMessages       PrivateMessage[]     @relation("PrivateMessageSender")
+  receivedPrivateMessages   PrivateMessage[]     @relation("PrivateMessageRecipient")
+  contentReactions          ContentReaction[]
+  contentViews              ContentView[]
 
-  @@map("users")
   @@index([accountType, status])
   @@index([country, city])
   @@index([lastOnlineAt])
+  @@map("users")
+}
+
+model PhoneVerification {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  phone      String
+  codeHash   String    @map("code_hash")
+  attempts   Int       @default(0)
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, phone, createdAt])
+  @@index([expiresAt])
+  @@map("phone_verifications")
 }
 
 model AdminRoleGroup {
@@ -185,14 +204,14 @@ model AdminRoleGroup {
 }
 
 model CmsCategory {
-  id          String   @id @default(uuid())
+  id          String          @id @default(uuid())
   name        String
-  slug        String   @unique
+  slug        String          @unique
   description String?
   type        CmsCategoryType @default(faq)
-  status      String   @default("active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  status      String          @default("active")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
 
   faqs Faq[]
 
@@ -202,13 +221,13 @@ model CmsCategory {
 }
 
 model Faq {
-  id          String   @id @default(uuid())
-  categoryId  String   @map("category_id")
-  title       String
-  body        String
-  status      String   @default("active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id         String   @id @default(uuid())
+  categoryId String   @map("category_id")
+  title      String
+  body       String
+  status     String   @default("active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   category CmsCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
@@ -217,35 +236,35 @@ model Faq {
 }
 
 model Announcement {
-  id          String   @id @default(uuid())
-  title       String
-  body        String
-  target      String   @default("all")
+  id                  String    @id @default(uuid())
+  title               String
+  body                String
+  target              String    @default("all")
   targetLastLoginFrom DateTime? @map("target_last_login_from")
   targetLastLoginTo   DateTime? @map("target_last_login_to")
   targetJoinedFrom    DateTime? @map("target_joined_from")
   targetJoinedTo      DateTime? @map("target_joined_to")
   targetAppVersion    String?   @map("target_app_version")
   publishMode         String    @default("scheduled") @map("publish_mode")
-  status      String   @default("active")
-  publishAt   DateTime @default(now()) @map("publish_at")
-  expiresAt   DateTime? @map("expires_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  status              String    @default("active")
+  publishAt           DateTime  @default(now()) @map("publish_at")
+  expiresAt           DateTime? @map("expires_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   @@index([status, publishAt])
   @@map("announcements")
 }
 
 model CmsPolicy {
-  id          String   @id @default(uuid())
-  type        String   @unique
+  id          String    @id @default(uuid())
+  type        String    @unique
   title       String
   body        String
-  status      String   @default("active")
+  status      String    @default("active")
   publishedAt DateTime? @map("published_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@index([status])
   @@map("cms_policies")
@@ -278,10 +297,10 @@ model Tag {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  category  TagCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  createdBy User?        @relation("TagCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy User?        @relation("TagUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  events    EventTag[]
+  category        TagCategory?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdBy       User?             @relation("TagCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy       User?             @relation("TagUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  events          EventTag[]
   interestedUsers UserInterestTag[]
 
   @@index([status])
@@ -289,38 +308,38 @@ model Tag {
 }
 
 model Event {
-  id                      String      @id @default(uuid())
+  id                      String          @id @default(uuid())
   title                   String
-  slug                    String      @unique
+  slug                    String          @unique
   summary                 String
   description             String
-  status                  EventStatus @default(published)
-  startsAt                DateTime    @map("starts_at")
-  endsAt                  DateTime?   @map("ends_at")
+  status                  EventStatus     @default(published)
+  startsAt                DateTime        @map("starts_at")
+  endsAt                  DateTime?       @map("ends_at")
   timezone                String
   format                  EventFormat
   visibility              EventVisibility @default(open)
-  locationName            String?     @map("location_name")
-  locationAddress         String?     @map("location_address")
+  locationName            String?         @map("location_name")
+  locationAddress         String?         @map("location_address")
   city                    String?
   country                 String?
-  latitude                Decimal?    @db.Decimal(10, 7)
-  longitude               Decimal?    @db.Decimal(10, 7)
+  latitude                Decimal?        @db.Decimal(10, 7)
+  longitude               Decimal?        @db.Decimal(10, 7)
   language                String
-  organizerName           String?     @map("organizer_name")
-  externalRegistrationUrl String?     @map("external_registration_url")
-  coverImageUrl           String?     @map("cover_image_url")
+  organizerName           String?         @map("organizer_name")
+  externalRegistrationUrl String?         @map("external_registration_url")
+  coverImageUrl           String?         @map("cover_image_url")
   capacity                Int?
-  createdById             String?     @map("created_by")
-  updatedById             String?     @map("updated_by")
-  createdAt               DateTime    @default(now()) @map("created_at")
-  updatedAt               DateTime    @updatedAt @map("updated_at")
+  createdById             String?         @map("created_by")
+  updatedById             String?         @map("updated_by")
+  createdAt               DateTime        @default(now()) @map("created_at")
+  updatedAt               DateTime        @updatedAt @map("updated_at")
 
-  createdBy User?      @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy User?      @relation("EventUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  tags      EventTag[]
-  participants EventParticipant[]
-  media EventMedia[]
+  createdBy     User?              @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy     User?              @relation("EventUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  tags          EventTag[]
+  participants  EventParticipant[]
+  media         EventMedia[]
   ticketRefunds TicketRefund[]
 
   @@index([status, startsAt])
@@ -328,14 +347,14 @@ model Event {
 }
 
 model EventParticipant {
-  id        String                 @id @default(uuid())
-  eventId   String                 @map("event_id")
-  userId    String                 @map("user_id")
-  status    EventParticipantStatus @default(requested)
-  role      EventParticipantRole   @default(attendee)
-  checkedInAt DateTime?            @map("checked_in_at")
-  createdAt DateTime               @default(now()) @map("created_at")
-  updatedAt DateTime               @updatedAt @map("updated_at")
+  id          String                 @id @default(uuid())
+  eventId     String                 @map("event_id")
+  userId      String                 @map("user_id")
+  status      EventParticipantStatus @default(requested)
+  role        EventParticipantRole   @default(attendee)
+  checkedInAt DateTime?              @map("checked_in_at")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -379,21 +398,21 @@ model EventMedia {
 }
 
 model Place {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String   @unique
-  description String?
-  status      String   @default("active")
-  coverImageUrl String? @map("cover_image_url")
-  country     String?
-  city        String?
-  address     String?
-  followerCount Int    @default(0) @map("follower_count")
-  inviteCount Int      @default(0) @map("invite_count")
-  createdById String?  @map("created_by")
-  updatedById String?  @map("updated_by")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(uuid())
+  name          String
+  slug          String   @unique
+  description   String?
+  status        String   @default("active")
+  coverImageUrl String?  @map("cover_image_url")
+  country       String?
+  city          String?
+  address       String?
+  followerCount Int      @default(0) @map("follower_count")
+  inviteCount   Int      @default(0) @map("invite_count")
+  createdById   String?  @map("created_by")
+  updatedById   String?  @map("updated_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   createdBy User? @relation("PlaceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy User? @relation("PlaceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
@@ -404,15 +423,15 @@ model Place {
 }
 
 model MediaFile {
-  id          String   @id @default(uuid())
-  url         String
-  type        String   @default("image")
-  status      String   @default("active")
-  contentType ReportTargetType @map("content_type")
-  contentId   String   @map("content_id")
-  uploadedById String? @map("uploaded_by")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id           String           @id @default(uuid())
+  url          String
+  type         String           @default("image")
+  status       String           @default("active")
+  contentType  ReportTargetType @map("content_type")
+  contentId    String           @map("content_id")
+  uploadedById String?          @map("uploaded_by")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
 
   uploadedBy User? @relation("MediaUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
 
@@ -422,20 +441,20 @@ model MediaFile {
 }
 
 model ContentComment {
-  id          String   @id @default(uuid())
-  targetType  ReportTargetType @map("target_type")
-  targetId    String   @map("target_id")
-  parentId    String?  @map("parent_id")
-  authorId    String?  @map("author_id")
-  body        String
-  status      String   @default("active")
-  likeCount   Int      @default(0) @map("like_count")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id         String           @id @default(uuid())
+  targetType ReportTargetType @map("target_type")
+  targetId   String           @map("target_id")
+  parentId   String?          @map("parent_id")
+  authorId   String?          @map("author_id")
+  body       String
+  status     String           @default("active")
+  likeCount  Int              @default(0) @map("like_count")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
 
-  parent ContentComment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  parent  ContentComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies ContentComment[] @relation("CommentReplies")
-  author User? @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  author  User?            @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
 
   @@index([targetType, targetId])
   @@index([parentId])
@@ -452,7 +471,7 @@ model PrivateMessage {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  sender User? @relation("PrivateMessageSender", fields: [senderId], references: [id], onDelete: SetNull)
+  sender    User? @relation("PrivateMessageSender", fields: [senderId], references: [id], onDelete: SetNull)
   recipient User? @relation("PrivateMessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
 
   @@index([senderId, recipientId])
@@ -461,12 +480,12 @@ model PrivateMessage {
 }
 
 model ContentReaction {
-  id          String   @id @default(uuid())
-  targetType  ReportTargetType @map("target_type")
-  targetId    String   @map("target_id")
-  userId      String   @map("user_id")
-  reaction    String
-  createdAt   DateTime @default(now()) @map("created_at")
+  id         String           @id @default(uuid())
+  targetType ReportTargetType @map("target_type")
+  targetId   String           @map("target_id")
+  userId     String           @map("user_id")
+  reaction   String
+  createdAt  DateTime         @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -476,11 +495,11 @@ model ContentReaction {
 }
 
 model ContentView {
-  id          String   @id @default(uuid())
-  targetType  ReportTargetType @map("target_type")
-  targetId    String   @map("target_id")
-  userId      String?  @map("user_id")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id         String           @id @default(uuid())
+  targetType ReportTargetType @map("target_type")
+  targetId   String           @map("target_id")
+  userId     String?          @map("user_id")
+  createdAt  DateTime         @default(now()) @map("created_at")
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -528,8 +547,8 @@ model ContentReport {
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
 
-  reporter   User  @relation("ReportSubmittedBy", fields: [reporterId], references: [id], onDelete: Cascade)
-  resolvedBy User? @relation("ReportResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  reporter   User        @relation("ReportSubmittedBy", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolvedBy User?       @relation("ReportResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
   rule       ReportRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
 
   @@index([targetType, targetId])
@@ -539,13 +558,13 @@ model ContentReport {
 }
 
 model ReportGroupNote {
-  id             String           @id @default(uuid())
-  targetType     ReportTargetType @map("target_type")
-  targetId       String           @map("target_id")
-  note           String
-  updatedById    String?          @map("updated_by")
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
+  id          String           @id @default(uuid())
+  targetType  ReportTargetType @map("target_type")
+  targetId    String           @map("target_id")
+  note        String
+  updatedById String?          @map("updated_by")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
 
   updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
 
@@ -554,13 +573,13 @@ model ReportGroupNote {
 }
 
 model ReportGroupComment {
-  id             String           @id @default(uuid())
-  targetType     ReportTargetType @map("target_type")
-  targetId       String           @map("target_id")
-  body           String
-  createdById    String?          @map("created_by")
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
+  id          String           @id @default(uuid())
+  targetType  ReportTargetType @map("target_type")
+  targetId    String           @map("target_id")
+  body        String
+  createdById String?          @map("created_by")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
 
   createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
@@ -569,15 +588,15 @@ model ReportGroupComment {
 }
 
 model Notification {
-  id         String   @id @default(uuid())
-  userId     String   @map("user_id")
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
   type       String
   title      String
   body       String
-  targetType String?  @map("target_type")
-  targetId   String?  @map("target_id")
+  targetType String?   @map("target_type")
+  targetId   String?   @map("target_id")
   readAt     DateTime? @map("read_at")
-  createdAt  DateTime @default(now()) @map("created_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -656,21 +675,21 @@ model EmailToken {
 }
 
 model UserMessage {
-  id          String            @id @default(uuid())
-  type        UserMessageType
-  category    String?
-  userId      String?           @map("user_id")
-  name        String
-  email       String
-  phone       String?
-  body        String
-  status      UserMessageStatus @default(unread)
-  appVersion  String?           @map("app_version")
-  systemInfo  String?           @map("system_info")
-  readAt      DateTime?         @map("read_at")
-  readById    String?           @map("read_by")
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
+  id         String            @id @default(uuid())
+  type       UserMessageType
+  category   String?
+  userId     String?           @map("user_id")
+  name       String
+  email      String
+  phone      String?
+  body       String
+  status     UserMessageStatus @default(unread)
+  appVersion String?           @map("app_version")
+  systemInfo String?           @map("system_info")
+  readAt     DateTime?         @map("read_at")
+  readById   String?           @map("read_by")
+  createdAt  DateTime          @default(now()) @map("created_at")
+  updatedAt  DateTime          @updatedAt @map("updated_at")
 
   user   User? @relation("UserMessageUser", fields: [userId], references: [id], onDelete: SetNull)
   readBy User? @relation("UserMessageReadBy", fields: [readById], references: [id], onDelete: SetNull)

@@ -9,6 +9,7 @@ const profileSelect = {
   username: true,
   email: true,
   phone: true,
+  phoneVerified: true,
   country: true,
   city: true,
   district: true,
@@ -43,6 +44,10 @@ export class ProfileService {
     const current = await this.getProfile(userId);
     const username = input.username?.trim() || null;
 
+    if (input.phone !== undefined && (input.phone.trim() || null) !== current.phone) {
+      throw new BadRequestException("Telefon numarası doğrulama akışıyla değiştirilmelidir.");
+    }
+
     if (username) {
       const owner = await this.prisma.user.findFirst({ where: { username, id: { not: userId } }, select: { id: true } });
       if (owner) {
@@ -61,7 +66,7 @@ export class ProfileService {
       data: {
         name: input.name.trim(),
         username,
-        phone: this.optionalText(input.phone, current.phone),
+        phone: current.phone,
         country: this.optionalText(input.country, current.country),
         city: this.optionalText(input.city, current.city),
         district: this.optionalText(input.district, current.district),

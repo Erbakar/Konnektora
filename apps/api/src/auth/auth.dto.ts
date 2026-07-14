@@ -99,3 +99,15 @@ export class DeactivateAccountDto {
   @MaxLength(1000)
   reason!: string;
 }
+
+export class RequestPhoneVerificationDto {
+  @IsString()
+  @Matches(/^\+[1-9]\d{7,14}$/, { message: "Telefon numarası E.164 formatında olmalıdır." })
+  phone!: string;
+}
+
+export class ConfirmPhoneVerificationDto extends RequestPhoneVerificationDto {
+  @IsString()
+  @Matches(/^\d{6}$/)
+  code!: string;
+}

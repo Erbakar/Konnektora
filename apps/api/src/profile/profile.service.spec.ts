@@ -9,6 +9,7 @@ describe("ProfileService", () => {
     username: "ada",
     email: "ada@example.com",
     phone: null,
+    phoneVerified: false,
     country: "Türkiye",
     city: "İstanbul",
     district: null,
@@ -62,6 +63,16 @@ describe("ProfileService", () => {
     await expect(service.updateProfile("user-1", { name: "Konnektora", companyName: "", tradeName: "" })).rejects.toBeInstanceOf(
       BadRequestException
     );
+  });
+
+  it("rejects phone changes outside the verification flow", async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue(currentProfile);
+
+    await expect(
+      service.updateProfile("user-1", { name: "Ada Lovelace", phone: "+905551112233" })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   it("normalizes optional profile fields before updating", async () => {

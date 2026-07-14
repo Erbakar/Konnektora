@@ -25,6 +25,12 @@ export const passwordSchema = z
   .regex(/[a-z]/, "Şifre en az bir küçük harf içermelidir.")
   .regex(/[A-Z]/, "Şifre en az bir büyük harf içermelidir.")
   .regex(/[^A-Za-z0-9]/, "Şifre en az bir özel karakter içermelidir.");
+export const phoneSchema = z.string().regex(/^\+[1-9]\d{7,14}$/);
+export const phoneVerificationResponseSchema = z.object({
+  ok: z.literal(true),
+  expiresInSeconds: z.number().int().positive(),
+  developmentCode: z.string().length(6).optional()
+});
 export const userStatusSchema = z.enum(["invited", "pending", "active", "disabled", "frozen", "deleted", "suspended", "banned"]);
 export const eventParticipantStatusSchema = z.enum([
   "invited",
@@ -210,6 +216,7 @@ export const profileSchema = z.object({
   username: z.string().min(2).max(80).nullable(),
   email: z.string().email(),
   phone: z.string().max(40).nullable(),
+  phoneVerified: z.boolean(),
   country: z.string().max(120).nullable(),
   city: z.string().max(120).nullable(),
   district: z.string().max(120).nullable(),

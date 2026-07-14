@@ -1,11 +1,12 @@
-import { ConflictException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { User } from "@prisma/client";
 import { compare, hash } from "bcryptjs";
-import { createHash, randomBytes } from "crypto";
+import { createHash, randomBytes, randomInt } from "crypto";
 import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { AcceptInviteDto, ChangePasswordDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, ResetPasswordDto, TokenDto } from "./auth.dto";
+import { SmsService } from "../sms/sms.service";
+import { AcceptInviteDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, TokenDto } from "./auth.dto";
 
 const EMAIL_TOKEN_TTL_MS = {
   verify_email: 1000 * 60 * 60 * 24,
@@ -18,7 +19,8 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
-    private readonly mailService: MailService
+    private readonly mailService: MailService,
+    private readonly smsService: SmsService
   ) {}
 
   async login(input: LoginDto, options: { adminOnly?: boolean } = {}) {
@@ -234,6 +236,63 @@ export class AuthService {
 
     const activeUser = await this.prisma.user.update({ where: { id: user.id }, data: { status: "active" } });
     return this.createLoginResponse(activeUser);
+  }
+
+  async requestPhoneVerification(userId: string, input: RequestPhoneVerificationDto) {
+    const owner = await this.prisma.user.findFirst({ where: { phone: input.phone, id: { not: userId } }, select: { id: true } });
+    if (owner) {
+      throw new ConflictException("Bu telefon numarası zaten kullanılıyor.");
+    }
+
+    const latest = await this.prisma.phoneVerification.findFirst({
+      where: { userId, phone: input.phone },
+      orderBy: { createdAt: "desc" }
+    });
+    if (latest && Date.now() - latest.createdAt.getTime() < 60_000) {
+      throw new BadRequestException("Yeni kod istemeden önce 60 saniye bekleyin.");
+    }
+
+    const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+    await this.smsService.sendVerificationCode(input.phone, code);
+    await this.prisma.phoneVerification.create({
+      data: {
+        userId,
+        phone: input.phone,
+        codeHash: this.hashToken(code),
+        expiresAt: new Date(Date.now() + 120_000)
+      }
+    });
+
+    return {
+      ok: true as const,
+      expiresInSeconds: 120,
+      ...(process.env.NODE_ENV === "production" ? {} : { developmentCode: code })
+    };
+  }
+
+  async confirmPhoneVerification(userId: string, input: ConfirmPhoneVerificationDto) {
+    const owner = await this.prisma.user.findFirst({ where: { phone: input.phone, id: { not: userId } }, select: { id: true } });
+    if (owner) {
+      throw new ConflictException("Bu telefon numarası artık başka bir hesapta kullanılıyor.");
+    }
+
+    const verification = await this.prisma.phoneVerification.findFirst({
+      where: { userId, phone: input.phone, consumedAt: null },
+      orderBy: { createdAt: "desc" }
+    });
+    if (!verification || verification.expiresAt.getTime() < Date.now() || verification.attempts >= 5) {
+      throw new BadRequestException("Kod geçersiz veya süresi dolmuş.");
+    }
+    if (verification.codeHash !== this.hashToken(input.code)) {
+      await this.prisma.phoneVerification.update({ where: { id: verification.id }, data: { attempts: { increment: 1 } } });
+      throw new BadRequestException("Kod hatalı.");
+    }
+
+    const [, user] = await this.prisma.$transaction([
+      this.prisma.phoneVerification.update({ where: { id: verification.id }, data: { consumedAt: new Date() } }),
+      this.prisma.user.update({ where: { id: userId }, data: { phone: input.phone, phoneVerified: true } })
+    ]);
+    return { ok: true as const, phone: user.phone, phoneVerified: user.phoneVerified };
   }
 
   async createInviteAcceptToken(userId: string) {

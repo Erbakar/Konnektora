@@ -8,6 +8,7 @@ import {
   archiveMyEvent,
   checkInEventParticipant,
   changePassword,
+  confirmPhoneVerification,
   clearUserSession,
   createUserEvent,
   createUserTag,
@@ -26,6 +27,7 @@ import {
   registerUser,
   reactivateAccount,
   requestEmailVerification,
+  requestPhoneVerification,
   requestPasswordReset,
   setUserSession,
   updateEventParticipantStatus,
@@ -40,6 +42,8 @@ export function AccountPage() {
   const [user, setUser] = useState(() => getUserSession());
   const [mode, setMode] = useState<"login" | "register">("register");
   const [registrationAccountType, setRegistrationAccountType] = useState<AccountType>("individual");
+  const [pendingPhone, setPendingPhone] = useState<string | null>(null);
+  const [developmentPhoneCode, setDevelopmentPhoneCode] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const { data: tags = [] } = useQuery({ queryKey: ["tags"], queryFn: listTags });
   const myEventsQuery = useQuery({
@@ -161,6 +165,25 @@ export function AccountPage() {
     },
     onError: () => setNotice({ tone: "error", message: "Hesap dondurulamadı. Mevcut şifrenizi kontrol edin." })
   });
+  const requestPhoneMutation = useMutation({
+    mutationFn: requestPhoneVerification,
+    onSuccess: (response, phone) => {
+      setPendingPhone(phone);
+      setDevelopmentPhoneCode(response.developmentCode ?? null);
+      setNotice({ tone: "success", message: "Doğrulama kodu gönderildi. Kod 2 dakika geçerlidir." });
+    },
+    onError: () => setNotice({ tone: "error", message: "Kod gönderilemedi. Numarayı +905551112233 biçiminde kontrol edin." })
+  });
+  const confirmPhoneMutation = useMutation({
+    mutationFn: (input: { phone: string; code: string }) => confirmPhoneVerification(input.phone, input.code),
+    onSuccess: () => {
+      setPendingPhone(null);
+      setDevelopmentPhoneCode(null);
+      void queryClient.invalidateQueries({ queryKey: ["my-profile", user?.id] });
+      setNotice({ tone: "success", message: "Telefon numaranız doğrulandı." });
+    },
+    onError: () => setNotice({ tone: "error", message: "Kod hatalı veya süresi dolmuş." })
+  });
   const readNotificationMutation = useMutation({
     mutationFn: markMyNotificationRead,
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["my-notifications", user?.id] })
@@ -281,6 +304,17 @@ export function AccountPage() {
       currentPassword: String(form.get("currentPassword") || ""),
       reason: String(form.get("reason") || "").trim()
     });
+  }
+
+  function handlePhoneRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    requestPhoneMutation.mutate(String(new FormData(event.currentTarget).get("phone") || "").trim());
+  }
+
+  function handlePhoneConfirmation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!pendingPhone) return;
+    confirmPhoneMutation.mutate({ phone: pendingPhone, code: String(new FormData(event.currentTarget).get("code") || "") });
   }
 
   return (
@@ -447,7 +481,8 @@ export function AccountPage() {
                   </label>
                   <label>
                     Telefon
-                    <input defaultValue={profileQuery.data.phone ?? ""} name="phone" type="tel" />
+                    <input defaultValue={profileQuery.data.phone ?? ""} name="phone" readOnly type="tel" />
+                    <span className="form-help">{profileQuery.data.phoneVerified ? "Doğrulandı" : "Doğrulanmadı"}</span>
                   </label>
                   <label>
                     Web sitesi
@@ -510,6 +545,28 @@ export function AccountPage() {
                 </button>
               </form>
             ) : null}
+            <form className="admin-form" onSubmit={pendingPhone ? handlePhoneConfirmation : handlePhoneRequest}>
+              <h2>Telefon doğrulama</h2>
+              {!pendingPhone ? (
+                <label>
+                  Yeni telefon numarası
+                  <input name="phone" pattern="\+[1-9][0-9]{7,14}" placeholder="+905551112233" required type="tel" />
+                </label>
+              ) : (
+                <>
+                  <p className="form-help">{pendingPhone} numarasına gönderilen 6 haneli kodu girin.</p>
+                  {developmentPhoneCode ? <p className="form-help">Geliştirme kodu: {developmentPhoneCode}</p> : null}
+                  <label>
+                    Doğrulama kodu
+                    <input autoComplete="one-time-code" inputMode="numeric" maxLength={6} minLength={6} name="code" pattern="[0-9]{6}" required />
+                  </label>
+                </>
+              )}
+              <button className="secondary-action" disabled={requestPhoneMutation.isPending || confirmPhoneMutation.isPending} type="submit">
+                {pendingPhone ? "Numarayı doğrula" : "Kod gönder"}
+              </button>
+              {pendingPhone ? <button className="ghost-action" onClick={() => { setPendingPhone(null); setDevelopmentPhoneCode(null); }} type="button">İptal</button> : null}
+            </form>
             <form className="admin-form" onSubmit={handleChangePassword}>
               <h2>Şifre değiştir</h2>
               <label>

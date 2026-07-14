@@ -21,6 +21,8 @@ import {
   loginResponseSchema,
   moderationDecisionSchema,
   notificationSchema,
+  phoneVerificationResponseSchema,
+  phoneSchema,
   profileSchema,
   reportGroupCommentSchema,
   reportGroupDetailSchema,
@@ -105,6 +107,7 @@ const MOCK_MEDIA_KEY = "konnektora_mock_media";
 const MOCK_COMMENTS_KEY = "konnektora_mock_comments";
 const MOCK_PRIVATE_MESSAGES_KEY = "konnektora_mock_private_messages";
 const MOCK_NOTIFICATIONS_KEY = "konnektora_mock_notifications";
+const MOCK_PHONE_VERIFICATIONS_KEY = "konnektora_mock_phone_verifications";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -136,6 +139,7 @@ type MockUser = {
   followingCount?: number;
   lastOnlineAt?: string | null;
   emailVerified?: boolean;
+  phoneVerified?: boolean;
   invitedById?: string | null;
   penaltyScoreLastYear?: number;
   penaltyScoreAllTime?: number;
@@ -411,6 +415,14 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname === "/auth/reactivate" && method === "POST") {
     return schema.parse(reactivateMockAccount(parseBody<{ email: string; password: string }>(options)));
+  }
+
+  if (pathname === "/auth/phone/verification/request" && method === "POST") {
+    return schema.parse(requestMockPhoneVerification(parseBody<{ phone: string }>(options).phone));
+  }
+
+  if (pathname === "/auth/phone/verification/confirm" && method === "POST") {
+    return schema.parse(confirmMockPhoneVerification(parseBody<{ phone: string; code: string }>(options)));
   }
 
   if (pathname === "/auth/invite/accept" && method === "POST") {
@@ -2453,6 +2465,33 @@ function reactivateMockAccount(input: { email: string; password: string }): Logi
   return createMockLoginResponse(activeUser);
 }
 
+function requestMockPhoneVerification(phone: string) {
+  const session = getUserSession();
+  if (!session) throw new Error("User session required");
+  const code = Math.floor(Math.random() * 1_000_000).toString().padStart(6, "0");
+  const verifications = readStorage<Record<string, { phone: string; code: string; expiresAt: number }>>(MOCK_PHONE_VERIFICATIONS_KEY, {});
+  writeStorage(MOCK_PHONE_VERIFICATIONS_KEY, {
+    ...verifications,
+    [session.id]: { phone, code, expiresAt: Date.now() + 120_000 }
+  });
+  return { ok: true, expiresInSeconds: 120, developmentCode: code };
+}
+
+function confirmMockPhoneVerification(input: { phone: string; code: string }) {
+  const session = getUserSession();
+  const verifications = readStorage<Record<string, { phone: string; code: string; expiresAt: number }>>(MOCK_PHONE_VERIFICATIONS_KEY, {});
+  const verification = session ? verifications[session.id] : undefined;
+  if (!session || !verification || verification.phone !== input.phone || verification.code !== input.code || verification.expiresAt < Date.now()) {
+    throw new Error("Invalid phone verification code");
+  }
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  const user = users.find((item) => item.id === session.id);
+  if (user) {
+    writeStorage(MOCK_USERS_KEY, [{ ...user, phone: input.phone, phoneVerified: true }, ...users.filter((item) => item.id !== user.id)]);
+  }
+  return { ok: true, phone: input.phone, phoneVerified: true };
+}
+
 function acceptMockInvite(token: string, password: string, name?: string): LoginResponse {
   const response = consumeMockEmailToken(token, "invite_accept");
   const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
@@ -2509,6 +2548,7 @@ function getMockProfile(): Profile {
     username: stored?.username ?? null,
     email: stored?.email ?? session.email,
     phone: stored?.phone ?? null,
+    phoneVerified: stored?.phoneVerified ?? false,
     country: stored?.country ?? null,
     city: stored?.city ?? null,
     district: stored?.district ?? null,
@@ -2988,6 +3028,22 @@ export function deactivateAccount(input: { currentPassword: string; reason: stri
 
 export function reactivateAccount(email: string, password: string): Promise<LoginResponse> {
   return requestJson("/auth/reactivate", loginResponseSchema, { method: "POST", body: JSON.stringify({ email, password }) });
+}
+
+export function requestPhoneVerification(phone: string) {
+  return requestJson("/auth/phone/verification/request", phoneVerificationResponseSchema, {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify({ phone })
+  });
+}
+
+export function confirmPhoneVerification(phone: string, code: string) {
+  return requestJson(
+    "/auth/phone/verification/confirm",
+    z.object({ ok: z.literal(true), phone: phoneSchema, phoneVerified: z.literal(true) }),
+    { auth: "user", method: "POST", body: JSON.stringify({ phone, code }) }
+  );
 }
 
 export function acceptInvite(input: { token: string; name?: string; password: string }): Promise<LoginResponse> {
