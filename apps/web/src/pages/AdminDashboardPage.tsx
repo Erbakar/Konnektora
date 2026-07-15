@@ -16,7 +16,7 @@ import {
   Users,
   X
 } from "lucide-react";
-import { type FormEvent, type ReactNode, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import {
   type AdminEventInput,
   type AnnouncementInput,
@@ -1631,7 +1631,14 @@ function CmsAdminPanel({
                 </label>
                 <label>
                   İçerik
-                  <RichTextTextarea name="body" defaultValue={policy?.body ?? policyType.defaultBody} required minLength={10} rows={8} />
+                  <RichTextTextarea
+                    key={`${policyType.value}-${policy?.updatedAt ?? "new"}`}
+                    name="body"
+                    defaultValue={policy?.body ?? policyType.defaultBody}
+                    required
+                    minLength={10}
+                    rows={8}
+                  />
                 </label>
                 <button className="secondary-action" disabled={isPending} type="submit">
                   <Check size={18} />
@@ -1739,6 +1746,24 @@ function RichTextTextarea({
 }) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const initialHtml = defaultValue ?? "";
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    const input = inputRef.current;
+
+    if (!editor || !input) {
+      return;
+    }
+
+    // Set initial HTML once via DOM — never through dangerouslySetInnerHTML,
+    // which resets the caret on every parent re-render and blocks typing.
+    if (editor.dataset.initialized !== "true") {
+      editor.innerHTML = initialHtml;
+      input.value = initialHtml;
+      editor.dataset.initialized = "true";
+    }
+  }, [initialHtml]);
 
   function syncInput() {
     if (inputRef.current && editorRef.current) {
@@ -1746,37 +1771,82 @@ function RichTextTextarea({
     }
   }
 
-  function command(name: string, value?: string) {
-    editorRef.current?.focus();
-    document.execCommand(name, false, value);
+  function runCommand(commandName: string, value?: string) {
+    const editor = editorRef.current;
+
+    if (!editor) {
+      return;
+    }
+
+    editor.focus();
+    document.execCommand(commandName, false, value);
     syncInput();
   }
 
   return (
     <div className="rich-text-editor">
       <div className="rich-text-toolbar">
-        <button onClick={() => command("formatBlock", "h2")} type="button">H2</button>
-        <button onClick={() => command("formatBlock", "p")} type="button">P</button>
-        <button onClick={() => command("bold")} type="button">B</button>
-        <button onClick={() => command("italic")} type="button">I</button>
-        <button onClick={() => command("insertUnorderedList")} type="button">•</button>
-        <button onClick={() => command("insertOrderedList")} type="button">1.</button>
-        <button onClick={() => command("formatBlock", "blockquote")} type="button">“”</button>
-        <button onClick={() => command("createLink", window.prompt("Link URL") || "")} type="button">Link</button>
-        <button onClick={() => command("insertImage", window.prompt("Medya URL") || "")} type="button">Medya</button>
-        <button onClick={() => command("removeFormat")} type="button">Tx</button>
+        <button onMouseDown={(event) => event.preventDefault()} onClick={() => runCommand("formatBlock", "h2")} type="button">
+          H2
+        </button>
+        <button onMouseDown={(event) => event.preventDefault()} onClick={() => runCommand("formatBlock", "p")} type="button">
+          P
+        </button>
+        <button onMouseDown={(event) => event.preventDefault()} onClick={() => runCommand("bold")} type="button">
+          B
+        </button>
+        <button onMouseDown={(event) => event.preventDefault()} onClick={() => runCommand("italic")} type="button">
+          I
+        </button>
+        <button onMouseDown={(event) => event.preventDefault()} onClick={() => runCommand("insertUnorderedList")} type="button">
+          •
+        </button>
+        <button onMouseDown={(event) => event.preventDefault()} onClick={() => runCommand("insertOrderedList")} type="button">
+          1.
+        </button>
+        <button onMouseDown={(event) => event.preventDefault()} onClick={() => runCommand("formatBlock", "blockquote")} type="button">
+          “”
+        </button>
+        <button
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            const url = window.prompt("Link URL");
+            if (url) {
+              runCommand("createLink", url);
+            }
+          }}
+          type="button"
+        >
+          Link
+        </button>
+        <button
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            const url = window.prompt("Medya URL");
+            if (url) {
+              runCommand("insertImage", url);
+            }
+          }}
+          type="button"
+        >
+          Medya
+        </button>
+        <button onMouseDown={(event) => event.preventDefault()} onClick={() => runCommand("removeFormat")} type="button">
+          Tx
+        </button>
       </div>
-      <input name={name} ref={inputRef} required={required} type="hidden" defaultValue={defaultValue ?? ""} />
+      <input name={name} ref={inputRef} required={required} type="hidden" defaultValue={initialHtml} />
       <div
         className="rich-text-surface"
-        contentEditable
+        contentEditable={true}
         data-placeholder={placeholder}
         onInput={syncInput}
+        onBlur={syncInput}
         ref={editorRef}
         role="textbox"
+        aria-multiline="true"
         style={{ minHeight: `${rows * 24}px` }}
         suppressContentEditableWarning
-        dangerouslySetInnerHTML={{ __html: defaultValue ?? "" }}
       />
       <span className="sr-only">{maxLength ?? minLength ?? ""}</span>
     </div>
