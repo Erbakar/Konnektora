@@ -1135,6 +1135,94 @@ function defaultModerationAction(targetType: ReportTargetType): ModerationDecisi
   return "warn_user";
 }
 
+function contentActionOptions(targetType: ReportTargetType): Array<{ value: ModerationDecisionInput["action"]; label: string }> {
+  if (targetType === "event") {
+    return [
+      { value: "none", label: "İçeriğe aksiyon yok" },
+      { value: "archive_event", label: "Etkinliği arşivle" }
+    ];
+  }
+
+  if (targetType === "tag") {
+    return [
+      { value: "none", label: "İçeriğe aksiyon yok" },
+      { value: "archive_tag", label: "Tag'i arşivle" }
+    ];
+  }
+
+  if (targetType === "media") {
+    return [
+      { value: "none", label: "İçeriğe aksiyon yok" },
+      { value: "remove_media", label: "Medyayı yayından kaldır" }
+    ];
+  }
+
+  if (targetType === "place") {
+    return [
+      { value: "none", label: "İçeriğe aksiyon yok" },
+      { value: "archive_place", label: "Mekanı yayından kaldır" }
+    ];
+  }
+
+  if (["tag_comment", "event_comment", "place_comment", "comment_reply"].includes(targetType)) {
+    return [
+      { value: "none", label: "İçeriğe aksiyon yok" },
+      { value: "remove_comment", label: "Yorumu yayından kaldır" }
+    ];
+  }
+
+  if (targetType === "username") {
+    return [
+      { value: "none", label: "İçeriğe aksiyon yok" },
+      { value: "reset_username", label: "Kullanıcı adını değiştir" }
+    ];
+  }
+
+  if (targetType === "website_url") {
+    return [
+      { value: "none", label: "İçeriğe aksiyon yok" },
+      { value: "remove_website", label: "Web sitesini sil" }
+    ];
+  }
+
+  if (targetType === "private_message") {
+    return [
+      { value: "none", label: "İçeriğe aksiyon yok" },
+      { value: "remove_private_messages", label: "Özel mesajları yayından kaldır" }
+    ];
+  }
+
+  return [{ value: "none", label: "İçeriğe aksiyon yok" }];
+}
+
+const USER_ACTION_OPTIONS: Array<{ value: NonNullable<ModerationDecisionInput["userAction"]>; label: string }> = [
+  { value: "none", label: "Kullanıcıya aksiyon yok" },
+  { value: "warn_user", label: "Kullanıcıyı uyar" },
+  { value: "suspend_user", label: "Kullanıcıyı askıya al" },
+  { value: "ban_user", label: "Kullanıcıyı yasakla" }
+];
+
+function formatPayloadValue(value: unknown) {
+  if (value == null) {
+    return "—";
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (typeof value === "object" && value !== null && "email" in value) {
+    const record = value as { email?: string; name?: string; username?: string };
+    return record.username ? `@${record.username}` : record.email ?? record.name ?? "—";
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "—";
+  }
+}
+
 const policyTypes: Array<{ value: PolicyType; label: string; defaultTitle: string; defaultBody: string }> = [
   {
     value: "privacy",
@@ -1153,6 +1241,12 @@ const policyTypes: Array<{ value: PolicyType; label: string; defaultTitle: strin
     label: "Çerez Politikası",
     defaultTitle: "Cookie Policy",
     defaultBody: "Konnektora çerez politikası içeriği admin panelinden yönetilir."
+  },
+  {
+    value: "about",
+    label: "About Us",
+    defaultTitle: "About Us",
+    defaultBody: "Konnektora about us içeriği admin panelinden yönetilir."
   }
 ];
 
@@ -2993,6 +3087,12 @@ function ReportAdminPanel({
   reports: ContentReport[];
 }) {
   const [ruleTargetType, setRuleTargetType] = useState<ReportTargetType>("event");
+  const [selectedUserAction, setSelectedUserAction] = useState<NonNullable<ModerationDecisionInput["userAction"]>>("none");
+  const isUserTarget = groupDetail?.targetType === "user";
+
+  useEffect(() => {
+    setSelectedUserAction(groupDetail?.targetType === "user" ? "warn_user" : "none");
+  }, [groupDetail?.targetType, groupDetail?.targetId]);
 
   function handleRuleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3058,19 +3158,29 @@ function ReportAdminPanel({
 
     const form = new FormData(event.currentTarget);
     const suspensionEndsAt = String(form.get("suspensionEndsAt") || "");
+    const contentAction = String(form.get("action") || "none") as ModerationDecisionInput["action"];
+    const userAction = String(form.get("userAction") || "none") as NonNullable<ModerationDecisionInput["userAction"]>;
+    const effectiveAction = groupDetail.targetType === "user" ? (userAction === "none" ? "none" : userAction) : contentAction;
+
+    if ((userAction === "suspend_user" || effectiveAction === "suspend_user") && !suspensionEndsAt) {
+      window.alert("Askıya alma için askı bitiş zamanı zorunludur.");
+      return;
+    }
 
     onCreateDecision({
       targetType: groupDetail.targetType,
       targetId: groupDetail.targetId,
       data: {
         decision: String(form.get("decision")) as "violation" | "no_violation",
-        action: String(form.get("action")) as ModerationDecisionInput["action"],
+        action: effectiveAction,
+        userAction: groupDetail.targetType === "user" ? undefined : userAction,
         penaltyScore: Number(form.get("penaltyScore") || 0),
         note: String(form.get("note") || "") || undefined,
         suspensionEndsAt: suspensionEndsAt ? new Date(suspensionEndsAt).toISOString() : undefined
       }
     });
     event.currentTarget.reset();
+    setSelectedUserAction("none");
   }
 
   function getModerationAction(report: ContentReport) {
@@ -3220,7 +3330,7 @@ function ReportAdminPanel({
           </div>
           <div className="admin-subsection">
             <div className="admin-subsection-header">
-              <h3>Tab 1 · Şikayet edilen içerik</h3>
+              <h3>Şikayet edilen içerik</h3>
               <span>{groupDetail.targetSummary?.status ?? "durum yok"}</span>
             </div>
             {groupDetail.targetSummary ? (
@@ -3228,7 +3338,16 @@ function ReportAdminPanel({
                 <div>
                   <strong>{groupDetail.targetSummary.title}</strong>
                   <span>{groupDetail.targetSummary.subtitle ?? "Ek açıklama yok"}</span>
-                  <span>Yayın/oluşturulma bilgileri payload içinde tutulur; hedef türü: {groupDetail.targetType}</span>
+                  <span>
+                    Hedef türü: {REPORT_TARGET_OPTIONS.find((option) => option.value === groupDetail.targetType)?.label ?? groupDetail.targetType}
+                    {" · "}
+                    ID: {groupDetail.targetId}
+                  </span>
+                  {Object.entries(groupDetail.targetSummary.payload ?? {}).map(([label, value]) => (
+                    <span key={label}>
+                      {label}: {formatPayloadValue(value)}
+                    </span>
+                  ))}
                 </div>
                 <div className="profile-tag-row">
                   {Object.entries(groupDetail.targetSummary.metrics ?? {}).map(([label, value]) => (
@@ -3244,15 +3363,33 @@ function ReportAdminPanel({
           </div>
           <div className="admin-subsection">
             <div className="admin-subsection-header">
-              <h3>Tab 2 · Sorumlusu hakkında</h3>
+              <h3>Sorumlusu hakkında</h3>
               <span>{groupDetail.targetSummary?.owner?.status ?? "sorumlu yok"}</span>
             </div>
             {groupDetail.targetSummary?.owner ? (
               <div className="admin-list-row">
                 <div>
-                  <strong>{groupDetail.targetSummary.owner.username ? `@${groupDetail.targetSummary.owner.username}` : groupDetail.targetSummary.owner.name}</strong>
+                  <strong>
+                    {groupDetail.targetSummary.owner.username
+                      ? `@${groupDetail.targetSummary.owner.username}`
+                      : groupDetail.targetSummary.owner.name}
+                  </strong>
                   <span>{groupDetail.targetSummary.owner.email}</span>
-                  <span>Rol: {groupDetail.targetSummary.owner.role} · Statü: {groupDetail.targetSummary.owner.status}</span>
+                  <span>
+                    Rol: {groupDetail.targetSummary.owner.role} · Statü: {groupDetail.targetSummary.owner.status}
+                    {groupDetail.targetSummary.owner.accountType ? ` · Hesap: ${groupDetail.targetSummary.owner.accountType}` : ""}
+                  </span>
+                  <span>
+                    {[groupDetail.targetSummary.owner.city, groupDetail.targetSummary.owner.country].filter(Boolean).join(", ") || "Konum yok"}
+                    {groupDetail.targetSummary.owner.phone ? ` · ${groupDetail.targetSummary.owner.phone}` : ""}
+                  </span>
+                  <span>
+                    Ceza (yıl): {groupDetail.targetSummary.owner.penaltyScoreLastYear ?? 0}
+                    {" · "}
+                    Ceza (toplam): {groupDetail.targetSummary.owner.penaltyScoreAllTime ?? 0}
+                    {" · "}
+                    Takipçi: {groupDetail.targetSummary.owner.followerCount ?? 0}
+                  </span>
                 </div>
               </div>
             ) : (
@@ -3270,8 +3407,31 @@ function ReportAdminPanel({
           </form>
           <div className="admin-subsection">
             <div className="admin-subsection-header">
-              <h3>Tab 3 · Şikayet kartları / Admin yorumları</h3>
-              <span>{groupDetail.reports.length} şikayet · {groupDetail.comments?.length ?? 0} admin yorumu</span>
+              <h3>Gruplanmış şikayetler / Admin yorumları</h3>
+              <span>
+                {groupDetail.reports.length} şikayet · {groupDetail.comments?.length ?? 0} admin yorumu
+              </span>
+            </div>
+            <p className="form-help">
+              Aynı içeriğe yapılan tüm şikayetler bu detayda birleştirilir. Toplam ihlal puanı: {groupDetail.violationScore}.
+            </p>
+            <div className="admin-list">
+              {groupDetail.reports.map((report) => (
+                <div className="admin-list-row" key={report.id}>
+                  <div>
+                    <strong>{report.reason}</strong>
+                    <span>
+                      {report.rule?.title ?? "Serbest rapor"}
+                      {report.rule?.violationScore != null ? ` · ${report.rule.violationScore} puan` : ""}
+                      {" · "}
+                      {report.reporter?.email ?? report.reporterId}
+                    </span>
+                    {report.details ? <span>{report.details}</span> : null}
+                    <span>{report.createdAt ? formatDateTime(report.createdAt) : "tarih yok"}</span>
+                  </div>
+                  <span className={`status-pill status-${report.status}`}>{report.status}</span>
+                </div>
+              ))}
             </div>
             <form className="admin-form compact-form" onSubmit={handleGroupCommentSubmit}>
               <label>
@@ -3295,7 +3455,7 @@ function ReportAdminPanel({
             </div>
           </div>
           <form className="admin-form compact-form" onSubmit={handleDecisionSubmit}>
-            <h3>Tab 4-5 · İçeriğe Müdahale / Sorumlusuna Ceza</h3>
+            <h3>Moderasyon kararı</h3>
             <div className="admin-form-grid">
               <label>
                 Karar
@@ -3304,31 +3464,43 @@ function ReportAdminPanel({
                   <option value="no_violation">İhlal yok</option>
                 </select>
               </label>
+              {!isUserTarget ? (
+                <label>
+                  İçeriğe müdahale
+                  <select name="action" defaultValue={defaultModerationAction(groupDetail.targetType)}>
+                    {contentActionOptions(groupDetail.targetType).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <label>
-                Aksiyon
-                <select name="action" defaultValue={defaultModerationAction(groupDetail.targetType)}>
-                  <option value="none">Aksiyon yok</option>
-                  <option value="warn_user">Kullanıcıyı uyar</option>
-                  <option value="suspend_user">Kullanıcıyı askıya al</option>
-                  <option value="ban_user">Kullanıcıyı yasakla</option>
-                  <option value="archive_event">Etkinliği arşivle</option>
-                  <option value="archive_tag">Tag'i arşivle</option>
-                  <option value="remove_media">Medyayı yayından kaldır</option>
-                  <option value="archive_place">Mekanı yayından kaldır</option>
-                  <option value="remove_comment">Yorumu yayından kaldır</option>
-                  <option value="reset_username">Kullanıcı adını değiştir</option>
-                  <option value="remove_website">Web sitesini sil</option>
-                  <option value="remove_private_messages">Özel mesajları yayından kaldır</option>
+                Kullanıcıya müdahale
+                <select
+                  name="userAction"
+                  value={selectedUserAction}
+                  onChange={(event) => setSelectedUserAction(event.target.value as NonNullable<ModerationDecisionInput["userAction"]>)}
+                >
+                  {USER_ACTION_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
                 Ceza puanı
                 <input name="penaltyScore" defaultValue={groupDetail.violationScore} min={0} max={1000} type="number" />
               </label>
-              <label>
-                Askı bitişi
-                <input name="suspensionEndsAt" type="datetime-local" />
-              </label>
+              {selectedUserAction === "suspend_user" ? (
+                <label>
+                  Askı bitiş zamanı
+                  <input name="suspensionEndsAt" required type="datetime-local" />
+                  <span className="form-help">Kullanıcı askısının otomatik olarak sona ereceği tarih/saat.</span>
+                </label>
+              ) : null}
             </div>
             <label>
               Karar notu
@@ -3348,7 +3520,11 @@ function ReportAdminPanel({
                     </strong>
                     <span>
                       {decision.penaltyScore} puan · {decision.issuedBy?.email ?? "admin"}
+                      {decision.suspensionEndsAt
+                        ? ` · Askı bitişi: ${formatDateTime(decision.suspensionEndsAt)}`
+                        : ""}
                     </span>
+                    {decision.note ? <span>{decision.note}</span> : null}
                   </div>
                   <span className="status-pill status-resolved">{decision.createdAt ? formatDateTime(decision.createdAt) : "karar"}</span>
                 </div>
@@ -3374,19 +3550,6 @@ function ReportAdminPanel({
               </div>
             </div>
           ) : null}
-          <div className="admin-list">
-            {groupDetail.reports.map((report) => (
-              <div className="admin-list-row" key={report.id}>
-                <div>
-                  <strong>{report.reason}</strong>
-                  <span>
-                    {report.status} · {report.rule?.title ?? "Serbest rapor"} · {report.reporter?.email ?? report.reporterId}
-                  </span>
-                </div>
-                <span className={`status-pill status-${report.status}`}>{report.status}</span>
-              </div>
-            ))}
-          </div>
         </div>
       ) : null}
       <div className="section-header compact">
