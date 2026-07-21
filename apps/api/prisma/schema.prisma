@@ -90,6 +90,14 @@ enum ReportTargetType {
   place_comment
   comment_reply
   private_message
+  post
+  post_comment
+}
+
+enum PostVisibility {
+  everybody
+  following
+  network
 }
 
 enum ReportStatus {
@@ -246,12 +254,83 @@ model User {
   contactInvites           ContactInvite[]
   profileVerificationRequests ProfileVerification[] @relation("ProfileVerificationUser")
   reviewedProfileVerifications ProfileVerification[] @relation("ProfileVerificationReviewer")
+  posts                    Post[]        @relation("PostAuthor")
+  postLikes                PostLike[]
+  postComments             PostComment[] @relation("PostCommentAuthor")
   profileVerifiedAt       DateTime? @map("profile_verified_at")
 
   @@index([accountType, status])
   @@index([country, city])
   @@index([lastOnlineAt])
   @@map("users")
+}
+
+model Post {
+  id           String         @id @default(uuid())
+  authorId     String         @map("author_id")
+  body         String
+  visibility   PostVisibility @default(everybody)
+  status       String         @default("active")
+  likeCount    Int            @default(0) @map("like_count")
+  commentCount Int            @default(0) @map("comment_count")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  author   User          @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  media    PostMedia[]
+  likes    PostLike[]
+  comments PostComment[]
+
+  @@index([status, createdAt])
+  @@index([authorId, createdAt])
+  @@map("posts")
+}
+
+model PostMedia {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  url       String
+  type      String
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, sortOrder])
+  @@map("post_media")
+}
+
+model PostLike {
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@index([userId, createdAt])
+  @@map("post_likes")
+}
+
+model PostComment {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  authorId  String   @map("author_id")
+  parentId  String?  @map("parent_id")
+  body      String
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  post    Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User          @relation("PostCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  parent  PostComment?  @relation("PostCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies PostComment[] @relation("PostCommentReplies")
+
+  @@index([postId, status, createdAt])
+  @@index([authorId, createdAt])
+  @@map("post_comments")
 }
 
 model ProfileVerification {

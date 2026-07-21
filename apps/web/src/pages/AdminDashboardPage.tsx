@@ -210,10 +210,14 @@ const REPORT_RULE_TITLE_OPTIONS: Record<ReportTargetType, string[]> = {
   event_comment: ["Uygunsuz etkinlik yorumu", "Spam etkinlik yorumu", "Taciz içeren etkinlik yorumu", "Yanıltıcı etkinlik yorumu"],
   place_comment: ["Uygunsuz mekan yorumu", "Spam mekan yorumu", "Taciz içeren mekan yorumu", "Yanıltıcı mekan yorumu"],
   comment_reply: ["Uygunsuz yorum cevabı", "Spam yorum cevabı", "Taciz içeren yorum cevabı", "Yanıltıcı yorum cevabı"],
-  private_message: ["Uygunsuz özel mesaj", "Spam özel mesaj", "Taciz içeren özel mesaj", "Güvenlik riski taşıyan özel mesaj"]
+  private_message: ["Uygunsuz özel mesaj", "Spam özel mesaj", "Taciz içeren özel mesaj", "Güvenlik riski taşıyan özel mesaj"],
+  post: ["Uygunsuz gönderi", "Spam gönderi", "Taciz içeren gönderi", "Yanıltıcı gönderi"],
+  post_comment: ["Uygunsuz gönderi yorumu", "Spam gönderi yorumu", "Taciz içeren gönderi yorumu", "Yanıltıcı gönderi yorumu"]
 };
 
 const REPORT_TARGET_OPTIONS: Array<{ value: ReportTargetType; label: string }> = [
+  { value: "post", label: "Gönderi" },
+  { value: "post_comment", label: "Gönderi yorumu" },
   { value: "media", label: "Medya" },
   { value: "tag", label: "Etiket" },
   { value: "event", label: "Etkinlik" },

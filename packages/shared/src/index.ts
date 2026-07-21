@@ -185,8 +185,17 @@ export const reportTargetTypeSchema = z.enum([
   "event_comment",
   "place_comment",
   "comment_reply",
-  "private_message"
+  "private_message",
+  "post",
+  "post_comment"
 ]);
+
+export const postVisibilitySchema = z.enum(["everybody", "following", "network"]);
+export const postAuthorSchema = z.object({ id: z.string().uuid(), name: z.string(), username: z.string().nullable().optional(), profileVerifiedAt: z.string().datetime().or(z.date()).nullable().optional(), avatarUrl: z.string().nullable().optional() });
+export const postMediaSchema = z.object({ id: z.string().uuid(), postId: z.string().uuid(), url: z.string(), type: z.string(), sortOrder: z.number().int(), createdAt: z.string().datetime().or(z.date()) });
+export const socialPostSchema = z.object({ id: z.string().uuid(), authorId: z.string().uuid(), body: z.string(), visibility: postVisibilitySchema, status: z.string(), likeCount: z.number().int().nonnegative(), commentCount: z.number().int().nonnegative(), createdAt: z.string().datetime().or(z.date()), updatedAt: z.string().datetime().or(z.date()), liked: z.boolean(), author: postAuthorSchema, media: z.array(postMediaSchema) });
+export const socialPostFeedSchema = z.object({ items: z.array(socialPostSchema), page: z.number().int(), pageSize: z.number().int(), total: z.number().int().nonnegative(), hasMore: z.boolean() });
+export const socialPostCommentSchema = z.object({ id: z.string().uuid(), postId: z.string().uuid(), authorId: z.string().uuid(), parentId: z.string().uuid().nullable().optional(), body: z.string(), status: z.string(), createdAt: z.string().datetime().or(z.date()), updatedAt: z.string().datetime().or(z.date()), author: postAuthorSchema });
 export const reportStatusSchema = z.enum(["open", "reviewing", "resolved", "dismissed"]);
 export const userMessageTypeSchema = z.enum(["faq", "account_freeze", "write_to_us"]);
 export const userMessageStatusSchema = z.enum(["unread", "read"]);
@@ -903,6 +912,10 @@ export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;
 export type EventTicket = z.infer<typeof eventTicketSchema>;
 export type ReportTargetType = z.infer<typeof reportTargetTypeSchema>;
+export type PostVisibility = z.infer<typeof postVisibilitySchema>;
+export type SocialPost = z.infer<typeof socialPostSchema>;
+export type SocialPostFeed = z.infer<typeof socialPostFeedSchema>;
+export type SocialPostComment = z.infer<typeof socialPostCommentSchema>;
 export type ReportStatus = z.infer<typeof reportStatusSchema>;
 export type UserMessageType = z.infer<typeof userMessageTypeSchema>;
 export type UserMessageStatus = z.infer<typeof userMessageStatusSchema>;

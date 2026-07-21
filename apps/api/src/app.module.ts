@@ -20,6 +20,7 @@ import { IdentityModule } from "./identity/identity.module";
 import { DiscoveryModule } from "./discovery/discovery.module";
 import { PublicProfileModule } from "./public-profile/public-profile.module";
 import { ProfileVerificationModule } from "./profile-verification/profile-verification.module";
+import { PostsModule } from "./posts/posts.module";
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { ProfileVerificationModule } from "./profile-verification/profile-verifi
     ProfileModule,
     PublicProfileModule,
     ProfileVerificationModule,
+    PostsModule,
     PlacesModule,
     ReportsModule,
     SocialModule,

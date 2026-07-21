@@ -535,6 +535,18 @@ export class ReportsService {
   }
 
   private async ensureTargetExists(targetType: ReportTargetType, targetId: string) {
+    if (targetType === ReportTargetType.post) {
+      const post = await this.prisma.post.findUnique({ where: { id: targetId }, select: { id: true } });
+      if (!post) throw new NotFoundException("Raporlanacak gönderi bulunamadı.");
+      return;
+    }
+
+    if (targetType === ReportTargetType.post_comment) {
+      const comment = await this.prisma.postComment.findUnique({ where: { id: targetId }, select: { id: true } });
+      if (!comment) throw new NotFoundException("Raporlanacak gönderi yorumu bulunamadı.");
+      return;
+    }
+
     if (targetType === ReportTargetType.event) {
       const event = await this.prisma.event.findUnique({ where: { id: targetId }, select: { id: true } });
 
@@ -673,6 +685,18 @@ export class ReportsService {
   }
 
   private async resolveTargetSummary(targetType: ReportTargetType, targetId: string) {
+    if (targetType === ReportTargetType.post) {
+      const post = await this.prisma.post.findUnique({ where: { id: targetId }, include: { author: { select: TARGET_OWNER_SELECT }, _count: { select: { media: true } } } as any });
+      if (!post) return null;
+      return { title: post.body.slice(0, 120), subtitle: "Sosyal gönderi", status: post.status, owner: post.author, metrics: { likes: post.likeCount, comments: post.commentCount, media: (post as any)._count?.media ?? 0 }, payload: { visibility: post.visibility } };
+    }
+
+    if (targetType === ReportTargetType.post_comment) {
+      const comment = await this.prisma.postComment.findUnique({ where: { id: targetId }, include: { author: { select: TARGET_OWNER_SELECT } } as any });
+      if (!comment) return null;
+      return { title: comment.body.slice(0, 120), subtitle: "Gönderi yorumu", status: comment.status, owner: comment.author, metrics: {}, payload: { postId: comment.postId } };
+    }
+
     if (targetType === ReportTargetType.event) {
       const event = await this.prisma.event.findUnique({
         where: { id: targetId },

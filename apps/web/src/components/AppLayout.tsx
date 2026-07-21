@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, LayoutDashboard, MapPin, Menu, MessageCircle, QrCode, Search, Tag, UserRound, X } from "lucide-react";
+import { CalendarDays, Home, LayoutDashboard, MapPin, Menu, MessageCircle, QrCode, Search, Tag, UserRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
@@ -35,6 +35,7 @@ export function AppLayout() {
         </NavLink>
 
         <nav className="corp-nav" aria-label="Ana navigasyon">
+          <NavLink to="/feed"><Home size={18} /> Feed</NavLink>
           <NavLink to="/events">
             <CalendarDays size={18} />
             Events
@@ -96,6 +97,7 @@ export function AppLayout() {
           onClick={() => setMenuOpen(false)}
         />
         <nav className="corp-mobile-menu-panel" aria-label="Mobil navigasyon">
+          <NavLink to="/feed" onClick={() => setMenuOpen(false)}><Home size={18} /> Feed</NavLink>
           <NavLink to="/events" onClick={() => setMenuOpen(false)}>
             <CalendarDays size={18} />
             Events

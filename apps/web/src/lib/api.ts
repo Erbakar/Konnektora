@@ -46,6 +46,9 @@ import {
   profileVerificationStatusSchema,
   profileVerificationRequestsSchema,
   profileVerificationRequestSchema,
+  socialPostFeedSchema,
+  socialPostSchema,
+  socialPostCommentSchema,
   publicProfileSchema,
   privacySettingsSchema,
   privateChatMessageSchema,
@@ -109,6 +112,10 @@ import {
   type ProfileVerificationStatus,
   type ProfileVerificationRequest,
   type PublicProfile,
+  type PostVisibility,
+  type SocialPost,
+  type SocialPostFeed,
+  type SocialPostComment,
   type PrivateChatMessage,
   type PrivacySettings,
   type ReportRule,
@@ -178,6 +185,8 @@ const MOCK_USER_BLOCKS_KEY = "konnektora_mock_user_blocks";
 const MOCK_USER_FOLLOWS_KEY = "konnektora_mock_user_follows";
 const MOCK_TAG_COMMENTS_KEY = "konnektora_mock_tag_comments";
 const MOCK_PROFILE_MEDIA_KEY = "konnektora_mock_profile_media";
+const MOCK_SOCIAL_POSTS_KEY = "konnektora_mock_social_posts";
+const MOCK_SOCIAL_COMMENTS_KEY = "konnektora_mock_social_comments";
 const MOCK_MEMBER_SCANS_KEY = "konnektora_mock_member_scans";
 const MOCK_SOCIAL_ACCOUNTS_KEY = "konnektora_mock_social_accounts";
 const MOCK_PROFILE_VERIFICATIONS_KEY = "konnektora_mock_profile_verifications";
@@ -315,6 +324,38 @@ export function clearUserSession() {
   localStorage.removeItem(USER_KEY);
 }
 
+export function listSocialPosts(scope: "all" | "following" = "all", page = 1): Promise<SocialPostFeed> {
+  return requestJson(`/feed/posts?scope=${scope}&page=${page}&pageSize=20`, socialPostFeedSchema, { auth: "user" });
+}
+
+export function createSocialPost(body: string, visibility: PostVisibility, media: File[]): Promise<SocialPost> {
+  const form = new FormData();
+  form.set("body", body);
+  form.set("visibility", visibility);
+  media.forEach((file) => form.append("media", file));
+  return requestJson("/posts", socialPostSchema, { method: "POST", body: form, auth: "user" });
+}
+
+export function toggleSocialPostLike(id: string): Promise<{ liked: boolean; likeCount: number }> {
+  return requestJson(`/posts/${id}/like`, z.object({ liked: z.boolean(), likeCount: z.number().int().nonnegative() }), { method: "POST", auth: "user" });
+}
+
+export function deleteSocialPost(id: string): Promise<{ success: boolean }> {
+  return requestJson(`/posts/${id}`, z.object({ success: z.boolean() }), { method: "DELETE", auth: "user" });
+}
+
+export function listSocialPostComments(id: string): Promise<SocialPostComment[]> {
+  return requestJson(`/posts/${id}/comments`, z.array(socialPostCommentSchema), { auth: "user" });
+}
+
+export function createSocialPostComment(id: string, body: string, parentId?: string): Promise<SocialPostComment> {
+  return requestJson(`/posts/${id}/comments`, socialPostCommentSchema, { method: "POST", body: JSON.stringify({ body, parentId }), auth: "user" });
+}
+
+export function deleteSocialPostComment(postId: string, commentId: string): Promise<{ success: boolean }> {
+  return requestJson(`/posts/${postId}/comments/${commentId}`, z.object({ success: z.boolean() }), { method: "DELETE", auth: "user" });
+}
+
 export function getUserInterestTagIds() {
   const user = getUserSession();
   const allInterests = readStorage<Record<string, string[]>>(USER_INTEREST_TAGS_KEY, {});
@@ -405,6 +446,22 @@ function markMockNotificationRead(id: string): Notification {
   writeStorage(MOCK_NOTIFICATIONS_KEY, updated);
   return notification;
 }
+
+function mockSocialSeed(): SocialPost[] {
+  const now = Date.now();
+  return [
+    { id: "71000000-0000-4000-8000-000000000001", authorId: "72000000-0000-4000-8000-000000000001", body: "Konnektora topluluğuna merhaba! Yeni bağlantılar, gerçek sohbetler ve birlikte üretmek için buradayız. 🌱", visibility: "everybody", status: "active", likeCount: 18, commentCount: 1, liked: false, createdAt: new Date(now - 32 * 60_000).toISOString(), updatedAt: new Date(now - 32 * 60_000).toISOString(), author: { id: "72000000-0000-4000-8000-000000000001", name: "Derya Akın", username: "derya", profileVerifiedAt: new Date(now - 86_400_000).toISOString(), avatarUrl: null }, media: [] },
+    { id: "71000000-0000-4000-8000-000000000002", authorId: "72000000-0000-4000-8000-000000000002", body: "Bu hafta İstanbul'da ürün geliştirme ve yapay zekâ üzerine küçük bir buluşma organize ediyoruz. Katılmak isteyenler yorum bırakabilir.", visibility: "everybody", status: "active", likeCount: 9, commentCount: 0, liked: false, createdAt: new Date(now - 3 * 3_600_000).toISOString(), updatedAt: new Date(now - 3 * 3_600_000).toISOString(), author: { id: "72000000-0000-4000-8000-000000000002", name: "Mert Yalın", username: "mertyalin", profileVerifiedAt: null, avatarUrl: null }, media: [] }
+  ];
+}
+
+function getMockSocialPosts() { return readStorage<SocialPost[]>(MOCK_SOCIAL_POSTS_KEY, mockSocialSeed()); }
+function listMockSocialPosts(params: URLSearchParams): SocialPostFeed { const scope = params.get("scope"); const user = getUserSession(); const all = getMockSocialPosts(); const items = scope === "following" && user ? all.filter((post) => post.authorId === user.id || post.author.username === "derya") : all; return { items, page: 1, pageSize: 20, total: items.length, hasMore: false }; }
+function createMockSocialPost(form: FormData): SocialPost { const user = getUserSession(); if (!user) throw new Error("Gönderi için giriş gerekli."); const now = new Date().toISOString(); const post: SocialPost = { id: crypto.randomUUID(), authorId: user.id, body: String(form.get("body") ?? "").trim(), visibility: (form.get("visibility") as PostVisibility) ?? "everybody", status: "active", likeCount: 0, commentCount: 0, liked: false, createdAt: now, updatedAt: now, author: { id: user.id, name: user.name, username: null, avatarUrl: null }, media: [] }; writeStorage(MOCK_SOCIAL_POSTS_KEY, [post, ...getMockSocialPosts()]); return post; }
+function toggleMockSocialPostLike(id: string) { let result = { liked: false, likeCount: 0 }; const posts = getMockSocialPosts().map((post) => { if (post.id !== id) return post; result = { liked: !post.liked, likeCount: Math.max(0, post.likeCount + (post.liked ? -1 : 1)) }; return { ...post, ...result }; }); writeStorage(MOCK_SOCIAL_POSTS_KEY, posts); return result; }
+function listMockSocialComments(postId: string): SocialPostComment[] { const stored = readStorage<SocialPostComment[]>(MOCK_SOCIAL_COMMENTS_KEY, []); if (stored.some((item) => item.postId === postId)) return stored.filter((item) => item.postId === postId); if (postId !== "71000000-0000-4000-8000-000000000001") return []; const time = new Date(Date.now() - 15 * 60_000).toISOString(); return [{ id: "73000000-0000-4000-8000-000000000001", postId, authorId: "72000000-0000-4000-8000-000000000003", parentId: null, body: "Harika bir başlangıç, aramıza hoş geldiniz!", status: "active", createdAt: time, updatedAt: time, author: { id: "72000000-0000-4000-8000-000000000003", name: "Selin Özer", username: "selinozer", avatarUrl: null } }]; }
+function createMockSocialComment(postId: string, input: { body: string; parentId?: string }): SocialPostComment { const user = getUserSession(); if (!user) throw new Error("Yorum için giriş gerekli."); const now = new Date().toISOString(); const comment: SocialPostComment = { id: crypto.randomUUID(), postId, authorId: user.id, parentId: input.parentId ?? null, body: input.body.trim(), status: "active", createdAt: now, updatedAt: now, author: { id: user.id, name: user.name, username: null, avatarUrl: null } }; const comments = readStorage<SocialPostComment[]>(MOCK_SOCIAL_COMMENTS_KEY, []); writeStorage(MOCK_SOCIAL_COMMENTS_KEY, [...comments, comment]); const posts = getMockSocialPosts().map((post) => post.id === postId ? { ...post, commentCount: post.commentCount + 1 } : post); writeStorage(MOCK_SOCIAL_POSTS_KEY, posts); return comment; }
+function deleteMockSocialPost(id: string) { writeStorage(MOCK_SOCIAL_POSTS_KEY, getMockSocialPosts().filter((post) => post.id !== id)); return { success: true }; }
 
 async function requestJson<T>(path: string, schema: z.ZodType<T>, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
@@ -661,6 +718,12 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   if (pathname === "/me/member-scans" && method === "POST") return schema.parse(scanMockMember(parseBody<{ payload: string; method: "qr" | "nfc" }>(options)));
   if (pathname === "/discover/feed" && method === "GET") return schema.parse(getMockDiscoveryFeed(new URLSearchParams(queryString)));
   if (pathname === "/discover/search" && method === "GET") return schema.parse(searchMockDiscovery(new URLSearchParams(queryString).get("q") ?? ""));
+  if (pathname === "/feed/posts" && method === "GET") return schema.parse(listMockSocialPosts(new URLSearchParams(queryString)));
+  if (pathname === "/posts" && method === "POST") return schema.parse(createMockSocialPost(options.body as FormData));
+  if (/^\/posts\/[^/]+\/like$/.test(pathname) && method === "POST") return schema.parse(toggleMockSocialPostLike(pathname.split("/")[2] ?? ""));
+  if (/^\/posts\/[^/]+\/comments$/.test(pathname) && method === "GET") return schema.parse(listMockSocialComments(pathname.split("/")[2] ?? ""));
+  if (/^\/posts\/[^/]+\/comments$/.test(pathname) && method === "POST") return schema.parse(createMockSocialComment(pathname.split("/")[2] ?? "", parseBody<{ body: string; parentId?: string }>(options)));
+  if (/^\/posts\/[^/]+$/.test(pathname) && method === "DELETE") return schema.parse(deleteMockSocialPost(pathname.split("/")[2] ?? ""));
 
   if (pathname.startsWith("/tags/") && pathname.endsWith("/comments") && method === "GET") {
     return schema.parse(listMockTagComments(pathname.slice("/tags/".length, -"/comments".length)));
@@ -3960,7 +4023,9 @@ function parseReportTargetType(value?: string): ReportTargetType {
     "event_comment",
     "place_comment",
     "comment_reply",
-    "private_message"
+    "private_message",
+    "post",
+    "post_comment"
   ];
   return allowed.includes(value as ReportTargetType) ? (value as ReportTargetType) : "event";
 }
