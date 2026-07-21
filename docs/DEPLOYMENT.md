@@ -15,6 +15,10 @@ Telefon rehberi seçimi HTTPS ve Contact Picker API destekleyen mobil tarayıcı
 
 Production ortamında `FACE_VERIFICATION_URL` yüz eşleşmesi ve canlılık kontrolü yapan sağlayıcının webhook adresine, `FACE_VERIFICATION_API_KEY` ise sağlayıcı anahtarına ayarlanır. Yüz ve canlılık skoru 0.90 üzerindeyse profil otomatik onaylanır; 0.65 altındaysa reddedilir, aradaki sonuçlar admin inceleme kuyruğuna düşer. Kamera kanıtları public `uploads` dizininden ayrı tutulur ve yalnızca `media.manage` yetkili admin endpoint'i üzerinden okunur. Sağlayıcı yapılandırılmamış production kurulumlarında başvurular güvenli biçimde manuel incelemeye aktarılır.
 
+## QR ve NFC cihaz desteği
+
+QR tarama tarayıcının kamera API'sini ve ZXing decoder'ını kullanır. Web NFC okuma/yazma Android Chrome tabanlı tarayıcılarda kullanılabilir; desteklenmeyen iOS veya masaüstü cihazlarda QR ve manuel kart verisi fallback'i gösterilir. Kamera ve NFC production ortamında HTTPS gerektirir. NFC etiketine kişisel veri değil, sürümlenebilir ve iptal edilebilir imzalı üye kartı URI'si yazılır; kullanıcı kartını yenilediğinde eski QR ekran görüntüleri ve NFC kayıtları backend tarafından reddedilir.
+
 ## Mimari
 
 ```text

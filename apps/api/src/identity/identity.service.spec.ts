@@ -48,4 +48,22 @@ describe("IdentityService", () => {
     userBlock.findFirst.mockResolvedValue({ userId: id });
     await expect(service.scan(id, { payload: "signed-token-value", method: "qr" })).rejects.toBeInstanceOf(ForbiddenException);
   });
+
+  it.each(["qr", "nfc"] as const)("records a real %s device scan and follows once", async (method) => {
+    jwt.verifyAsync.mockResolvedValue({ sub: peerId, purpose: "member-pass", version: 2 });
+    user.findUnique.mockResolvedValue({ id: peerId, name: "Peer", username: "peer", city: "Berlin", country: "Germany", followerCount: 4, memberPassVersion: 2, status: UserStatus.active });
+    memberScan.create.mockResolvedValue({ id: `scan-${method}`, method, createdAt: new Date() });
+    user.update.mockResolvedValue({});
+    userFollow.create.mockResolvedValue({});
+    const result = await service.scan(id, { payload: "signed-device-token", method });
+    expect(result).toMatchObject({ method, following: true, member: { id: peerId } });
+    expect(userFollow.create).toHaveBeenCalledWith({ data: { followerId: id, followingId: peerId } });
+    expect(memberScan.create).toHaveBeenCalledWith({ data: { scannerId: id, memberId: peerId, method } });
+  });
+
+  it("rejects a rotated member pass captured by a QR screenshot", async () => {
+    jwt.verifyAsync.mockResolvedValue({ sub: peerId, purpose: "member-pass", version: 1 });
+    user.findUnique.mockResolvedValue({ id: peerId, name: "Peer", username: "peer", city: null, country: null, followerCount: 0, memberPassVersion: 2, status: UserStatus.active });
+    await expect(service.scan(id, { payload: "old-signed-token", method: "qr" })).rejects.toBeInstanceOf(BadRequestException);
+  });
 });

@@ -813,6 +813,30 @@ select {
 .verification-admin-grid img, .verification-evidence-placeholder { width: 110px; height: 90px; object-fit: cover; display: grid; place-items: center; background: #edf1ed; border-radius: 10px; }
 .verification-admin-grid article > div:nth-child(2) { display: grid; gap: 4px; }
 .verification-admin-grid small, .verification-admin-grid span { color: var(--muted); }
+.device-scanner { display: grid; gap: 18px; }
+.device-scanner .section-header p { margin: 4px 0 0; color: var(--muted); }
+.scanner-mode-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.scanner-mode { min-height: 108px; display: grid; justify-items: center; align-content: center; gap: 5px; padding: 14px; color: var(--brand); background: #f7f9f6; border: 1px solid var(--border); border-radius: 15px; cursor: pointer; }
+.scanner-mode small { color: var(--muted); font-weight: 500; text-align: center; }
+.scanner-mode.is-active { color: #fff; background: var(--brand); border-color: var(--brand); }
+.scanner-mode.is-active small { color: #dbe9df; }
+.qr-camera-shell { position: relative; width: min(100%,720px); aspect-ratio: 4/3; justify-self: center; overflow: hidden; background: #07110c; border-radius: 20px; }
+.qr-camera-shell video { width: 100%; height: 100%; object-fit: cover; }
+.qr-camera-shell > span { position: absolute; left: 50%; bottom: 18px; display: flex; align-items: center; gap: 7px; padding: 8px 12px; color: #fff; background: rgba(0,0,0,.62); border-radius: 99px; transform: translateX(-50%); white-space: nowrap; }
+.qr-camera-shell > button { position: absolute; top: 14px; right: 14px; width: 40px; height: 40px; display: grid; place-items: center; color: #fff; background: rgba(0,0,0,.6); border: 0; border-radius: 50%; cursor: pointer; }
+.qr-scan-frame { position: absolute; inset: 50% auto auto 50%; width: min(62%,320px); aspect-ratio: 1; transform: translate(-50%,-50%); }
+.qr-scan-frame i { position: absolute; width: 48px; height: 48px; border-color: #8bf0ac; border-style: solid; }
+.qr-scan-frame i:nth-child(1) { top: 0; left: 0; border-width: 4px 0 0 4px; }
+.qr-scan-frame i:nth-child(2) { top: 0; right: 0; border-width: 4px 4px 0 0; }
+.qr-scan-frame i:nth-child(3) { bottom: 0; left: 0; border-width: 0 0 4px 4px; }
+.qr-scan-frame i:nth-child(4) { right: 0; bottom: 0; border-width: 0 4px 4px 0; }
+.nfc-reading-state { min-height: 260px; display: grid; place-items: center; align-content: center; gap: 10px; color: var(--brand); background: radial-gradient(circle,#edf8f0,#f8faf8 65%); border: 1px solid #cee0d2; border-radius: 20px; text-align: center; }
+.nfc-reading-state > svg { animation: nfc-pulse 1.8s ease-in-out infinite; }
+@keyframes nfc-pulse { 50% { transform: scale(1.16); opacity: .62; } }
+.nfc-write-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 15px; background: #f7f9f6; border-radius: 14px; }
+.nfc-write-row > div { display: grid; gap: 3px; }
+.nfc-write-row span { color: var(--muted); }
+.scanner-warning { display: flex; align-items: center; gap: 8px; margin: 0; color: #8a5a16; }
 .wizard-buttons { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .wizard-buttons .primary-action { margin-top: 0; }
 .onboarding-upload { min-height: 170px; place-items: center; align-content: center; padding: 24px; color: #22543d; background: #f4f7f3; border: 2px dashed #aebbad; border-radius: 16px; cursor: pointer; }
@@ -2291,6 +2315,11 @@ select {
   .verification-admin-grid article { grid-template-columns: 82px 1fr; }
   .verification-admin-grid img, .verification-evidence-placeholder { width: 82px; height: 82px; }
   .verification-admin-grid .row-actions { grid-column: 1 / -1; }
+  .scanner-mode-grid { grid-template-columns: 1fr; }
+  .scanner-mode { min-height: 82px; grid-template-columns: auto 1fr; justify-items: start; text-align: left; }
+  .scanner-mode svg { grid-row: 1 / span 2; }
+  .nfc-write-row { grid-template-columns: 1fr; }
+  .qr-camera-shell > span { max-width: 86%; white-space: normal; text-align: center; }
   .onboarding-header { align-items: flex-start; }
   .onboarding-header > strong { width: 58px; height: 58px; border-width: 5px; font-size: 15px; }
   .onboarding-progress { grid-template-columns: repeat(6, 64px); overflow-x: auto; padding-bottom: 8px; }

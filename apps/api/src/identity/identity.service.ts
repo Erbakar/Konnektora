@@ -42,7 +42,8 @@ export class IdentityService {
     if (!user || user.status !== UserStatus.active) throw new NotFoundException("Üye bulunamadı.");
     const token = await this.jwt.signAsync({ sub: user.id, purpose: "member-pass", version: user.memberPassVersion }, { expiresIn: "365d" });
     const payload = `konnektora://member?token=${encodeURIComponent(token)}`;
-    const { memberPassVersion: version, status: _status, ...member } = user;
+    const version = user.memberPassVersion;
+    const member = { id: user.id, name: user.name, username: user.username, city: user.city, country: user.country, followerCount: user.followerCount };
     return { member, qrPayload: payload, nfcPayload: payload, version };
   }
 
@@ -71,7 +72,7 @@ export class IdentityService {
       }
       return tx.memberScan.create({ data: { scannerId, memberId: member.id, method: input.method } });
     });
-    const { memberPassVersion: _version, status: _memberStatus, ...card } = member;
+    const card = { id: member.id, name: member.name, username: member.username, city: member.city, country: member.country, followerCount: member.followerCount };
     return { id: scan.id, method: input.method, createdAt: scan.createdAt, member: card, following: true };
   }
 
