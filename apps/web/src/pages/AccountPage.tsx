@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 import type { AccountType, Event, EventParticipant, MemberCard, NotificationPreference, PrivacyAudience, ProfileMedia, Tag, TagAffinity, TagSentiment, SocialProvider } from "@konnektora/shared";
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
+import { ProfileVerificationPanel } from "../components/ProfileVerificationPanel";
 import { getSocialCredential } from "../lib/socialProviders";
 import { type AdminEventInput, type RegistrationInput, archiveMyEvent, checkInEventParticipant, changePassword, connectSocialAccount, confirmPhoneVerification, clearUserSession, createUserEvent, createUserTag, createTagComment, deactivateAccount, deleteProfileMedia, deleteTagComment, getProfileAffinities, getMyProfile, getNotificationPreferences, getPrivacySettings, getUserSession, getUserToken, followUser, inviteEventParticipant, isMockApiMode, listMyNotifications, listBlocks, listFollowing, listMemberSuggestions, listEventParticipants, listMyEvents, listProfileMedia, listSocialAccounts, listTags, listTagComments, markMyNotificationRead, makeProfilePicture, registerUser, reactivateAccount, removeBlock, removeSocialAccount, requestEmailVerification, requestPhoneVerification, requestPasswordReset, reorderProfileMedia, resolveMediaUrl, scanEventTicket, setUserSession, updateEventParticipantStatus, updateMyEvent, updateProfileAffinities, unfollowUser, updateMyProfile, updateNotificationPreferences, updatePrivacySettings, uploadProfileMedia, userLogin, socialLogin } from "../lib/api";
 
@@ -676,6 +677,7 @@ export function AccountPage() {
             )}
           </aside>
           <div className="account-stack">
+            <ProfileVerificationPanel userId={user.id} />
             <section className="admin-form">
               <h2>Bağlı hesaplar</h2>
               <p className="form-help">Google veya Facebook hesabını bağlayarak tek dokunuşla giriş yapabilirsin.</p>

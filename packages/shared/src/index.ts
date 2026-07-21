@@ -297,13 +297,25 @@ export const publicProfileInterestSchema = z.object({ tag: tagSchema, sentiment:
 export const publicProfileSchema = z.object({
   id: z.string().uuid(), name: z.string(), username: z.string(), accountType: accountTypeSchema,
   website: z.string().nullable(), city: z.string().nullable(), country: z.string().nullable(),
-  followerCount: z.number().int().nonnegative(), followingCount: z.number().int().nonnegative(),
+  followerCount: z.number().int().nonnegative(), followingCount: z.number().int().nonnegative(), verified: z.boolean(),
   memberSince: z.string().datetime().or(z.date()),
   media: z.array(z.object({ id: z.string().uuid(), url: z.string(), type: z.string(), sortOrder: z.number().int(), isProfilePicture: z.boolean() })),
   interests: z.array(publicProfileInterestSchema), commonInterestCount: z.number().int().nonnegative(),
   relationship: z.object({ isSelf: z.boolean(), following: z.boolean(), canMessage: z.boolean() }),
   events: z.array(discoveryItemSchema), places: z.array(discoveryItemSchema)
 });
+
+export const profileVerificationRequestSchema = z.object({
+  id: z.string().uuid(), userId: z.string().uuid(), referenceMediaId: z.string().uuid(), selfieUrl: z.string(),
+  challenge: z.enum(["blink", "smile", "turn_left", "turn_right"]), status: z.enum(["pending", "approved", "rejected"]), provider: z.string(),
+  faceMatchScore: z.number().nullable(), livenessScore: z.number().nullable(), decisionReason: z.string().nullable(), reviewedById: z.string().uuid().nullable(),
+  reviewedAt: z.string().datetime().or(z.date()).nullable(), createdAt: z.string().datetime().or(z.date()), updatedAt: z.string().datetime().or(z.date()),
+  user: z.object({ id: z.string().uuid(), name: z.string(), username: z.string().nullable(), email: z.string().email(), accountType: z.string() }).optional()
+});
+export const profileVerificationStatusSchema = z.object({ eligible: z.boolean(), verified: z.boolean(), verifiedAt: z.string().datetime().or(z.date()).nullable(), request: profileVerificationRequestSchema.nullable() });
+export const profileVerificationRequestsSchema = z.array(profileVerificationRequestSchema);
+export type ProfileVerificationRequest = z.infer<typeof profileVerificationRequestSchema>;
+export type ProfileVerificationStatus = z.infer<typeof profileVerificationStatusSchema>;
 
 export const tagSentimentSchema = z.enum(["like", "ok", "dislike"]);
 export const tagAffinitySchema = z.object({

@@ -12,7 +12,7 @@ export class PublicProfileService {
       where: { username: { equals: username, mode: "insensitive" }, status: "active", role: "user" },
       select: {
         id: true, name: true, username: true, accountType: true, website: true, city: true, country: true,
-        followerCount: true, followingCount: true, createdAt: true,
+        followerCount: true, followingCount: true, createdAt: true, profileVerifiedAt: true,
         privacySettings: { select: { messageAudience: true, eventAudience: true, placeAudience: true } },
         interestTags: { where: { tag: { status: "active" } }, include: { tag: true }, orderBy: { createdAt: "desc" } }
       }
@@ -36,7 +36,7 @@ export class PublicProfileService {
       id: profile.id, name: profile.name, username: profile.username,
       accountType: profile.accountType === "corporate" ? "corporate" as const : "individual" as const,
       website: profile.website, city: profile.city, country: profile.country,
-      followerCount: profile.followerCount, followingCount: profile.followingCount, memberSince: profile.createdAt,
+      followerCount: profile.followerCount, followingCount: profile.followingCount, memberSince: profile.createdAt, verified: Boolean(profile.profileVerifiedAt),
       media, interests, commonInterestCount: interests.filter((item) => item.common).length,
       relationship: { isSelf: viewerId === profile.id, following: relationship.viewerFollowsOwner, canMessage: viewerId !== undefined && viewerId !== profile.id && this.canView(privacy.messageAudience, relationship) },
       events: events.map((event) => ({ kind: "event" as const, id: event.id, title: event.title, subtitle: event.summary, href: `/events/${event.slug}`, imageUrl: event.coverImageUrl, meta: `${event.city ?? "Online"} · ${event.startsAt.toISOString()}` })),

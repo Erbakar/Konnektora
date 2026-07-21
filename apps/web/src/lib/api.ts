@@ -43,6 +43,9 @@ import {
   profileSchema,
   profileMediaListSchema,
   profileMediaSchema,
+  profileVerificationStatusSchema,
+  profileVerificationRequestsSchema,
+  profileVerificationRequestSchema,
   publicProfileSchema,
   privacySettingsSchema,
   privateChatMessageSchema,
@@ -103,6 +106,8 @@ import {
   type PlaceMember,
   type Profile,
   type ProfileMedia,
+  type ProfileVerificationStatus,
+  type ProfileVerificationRequest,
   type PublicProfile,
   type PrivateChatMessage,
   type PrivacySettings,
@@ -175,6 +180,7 @@ const MOCK_TAG_COMMENTS_KEY = "konnektora_mock_tag_comments";
 const MOCK_PROFILE_MEDIA_KEY = "konnektora_mock_profile_media";
 const MOCK_MEMBER_SCANS_KEY = "konnektora_mock_member_scans";
 const MOCK_SOCIAL_ACCOUNTS_KEY = "konnektora_mock_social_accounts";
+const MOCK_PROFILE_VERIFICATIONS_KEY = "konnektora_mock_profile_verifications";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -213,6 +219,7 @@ type MockUser = {
   createdAt?: string;
   updatedAt?: string;
   onboardingCompletedAt?: string | null;
+  profileVerifiedAt?: string | null;
   memberPassVersion?: number;
 };
 
@@ -562,6 +569,9 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(listMockProfileMedia());
   }
 
+  if (pathname === "/profile/verification" && method === "GET") return schema.parse(getMockProfileVerificationStatus());
+  if (pathname === "/profile/verification" && method === "POST") return schema.parse(createMockProfileVerification(options));
+
   if (pathname === "/profile/media/upload" && method === "POST") {
     const file = options.body instanceof FormData ? options.body.get("file") : null;
     if (!(file instanceof File)) throw new Error("Mock media file not found");
@@ -726,6 +736,11 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname === "/admin/content/media" && method === "GET") {
     return schema.parse(listMockMedia(new URLSearchParams(queryString)));
+  }
+
+  if (pathname === "/admin/profile-verifications" && method === "GET") return schema.parse(readStorage<ProfileVerificationRequest[]>(MOCK_PROFILE_VERIFICATIONS_KEY, []));
+  if (pathname.startsWith("/admin/profile-verifications/") && method === "PATCH") {
+    const id = pathname.slice("/admin/profile-verifications/".length); const input = parseBody<{ status: "approved" | "rejected"; reason?: string }>(options); const requests = readStorage<ProfileVerificationRequest[]>(MOCK_PROFILE_VERIFICATIONS_KEY, []); const updated = requests.map((item) => item.id === id ? { ...item, status: input.status, decisionReason: input.reason ?? null, reviewedAt: new Date().toISOString() } : item); writeStorage(MOCK_PROFILE_VERIFICATIONS_KEY, updated); return schema.parse(updated.find((item) => item.id === id));
   }
 
   if (pathname.startsWith("/admin/content/media/") && method === "GET") {
@@ -3253,7 +3268,16 @@ function getMockPublicProfile(username: string): PublicProfile {
   const events = getStoredEvents().filter((event) => event.status === "published" && event.organizerName?.toLowerCase() === target.name.toLowerCase()).slice(0, 12).map(mockEventDiscoveryItem);
   const places = listMockPlaces(new URLSearchParams()).filter((place) => place.status === "active" && place.createdById === target.id).slice(0, 12).map(mockPlaceDiscoveryItem);
   const media = target.id === viewer?.id ? listMockProfileMedia().map(({ id, url, type, sortOrder, isProfilePicture }) => ({ id, url, type, sortOrder, isProfilePicture })) : [];
-  return publicProfileSchema.parse({ id: target.id, name: target.name, username: target.username, accountType: target.accountType === "corporate" ? "corporate" : "individual", website: target.website ?? null, city: target.city ?? null, country: target.country ?? null, followerCount: target.followerCount ?? 0, followingCount: target.followingCount ?? 0, memberSince: target.createdAt ?? new Date().toISOString(), media, interests, commonInterestCount: interests.filter((item) => item.common).length, relationship: { isSelf: viewer?.id === target.id, following: follows.includes(target.id), canMessage: Boolean(viewer && viewer.id !== target.id) }, events, places });
+  return publicProfileSchema.parse({ id: target.id, name: target.name, username: target.username, accountType: target.accountType === "corporate" ? "corporate" : "individual", website: target.website ?? null, city: target.city ?? null, country: target.country ?? null, followerCount: target.followerCount ?? 0, followingCount: target.followingCount ?? 0, verified: Boolean(target.profileVerifiedAt), memberSince: target.createdAt ?? new Date().toISOString(), media, interests, commonInterestCount: interests.filter((item) => item.common).length, relationship: { isSelf: viewer?.id === target.id, following: follows.includes(target.id), canMessage: Boolean(viewer && viewer.id !== target.id) }, events, places });
+}
+
+function getMockProfileVerificationStatus(): ProfileVerificationStatus {
+  const session = getUserSession(); if (!session) throw new Error("User session required"); const user = getAllMockUsers().find((item) => item.id === session.id); const request = readStorage<ProfileVerificationRequest[]>(MOCK_PROFILE_VERIFICATIONS_KEY, []).find((item) => item.userId === session.id) ?? null;
+  return profileVerificationStatusSchema.parse({ eligible: user?.accountType !== "corporate", verified: Boolean(user?.profileVerifiedAt), verifiedAt: user?.profileVerifiedAt ?? null, request });
+}
+
+function createMockProfileVerification(options: RequestOptions): ProfileVerificationStatus {
+  const session = getUserSession(); if (!session || !(options.body instanceof FormData)) throw new Error("Verification form required"); const now = new Date().toISOString(); const request = profileVerificationRequestSchema.parse({ id: createId(), userId: session.id, referenceMediaId: listMockProfileMedia()[0]?.id ?? createId(), selfieUrl: "private-demo-selfie.jpg", challenge: String(options.body.get("challenge") || "blink"), status: "approved", provider: "development_simulator", faceMatchScore: .98, livenessScore: .97, decisionReason: "Geliştirme ortamı otomatik doğrulaması.", reviewedById: null, reviewedAt: now, createdAt: now, updatedAt: now }); writeStorage(MOCK_PROFILE_VERIFICATIONS_KEY, [request]); const users = getAllMockUsers(); writeStorage(MOCK_USERS_KEY, users.map((item) => item.id === session.id ? { ...item, profileVerifiedAt: now } : item)); return profileVerificationStatusSchema.parse({ eligible: true, verified: true, verifiedAt: now, request });
 }
 
 function completeMockOnboarding() {
@@ -4027,6 +4051,12 @@ export function uploadProfileMedia(file: File): Promise<ProfileMedia> {
   body.append("file", file);
   return requestJson("/profile/media/upload", profileMediaSchema, { auth: "user", method: "POST", body });
 }
+
+export function getProfileVerification(): Promise<ProfileVerificationStatus> { return requestJson("/profile/verification", profileVerificationStatusSchema, { auth: "user" }); }
+export function submitProfileVerification(selfie: Blob, challenge: "blink" | "smile" | "turn_left" | "turn_right"): Promise<ProfileVerificationStatus> { const body = new FormData(); body.append("selfie", selfie, "verification.jpg"); body.append("challenge", challenge); return requestJson("/profile/verification", profileVerificationStatusSchema, { auth: "user", method: "POST", body }); }
+export function listProfileVerifications(status?: "pending" | "approved" | "rejected"): Promise<ProfileVerificationRequest[]> { return requestJson(`/admin/profile-verifications${status ? `?status=${status}` : ""}`, profileVerificationRequestsSchema, { auth: true }); }
+export function reviewProfileVerification(id: string, status: "approved" | "rejected", reason?: string): Promise<ProfileVerificationRequest> { return requestJson(`/admin/profile-verifications/${id}`, profileVerificationRequestSchema, { auth: true, method: "PATCH", body: JSON.stringify({ status, reason }) }); }
+export async function getProfileVerificationEvidence(id: string): Promise<string> { const response = await fetch(`${API_URL}/admin/profile-verifications/${id}/evidence`, { headers: { Authorization: `Bearer ${getAdminToken() ?? ""}` } }); if (!response.ok) throw new Error("Doğrulama karesi alınamadı."); return URL.createObjectURL(await response.blob()); }
 
 export function makeProfilePicture(mediaId: string): Promise<ProfileMedia[]> {
   return requestJson(`/profile/media/${mediaId}/profile-picture`, profileMediaListSchema, { auth: "user", method: "PATCH" });

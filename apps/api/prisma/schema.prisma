@@ -162,6 +162,12 @@ enum SocialProvider {
   facebook
 }
 
+enum ProfileVerificationStatus {
+  pending
+  approved
+  rejected
+}
+
 model User {
   id                   String     @id @default(uuid())
   email                String     @unique
@@ -238,11 +244,38 @@ model User {
   scansReceived             MemberScan[] @relation("MemberScanMember")
   socialAccounts           SocialAccount[]
   contactInvites           ContactInvite[]
+  profileVerificationRequests ProfileVerification[] @relation("ProfileVerificationUser")
+  reviewedProfileVerifications ProfileVerification[] @relation("ProfileVerificationReviewer")
+  profileVerifiedAt       DateTime? @map("profile_verified_at")
 
   @@index([accountType, status])
   @@index([country, city])
   @@index([lastOnlineAt])
   @@map("users")
+}
+
+model ProfileVerification {
+  id                String                    @id @default(uuid())
+  userId            String                    @map("user_id")
+  referenceMediaId  String                    @map("reference_media_id")
+  selfieUrl         String                    @map("selfie_url")
+  challenge         String
+  status            ProfileVerificationStatus @default(pending)
+  provider          String                    @default("manual")
+  faceMatchScore    Float?                    @map("face_match_score")
+  livenessScore     Float?                    @map("liveness_score")
+  decisionReason    String?                   @map("decision_reason")
+  reviewedById      String?                   @map("reviewed_by_id")
+  reviewedAt        DateTime?                 @map("reviewed_at")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+
+  user       User  @relation("ProfileVerificationUser", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("ProfileVerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("profile_verifications")
 }
 
 model SocialAccount {

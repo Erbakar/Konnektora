@@ -57,6 +57,7 @@ import {
   listAdminMessages,
   listAdminComments,
   listAdminMedia,
+  listProfileVerifications,
   listAdminPlaces,
   listAdminPrivateMessages,
   listAdminPolicies,
@@ -77,6 +78,8 @@ import {
   updateAdminMessage,
   updateAdminComment,
   updateAdminMedia,
+  reviewProfileVerification,
+  getProfileVerificationEvidence,
   updateAdminPlace,
   updateAdminPrivateMessage,
   updateAdminRoleGroup,
@@ -106,6 +109,7 @@ import type {
   EventParticipant,
   Faq,
   PolicyType,
+  ProfileVerificationRequest,
   ReportGroup,
   ReportGroupDetail,
   ReportRule,
@@ -332,6 +336,7 @@ export function AdminDashboardPage() {
     queryFn: () => listAdminMedia(),
     enabled: Boolean(token)
   });
+  const profileVerificationsQuery = useQuery({ queryKey: ["admin-profile-verifications"], queryFn: () => listProfileVerifications(), enabled: Boolean(token) });
   const commentsQuery = useQuery({
     queryKey: ["admin-comments"],
     queryFn: () => listAdminComments(),
@@ -473,6 +478,7 @@ export function AdminDashboardPage() {
     mutationFn: (input: { id: string; status: string }) => updateAdminMedia(input.id, input.status),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-media"] })
   });
+  const verificationReviewMutation = useMutation({ mutationFn: ({ id, status }: { id: string; status: "approved" | "rejected" }) => reviewProfileVerification(id, status), onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-profile-verifications"] }) });
   const updateCommentMutation = useMutation({
     mutationFn: (input: { id: string; status: string }) => updateAdminComment(input.id, input.status),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-comments"] })
@@ -939,6 +945,8 @@ export function AdminDashboardPage() {
         )}
 
         {activeSection === "media" && (
+          <>
+          <ProfileVerificationQueue items={profileVerificationsQuery.data ?? []} isPending={verificationReviewMutation.isPending} onReview={(id, status) => verificationReviewMutation.mutate({ id, status })} />
           <AdminContentPanel
             title="Medya Yönetimi"
             description="Profil, etkinlik, mekan ve yorumlarda kullanılan medya dosyalarını yönet."
@@ -949,6 +957,7 @@ export function AdminDashboardPage() {
             renderSecondary={(item: AdminMedia) => `${item.contentType} · ${item.contentId}`}
             renderMeta={(item: AdminMedia) => `${item.type} · ${item.reportCount ?? 0} şikayet`}
           />
+          </>
         )}
 
         {activeSection === "comments" && (
@@ -2936,6 +2945,16 @@ function UserDetailCard({
       </form>
     </div>
   );
+}
+
+function ProfileVerificationQueue({ items, isPending, onReview }: { items: ProfileVerificationRequest[]; isPending: boolean; onReview: (id: string, status: "approved" | "rejected") => void }) {
+  return <section className="admin-panel verification-admin"><div className="section-header"><div><h2>Profil doğrulama kuyruğu</h2><p>Otomatik kontrolün kesin karar veremediği başvuruları incele.</p></div><span>{items.filter((item) => item.status === "pending").length} bekliyor</span></div><div className="verification-admin-grid">{items.map((item) => <article key={item.id}><VerificationEvidence id={item.id} /><div><strong>{item.user?.name ?? item.userId}</strong><small>{item.user?.email}</small><span>{item.challenge.replace("_", " ")} · yüz %{item.faceMatchScore == null ? "-" : Math.round(item.faceMatchScore * 100)} · canlılık %{item.livenessScore == null ? "-" : Math.round(item.livenessScore * 100)}</span><b className={`status-badge status-${item.status}`}>{item.status}</b></div>{item.status === "pending" ? <div className="row-actions"><button className="secondary-action" disabled={isPending} onClick={() => onReview(item.id, "approved")} type="button">Onayla</button><button className="danger-action" disabled={isPending} onClick={() => onReview(item.id, "rejected")} type="button">Reddet</button></div> : null}</article>)}</div>{!items.length ? <p className="muted">Doğrulama başvurusu yok.</p> : null}</section>;
+}
+
+function VerificationEvidence({ id }: { id: string }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => { let active = true; let objectUrl = ""; void getProfileVerificationEvidence(id).then((value) => { objectUrl = value; if (active) setUrl(value); else URL.revokeObjectURL(value); }).catch(() => undefined); return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); }; }, [id]);
+  return url ? <img alt="Doğrulama kamera karesi" src={url} /> : <div className="verification-evidence-placeholder"><ShieldCheck size={28} /></div>;
 }
 
 function AdminContentPanel<T extends { id: string; status: string; createdAt?: string | Date }>({

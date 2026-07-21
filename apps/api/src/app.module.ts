@@ -19,6 +19,7 @@ import { SocialModule } from "./social/social.module";
 import { IdentityModule } from "./identity/identity.module";
 import { DiscoveryModule } from "./discovery/discovery.module";
 import { PublicProfileModule } from "./public-profile/public-profile.module";
+import { ProfileVerificationModule } from "./profile-verification/profile-verification.module";
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { PublicProfileModule } from "./public-profile/public-profile.module";
     MessagesModule,
     ProfileModule,
     PublicProfileModule,
+    ProfileVerificationModule,
     PlacesModule,
     ReportsModule,
     SocialModule,

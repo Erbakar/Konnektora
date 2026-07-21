@@ -11,6 +11,10 @@ API ortamında `GOOGLE_CLIENT_ID`, web build ortamında aynı OAuth istemcisine 
 
 Telefon rehberi seçimi HTTPS ve Contact Picker API destekleyen mobil tarayıcı gerektirir. Ham rehber verisi yalnızca eşleştirme isteği boyunca işlenir ve saklanmaz; davet denetim kayıtlarında sadece alıcı bilgisinin SHA-256 özeti tutulur. E-posta davetleri mevcut Resend ayarlarını, SMS davetleri `SMS_WEBHOOK_URL` ve `SMS_API_KEY` ayarlarını kullanır.
 
+## Profil fotoğrafı doğrulama
+
+Production ortamında `FACE_VERIFICATION_URL` yüz eşleşmesi ve canlılık kontrolü yapan sağlayıcının webhook adresine, `FACE_VERIFICATION_API_KEY` ise sağlayıcı anahtarına ayarlanır. Yüz ve canlılık skoru 0.90 üzerindeyse profil otomatik onaylanır; 0.65 altındaysa reddedilir, aradaki sonuçlar admin inceleme kuyruğuna düşer. Kamera kanıtları public `uploads` dizininden ayrı tutulur ve yalnızca `media.manage` yetkili admin endpoint'i üzerinden okunur. Sağlayıcı yapılandırılmamış production kurulumlarında başvurular güvenli biçimde manuel incelemeye aktarılır.
+
 ## Mimari
 
 ```text
