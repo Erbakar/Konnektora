@@ -40,6 +40,7 @@ import {
   profileSchema,
   profileMediaListSchema,
   profileMediaSchema,
+  publicProfileSchema,
   privacySettingsSchema,
   privateChatMessageSchema,
   reportGroupCommentSchema,
@@ -94,6 +95,7 @@ import {
   type PlaceMember,
   type Profile,
   type ProfileMedia,
+  type PublicProfile,
   type PrivateChatMessage,
   type PrivacySettings,
   type ReportRule,
@@ -602,6 +604,7 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(markMockConversationRead(pathname.slice("/me/conversations/".length, -"/read".length)));
   }
 
+  if (pathname.startsWith("/users/") && method === "GET") return schema.parse(getMockPublicProfile(decodeURIComponent(pathname.slice("/users/".length))));
   if (pathname === "/me/onboarding" && method === "GET") return schema.parse(getMockOnboardingStatus());
   if (pathname === "/me/onboarding/complete" && method === "POST") return schema.parse(completeMockOnboarding());
   if (pathname === "/me/member-pass" && method === "GET") return schema.parse(getMockMemberPass());
@@ -3167,7 +3170,7 @@ function getMockOnboardingStatus(): OnboardingStatus {
   return onboardingStatusSchema.parse({ completed: Boolean(stored?.onboardingCompletedAt), completedAt: stored?.onboardingCompletedAt ?? null, progress: steps.filter((step) => step.completed).length * 20, currentStep: steps.find((step) => !step.completed) ?? null, steps });
 }
 
-function mockUserDiscoveryItem(user: MockUser): DiscoveryItem { return { kind: "user", id: user.id, title: user.name, subtitle: user.username ? `@${user.username}` : null, href: `/messages?peer=${user.id}`, imageUrl: null, meta: `${user.followerCount ?? 0} takipçi${user.city || user.country ? ` · ${user.city ?? user.country}` : ""}` }; }
+function mockUserDiscoveryItem(user: MockUser): DiscoveryItem { return { kind: "user", id: user.id, title: user.name, subtitle: user.username ? `@${user.username}` : null, href: user.username ? `/users/${user.username}` : `/messages?peer=${user.id}`, imageUrl: null, meta: `${user.followerCount ?? 0} takipçi${user.city || user.country ? ` · ${user.city ?? user.country}` : ""}` }; }
 function mockTagDiscoveryItem(tag: Tag): DiscoveryItem { return { kind: "tag", id: tag.id, title: `#${tag.name}`, subtitle: tag.description, href: `/events?tag=${tag.slug}`, imageUrl: null, meta: `${tag.usageCount} kullanım` }; }
 function mockEventDiscoveryItem(event: Event): DiscoveryItem { return { kind: "event", id: event.id, title: event.title, subtitle: event.summary, href: `/events/${event.slug}`, imageUrl: event.coverImageUrl, meta: `${event.city ?? "Online"} · ${event.startsAt}` }; }
 function mockPlaceDiscoveryItem(place: AdminPlace): DiscoveryItem { return { kind: "place", id: place.id, title: place.name, subtitle: place.description, href: `/places/${place.slug}`, imageUrl: place.coverImageUrl, meta: `${place.followerCount} takipçi${place.city ? ` · ${place.city}` : ""}` }; }
@@ -3198,6 +3201,21 @@ function searchMockDiscovery(query: string): DiscoverySearch {
     ...listMockPlaces(new URLSearchParams()).filter((place) => place.status === "active" && matches(place)).slice(0, 10).map(mockPlaceDiscoveryItem)
   ];
   return discoverySearchSchema.parse({ query: query.trim(), total: items.length, items });
+}
+
+function getMockPublicProfile(username: string): PublicProfile {
+  const target = getAllMockUsers().find((user) => user.username?.toLowerCase() === username.toLowerCase() && user.status !== "banned");
+  if (!target?.username) throw new Error("Kullanıcı profili bulunamadı");
+  const viewer = getUserSession();
+  const follows = mockFollowIds();
+  const interestMap = readStorage<Record<string, string[]>>(USER_INTEREST_TAGS_KEY, {});
+  const ownTags = new Set(viewer ? interestMap[viewer.id] ?? [] : []);
+  const sentiments = readStorage<Record<string, Record<string, TagSentiment>>>(USER_TAG_SENTIMENTS_KEY, {});
+  const interests = getTagsByIds(interestMap[target.id] ?? []).map((tag) => ({ tag, sentiment: sentiments[target.id]?.[tag.id] ?? "like" as const, common: ownTags.has(tag.id) }));
+  const events = getStoredEvents().filter((event) => event.status === "published" && event.organizerName?.toLowerCase() === target.name.toLowerCase()).slice(0, 12).map(mockEventDiscoveryItem);
+  const places = listMockPlaces(new URLSearchParams()).filter((place) => place.status === "active" && place.createdById === target.id).slice(0, 12).map(mockPlaceDiscoveryItem);
+  const media = target.id === viewer?.id ? listMockProfileMedia().map(({ id, url, type, sortOrder, isProfilePicture }) => ({ id, url, type, sortOrder, isProfilePicture })) : [];
+  return publicProfileSchema.parse({ id: target.id, name: target.name, username: target.username, accountType: target.accountType === "corporate" ? "corporate" : "individual", website: target.website ?? null, city: target.city ?? null, country: target.country ?? null, followerCount: target.followerCount ?? 0, followingCount: target.followingCount ?? 0, memberSince: target.createdAt ?? new Date().toISOString(), media, interests, commonInterestCount: interests.filter((item) => item.common).length, relationship: { isSelf: viewer?.id === target.id, following: follows.includes(target.id), canMessage: Boolean(viewer && viewer.id !== target.id) }, events, places });
 }
 
 function completeMockOnboarding() {
@@ -4072,6 +4090,7 @@ export function markConversationRead(peerId: string): Promise<{ updated: number 
 
 export function getOnboardingStatus(): Promise<OnboardingStatus> { return requestJson("/me/onboarding", onboardingStatusSchema, { auth: "user" }); }
 export function getDiscoveryFeed(params?: { city?: string; country?: string }): Promise<DiscoveryFeed> { const query = new URLSearchParams(); if (params?.city) query.set("city", params.city); if (params?.country) query.set("country", params.country); return requestJson(`/discover/feed${query.size ? `?${query}` : ""}`, discoveryFeedSchema, { auth: "user" }); }
+export function getPublicProfile(username: string): Promise<PublicProfile> { return requestJson(`/users/${encodeURIComponent(username)}`, publicProfileSchema, { auth: "user" }); }
 export function searchDiscovery(query: string): Promise<DiscoverySearch> { return requestJson(`/discover/search?q=${encodeURIComponent(query)}`, discoverySearchSchema, { auth: "user" }); }
 export function completeOnboarding(): Promise<OnboardingStatus> { return requestJson("/me/onboarding/complete", onboardingStatusSchema, { auth: "user", method: "POST" }); }
 export function getMemberPass(): Promise<MemberPass> { return requestJson("/me/member-pass", memberPassSchema, { auth: "user" }); }

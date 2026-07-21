@@ -270,6 +270,17 @@ export const tagSchema = z.object({
   status: tagStatusSchema,
   usageCount: z.number().int().nonnegative()
 });
+export const publicProfileInterestSchema = z.object({ tag: tagSchema, sentiment: z.enum(["like", "ok", "dislike"]), common: z.boolean() });
+export const publicProfileSchema = z.object({
+  id: z.string().uuid(), name: z.string(), username: z.string(), accountType: accountTypeSchema,
+  website: z.string().nullable(), city: z.string().nullable(), country: z.string().nullable(),
+  followerCount: z.number().int().nonnegative(), followingCount: z.number().int().nonnegative(),
+  memberSince: z.string().datetime().or(z.date()),
+  media: z.array(z.object({ id: z.string().uuid(), url: z.string(), type: z.string(), sortOrder: z.number().int(), isProfilePicture: z.boolean() })),
+  interests: z.array(publicProfileInterestSchema), commonInterestCount: z.number().int().nonnegative(),
+  relationship: z.object({ isSelf: z.boolean(), following: z.boolean(), canMessage: z.boolean() }),
+  events: z.array(discoveryItemSchema), places: z.array(discoveryItemSchema)
+});
 
 export const tagSentimentSchema = z.enum(["like", "ok", "dislike"]);
 export const tagAffinitySchema = z.object({
@@ -848,6 +859,7 @@ export type MemberScan = z.infer<typeof memberScanSchema>;
 export type DiscoveryItem = z.infer<typeof discoveryItemSchema>;
 export type DiscoveryFeed = z.infer<typeof discoveryFeedSchema>;
 export type DiscoverySearch = z.infer<typeof discoverySearchSchema>;
+export type PublicProfile = z.infer<typeof publicProfileSchema>;
 export type TagSentiment = z.infer<typeof tagSentimentSchema>;
 export type TagAffinity = z.infer<typeof tagAffinitySchema>;
 export type TagComment = z.infer<typeof tagCommentSchema>;

@@ -17,6 +17,7 @@ import { TagsModule } from "./tags/tags.module";
 import { SocialModule } from "./social/social.module";
 import { IdentityModule } from "./identity/identity.module";
 import { DiscoveryModule } from "./discovery/discovery.module";
+import { PublicProfileModule } from "./public-profile/public-profile.module";
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { DiscoveryModule } from "./discovery/discovery.module";
     IdentityModule,
     MessagesModule,
     ProfileModule,
+    PublicProfileModule,
     PlacesModule,
     ReportsModule,
     SocialModule,
