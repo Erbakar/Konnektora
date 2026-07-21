@@ -6,6 +6,7 @@ import { CmsModule } from "./cms/cms.module";
 import { ChatModule } from "./chat/chat.module";
 import { ContentAdminModule } from "./content-admin/content-admin.module";
 import { ContentModule } from "./content/content.module";
+import { ContactsModule } from "./contacts/contacts.module";
 import { EventsModule } from "./events/events.module";
 import { HealthController } from "./health.controller";
 import { MessagesModule } from "./messages/messages.module";
@@ -28,6 +29,7 @@ import { PublicProfileModule } from "./public-profile/public-profile.module";
     ChatModule,
     ContentAdminModule,
     ContentModule,
+    ContactsModule,
     DiscoveryModule,
     AdminModule,
     EventsModule,

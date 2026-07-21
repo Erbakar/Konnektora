@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
+import { ConfigModule } from "@nestjs/config";
 import { MailModule } from "../mail/mail.module";
 import { SmsModule } from "../sms/sms.module";
 import { AdminGuard } from "./admin.guard";
@@ -12,6 +13,7 @@ import { OptionalJwtAuthGuard } from "./optional-jwt-auth.guard";
   imports: [
     MailModule,
     SmsModule,
+    ConfigModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET ?? "change-me-in-env",
       signOptions: { expiresIn: "8h" }

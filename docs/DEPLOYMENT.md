@@ -5,6 +5,12 @@ Bu rehber iki production yolunu kapsar:
 1. Netlify frontend + Netlify Function API + Netlify Database/Postgres
 2. Netlify frontend + Render backend + Render PostgreSQL
 
+## Sosyal sağlayıcılar ve rehber
+
+API ortamında `GOOGLE_CLIENT_ID`, web build ortamında aynı OAuth istemcisine ait `VITE_GOOGLE_CLIENT_ID` tanımlanmalıdır. Google Cloud'da People API etkinleştirilmeli ve izin ekranına `contacts.readonly` kapsamı eklenmelidir. Facebook için web ortamında `VITE_FACEBOOK_APP_ID`, API ortamında `FACEBOOK_APP_ID` ve `FACEBOOK_APP_SECRET` tanımlanır; API access token'ını Graph API üzerinden uygulama kimliğiyle doğrular. Production ve preview origin'leri iki sağlayıcının izin verilen JavaScript origin listesine eklenmelidir.
+
+Telefon rehberi seçimi HTTPS ve Contact Picker API destekleyen mobil tarayıcı gerektirir. Ham rehber verisi yalnızca eşleştirme isteği boyunca işlenir ve saklanmaz; davet denetim kayıtlarında sadece alıcı bilgisinin SHA-256 özeti tutulur. E-posta davetleri mevcut Resend ayarlarını, SMS davetleri `SMS_WEBHOOK_URL` ve `SMS_API_KEY` ayarlarını kullanır.
+
 ## Mimari
 
 ```text

@@ -26,6 +26,8 @@ import {
   faqSchema,
   loginResponseSchema,
   memberCardsSchema,
+  socialAccountsSchema,
+  contactImportResultSchema,
   memberPassSchema,
   memberScanSchema,
   memberScansSchema,
@@ -85,6 +87,10 @@ import {
   type Faq,
   type LoginResponse,
   type MemberCard,
+  type SocialAccount,
+  type SocialProvider,
+  type Contact,
+  type ContactImportResult,
   type MemberPass,
   type MemberScan,
   type ModerationDecision,
@@ -168,6 +174,7 @@ const MOCK_USER_FOLLOWS_KEY = "konnektora_mock_user_follows";
 const MOCK_TAG_COMMENTS_KEY = "konnektora_mock_tag_comments";
 const MOCK_PROFILE_MEDIA_KEY = "konnektora_mock_profile_media";
 const MOCK_MEMBER_SCANS_KEY = "konnektora_mock_member_scans";
+const MOCK_SOCIAL_ACCOUNTS_KEY = "konnektora_mock_social_accounts";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -471,6 +478,28 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   if (pathname === "/auth/login" && method === "POST") {
     return schema.parse(loginMockUser(parseBody<{ email: string; password: string }>(options)));
   }
+
+  if (pathname === "/auth/social" && method === "POST") {
+    const input = parseBody<{ provider: SocialProvider }>(options);
+    const email = `demo.${input.provider}@konnektora.local`;
+    let response: LoginResponse;
+    try { response = loginMockUser({ email, password: "DemoSocial!1" }); }
+    catch { response = registerMockUser({ name: `${input.provider === "google" ? "Google" : "Facebook"} Demo`, email, password: "DemoSocial!1", accountType: "individual" }); }
+    const users = getAllMockUsers(); writeStorage(MOCK_USERS_KEY, users.map((item) => item.id === response.user.id ? { ...item, status: "active", emailVerified: true } : item));
+    return schema.parse({ ...response, user: { ...response.user, status: "active", emailVerified: true } });
+  }
+
+  if (pathname === "/auth/social/accounts" && method === "GET") return schema.parse(readStorage<SocialAccount[]>(MOCK_SOCIAL_ACCOUNTS_KEY, []));
+  if (pathname === "/auth/social/accounts" && method === "POST") {
+    const { provider } = parseBody<{ provider: SocialProvider }>(options); const accounts = readStorage<SocialAccount[]>(MOCK_SOCIAL_ACCOUNTS_KEY, []).filter((item) => item.provider !== provider); const now = new Date().toISOString();
+    const updated = [...accounts, { provider, email: `demo.${provider}@konnektora.local`, displayName: `${provider} hesabı`, avatarUrl: null, connectedAt: now, lastUsedAt: now }]; writeStorage(MOCK_SOCIAL_ACCOUNTS_KEY, updated); return schema.parse(updated);
+  }
+  if (pathname === "/auth/social/accounts/remove" && method === "POST") { const { provider } = parseBody<{ provider: SocialProvider }>(options); const updated = readStorage<SocialAccount[]>(MOCK_SOCIAL_ACCOUNTS_KEY, []).filter((item) => item.provider !== provider); writeStorage(MOCK_SOCIAL_ACCOUNTS_KEY, updated); return schema.parse(updated); }
+
+  if (pathname === "/contacts/import" && method === "POST") {
+    const input = parseBody<{ source: "phone" | "google"; contacts: Contact[] }>(options); const users = getAllMockUsers(); const matches = input.contacts.flatMap((contact) => { const member = users.find((item) => item.email.toLowerCase() === contact.email?.toLowerCase() || item.phone === contact.phone); return member ? [{ contactName: contact.name, member: toMockMemberCard(member, false) }] : []; }); const matched = new Set(matches.map((item) => item.contactName)); return schema.parse({ source: input.source, importedCount: input.contacts.length, matches, invitees: input.contacts.filter((item) => !matched.has(item.name)) });
+  }
+  if (pathname === "/contacts/invite" && method === "POST") return schema.parse({ ok: true, invitedCount: parseBody<{ contacts: Contact[] }>(options).contacts.length });
 
   if (pathname === "/auth/email/verify/request" && method === "POST") {
     return schema.parse(createMockEmailToken(parseBody<{ email: string }>(options).email, "verify_email"));
@@ -4148,6 +4177,13 @@ export function userLogin(email: string, password: string): Promise<LoginRespons
     body: JSON.stringify({ email, password })
   });
 }
+
+export function socialLogin(provider: SocialProvider, credential: string): Promise<LoginResponse> { return requestJson("/auth/social", loginResponseSchema, { method: "POST", body: JSON.stringify({ provider, credential }) }); }
+export function listSocialAccounts(): Promise<SocialAccount[]> { return requestJson("/auth/social/accounts", socialAccountsSchema, { auth: "user" }); }
+export function connectSocialAccount(provider: SocialProvider, credential: string): Promise<SocialAccount[]> { return requestJson("/auth/social/accounts", socialAccountsSchema, { auth: "user", method: "POST", body: JSON.stringify({ provider, credential }) }); }
+export function removeSocialAccount(provider: SocialProvider): Promise<SocialAccount[]> { return requestJson("/auth/social/accounts/remove", socialAccountsSchema, { auth: "user", method: "POST", body: JSON.stringify({ provider }) }); }
+export function importContacts(source: "phone" | "google", contacts: Contact[]): Promise<ContactImportResult> { return requestJson("/contacts/import", contactImportResultSchema, { auth: "user", method: "POST", body: JSON.stringify({ source, contacts }) }); }
+export function inviteContacts(contacts: Contact[]): Promise<{ ok: boolean; invitedCount: number }> { return requestJson("/contacts/invite", z.object({ ok: z.boolean(), invitedCount: z.number().int() }), { auth: "user", method: "POST", body: JSON.stringify({ contacts }) }); }
 
 export function registerUser(input: RegistrationInput): Promise<LoginResponse> {
   return requestJson("/auth/register", loginResponseSchema, {

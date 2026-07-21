@@ -87,6 +87,27 @@ export const memberCardSchema = z.object({
   following: z.boolean()
 });
 export const memberCardsSchema = z.array(memberCardSchema);
+export const socialProviderSchema = z.enum(["google", "facebook"]);
+export const socialAccountSchema = z.object({
+  provider: socialProviderSchema,
+  email: z.string().nullable(),
+  displayName: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+  connectedAt: z.string().datetime().or(z.date()),
+  lastUsedAt: z.string().datetime().or(z.date())
+});
+export const socialAccountsSchema = z.array(socialAccountSchema);
+export const contactSchema = z.object({ name: z.string(), email: z.string().email().optional(), phone: z.string().optional() });
+export const contactImportResultSchema = z.object({
+  source: z.enum(["phone", "google"]),
+  importedCount: z.number().int().nonnegative(),
+  matches: z.array(z.object({ contactName: z.string(), member: memberCardSchema })),
+  invitees: z.array(contactSchema)
+});
+export type SocialProvider = z.infer<typeof socialProviderSchema>;
+export type SocialAccount = z.infer<typeof socialAccountSchema>;
+export type Contact = z.infer<typeof contactSchema>;
+export type ContactImportResult = z.infer<typeof contactImportResultSchema>;
 export const onboardingStepSchema = z.object({
   key: z.enum(["phone", "personal_info", "photo", "interests", "people"]),
   title: z.string(),

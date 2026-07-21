@@ -6,7 +6,9 @@ class StrongPasswordDto {
   @IsString()
   @MinLength(8)
   @MaxLength(128)
-  @Matches(strongPassword, { message: "Şifre en az bir büyük harf, bir küçük harf ve bir özel karakter içermelidir." })
+  @Matches(strongPassword, {
+    message: "Şifre en az bir büyük harf, bir küçük harf ve bir özel karakter içermelidir.",
+  })
   password!: string;
 }
 
@@ -84,7 +86,9 @@ export class ChangePasswordDto {
   @IsString()
   @MinLength(8)
   @MaxLength(128)
-  @Matches(strongPassword, { message: "Şifre en az bir büyük harf, bir küçük harf ve bir özel karakter içermelidir." })
+  @Matches(strongPassword, {
+    message: "Şifre en az bir büyük harf, bir küçük harf ve bir özel karakter içermelidir.",
+  })
   newPassword!: string;
 }
 
@@ -102,7 +106,9 @@ export class DeactivateAccountDto {
 
 export class RequestPhoneVerificationDto {
   @IsString()
-  @Matches(/^\+[1-9]\d{7,14}$/, { message: "Telefon numarası E.164 formatında olmalıdır." })
+  @Matches(/^\+[1-9]\d{7,14}$/, {
+    message: "Telefon numarası E.164 formatında olmalıdır.",
+  })
   phone!: string;
 }
 
@@ -115,5 +121,20 @@ export class ConfirmPhoneVerificationDto extends RequestPhoneVerificationDto {
 export class AvailabilityQueryDto {
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @Matches(/^\+[1-9]\d{7,14}$/) phone?: string;
-  @IsOptional() @IsString() @MinLength(2) @MaxLength(80) @Matches(/^[\p{L}\p{N} .-]+$/u) username?: string;
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(80)
+  @Matches(/^[\p{L}\p{N} .-]+$/u)
+  username?: string;
+}
+
+export class SocialAuthDto {
+  @IsIn(["google", "facebook"])
+  provider!: "google" | "facebook";
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(4096)
+  credential!: string;
 }

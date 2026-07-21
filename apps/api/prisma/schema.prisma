@@ -157,6 +157,11 @@ enum TagSentiment {
   dislike
 }
 
+enum SocialProvider {
+  google
+  facebook
+}
+
 model User {
   id                   String     @id @default(uuid())
   email                String     @unique
@@ -231,11 +236,45 @@ model User {
   contentViews              ContentView[]
   scansMade                 MemberScan[] @relation("MemberScanScanner")
   scansReceived             MemberScan[] @relation("MemberScanMember")
+  socialAccounts           SocialAccount[]
+  contactInvites           ContactInvite[]
 
   @@index([accountType, status])
   @@index([country, city])
   @@index([lastOnlineAt])
   @@map("users")
+}
+
+model SocialAccount {
+  id              String         @id @default(uuid())
+  userId          String         @map("user_id")
+  provider        SocialProvider
+  providerUserId  String         @map("provider_user_id")
+  email           String?
+  displayName     String?        @map("display_name")
+  avatarUrl       String?        @map("avatar_url")
+  connectedAt     DateTime       @default(now()) @map("connected_at")
+  lastUsedAt      DateTime       @default(now()) @map("last_used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("social_accounts")
+}
+
+model ContactInvite {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  channel        String
+  recipientHash  String   @map("recipient_hash")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("contact_invites")
 }
 
 model MemberScan {

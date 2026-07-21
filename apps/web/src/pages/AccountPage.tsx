@@ -1,61 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ClipboardCheck, Image, LogOut, Plus, Trash2, UserRound, Users, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import type { AccountType, Event, EventParticipant, MemberCard, NotificationPreference, PrivacyAudience, ProfileMedia, Tag, TagAffinity, TagSentiment } from "@konnektora/shared";
-import {
-  type AdminEventInput,
-  type RegistrationInput,
-  archiveMyEvent,
-  checkInEventParticipant,
-  changePassword,
-  confirmPhoneVerification,
-  clearUserSession,
-  createUserEvent,
-  createUserTag,
-  createTagComment,
-  deactivateAccount,
-  deleteProfileMedia,
-  deleteTagComment,
-  getProfileAffinities,
-  getMyProfile,
-  getNotificationPreferences,
-  getPrivacySettings,
-  getUserSession,
-  getUserToken,
-  followUser,
-  inviteEventParticipant,
-  isMockApiMode,
-  listMyNotifications,
-  listBlocks,
-  listFollowing,
-  listMemberSuggestions,
-  listEventParticipants,
-  listMyEvents,
-  listProfileMedia,
-  listTags,
-  listTagComments,
-  markMyNotificationRead,
-  makeProfilePicture,
-  registerUser,
-  reactivateAccount,
-  removeBlock,
-  requestEmailVerification,
-  requestPhoneVerification,
-  requestPasswordReset,
-  reorderProfileMedia,
-  resolveMediaUrl,
-  scanEventTicket,
-  setUserSession,
-  updateEventParticipantStatus,
-  updateMyEvent,
-  updateProfileAffinities,
-  unfollowUser,
-  updateMyProfile,
-  updateNotificationPreferences,
-  updatePrivacySettings,
-  uploadProfileMedia,
-  userLogin
-} from "../lib/api";
+import { Link } from "react-router-dom";
+import type { AccountType, Event, EventParticipant, MemberCard, NotificationPreference, PrivacyAudience, ProfileMedia, Tag, TagAffinity, TagSentiment, SocialProvider } from "@konnektora/shared";
+import { SocialAuthButtons } from "../components/SocialAuthButtons";
+import { getSocialCredential } from "../lib/socialProviders";
+import { type AdminEventInput, type RegistrationInput, archiveMyEvent, checkInEventParticipant, changePassword, connectSocialAccount, confirmPhoneVerification, clearUserSession, createUserEvent, createUserTag, createTagComment, deactivateAccount, deleteProfileMedia, deleteTagComment, getProfileAffinities, getMyProfile, getNotificationPreferences, getPrivacySettings, getUserSession, getUserToken, followUser, inviteEventParticipant, isMockApiMode, listMyNotifications, listBlocks, listFollowing, listMemberSuggestions, listEventParticipants, listMyEvents, listProfileMedia, listSocialAccounts, listTags, listTagComments, markMyNotificationRead, makeProfilePicture, registerUser, reactivateAccount, removeBlock, removeSocialAccount, requestEmailVerification, requestPhoneVerification, requestPasswordReset, reorderProfileMedia, resolveMediaUrl, scanEventTicket, setUserSession, updateEventParticipantStatus, updateMyEvent, updateProfileAffinities, unfollowUser, updateMyProfile, updateNotificationPreferences, updatePrivacySettings, uploadProfileMedia, userLogin, socialLogin } from "../lib/api";
 
 export function AccountPage() {
   const queryClient = useQueryClient();
@@ -65,106 +15,159 @@ export function AccountPage() {
   const [pendingPhone, setPendingPhone] = useState<string | null>(null);
   const [developmentPhoneCode, setDevelopmentPhoneCode] = useState<string | null>(null);
   const [commentTagId, setCommentTagId] = useState("");
-  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
-  const { data: tags = [] } = useQuery({ queryKey: ["tags"], queryFn: listTags });
+  const [notice, setNotice] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
+  const { data: tags = [] } = useQuery({
+    queryKey: ["tags"],
+    queryFn: listTags,
+  });
   const myEventsQuery = useQuery({
     queryKey: ["my-events", user?.id],
     queryFn: listMyEvents,
-    enabled: Boolean(user)
+    enabled: Boolean(user),
   });
   const interestsQuery = useQuery({
     queryKey: ["profile-interests", user?.id],
     queryFn: getProfileAffinities,
-    enabled: Boolean(user)
+    enabled: Boolean(user),
   });
   const profileQuery = useQuery({
     queryKey: ["my-profile", user?.id],
     queryFn: getMyProfile,
-    enabled: Boolean(user)
+    enabled: Boolean(user),
   });
   const profileMediaQuery = useQuery({
     queryKey: ["profile-media", user?.id],
     queryFn: listProfileMedia,
-    enabled: Boolean(user)
+    enabled: Boolean(user),
   });
   const privacyQuery = useQuery({
     queryKey: ["privacy-settings", user?.id],
     queryFn: getPrivacySettings,
-    enabled: Boolean(user)
+    enabled: Boolean(user),
+  });
+  const socialAccountsQuery = useQuery({
+    queryKey: ["social-accounts", user?.id],
+    queryFn: listSocialAccounts,
+    enabled: Boolean(user),
   });
   const notificationPreferencesQuery = useQuery({
     queryKey: ["notification-preferences", user?.id],
     queryFn: getNotificationPreferences,
-    enabled: Boolean(user)
+    enabled: Boolean(user),
   });
   const blocksQuery = useQuery({
     queryKey: ["blocks", user?.id],
     queryFn: listBlocks,
-    enabled: Boolean(user)
+    enabled: Boolean(user),
   });
-  const followingQuery = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
-  const suggestionsQuery = useQuery({ queryKey: ["member-suggestions", user?.id], queryFn: listMemberSuggestions, enabled: Boolean(user) });
+  const followingQuery = useQuery({
+    queryKey: ["following", user?.id],
+    queryFn: listFollowing,
+    enabled: Boolean(user),
+  });
+  const suggestionsQuery = useQuery({
+    queryKey: ["member-suggestions", user?.id],
+    queryFn: listMemberSuggestions,
+    enabled: Boolean(user),
+  });
   const notificationsQuery = useQuery({
     queryKey: ["my-notifications", user?.id],
     queryFn: listMyNotifications,
-    enabled: Boolean(user)
+    enabled: Boolean(user),
   });
   const tagCommentsQuery = useQuery({
     queryKey: ["tag-comments", commentTagId],
     queryFn: () => listTagComments(commentTagId),
-    enabled: Boolean(user && commentTagId)
+    enabled: Boolean(user && commentTagId),
   });
   const interestTagIds = interestsQuery.data?.map((affinity) => affinity.tag.id) ?? [];
   const interestSentiments = new Map(interestsQuery.data?.map((affinity) => [affinity.tag.id, affinity.sentiment]) ?? []);
   const interestTags = tags.filter((tag) => interestTagIds.includes(tag.id));
 
   const authMutation = useMutation({
-    mutationFn: (input: RegistrationInput) =>
-      mode === "register"
-        ? registerUser(input)
-        : userLogin(input.email, input.password),
+    mutationFn: (input: RegistrationInput) => (mode === "register" ? registerUser(input) : userLogin(input.email, input.password)),
     onSuccess: (response) => {
       setUserSession(response);
       setUser(response.user);
-      void queryClient.invalidateQueries({ queryKey: ["profile-interests", response.user.id] });
+      void queryClient.invalidateQueries({
+        queryKey: ["profile-interests", response.user.id],
+      });
       setNotice({
         tone: "success",
-        message:
-          response.user.status === "pending"
-            ? "Hesap oluşturuldu. Email doğrulama linkini kontrol et."
-            : "Giriş yapıldı. Artık etkinlik oluşturabilirsin."
+        message: response.user.status === "pending" ? "Hesap oluşturuldu. Email doğrulama linkini kontrol et." : "Giriş yapıldı. Artık etkinlik oluşturabilirsin.",
       });
     },
-    onError: () => setNotice({ tone: "error", message: "İşlem tamamlanamadı. Bilgileri kontrol edip tekrar dene." })
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "İşlem tamamlanamadı. Bilgileri kontrol edip tekrar dene.",
+      }),
+  });
+  const socialAccountMutation = useMutation({
+    mutationFn: async ({ provider, remove = false }: { provider: SocialProvider; remove?: boolean }) => (remove ? removeSocialAccount(provider) : connectSocialAccount(provider, await getSocialCredential(provider))),
+    onSuccess: (accounts) => {
+      queryClient.setQueryData(["social-accounts", user?.id], accounts);
+      setNotice({ tone: "success", message: "Bağlı hesaplar güncellendi." });
+    },
+    onError: (error: Error) => setNotice({ tone: "error", message: error.message }),
   });
   const forgotPasswordMutation = useMutation({
     mutationFn: requestPasswordReset,
-    onSuccess: () => setNotice({ tone: "success", message: "Şifre sıfırlama linki email adresine gönderildi." }),
-    onError: () => setNotice({ tone: "error", message: "Şifre sıfırlama isteği gönderilemedi." })
+    onSuccess: () =>
+      setNotice({
+        tone: "success",
+        message: "Şifre sıfırlama linki email adresine gönderildi.",
+      }),
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "Şifre sıfırlama isteği gönderilemedi.",
+      }),
   });
   const reactivateMutation = useMutation({
     mutationFn: (input: { email: string; password: string }) => reactivateAccount(input.email, input.password),
     onSuccess: (response) => {
       setUserSession(response);
       setUser(response.user);
-      setNotice({ tone: "success", message: "Hesabınız yeniden aktifleştirildi." });
+      setNotice({
+        tone: "success",
+        message: "Hesabınız yeniden aktifleştirildi.",
+      });
     },
-    onError: () => setNotice({ tone: "error", message: "Dondurulmuş hesap bulunamadı veya şifre hatalı." })
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "Dondurulmuş hesap bulunamadı veya şifre hatalı.",
+      }),
   });
   const resendVerificationMutation = useMutation({
     mutationFn: requestEmailVerification,
-    onSuccess: () => setNotice({ tone: "success", message: "Doğrulama emaili tekrar gönderildi." }),
-    onError: () => setNotice({ tone: "error", message: "Doğrulama emaili gönderilemedi." })
+    onSuccess: () =>
+      setNotice({
+        tone: "success",
+        message: "Doğrulama emaili tekrar gönderildi.",
+      }),
+    onError: () => setNotice({ tone: "error", message: "Doğrulama emaili gönderilemedi." }),
   });
 
   const eventMutation = useMutation({
     mutationFn: createUserEvent,
     onSuccess: () => {
-      setNotice({ tone: "success", message: "Etkinlik yayınlandı ve public listede görünür." });
+      setNotice({
+        tone: "success",
+        message: "Etkinlik yayınlandı ve public listede görünür.",
+      });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
       void queryClient.invalidateQueries({ queryKey: ["my-events", user?.id] });
     },
-    onError: () => setNotice({ tone: "error", message: "Etkinlik oluşturulamadı. Zorunlu alanları kontrol et." })
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "Etkinlik oluşturulamadı. Zorunlu alanları kontrol et.",
+      }),
   });
   const tagMutation = useMutation({
     mutationFn: createUserTag,
@@ -173,75 +176,121 @@ export function AccountPage() {
       void queryClient.invalidateQueries({ queryKey: ["tags"] });
       void queryClient.invalidateQueries({ queryKey: ["tags", "home"] });
     },
-    onError: () => setNotice({ tone: "error", message: "Tag oluşturulamadı. Aynı isimde sorunlu bir tag olabilir." })
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "Tag oluşturulamadı. Aynı isimde sorunlu bir tag olabilir.",
+      }),
   });
   const interestsMutation = useMutation({
     mutationFn: updateProfileAffinities,
     onSuccess: (affinities) => {
       queryClient.setQueryData<TagAffinity[]>(["profile-interests", user?.id], affinities);
-      void queryClient.invalidateQueries({ queryKey: ["member-suggestions", user?.id] });
+      void queryClient.invalidateQueries({
+        queryKey: ["member-suggestions", user?.id],
+      });
       setNotice({ tone: "success", message: "İlgi alanların kaydedildi." });
     },
-    onError: () => setNotice({ tone: "error", message: "İlgi alanları kaydedilemedi. Lütfen tekrar dene." })
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "İlgi alanları kaydedilemedi. Lütfen tekrar dene.",
+      }),
   });
   const createTagCommentMutation = useMutation({
     mutationFn: (body: string) => createTagComment(commentTagId, body),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["tag-comments", commentTagId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["tag-comments", commentTagId],
+      });
       setNotice({ tone: "success", message: "Tag yorumunuz eklendi." });
     },
-    onError: () => setNotice({ tone: "error", message: "Tag yorumu eklenemedi." })
+    onError: () => setNotice({ tone: "error", message: "Tag yorumu eklenemedi." }),
   });
   const deleteTagCommentMutation = useMutation({
     mutationFn: (commentId: string) => deleteTagComment(commentTagId, commentId),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["tag-comments", commentTagId] })
+    onSuccess: () =>
+      void queryClient.invalidateQueries({
+        queryKey: ["tag-comments", commentTagId],
+      }),
   });
   const profileMutation = useMutation({
     mutationFn: updateMyProfile,
     onSuccess: (profile) => {
       const session = getUserSession();
       if (session) {
-        const response = { accessToken: getUserToken() ?? "", user: { ...session, name: profile.name, accountType: profile.accountType } };
+        const response = {
+          accessToken: getUserToken() ?? "",
+          user: {
+            ...session,
+            name: profile.name,
+            accountType: profile.accountType,
+          },
+        };
         setUserSession(response);
         setUser(response.user);
       }
       queryClient.setQueryData(["my-profile", profile.id], profile);
       setNotice({ tone: "success", message: "Profil bilgileri kaydedildi." });
     },
-    onError: () => setNotice({ tone: "error", message: "Profil kaydedilemedi. Kullanıcı adı ve zorunlu alanları kontrol et." })
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "Profil kaydedilemedi. Kullanıcı adı ve zorunlu alanları kontrol et.",
+      }),
   });
   const changePasswordMutation = useMutation({
     mutationFn: changePassword,
     onSuccess: () => setNotice({ tone: "success", message: "Şifreniz değiştirildi." }),
-    onError: () => setNotice({ tone: "error", message: "Şifre değiştirilemedi. Mevcut şifrenizi kontrol edin." })
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "Şifre değiştirilemedi. Mevcut şifrenizi kontrol edin.",
+      }),
   });
   const deactivateMutation = useMutation({
     mutationFn: deactivateAccount,
     onSuccess: () => {
       clearUserSession();
       setUser(null);
-      setNotice({ tone: "success", message: "Hesabınız donduruldu. Dilediğiniz zaman yeniden aktifleştirebilirsiniz." });
+      setNotice({
+        tone: "success",
+        message: "Hesabınız donduruldu. Dilediğiniz zaman yeniden aktifleştirebilirsiniz.",
+      });
     },
-    onError: () => setNotice({ tone: "error", message: "Hesap dondurulamadı. Mevcut şifrenizi kontrol edin." })
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "Hesap dondurulamadı. Mevcut şifrenizi kontrol edin.",
+      }),
   });
   const requestPhoneMutation = useMutation({
     mutationFn: requestPhoneVerification,
     onSuccess: (response, phone) => {
       setPendingPhone(phone);
       setDevelopmentPhoneCode(response.developmentCode ?? null);
-      setNotice({ tone: "success", message: "Doğrulama kodu gönderildi. Kod 2 dakika geçerlidir." });
+      setNotice({
+        tone: "success",
+        message: "Doğrulama kodu gönderildi. Kod 2 dakika geçerlidir.",
+      });
     },
-    onError: () => setNotice({ tone: "error", message: "Kod gönderilemedi. Numarayı +905551112233 biçiminde kontrol edin." })
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "Kod gönderilemedi. Numarayı +905551112233 biçiminde kontrol edin.",
+      }),
   });
   const confirmPhoneMutation = useMutation({
     mutationFn: (input: { phone: string; code: string }) => confirmPhoneVerification(input.phone, input.code),
     onSuccess: () => {
       setPendingPhone(null);
       setDevelopmentPhoneCode(null);
-      void queryClient.invalidateQueries({ queryKey: ["my-profile", user?.id] });
+      void queryClient.invalidateQueries({
+        queryKey: ["my-profile", user?.id],
+      });
       setNotice({ tone: "success", message: "Telefon numaranız doğrulandı." });
     },
-    onError: () => setNotice({ tone: "error", message: "Kod hatalı veya süresi dolmuş." })
+    onError: () => setNotice({ tone: "error", message: "Kod hatalı veya süresi dolmuş." }),
   });
   const privacyMutation = useMutation({
     mutationFn: updatePrivacySettings,
@@ -249,15 +298,22 @@ export function AccountPage() {
       queryClient.setQueryData(["privacy-settings", user?.id], settings);
       setNotice({ tone: "success", message: "Gizlilik ayarları kaydedildi." });
     },
-    onError: () => setNotice({ tone: "error", message: "Gizlilik ayarları kaydedilemedi." })
+    onError: () => setNotice({ tone: "error", message: "Gizlilik ayarları kaydedilemedi." }),
   });
   const notificationPreferencesMutation = useMutation({
     mutationFn: updateNotificationPreferences,
     onSuccess: (preferences) => {
       queryClient.setQueryData(["notification-preferences", user?.id], preferences);
-      setNotice({ tone: "success", message: "Bildirim tercihleri kaydedildi." });
+      setNotice({
+        tone: "success",
+        message: "Bildirim tercihleri kaydedildi.",
+      });
     },
-    onError: () => setNotice({ tone: "error", message: "Bildirim tercihleri kaydedilemedi." })
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "Bildirim tercihleri kaydedilemedi.",
+      }),
   });
   const removeBlockMutation = useMutation({
     mutationFn: (input: { targetType: "user" | "tag" | "event" | "place"; targetId: string }) => removeBlock(input.targetType, input.targetId),
@@ -266,18 +322,23 @@ export function AccountPage() {
       void queryClient.invalidateQueries({ queryKey: ["events"] });
       void queryClient.invalidateQueries({ queryKey: ["tags"] });
       setNotice({ tone: "success", message: "Engel kaldırıldı." });
-    }
+    },
   });
   const followMutation = useMutation({
-    mutationFn: (input: { userId: string; following: boolean }) => input.following ? unfollowUser(input.userId) : followUser(input.userId),
+    mutationFn: (input: { userId: string; following: boolean }) => (input.following ? unfollowUser(input.userId) : followUser(input.userId)),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["following", user?.id] });
-      void queryClient.invalidateQueries({ queryKey: ["member-suggestions", user?.id] });
-    }
+      void queryClient.invalidateQueries({
+        queryKey: ["member-suggestions", user?.id],
+      });
+    },
   });
   const readNotificationMutation = useMutation({
     mutationFn: markMyNotificationRead,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["my-notifications", user?.id] })
+    onSuccess: () =>
+      void queryClient.invalidateQueries({
+        queryKey: ["my-notifications", user?.id],
+      }),
   });
 
   function handleLogout() {
@@ -297,7 +358,7 @@ export function AccountPage() {
       companyName: String(form.get("companyName") || "") || undefined,
       tradeName: String(form.get("tradeName") || "") || undefined,
       companyType: String(form.get("companyType") || "") || undefined,
-      businessCategory: String(form.get("businessCategory") || "") || undefined
+      businessCategory: String(form.get("businessCategory") || "") || undefined,
     });
   }
 
@@ -316,7 +377,7 @@ export function AccountPage() {
       city: String(form.get("city") || ""),
       country: String(form.get("country") || ""),
       organizerName: user?.name ?? "Konnektora User",
-      tagIds: form.getAll("tagIds").map(String)
+      tagIds: form.getAll("tagIds").map(String),
     };
 
     if (coverImageUrl) {
@@ -339,7 +400,7 @@ export function AccountPage() {
 
     tagMutation.mutate({
       name,
-      description: description || undefined
+      description: description || undefined,
     });
     event.currentTarget.reset();
   }
@@ -351,8 +412,8 @@ export function AccountPage() {
     interestsMutation.mutate(
       selectedTagIds.map((tagId) => ({
         tagId,
-        sentiment: String(form.get(`sentiment:${tagId}`) || "like") as TagSentiment
-      }))
+        sentiment: String(form.get(`sentiment:${tagId}`) || "like") as TagSentiment,
+      })),
     );
   }
 
@@ -382,7 +443,7 @@ export function AccountPage() {
       companyName: value("companyName"),
       tradeName: value("tradeName"),
       companyType: value("companyType"),
-      businessCategory: value("businessCategory")
+      businessCategory: value("businessCategory"),
     });
   }
 
@@ -393,7 +454,10 @@ export function AccountPage() {
     const newPassword = String(form.get("newPassword") || "");
     const confirmation = String(form.get("newPasswordAgain") || "");
     if (newPassword !== confirmation) {
-      setNotice({ tone: "error", message: "Yeni şifreler birbiriyle eşleşmiyor." });
+      setNotice({
+        tone: "error",
+        message: "Yeni şifreler birbiriyle eşleşmiyor.",
+      });
       return;
     }
     changePasswordMutation.mutate({ currentPassword, newPassword });
@@ -404,7 +468,7 @@ export function AccountPage() {
     const form = new FormData(event.currentTarget);
     deactivateMutation.mutate({
       currentPassword: String(form.get("currentPassword") || ""),
-      reason: String(form.get("reason") || "").trim()
+      reason: String(form.get("reason") || "").trim(),
     });
   }
 
@@ -416,7 +480,10 @@ export function AccountPage() {
   function handlePhoneConfirmation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!pendingPhone) return;
-    confirmPhoneMutation.mutate({ phone: pendingPhone, code: String(new FormData(event.currentTarget).get("code") || "") });
+    confirmPhoneMutation.mutate({
+      phone: pendingPhone,
+      code: String(new FormData(event.currentTarget).get("code") || ""),
+    });
   }
 
   function handlePrivacySubmit(event: FormEvent<HTMLFormElement>) {
@@ -429,7 +496,7 @@ export function AccountPage() {
       eventAudience: audience("eventAudience"),
       eventInviteAudience: audience("eventInviteAudience"),
       placeAudience: audience("placeAudience"),
-      placeInviteAudience: audience("placeInviteAudience")
+      placeInviteAudience: audience("placeInviteAudience"),
     });
   }
 
@@ -438,7 +505,7 @@ export function AccountPage() {
     const form = new FormData(event.currentTarget);
     const preferences = (notificationPreferencesQuery.data ?? []).map((preference) => ({
       topic: preference.topic,
-      channel: String(form.get(preference.topic)) as NotificationPreference["channel"]
+      channel: String(form.get(preference.topic)) as NotificationPreference["channel"],
     }));
     notificationPreferencesMutation.mutate(preferences);
   }
@@ -468,12 +535,8 @@ export function AccountPage() {
       {!user ? (
         <div className="account-grid">
           <div>
-            <p className="lead">
-              Üye hesabı oluştur, giriş yap ve Konnektora community içinde kendi etkinliğini yayınla.
-            </p>
-            {isMockApiMode ? (
-              <p className="form-help">Demo modunda üyelik ve etkinlikler bu tarayıcıya kaydedilir.</p>
-            ) : null}
+            <p className="lead">Üye hesabı oluştur, giriş yap ve Konnektora community içinde kendi etkinliğini yayınla.</p>
+            {isMockApiMode ? <p className="form-help">Demo modunda üyelik ve etkinlikler bu tarayıcıya kaydedilir.</p> : null}
           </div>
           <form className="admin-form compact-form" onSubmit={handleAuthSubmit}>
             <div className="segmented-control" aria-label="Hesap modu">
@@ -510,7 +573,9 @@ export function AccountPage() {
                     <label>
                       Şirket türü
                       <select name="companyType" required defaultValue="">
-                        <option disabled value="">Seçiniz</option>
+                        <option disabled value="">
+                          Seçiniz
+                        </option>
                         <option value="sole_proprietorship">Şahıs firması</option>
                         <option value="limited_or_corporation">Limited / Anonim</option>
                         <option value="association">Dernek</option>
@@ -522,7 +587,9 @@ export function AccountPage() {
                     <label>
                       İşletme kategorisi
                       <select name="businessCategory" required defaultValue="">
-                        <option disabled value="">Seçiniz</option>
+                        <option disabled value="">
+                          Seçiniz
+                        </option>
                         <option value="event_organizer">Etkinlik organizatörü</option>
                         <option value="restaurant_bar_cafe">Restoran / Bar / Kafe</option>
                         <option value="night_club">Gece kulübü</option>
@@ -544,16 +611,7 @@ export function AccountPage() {
             </label>
             <label>
               Şifre
-              <input
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                maxLength={128}
-                minLength={8}
-                name="password"
-                pattern={mode === "register" ? "(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" : undefined}
-                required
-                title={mode === "register" ? "En az 8 karakter, bir büyük harf, bir küçük harf ve bir özel karakter kullanın." : undefined}
-                type="password"
-              />
+              <input autoComplete={mode === "login" ? "current-password" : "new-password"} maxLength={128} minLength={8} name="password" pattern={mode === "register" ? "(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" : undefined} required title={mode === "register" ? "En az 8 karakter, bir büyük harf, bir küçük harf ve bir özel karakter kullanın." : undefined} type="password" />
             </label>
             <button className="primary-action" disabled={authMutation.isPending} type="submit">
               <UserRound size={18} />
@@ -561,31 +619,48 @@ export function AccountPage() {
             </button>
             {mode === "login" ? (
               <>
-                <button className="ghost-action" disabled={forgotPasswordMutation.isPending} onClick={() => {
-                  const emailInput = document.querySelector<HTMLInputElement>('input[name="email"]');
-                  if (emailInput?.value) forgotPasswordMutation.mutate(emailInput.value);
-                }} type="button">Şifremi unuttum</button>
-                <button className="ghost-action" disabled={reactivateMutation.isPending} onClick={() => {
-                  const email = document.querySelector<HTMLInputElement>('input[name="email"]')?.value;
-                  const password = document.querySelector<HTMLInputElement>('input[name="password"]')?.value;
-                  if (email && password) reactivateMutation.mutate({ email, password });
-                }} type="button">Dondurulmuş hesabı aktifleştir</button>
+                <button
+                  className="ghost-action"
+                  disabled={forgotPasswordMutation.isPending}
+                  onClick={() => {
+                    const emailInput = document.querySelector<HTMLInputElement>('input[name="email"]');
+                    if (emailInput?.value) forgotPasswordMutation.mutate(emailInput.value);
+                  }}
+                  type="button"
+                >
+                  Şifremi unuttum
+                </button>
+                <button
+                  className="ghost-action"
+                  disabled={reactivateMutation.isPending}
+                  onClick={() => {
+                    const email = document.querySelector<HTMLInputElement>('input[name="email"]')?.value;
+                    const password = document.querySelector<HTMLInputElement>('input[name="password"]')?.value;
+                    if (email && password) reactivateMutation.mutate({ email, password });
+                  }}
+                  type="button"
+                >
+                  Dondurulmuş hesabı aktifleştir
+                </button>
               </>
             ) : null}
+            <SocialAuthButtons
+              action={socialLogin}
+              onSuccess={(response) => {
+                setUserSession(response);
+                setUser(response.user);
+                setNotice({
+                  tone: "success",
+                  message: "Sosyal hesapla giriş yapıldı.",
+                });
+              }}
+            />
           </form>
         </div>
       ) : (
         <div className="account-grid">
           <aside className="account-summary">
-            {profileMediaQuery.data?.find((media) => media.isProfilePicture) ? (
-              <img
-                alt={`${user.name} profil resmi`}
-                className="profile-avatar-image"
-                src={resolveMediaUrl(profileMediaQuery.data.find((media) => media.isProfilePicture)!.url)}
-              />
-            ) : (
-              <UserRound size={28} />
-            )}
+            {profileMediaQuery.data?.find((media) => media.isProfilePicture) ? <img alt={`${user.name} profil resmi`} className="profile-avatar-image" src={resolveMediaUrl(profileMediaQuery.data.find((media) => media.isProfilePicture)!.url)} /> : <UserRound size={28} />}
             <strong>{user.name}</strong>
             <span>{user.email}</span>
             <span>Rol: {user.role}</span>
@@ -601,17 +676,43 @@ export function AccountPage() {
             )}
           </aside>
           <div className="account-stack">
+            <section className="admin-form">
+              <h2>Bağlı hesaplar</h2>
+              <p className="form-help">Google veya Facebook hesabını bağlayarak tek dokunuşla giriş yapabilirsin.</p>
+              <div className="connected-account-list">
+                {(["google", "facebook"] as SocialProvider[]).map((provider) => {
+                  const account = socialAccountsQuery.data?.find((item) => item.provider === provider);
+                  return (
+                    <div key={provider}>
+                      <span className="provider-letter">{provider === "google" ? "G" : "f"}</span>
+                      <div>
+                        <strong>{provider === "google" ? "Google" : "Facebook"}</strong>
+                        <small>{account ? (account.email ?? account.displayName ?? "Bağlı") : "Bağlı değil"}</small>
+                      </div>
+                      <button
+                        className="secondary-action"
+                        disabled={socialAccountMutation.isPending}
+                        onClick={() =>
+                          socialAccountMutation.mutate({
+                            provider,
+                            remove: Boolean(account),
+                          })
+                        }
+                        type="button"
+                      >
+                        {account ? "Bağlantıyı kaldır" : "Hesabı bağla"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <Link className="ghost-action" to="/contacts">
+                Rehberden arkadaş bul ve davet et
+              </Link>
+            </section>
             <ProfileMediaPanel media={profileMediaQuery.data ?? []} userId={user.id} />
-            <MemberList
-              members={followingQuery.data ?? []}
-              title="Takip ettiklerim"
-              onToggle={(member) => followMutation.mutate({ userId: member.id, following: true })}
-            />
-            <MemberList
-              members={suggestionsQuery.data ?? []}
-              title="Sana benzer üyeler"
-              onToggle={(member) => followMutation.mutate({ userId: member.id, following: false })}
-            />
+            <MemberList members={followingQuery.data ?? []} title="Takip ettiklerim" onToggle={(member) => followMutation.mutate({ userId: member.id, following: true })} />
+            <MemberList members={suggestionsQuery.data ?? []} title="Sana benzer üyeler" onToggle={(member) => followMutation.mutate({ userId: member.id, following: false })} />
             {profileQuery.data ? (
               <form className="admin-form" key={String(profileQuery.data.updatedAt)} onSubmit={handleProfileSubmit}>
                 <h2>Profili düzenle</h2>
@@ -710,7 +811,18 @@ export function AccountPage() {
               <button className="secondary-action" disabled={requestPhoneMutation.isPending || confirmPhoneMutation.isPending} type="submit">
                 {pendingPhone ? "Numarayı doğrula" : "Kod gönder"}
               </button>
-              {pendingPhone ? <button className="ghost-action" onClick={() => { setPendingPhone(null); setDevelopmentPhoneCode(null); }} type="button">İptal</button> : null}
+              {pendingPhone ? (
+                <button
+                  className="ghost-action"
+                  onClick={() => {
+                    setPendingPhone(null);
+                    setDevelopmentPhoneCode(null);
+                  }}
+                  type="button"
+                >
+                  İptal
+                </button>
+              ) : null}
             </form>
             {privacyQuery.data ? (
               <form className="admin-form" key={String(privacyQuery.data.updatedAt ?? "privacy-defaults")} onSubmit={handlePrivacySubmit}>
@@ -738,7 +850,10 @@ export function AccountPage() {
                     <div className="admin-list-row" key={`${block.targetType}:${block.targetId}`}>
                       <div>
                         <strong>{block.label}</strong>
-                        <span>{block.targetType}{block.subtitle ? ` · ${block.subtitle}` : ""}</span>
+                        <span>
+                          {block.targetType}
+                          {block.subtitle ? ` · ${block.subtitle}` : ""}
+                        </span>
                       </div>
                       <button className="ghost-action" disabled={removeBlockMutation.isPending} onClick={() => removeBlockMutation.mutate(block)} type="button">
                         Engeli kaldır
@@ -746,7 +861,9 @@ export function AccountPage() {
                     </div>
                   ))}
                 </div>
-              ) : <p className="muted">Engellenen kullanıcı veya içerik yok.</p>}
+              ) : (
+                <p className="muted">Engellenen kullanıcı veya içerik yok.</p>
+              )}
             </section>
             {notificationPreferencesQuery.data ? (
               <form className="admin-form" onSubmit={handleNotificationPreferencesSubmit}>
@@ -800,7 +917,9 @@ export function AccountPage() {
                 Ayrılma nedeni
                 <textarea maxLength={1000} minLength={3} name="reason" required rows={3} />
               </label>
-              <button className="secondary-action" disabled={deactivateMutation.isPending} type="submit">Hesabı dondur</button>
+              <button className="secondary-action" disabled={deactivateMutation.isPending} type="submit">
+                Hesabı dondur
+              </button>
             </form>
             <section className="admin-form">
               <div className="section-header compact">
@@ -814,11 +933,16 @@ export function AccountPage() {
                       <div>
                         <strong>{notification.title}</strong>
                         <span>{notification.body}</span>
-                        <span>{notification.createdAt ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(notification.createdAt)) : ""}</span>
+                        <span>
+                          {notification.createdAt
+                            ? new Intl.DateTimeFormat("tr-TR", {
+                                dateStyle: "medium",
+                                timeStyle: "short",
+                              }).format(new Date(notification.createdAt))
+                            : ""}
+                        </span>
                       </div>
-                      <span className={`status-pill status-${notification.readAt ? "resolved" : "open"}`}>
-                        {notification.readAt ? "Okundu" : "Yeni"}
-                      </span>
+                      <span className={`status-pill status-${notification.readAt ? "resolved" : "open"}`}>{notification.readAt ? "Okundu" : "Yeni"}</span>
                       {!notification.readAt ? (
                         <button className="secondary-action" disabled={readNotificationMutation.isPending} onClick={() => readNotificationMutation.mutate(notification.id)} type="button">
                           Okundu yap
@@ -845,12 +969,7 @@ export function AccountPage() {
                 {tagMutation.isPending ? "Oluşturuluyor" : "Tag oluştur"}
               </button>
             </form>
-            <MyEventsPanel
-              events={myEventsQuery.data ?? []}
-              isLoading={myEventsQuery.isLoading}
-              tags={tags}
-              userId={user.id}
-            />
+            <MyEventsPanel events={myEventsQuery.data ?? []} isLoading={myEventsQuery.isLoading} tags={tags} userId={user.id} />
             <form className="admin-form" onSubmit={handleInterestSubmit}>
               <h2>İlgi alanları</h2>
               <p className="form-help">Seçtiğin tag'ler profilinde görünür ve etkinlik oluştururken varsayılan seçili gelir.</p>
@@ -858,12 +977,7 @@ export function AccountPage() {
                 <legend>Tag'ler</legend>
                 {tags.map((tag) => (
                   <label key={tag.id}>
-                    <input
-                      defaultChecked={interestTagIds.includes(tag.id)}
-                      name="interestTagIds"
-                      type="checkbox"
-                      value={tag.id}
-                    />
+                    <input defaultChecked={interestTagIds.includes(tag.id)} name="interestTagIds" type="checkbox" value={tag.id} />
                     {tag.name}
                     <select defaultValue={interestSentiments.get(tag.id) ?? "like"} name={`sentiment:${tag.id}`}>
                       <option value="like">Like</option>
@@ -883,7 +997,11 @@ export function AccountPage() {
                 İlgi alanı
                 <select onChange={(event) => setCommentTagId(event.target.value)} value={commentTagId}>
                   <option value="">Tag seçin</option>
-                  {interestTags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+                  {interestTags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
                 </select>
               </label>
               {commentTagId ? (
@@ -893,23 +1011,29 @@ export function AccountPage() {
                       Yorumunuz
                       <textarea maxLength={1000} minLength={1} name="body" required rows={3} />
                     </label>
-                    <button className="secondary-action" disabled={createTagCommentMutation.isPending} type="submit">Yorum ekle</button>
+                    <button className="secondary-action" disabled={createTagCommentMutation.isPending} type="submit">
+                      Yorum ekle
+                    </button>
                   </form>
                   <div className="admin-list">
                     {tagCommentsQuery.data?.map((comment) => (
                       <div className="admin-list-row" key={comment.id}>
                         <div>
-                          <strong>{comment.author?.username ? `@${comment.author.username}` : comment.author?.name ?? "Silinmiş kullanıcı"}</strong>
+                          <strong>{comment.author?.username ? `@${comment.author.username}` : (comment.author?.name ?? "Silinmiş kullanıcı")}</strong>
                           <span>{comment.body}</span>
                         </div>
                         {comment.canDelete ? (
-                          <button className="ghost-action" onClick={() => deleteTagCommentMutation.mutate(comment.id)} type="button">Sil</button>
+                          <button className="ghost-action" onClick={() => deleteTagCommentMutation.mutate(comment.id)} type="button">
+                            Sil
+                          </button>
                         ) : null}
                       </div>
                     ))}
                   </div>
                 </>
-              ) : <p className="muted">Yorumları görmek için bir tag seçin.</p>}
+              ) : (
+                <p className="muted">Yorumları görmek için bir tag seçin.</p>
+              )}
             </section>
             <form className="admin-form" onSubmit={handleEventSubmit}>
               <h2>Etkinlik oluştur</h2>
@@ -989,20 +1113,25 @@ const notificationTopicLabels: Record<NotificationPreference["topic"], string> =
   event_invite: "Etkinlik daveti",
   event_manager: "Etkinlik yöneticisi atanma",
   place_invite: "Mekân daveti",
-  place_manager: "Mekân yöneticisi atanma"
+  place_manager: "Mekân yöneticisi atanma",
 };
 
 function MemberList({ members, onToggle, title }: { members: MemberCard[]; onToggle: (member: MemberCard) => void; title: string }) {
   return (
     <section className="admin-form">
-      <div className="section-header compact"><h2>{title}</h2><span>{members.length}</span></div>
+      <div className="section-header compact">
+        <h2>{title}</h2>
+        <span>{members.length}</span>
+      </div>
       {members.length ? (
         <div className="admin-list">
           {members.map((member) => (
             <div className="admin-list-row" key={member.id}>
               <div>
                 <strong>{member.username ? `@${member.username}` : member.name}</strong>
-                <span>{member.commonTagCount} ortak ilgi alanı · {member.followerCount} takipçi</span>
+                <span>
+                  {member.commonTagCount} ortak ilgi alanı · {member.followerCount} takipçi
+                </span>
                 <span>{[member.city, member.country].filter(Boolean).join(", ")}</span>
               </div>
               <button className="secondary-action" onClick={() => onToggle(member)} type="button">
@@ -1011,7 +1140,9 @@ function MemberList({ members, onToggle, title }: { members: MemberCard[]; onTog
             </div>
           ))}
         </div>
-      ) : <p className="muted">Gösterilecek üye yok.</p>}
+      ) : (
+        <p className="muted">Gösterilecek üye yok.</p>
+      )}
     </section>
   );
 }
@@ -1031,27 +1162,41 @@ function PrivacyAudienceField({ defaultValue, label, name }: { defaultValue: Pri
 
 function ProfileMediaPanel({ media, userId }: { media: ProfileMedia[]; userId: string }) {
   const queryClient = useQueryClient();
-  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["profile-media", userId] });
   const uploadMutation = useMutation({
     mutationFn: uploadProfileMedia,
-    onSuccess: () => { setNotice({ tone: "success", message: "Medya albüme eklendi." }); refresh(); },
-    onError: () => setNotice({ tone: "error", message: "Medya yüklenemedi. Dosya türü ve 10 MB sınırını kontrol et." })
+    onSuccess: () => {
+      setNotice({ tone: "success", message: "Medya albüme eklendi." });
+      refresh();
+    },
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "Medya yüklenemedi. Dosya türü ve 10 MB sınırını kontrol et.",
+      }),
   });
   const profilePictureMutation = useMutation({
     mutationFn: makeProfilePicture,
     onSuccess: refresh,
-    onError: () => setNotice({ tone: "error", message: "Bu medya profil resmi yapılamadı." })
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "Bu medya profil resmi yapılamadı.",
+      }),
   });
   const deleteMutation = useMutation({
     mutationFn: deleteProfileMedia,
     onSuccess: refresh,
-    onError: () => setNotice({ tone: "error", message: "Son profil fotoğrafı silinemez." })
+    onError: () => setNotice({ tone: "error", message: "Son profil fotoğrafı silinemez." }),
   });
   const reorderMutation = useMutation({
     mutationFn: reorderProfileMedia,
     onSuccess: refresh,
-    onError: () => setNotice({ tone: "error", message: "Albüm sırası değiştirilemedi." })
+    onError: () => setNotice({ tone: "error", message: "Albüm sırası değiştirilemedi." }),
   });
   const isPending = uploadMutation.isPending || profilePictureMutation.isPending || deleteMutation.isPending || reorderMutation.isPending;
 
@@ -1065,14 +1210,20 @@ function ProfileMediaPanel({ media, userId }: { media: ProfileMedia[]; userId: s
 
   return (
     <section className="admin-form">
-      <div className="section-header compact"><h2>Profil fotoğrafları</h2><span>{media.length} / 50 medya</span></div>
-      <form className="guest-invite-form" onSubmit={(event) => {
-        event.preventDefault();
-        const input = event.currentTarget.elements.namedItem("profileMedia") as HTMLInputElement;
-        const file = input.files?.[0];
-        if (file) uploadMutation.mutate(file);
-        event.currentTarget.reset();
-      }}>
+      <div className="section-header compact">
+        <h2>Profil fotoğrafları</h2>
+        <span>{media.length} / 50 medya</span>
+      </div>
+      <form
+        className="guest-invite-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const input = event.currentTarget.elements.namedItem("profileMedia") as HTMLInputElement;
+          const file = input.files?.[0];
+          if (file) uploadMutation.mutate(file);
+          event.currentTarget.reset();
+        }}
+      >
         <label>
           Yeni fotoğraf veya video
           <input accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" name="profileMedia" required type="file" />
@@ -1091,15 +1242,23 @@ function ProfileMediaPanel({ media, userId }: { media: ProfileMedia[]; userId: s
             <strong>{item.isProfilePicture ? "Profil resmi" : `${index + 1}. medya`}</strong>
             <div className="row-actions">
               {!item.isProfilePicture && item.type === "image" ? (
-                <button className="secondary-action" disabled={isPending} onClick={() => profilePictureMutation.mutate(item.id)} type="button">Profil resmi yap</button>
+                <button className="secondary-action" disabled={isPending} onClick={() => profilePictureMutation.mutate(item.id)} type="button">
+                  Profil resmi yap
+                </button>
               ) : null}
               {!item.isProfilePicture ? (
                 <>
-                  <button className="ghost-action" disabled={isPending || index <= 1} onClick={() => moveMedia(index, -1)} type="button">←</button>
-                  <button className="ghost-action" disabled={isPending || index >= media.length - 1} onClick={() => moveMedia(index, 1)} type="button">→</button>
+                  <button className="ghost-action" disabled={isPending || index <= 1} onClick={() => moveMedia(index, -1)} type="button">
+                    ←
+                  </button>
+                  <button className="ghost-action" disabled={isPending || index >= media.length - 1} onClick={() => moveMedia(index, 1)} type="button">
+                    →
+                  </button>
                 </>
               ) : null}
-              <button className="danger-action" disabled={isPending} onClick={() => deleteMutation.mutate(item.id)} type="button"><Trash2 size={16} /> Sil</button>
+              <button className="danger-action" disabled={isPending} onClick={() => deleteMutation.mutate(item.id)} type="button">
+                <Trash2 size={16} /> Sil
+              </button>
             </div>
           </article>
         ))}
@@ -1108,17 +1267,7 @@ function ProfileMediaPanel({ media, userId }: { media: ProfileMedia[]; userId: s
   );
 }
 
-function MyEventsPanel({
-  events,
-  isLoading,
-  tags,
-  userId
-}: {
-  events: Event[];
-  isLoading: boolean;
-  tags: Tag[];
-  userId: string;
-}) {
+function MyEventsPanel({ events, isLoading, tags, userId }: { events: Event[]; isLoading: boolean; tags: Tag[]; userId: string }) {
   const queryClient = useQueryClient();
   const [guestListEventId, setGuestListEventId] = useState<string | null>(null);
   const updateMutation = useMutation({
@@ -1126,14 +1275,14 @@ function MyEventsPanel({
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["my-events", userId] });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
-    }
+    },
   });
   const archiveMutation = useMutation({
     mutationFn: archiveMyEvent,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["my-events", userId] });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
-    }
+    },
   });
 
   return (
@@ -1150,7 +1299,10 @@ function MyEventsPanel({
               <div>
                 <strong>{event.title}</strong>
                 <span>
-                  {event.status} · {new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date(event.startsAt))}
+                  {event.status} ·{" "}
+                  {new Intl.DateTimeFormat("tr-TR", {
+                    dateStyle: "medium",
+                  }).format(new Date(event.startsAt))}
                 </span>
               </div>
               <span className="muted">{event.tags.map((tag) => tag.name).join(", ") || "Tag yok"}</span>
@@ -1159,7 +1311,12 @@ function MyEventsPanel({
                   <button
                     className="secondary-action"
                     disabled={updateMutation.isPending}
-                    onClick={() => updateMutation.mutate({ id: event.id, data: { status: "published" } })}
+                    onClick={() =>
+                      updateMutation.mutate({
+                        id: event.id,
+                        data: { status: "published" },
+                      })
+                    }
                     type="button"
                   >
                     Yayınla
@@ -1169,27 +1326,23 @@ function MyEventsPanel({
                   <button
                     className="secondary-action"
                     disabled={updateMutation.isPending}
-                    onClick={() => updateMutation.mutate({ id: event.id, data: { status: "draft" } })}
+                    onClick={() =>
+                      updateMutation.mutate({
+                        id: event.id,
+                        data: { status: "draft" },
+                      })
+                    }
                     type="button"
                   >
                     Taslak
                   </button>
                 ) : null}
-                <button
-                  className="secondary-action"
-                  onClick={() => setGuestListEventId((currentId) => (currentId === event.id ? null : event.id))}
-                  type="button"
-                >
+                <button className="secondary-action" onClick={() => setGuestListEventId((currentId) => (currentId === event.id ? null : event.id))} type="button">
                   <Users size={16} />
                   Guest list
                 </button>
                 {event.status !== "archived" ? (
-                  <button
-                    className="danger-action"
-                    disabled={archiveMutation.isPending}
-                    onClick={() => archiveMutation.mutate(event.id)}
-                    type="button"
-                  >
+                  <button className="danger-action" disabled={archiveMutation.isPending} onClick={() => archiveMutation.mutate(event.id)} type="button">
                     Arşivle
                   </button>
                 ) : null}
@@ -1206,39 +1359,60 @@ function MyEventsPanel({
 
 function OrganizerGuestList({ eventId }: { eventId: string }) {
   const queryClient = useQueryClient();
-  const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
   const participantsQuery = useQuery({
     queryKey: ["event-participants", eventId, "organizer"],
-    queryFn: () => listEventParticipants(eventId, "user")
+    queryFn: () => listEventParticipants(eventId, "user"),
   });
   const inviteMutation = useMutation({
     mutationFn: (input: { email: string; name?: string; role?: string }) => inviteEventParticipant(eventId, input, "user"),
     onSuccess: () => {
       setNotice({ tone: "success", message: "Davet guest list'e eklendi." });
-      void queryClient.invalidateQueries({ queryKey: ["event-participants", eventId, "organizer"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["event-participants", eventId, "organizer"],
+      });
     },
-    onError: () => setNotice({ tone: "error", message: "Davet eklenemedi. Email adresini kontrol et." })
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "Davet eklenemedi. Email adresini kontrol et.",
+      }),
   });
   const statusMutation = useMutation({
-    mutationFn: (input: { userId: string; status: string }) =>
-      updateEventParticipantStatus(eventId, input.userId, input.status, "user"),
+    mutationFn: (input: { userId: string; status: string }) => updateEventParticipantStatus(eventId, input.userId, input.status, "user"),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["event-participants", eventId, "organizer"] });
-    }
+      void queryClient.invalidateQueries({
+        queryKey: ["event-participants", eventId, "organizer"],
+      });
+    },
   });
   const checkInMutation = useMutation({
     mutationFn: (userId: string) => checkInEventParticipant(eventId, userId, "user"),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["event-participants", eventId, "organizer"] });
-    }
+      void queryClient.invalidateQueries({
+        queryKey: ["event-participants", eventId, "organizer"],
+      });
+    },
   });
   const ticketScanMutation = useMutation({
     mutationFn: (token: string) => scanEventTicket(eventId, token),
     onSuccess: () => {
-      setNotice({ tone: "success", message: "QR bilet doğrulandı; katılımcı giriş yaptı." });
-      void queryClient.invalidateQueries({ queryKey: ["event-participants", eventId, "organizer"] });
+      setNotice({
+        tone: "success",
+        message: "QR bilet doğrulandı; katılımcı giriş yaptı.",
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["event-participants", eventId, "organizer"],
+      });
     },
-    onError: () => setNotice({ tone: "error", message: "QR bilet geçersiz, uygun değil veya daha önce kullanılmış." })
+    onError: () =>
+      setNotice({
+        tone: "error",
+        message: "QR bilet geçersiz, uygun değil veya daha önce kullanılmış.",
+      }),
   });
   const participants = participantsQuery.data ?? [];
 
@@ -1248,7 +1422,7 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
     inviteMutation.mutate({
       email: String(form.get("email")),
       name: String(form.get("name") || "") || undefined,
-      role: String(form.get("role") || "attendee")
+      role: String(form.get("role") || "attendee"),
     });
     event.currentTarget.reset();
   }
@@ -1306,30 +1480,14 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
       {notice ? <p className={notice.tone === "success" ? "form-success" : "form-error"}>{notice.message}</p> : null}
       <div className="guest-list">
         {participants.map((participant) => (
-          <OrganizerGuestListRow
-            isPending={statusMutation.isPending || checkInMutation.isPending}
-            key={participant.id}
-            onCheckIn={() => checkInMutation.mutate(participant.userId)}
-            onStatusChange={(status) => statusMutation.mutate({ userId: participant.userId, status })}
-            participant={participant}
-          />
+          <OrganizerGuestListRow isPending={statusMutation.isPending || checkInMutation.isPending} key={participant.id} onCheckIn={() => checkInMutation.mutate(participant.userId)} onStatusChange={(status) => statusMutation.mutate({ userId: participant.userId, status })} participant={participant} />
         ))}
       </div>
     </div>
   );
 }
 
-function OrganizerGuestListRow({
-  isPending,
-  onCheckIn,
-  onStatusChange,
-  participant
-}: {
-  isPending: boolean;
-  onCheckIn: () => void;
-  onStatusChange: (status: string) => void;
-  participant: EventParticipant;
-}) {
+function OrganizerGuestListRow({ isPending, onCheckIn, onStatusChange, participant }: { isPending: boolean; onCheckIn: () => void; onStatusChange: (status: string) => void; participant: EventParticipant }) {
   return (
     <div className="guest-list-row">
       <div>

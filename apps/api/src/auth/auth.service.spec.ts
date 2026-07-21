@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
 import { hash } from "bcryptjs";
 import { createHash } from "crypto";
 import { AuthService } from "./auth.service";
@@ -11,12 +12,12 @@ describe("AuthService", () => {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
         update: jest.fn(),
-        create: jest.fn()
+        create: jest.fn(),
       },
       emailToken: {
         create: jest.fn().mockResolvedValue({}),
         findUnique: jest.fn(),
-        update: jest.fn()
+        update: jest.fn(),
       },
       event: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       place: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
@@ -24,27 +25,72 @@ describe("AuthService", () => {
       phoneVerification: {
         findFirst: jest.fn(),
         create: jest.fn().mockResolvedValue({}),
-        update: jest.fn()
+        update: jest.fn(),
       },
-      $transaction: jest.fn().mockImplementation((operations: unknown[]) => Promise.all(operations))
+      socialAccount: {
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        upsert: jest.fn(),
+        deleteMany: jest.fn(),
+      },
+      $transaction: jest.fn().mockImplementation((operations: unknown[]) => Promise.all(operations)),
     };
     const jwtService = {
-      signAsync: jest.fn().mockResolvedValue("signed-token")
+      signAsync: jest.fn().mockResolvedValue("signed-token"),
     } as unknown as JwtService;
     const mailService = {
       sendAccountActivatedEmail: jest.fn().mockResolvedValue(undefined),
       sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
-      sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined)
+      sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
     };
-    const smsService = { sendVerificationCode: jest.fn().mockResolvedValue(undefined) };
+    const smsService = {
+      sendVerificationCode: jest.fn().mockResolvedValue(undefined),
+    };
 
     return {
-      service: new AuthService(prisma as never, jwtService, mailService as never, smsService as never),
+      service: new AuthService(
+        prisma as never,
+        jwtService,
+        mailService as never,
+        smsService as never,
+        {
+          get: jest.fn().mockReturnValue("development"),
+        } as unknown as ConfigService,
+      ),
       prisma,
       mailService,
-      smsService
+      smsService,
     };
   };
+
+  it("creates an active account from a verified social identity in development", async () => {
+    const { service, prisma } = createService();
+    prisma.socialAccount.findUnique.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.create.mockImplementation(({ data }) =>
+      Promise.resolve({
+        id: "social-user",
+        role: "user",
+        accountType: "individual",
+        ...data,
+      }),
+    );
+    prisma.socialAccount.create.mockResolvedValue({});
+    const result = await service.socialLogin({
+      provider: "google",
+      credential: "demo-google",
+    });
+    expect(result.user.email).toBe("demo.google@konnektora.local");
+    expect(result.user.status).toBe("active");
+    expect(prisma.socialAccount.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        provider: "google",
+        providerUserId: "google-demo-user",
+      }),
+    });
+  });
 
   it("marks an invited user pending and sends verification when they register with the same email", async () => {
     const { service, prisma, mailService } = createService();
@@ -56,13 +102,13 @@ describe("AuthService", () => {
       role: "user",
       accountType: "individual",
       emailVerified: false,
-      status: "invited"
+      status: "invited",
     };
     const pendingUser = {
       ...invitedUser,
       name: "Active Invitee",
       passwordHash: "new-hash",
-      status: "pending"
+      status: "pending",
     };
 
     prisma.user.findUnique.mockResolvedValue(invitedUser);
@@ -71,15 +117,15 @@ describe("AuthService", () => {
     const result = await service.register({
       email: "INVITEE@example.com",
       name: "Active Invitee",
-      password: "StrongerPass123!"
+      password: "StrongerPass123!",
     });
 
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: invitedUser.id },
       data: expect.objectContaining({
         name: "Active Invitee",
-        status: "pending"
-      })
+        status: "pending",
+      }),
     });
     expect(result).toEqual({
       accessToken: "signed-token",
@@ -90,13 +136,13 @@ describe("AuthService", () => {
         role: pendingUser.role,
         accountType: pendingUser.accountType,
         emailVerified: pendingUser.emailVerified,
-        status: pendingUser.status
-      }
+        status: pendingUser.status,
+      },
     });
     expect(mailService.sendVerificationEmail).toHaveBeenCalledWith({
       to: pendingUser.email,
       name: pendingUser.name,
-      token: expect.any(String)
+      token: expect.any(String),
     });
   });
 
@@ -109,15 +155,15 @@ describe("AuthService", () => {
       name: "Active User",
       passwordHash: "hash",
       role: "user",
-      status: "active"
+      status: "active",
     });
 
     await expect(
       service.register({
         email: "active@example.com",
         name: "Active User",
-        password: "StrongerPass123!"
-      })
+        password: "StrongerPass123!",
+      }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
@@ -132,7 +178,7 @@ describe("AuthService", () => {
       role: "user",
       status: "pending",
       accountType: "corporate",
-      emailVerified: false
+      emailVerified: false,
     };
 
     prisma.user.findUnique.mockResolvedValue(null);
@@ -146,7 +192,7 @@ describe("AuthService", () => {
       companyName: "Example",
       tradeName: "Example Company Ltd.",
       companyType: "limited_or_corporation",
-      businessCategory: "event_organizer"
+      businessCategory: "event_organizer",
     });
 
     expect(prisma.user.create).toHaveBeenCalledWith({
@@ -155,8 +201,8 @@ describe("AuthService", () => {
         companyName: "Example",
         tradeName: "Example Company Ltd.",
         companyType: "limited_or_corporation",
-        businessCategory: "event_organizer"
-      })
+        businessCategory: "event_organizer",
+      }),
     });
   });
 
@@ -170,7 +216,7 @@ describe("AuthService", () => {
       role: "user",
       status: "active",
       accountType: "individual",
-      emailVerified: true
+      emailVerified: true,
     };
     prisma.emailToken.findUnique.mockResolvedValue({
       id: "token-1",
@@ -178,7 +224,7 @@ describe("AuthService", () => {
       type: "verify_email",
       tokenHash: "hash",
       expiresAt: new Date(Date.now() + 60_000),
-      consumedAt: null
+      consumedAt: null,
     });
     prisma.emailToken.update.mockResolvedValue({ userId: user.id });
     prisma.user.update.mockResolvedValue(user);
@@ -187,21 +233,27 @@ describe("AuthService", () => {
 
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: user.id },
-      data: { status: "active", emailVerified: true }
+      data: { status: "active", emailVerified: true },
     });
   });
 
   it("changes the password after verifying the current password", async () => {
     const { service, prisma } = createService();
-    prisma.user.findUnique.mockResolvedValue({ id: "user-5", passwordHash: await hash("CurrentPass!1", 4) });
+    prisma.user.findUnique.mockResolvedValue({
+      id: "user-5",
+      passwordHash: await hash("CurrentPass!1", 4),
+    });
     prisma.user.update.mockResolvedValue({});
 
     await expect(
-      service.changePassword("user-5", { currentPassword: "CurrentPass!1", newPassword: "NewStrongPass!2" })
+      service.changePassword("user-5", {
+        currentPassword: "CurrentPass!1",
+        newPassword: "NewStrongPass!2",
+      }),
     ).resolves.toEqual({ ok: true });
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: "user-5" },
-      data: { passwordHash: expect.any(String) }
+      data: { passwordHash: expect.any(String) },
     });
   });
 
@@ -212,19 +264,33 @@ describe("AuthService", () => {
       name: "Leaving User",
       email: "leave@example.com",
       phone: null,
-      passwordHash: await hash("CurrentPass!1", 4)
+      passwordHash: await hash("CurrentPass!1", 4),
     });
     prisma.user.update.mockResolvedValue({});
 
     await expect(
-      service.deactivate("user-6", { currentPassword: "CurrentPass!1", reason: "I need a break." })
+      service.deactivate("user-6", {
+        currentPassword: "CurrentPass!1",
+        reason: "I need a break.",
+      }),
     ).resolves.toEqual({ ok: true });
     expect(prisma.event.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ createdById: "user-6", participants: expect.any(Object) }) })
+      expect.objectContaining({
+        where: expect.objectContaining({
+          createdById: "user-6",
+          participants: expect.any(Object),
+        }),
+      }),
     );
-    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: "user-6" }, data: { status: "frozen" } });
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-6" },
+      data: { status: "frozen" },
+    });
     expect(prisma.userMessage.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ type: "account_freeze", body: "I need a break." })
+      data: expect.objectContaining({
+        type: "account_freeze",
+        body: "I need a break.",
+      }),
     });
   });
 
@@ -238,12 +304,15 @@ describe("AuthService", () => {
       role: "user",
       status: "frozen",
       accountType: "individual",
-      emailVerified: true
+      emailVerified: true,
     };
     prisma.user.findUnique.mockResolvedValue(frozenUser);
     prisma.user.update.mockResolvedValue({ ...frozenUser, status: "active" });
 
-    const result = await service.reactivate({ email: frozenUser.email, password: "CurrentPass!1" });
+    const result = await service.reactivate({
+      email: frozenUser.email,
+      password: "CurrentPass!1",
+    });
     expect(result.user.status).toBe("active");
   });
 
@@ -252,12 +321,18 @@ describe("AuthService", () => {
     prisma.user.findFirst.mockResolvedValue(null);
     prisma.phoneVerification.findFirst.mockResolvedValue(null);
 
-    const result = await service.requestPhoneVerification("user-8", { phone: "+905551112233" });
+    const result = await service.requestPhoneVerification("user-8", {
+      phone: "+905551112233",
+    });
 
     expect(result.expiresInSeconds).toBe(120);
     expect(result.developmentCode).toMatch(/^\d{6}$/);
     expect(prisma.phoneVerification.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ userId: "user-8", phone: "+905551112233", codeHash: expect.any(String) })
+      data: expect.objectContaining({
+        userId: "user-8",
+        phone: "+905551112233",
+        codeHash: expect.any(String),
+      }),
     });
     expect(smsService.sendVerificationCode).toHaveBeenCalledWith("+905551112233", result.developmentCode);
   });
@@ -269,15 +344,23 @@ describe("AuthService", () => {
       id: "verification-1",
       codeHash: createHash("sha256").update(code).digest("hex"),
       attempts: 0,
-      expiresAt: new Date(Date.now() + 60_000)
+      expiresAt: new Date(Date.now() + 60_000),
     });
     prisma.phoneVerification.update.mockResolvedValue({});
-    prisma.user.update.mockResolvedValue({ phone: "+905551112233", phoneVerified: true });
+    prisma.user.update.mockResolvedValue({
+      phone: "+905551112233",
+      phoneVerified: true,
+    });
 
-    await expect(service.confirmPhoneVerification("user-8", { phone: "+905551112233", code })).resolves.toEqual({
+    await expect(
+      service.confirmPhoneVerification("user-8", {
+        phone: "+905551112233",
+        code,
+      }),
+    ).resolves.toEqual({
       ok: true,
       phone: "+905551112233",
-      phoneVerified: true
+      phoneVerified: true,
     });
   });
 
@@ -285,7 +368,17 @@ describe("AuthService", () => {
     const { service, prisma } = createService();
     prisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "phone-owner" });
     prisma.user.findFirst.mockResolvedValue(null);
-    await expect(service.availability({ email: "new@example.com", phone: "+905551112233", username: "new.user" })).resolves.toEqual({ emailAvailable: true, phoneAvailable: false, usernameAvailable: true });
+    await expect(
+      service.availability({
+        email: "new@example.com",
+        phone: "+905551112233",
+        username: "new.user",
+      }),
+    ).resolves.toEqual({
+      emailAvailable: true,
+      phoneAvailable: false,
+      usernameAvailable: true,
+    });
   });
 
   it("requires at least one availability field", async () => {

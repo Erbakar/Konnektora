@@ -1,17 +1,18 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
 import { User } from "@prisma/client";
 import { compare, hash } from "bcryptjs";
 import { createHash, randomBytes, randomInt } from "crypto";
 import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { SmsService } from "../sms/sms.service";
-import { AcceptInviteDto, AvailabilityQueryDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, TokenDto } from "./auth.dto";
+import { AcceptInviteDto, AvailabilityQueryDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, SocialAuthDto, TokenDto } from "./auth.dto";
 
 const EMAIL_TOKEN_TTL_MS = {
   verify_email: 1000 * 60 * 60 * 24,
   password_reset: 1000 * 60 * 30,
-  invite_accept: 1000 * 60 * 60 * 24 * 14
+  invite_accept: 1000 * 60 * 60 * 24 * 14,
 };
 
 @Injectable()
@@ -20,11 +21,14 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
-    private readonly smsService: SmsService
+    private readonly smsService: SmsService,
+    private readonly config: ConfigService,
   ) {}
 
   async login(input: LoginDto, options: { adminOnly?: boolean } = {}) {
-    const user = await this.prisma.user.findUnique({ where: { email: input.email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email: input.email },
+    });
 
     if (!user || user.status !== "active") {
       throw new UnauthorizedException("Geçersiz kullanıcı hesabı.");
@@ -63,15 +67,15 @@ export class AuthService {
           businessCategory: input.accountType === "corporate" ? input.businessCategory : null,
           passwordHash: await hash(input.password, 10),
           emailVerified: false,
-          status: "pending"
-        }
+          status: "pending",
+        },
       });
 
       const token = await this.createEmailToken(activatedUser.id, "verify_email");
       await this.mailService.sendVerificationEmail({
         to: activatedUser.email,
         name: activatedUser.name,
-        token
+        token,
       });
 
       return this.createLoginResponse(activatedUser);
@@ -88,29 +92,185 @@ export class AuthService {
         companyType: input.accountType === "corporate" ? input.companyType : null,
         businessCategory: input.accountType === "corporate" ? input.businessCategory : null,
         role: "user",
-        status: "pending"
-      }
+        status: "pending",
+      },
     });
 
     const token = await this.createEmailToken(user.id, "verify_email");
     await this.mailService.sendVerificationEmail({
       to: user.email,
       name: user.name,
-      token
+      token,
     });
 
     return this.createLoginResponse(user);
   }
 
+  async socialLogin(input: SocialAuthDto) {
+    const identity = await this.verifySocialCredential(input);
+    const linked = await this.prisma.socialAccount.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider: input.provider,
+          providerUserId: identity.id,
+        },
+      },
+      include: { user: true },
+    });
+    if (linked) {
+      if (linked.user.status !== "active") throw new UnauthorizedException("Bu hesapla giriş yapılamıyor.");
+      await this.prisma.socialAccount.update({
+        where: { id: linked.id },
+        data: {
+          lastUsedAt: new Date(),
+          email: identity.email,
+          displayName: identity.name,
+          avatarUrl: identity.avatarUrl,
+        },
+      });
+      return this.createLoginResponse(linked.user);
+    }
+
+    const existing = await this.prisma.user.findUnique({
+      where: { email: identity.email },
+    });
+    if (existing && existing.status !== "active") throw new UnauthorizedException("Bu hesapla giriş yapılamıyor.");
+    const user =
+      existing ??
+      (await this.prisma.user.create({
+        data: {
+          email: identity.email,
+          name: identity.name,
+          passwordHash: await hash(randomBytes(32).toString("hex"), 10),
+          emailVerified: true,
+          status: "active",
+        },
+      }));
+    await this.prisma.socialAccount.create({
+      data: {
+        userId: user.id,
+        provider: input.provider,
+        providerUserId: identity.id,
+        email: identity.email,
+        displayName: identity.name,
+        avatarUrl: identity.avatarUrl,
+      },
+    });
+    return this.createLoginResponse(user);
+  }
+
+  async listSocialAccounts(userId: string) {
+    return this.prisma.socialAccount.findMany({
+      where: { userId },
+      select: {
+        provider: true,
+        email: true,
+        displayName: true,
+        avatarUrl: true,
+        connectedAt: true,
+        lastUsedAt: true,
+      },
+      orderBy: { provider: "asc" },
+    });
+  }
+
+  async connectSocialAccount(userId: string, input: SocialAuthDto) {
+    const identity = await this.verifySocialCredential(input);
+    const owned = await this.prisma.socialAccount.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider: input.provider,
+          providerUserId: identity.id,
+        },
+      },
+    });
+    if (owned && owned.userId !== userId) throw new ConflictException("Bu sosyal hesap başka bir üyeye bağlı.");
+    await this.prisma.socialAccount.upsert({
+      where: { userId_provider: { userId, provider: input.provider } },
+      create: {
+        userId,
+        provider: input.provider,
+        providerUserId: identity.id,
+        email: identity.email,
+        displayName: identity.name,
+        avatarUrl: identity.avatarUrl,
+      },
+      update: {
+        providerUserId: identity.id,
+        email: identity.email,
+        displayName: identity.name,
+        avatarUrl: identity.avatarUrl,
+        lastUsedAt: new Date(),
+      },
+    });
+    return this.listSocialAccounts(userId);
+  }
+
+  async removeSocialAccount(userId: string, provider: "google" | "facebook") {
+    await this.prisma.socialAccount.deleteMany({ where: { userId, provider } });
+    return this.listSocialAccounts(userId);
+  }
+
+  private async verifySocialCredential(input: SocialAuthDto) {
+    if (this.config.get("NODE_ENV") !== "production" && input.credential.startsWith("demo-")) {
+      const provider = input.provider;
+      return {
+        id: `${provider}-demo-user`,
+        email: `demo.${provider}@konnektora.local`,
+        name: `${provider === "google" ? "Google" : "Facebook"} Demo`,
+        avatarUrl: null as string | null,
+      };
+    }
+    const googleClientId = this.config.get<string>("GOOGLE_CLIENT_ID");
+    const facebookAppId = this.config.get<string>("FACEBOOK_APP_ID");
+    const facebookAppSecret = this.config.get<string>("FACEBOOK_APP_SECRET");
+    if (input.provider === "google" && !googleClientId) throw new UnauthorizedException("Google girişi yapılandırılmamış.");
+    if (input.provider === "facebook" && (!facebookAppId || !facebookAppSecret)) throw new UnauthorizedException("Facebook girişi yapılandırılmamış.");
+    if (input.provider === "facebook") {
+      const debug = await fetch(`https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(input.credential)}&access_token=${encodeURIComponent(`${facebookAppId}|${facebookAppSecret}`)}`);
+      const payload = (await debug.json()) as {
+        data?: { is_valid?: boolean; app_id?: string };
+      };
+      if (!debug.ok || !payload.data?.is_valid || payload.data.app_id !== facebookAppId) throw new UnauthorizedException("Facebook token uygulama doğrulaması başarısız.");
+    }
+    const url = input.provider === "google" ? `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(input.credential)}` : `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${encodeURIComponent(input.credential)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new UnauthorizedException("Sosyal giriş doğrulanamadı.");
+    const data = (await response.json()) as Record<string, any>;
+    if (input.provider === "google") {
+      if (data.aud !== googleClientId) throw new UnauthorizedException("Google istemci kimliği geçersiz.");
+      if (!data.sub || !data.email || data.email_verified !== "true") throw new UnauthorizedException("Doğrulanmış Google e-postası gerekli.");
+      return {
+        id: String(data.sub),
+        email: String(data.email).toLowerCase(),
+        name: String(data.name || data.email),
+        avatarUrl: data.picture ? String(data.picture) : null,
+      };
+    }
+    if (!data.id || !data.email) throw new UnauthorizedException("Facebook hesabı e-posta izni vermelidir.");
+    return {
+      id: String(data.id),
+      email: String(data.email).toLowerCase(),
+      name: String(data.name || data.email),
+      avatarUrl: data.picture?.data?.url ? String(data.picture.data.url) : null,
+    };
+  }
+
   async requestEmailVerification(input: EmailDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: input.email.toLowerCase().trim() } });
+    const user = await this.prisma.user.findUnique({
+      where: { email: input.email.toLowerCase().trim() },
+    });
 
     if (!user || user.status === "active") {
       return { ok: true };
     }
 
     const token = await this.createEmailToken(user.id, "verify_email");
-    await this.mailService.sendVerificationEmail({ to: user.email, name: user.name, token });
+    await this.mailService.sendVerificationEmail({
+      to: user.email,
+      name: user.name,
+      token,
+    });
     return { ok: true };
   }
 
@@ -118,22 +278,31 @@ export class AuthService {
     const token = await this.consumeEmailToken(input.token, "verify_email");
     const user = await this.prisma.user.update({
       where: { id: token.userId },
-      data: { status: "active", emailVerified: true }
+      data: { status: "active", emailVerified: true },
     });
 
-    await this.mailService.sendAccountActivatedEmail({ to: user.email, name: user.name });
+    await this.mailService.sendAccountActivatedEmail({
+      to: user.email,
+      name: user.name,
+    });
     return this.createLoginResponse(user);
   }
 
   async requestPasswordReset(input: EmailDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: input.email.toLowerCase().trim() } });
+    const user = await this.prisma.user.findUnique({
+      where: { email: input.email.toLowerCase().trim() },
+    });
 
     if (!user || ["disabled", "suspended", "banned", "deleted"].includes(user.status)) {
       return { ok: true };
     }
 
     const token = await this.createEmailToken(user.id, "password_reset");
-    await this.mailService.sendPasswordResetEmail({ to: user.email, name: user.name, token });
+    await this.mailService.sendPasswordResetEmail({
+      to: user.email,
+      name: user.name,
+      token,
+    });
     return { ok: true };
   }
 
@@ -145,7 +314,11 @@ export class AuthService {
     }
 
     const token = await this.createEmailToken(user.id, "verify_email");
-    await this.mailService.sendVerificationEmail({ to: user.email, name: user.name, token });
+    await this.mailService.sendVerificationEmail({
+      to: user.email,
+      name: user.name,
+      token,
+    });
     return { ok: true };
   }
 
@@ -157,7 +330,11 @@ export class AuthService {
     }
 
     const token = await this.createEmailToken(user.id, "password_reset");
-    await this.mailService.sendPasswordResetEmail({ to: user.email, name: user.name, token });
+    await this.mailService.sendPasswordResetEmail({
+      to: user.email,
+      name: user.name,
+      token,
+    });
     return { ok: true };
   }
 
@@ -166,8 +343,8 @@ export class AuthService {
     const user = await this.prisma.user.update({
       where: { id: token.userId },
       data: {
-        passwordHash: await hash(input.password, 10)
-      }
+        passwordHash: await hash(input.password, 10),
+      },
     });
 
     return this.createLoginResponse(user);
@@ -185,7 +362,7 @@ export class AuthService {
 
     await this.prisma.user.update({
       where: { id: userId },
-      data: { passwordHash: await hash(input.newPassword, 10) }
+      data: { passwordHash: await hash(input.newPassword, 10) },
     });
     return { ok: true };
   }
@@ -205,13 +382,16 @@ export class AuthService {
             none: {
               userId: { not: userId },
               role: { in: ["organizer", "manager"] },
-              status: { in: ["accepted", "attended"] }
-            }
-          }
+              status: { in: ["accepted", "attended"] },
+            },
+          },
         },
-        data: { status: "archived" }
+        data: { status: "archived" },
       }),
-      this.prisma.place.updateMany({ where: { createdById: userId, status: "active" }, data: { status: "archived" } }),
+      this.prisma.place.updateMany({
+        where: { createdById: userId, status: "active" },
+        data: { status: "archived" },
+      }),
       this.prisma.userMessage.create({
         data: {
           type: "account_freeze",
@@ -219,34 +399,45 @@ export class AuthService {
           name: user.name,
           email: user.email,
           phone: user.phone,
-          body: input.reason.trim()
-        }
+          body: input.reason.trim(),
+        },
       }),
-      this.prisma.user.update({ where: { id: userId }, data: { status: "frozen" } })
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { status: "frozen" },
+      }),
     ]);
 
     return { ok: true };
   }
 
   async reactivate(input: LoginDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: input.email.toLowerCase().trim() } });
+    const user = await this.prisma.user.findUnique({
+      where: { email: input.email.toLowerCase().trim() },
+    });
     if (!user || user.status !== "frozen" || !(await compare(input.password, user.passwordHash))) {
       throw new UnauthorizedException("Dondurulmuş hesap bilgileri geçersiz.");
     }
 
-    const activeUser = await this.prisma.user.update({ where: { id: user.id }, data: { status: "active" } });
+    const activeUser = await this.prisma.user.update({
+      where: { id: user.id },
+      data: { status: "active" },
+    });
     return this.createLoginResponse(activeUser);
   }
 
   async requestPhoneVerification(userId: string, input: RequestPhoneVerificationDto) {
-    const owner = await this.prisma.user.findFirst({ where: { phone: input.phone, id: { not: userId } }, select: { id: true } });
+    const owner = await this.prisma.user.findFirst({
+      where: { phone: input.phone, id: { not: userId } },
+      select: { id: true },
+    });
     if (owner) {
       throw new ConflictException("Bu telefon numarası zaten kullanılıyor.");
     }
 
     const latest = await this.prisma.phoneVerification.findFirst({
       where: { userId, phone: input.phone },
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: "desc" },
     });
     if (latest && Date.now() - latest.createdAt.getTime() < 60_000) {
       throw new BadRequestException("Yeni kod istemeden önce 60 saniye bekleyin.");
@@ -259,40 +450,56 @@ export class AuthService {
         userId,
         phone: input.phone,
         codeHash: this.hashToken(code),
-        expiresAt: new Date(Date.now() + 120_000)
-      }
+        expiresAt: new Date(Date.now() + 120_000),
+      },
     });
 
     return {
       ok: true as const,
       expiresInSeconds: 120,
-      ...(process.env.NODE_ENV === "production" ? {} : { developmentCode: code })
+      ...(process.env.NODE_ENV === "production" ? {} : { developmentCode: code }),
     };
   }
 
   async confirmPhoneVerification(userId: string, input: ConfirmPhoneVerificationDto) {
-    const owner = await this.prisma.user.findFirst({ where: { phone: input.phone, id: { not: userId } }, select: { id: true } });
+    const owner = await this.prisma.user.findFirst({
+      where: { phone: input.phone, id: { not: userId } },
+      select: { id: true },
+    });
     if (owner) {
       throw new ConflictException("Bu telefon numarası artık başka bir hesapta kullanılıyor.");
     }
 
     const verification = await this.prisma.phoneVerification.findFirst({
       where: { userId, phone: input.phone, consumedAt: null },
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: "desc" },
     });
     if (!verification || verification.expiresAt.getTime() < Date.now() || verification.attempts >= 5) {
       throw new BadRequestException("Kod geçersiz veya süresi dolmuş.");
     }
     if (verification.codeHash !== this.hashToken(input.code)) {
-      await this.prisma.phoneVerification.update({ where: { id: verification.id }, data: { attempts: { increment: 1 } } });
+      await this.prisma.phoneVerification.update({
+        where: { id: verification.id },
+        data: { attempts: { increment: 1 } },
+      });
       throw new BadRequestException("Kod hatalı.");
     }
 
     const [, user] = await this.prisma.$transaction([
-      this.prisma.phoneVerification.update({ where: { id: verification.id }, data: { consumedAt: new Date() } }),
-      this.prisma.user.update({ where: { id: userId }, data: { phone: input.phone, phoneVerified: true } })
+      this.prisma.phoneVerification.update({
+        where: { id: verification.id },
+        data: { consumedAt: new Date() },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { phone: input.phone, phoneVerified: true },
+      }),
     ]);
-    return { ok: true as const, phone: user.phone, phoneVerified: user.phoneVerified };
+    return {
+      ok: true as const,
+      phone: user.phone,
+      phoneVerified: user.phoneVerified,
+    };
   }
 
   async createInviteAcceptToken(userId: string) {
@@ -306,11 +513,14 @@ export class AuthService {
       data: {
         name: input.name?.trim() || undefined,
         passwordHash: await hash(input.password, 10),
-        status: "active"
-      }
+        status: "active",
+      },
     });
 
-    await this.mailService.sendAccountActivatedEmail({ to: user.email, name: user.name });
+    await this.mailService.sendAccountActivatedEmail({
+      to: user.email,
+      name: user.name,
+    });
     return this.createLoginResponse(user);
   }
 
@@ -323,8 +533,8 @@ export class AuthService {
         userId,
         type,
         tokenHash,
-        expiresAt: new Date(Date.now() + EMAIL_TOKEN_TTL_MS[type])
-      }
+        expiresAt: new Date(Date.now() + EMAIL_TOKEN_TTL_MS[type]),
+      },
     });
 
     return rawToken;
@@ -332,7 +542,7 @@ export class AuthService {
 
   private async consumeEmailToken(rawToken: string, type: keyof typeof EMAIL_TOKEN_TTL_MS) {
     const token = await (this.prisma as any).emailToken.findUnique({
-      where: { tokenHash: this.hashToken(rawToken) }
+      where: { tokenHash: this.hashToken(rawToken) },
     });
 
     if (!token || token.type !== type || token.consumedAt || new Date(token.expiresAt).getTime() < Date.now()) {
@@ -341,7 +551,7 @@ export class AuthService {
 
     return (this.prisma as any).emailToken.update({
       where: { id: token.id },
-      data: { consumedAt: new Date() }
+      data: { consumedAt: new Date() },
     });
   }
 
@@ -351,7 +561,10 @@ export class AuthService {
 
   private async createLoginResponse(user: User) {
     return {
-      accessToken: await this.jwtService.signAsync({ sub: user.id, role: user.role }),
+      accessToken: await this.jwtService.signAsync({
+        sub: user.id,
+        role: user.role,
+      }),
       user: {
         id: user.id,
         email: user.email,
@@ -359,18 +572,39 @@ export class AuthService {
         role: user.role,
         accountType: user.accountType as "individual" | "corporate",
         emailVerified: user.emailVerified,
-        status: user.status
-      }
+        status: user.status,
+      },
     };
   }
 
   async availability(input: AvailabilityQueryDto) {
     if (!input.email && !input.phone && !input.username) throw new BadRequestException("Kontrol edilecek bir alan gerekli.");
     const [emailOwner, phoneOwner, usernameOwner] = await Promise.all([
-      input.email ? this.prisma.user.findUnique({ where: { email: input.email.toLowerCase().trim() }, select: { id: true } }) : null,
-      input.phone ? this.prisma.user.findUnique({ where: { phone: input.phone }, select: { id: true } }) : null,
-      input.username ? this.prisma.user.findFirst({ where: { username: { equals: input.username.trim(), mode: "insensitive" } }, select: { id: true } }) : null
+      input.email
+        ? this.prisma.user.findUnique({
+            where: { email: input.email.toLowerCase().trim() },
+            select: { id: true },
+          })
+        : null,
+      input.phone
+        ? this.prisma.user.findUnique({
+            where: { phone: input.phone },
+            select: { id: true },
+          })
+        : null,
+      input.username
+        ? this.prisma.user.findFirst({
+            where: {
+              username: { equals: input.username.trim(), mode: "insensitive" },
+            },
+            select: { id: true },
+          })
+        : null,
     ]);
-    return { emailAvailable: input.email ? !emailOwner : null, phoneAvailable: input.phone ? !phoneOwner : null, usernameAvailable: input.username ? !usernameOwner : null };
+    return {
+      emailAvailable: input.email ? !emailOwner : null,
+      phoneAvailable: input.phone ? !phoneOwner : null,
+      usernameAvailable: input.username ? !usernameOwner : null,
+    };
   }
 }

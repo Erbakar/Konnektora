@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
 import { User } from "@prisma/client";
-import { AcceptInviteDto, AvailabilityQueryDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, TokenDto } from "./auth.dto";
+import { AcceptInviteDto, AvailabilityQueryDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, SocialAuthDto, TokenDto } from "./auth.dto";
 import { CurrentUser } from "./current-user.decorator";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { AuthService } from "./auth.service";
@@ -10,7 +10,9 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Get("auth/availability")
-  availability(@Query() query: AvailabilityQueryDto) { return this.authService.availability(query); }
+  availability(@Query() query: AvailabilityQueryDto) {
+    return this.authService.availability(query);
+  }
 
   @Post("auth/login")
   login(@Body() body: LoginDto) {
@@ -20,6 +22,29 @@ export class AuthController {
   @Post("auth/register")
   register(@Body() body: RegisterDto) {
     return this.authService.register(body);
+  }
+
+  @Post("auth/social")
+  socialLogin(@Body() body: SocialAuthDto) {
+    return this.authService.socialLogin(body);
+  }
+
+  @Get("auth/social/accounts")
+  @UseGuards(JwtAuthGuard)
+  socialAccounts(@CurrentUser() user: User) {
+    return this.authService.listSocialAccounts(user.id);
+  }
+
+  @Post("auth/social/accounts")
+  @UseGuards(JwtAuthGuard)
+  connectSocialAccount(@CurrentUser() user: User, @Body() body: SocialAuthDto) {
+    return this.authService.connectSocialAccount(user.id, body);
+  }
+
+  @Post("auth/social/accounts/remove")
+  @UseGuards(JwtAuthGuard)
+  removeSocialAccount(@CurrentUser() user: User, @Body() body: Pick<SocialAuthDto, "provider">) {
+    return this.authService.removeSocialAccount(user.id, body.provider);
   }
 
   @Post("auth/email/verify/request")

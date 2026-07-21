@@ -3,14 +3,17 @@ import { ArrowLeft, ArrowRight, Check, ImagePlus, Sparkles, UserPlus } from "luc
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { TagSentiment } from "@konnektora/shared";
-import {
-  checkAvailability, completeOnboarding, confirmPhoneVerification, followUser, getMyProfile, getOnboardingStatus,
-  getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser,
-  requestPhoneVerification, setUserSession, updateMyProfile, updateProfileAffinities, uploadProfileMedia
-} from "../lib/api";
+import { SocialAuthButtons } from "../components/SocialAuthButtons";
+import { checkAvailability, completeOnboarding, confirmPhoneVerification, followUser, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, uploadProfileMedia } from "../lib/api";
 
 const steps = ["Hesap", "Telefon", "Temel bilgiler", "Profil fotoğrafı", "İlgi alanları", "Topluluk"];
-const statusStep: Record<string, number> = { phone: 1, personal_info: 2, photo: 3, interests: 4, people: 5 };
+const statusStep: Record<string, number> = {
+  phone: 1,
+  personal_info: 2,
+  photo: 3,
+  interests: 4,
+  people: 5,
+};
 
 export function OnboardingPage() {
   const navigate = useNavigate();
@@ -28,63 +31,505 @@ export function OnboardingPage() {
   const [availabilityText, setAvailabilityText] = useState("");
   const [sentiments, setSentiments] = useState<Record<string, TagSentiment>>({});
   const [emotionTagId, setEmotionTagId] = useState("");
-  const onboarding = useQuery({ queryKey: ["onboarding", session?.id], queryFn: getOnboardingStatus, enabled: session?.status === "active" });
-  const profile = useQuery({ queryKey: ["profile", session?.id], queryFn: getMyProfile, enabled: session?.status === "active" });
-  const media = useQuery({ queryKey: ["profile-media", session?.id], queryFn: listProfileMedia, enabled: session?.status === "active" });
-  const tags = useQuery({ queryKey: ["tags", "onboarding"], queryFn: listTags, enabled: session?.status === "active" });
-  const affinities = useQuery({ queryKey: ["profile-affinities", session?.id], queryFn: getProfileAffinities, enabled: session?.status === "active" });
-  const suggestions = useQuery({ queryKey: ["member-suggestions", session?.id], queryFn: listMemberSuggestions, enabled: session?.status === "active" && step === 5 });
+  const onboarding = useQuery({
+    queryKey: ["onboarding", session?.id],
+    queryFn: getOnboardingStatus,
+    enabled: session?.status === "active",
+  });
+  const profile = useQuery({
+    queryKey: ["profile", session?.id],
+    queryFn: getMyProfile,
+    enabled: session?.status === "active",
+  });
+  const media = useQuery({
+    queryKey: ["profile-media", session?.id],
+    queryFn: listProfileMedia,
+    enabled: session?.status === "active",
+  });
+  const tags = useQuery({
+    queryKey: ["tags", "onboarding"],
+    queryFn: listTags,
+    enabled: session?.status === "active",
+  });
+  const affinities = useQuery({
+    queryKey: ["profile-affinities", session?.id],
+    queryFn: getProfileAffinities,
+    enabled: session?.status === "active",
+  });
+  const suggestions = useQuery({
+    queryKey: ["member-suggestions", session?.id],
+    queryFn: listMemberSuggestions,
+    enabled: session?.status === "active" && step === 5,
+  });
 
-  useEffect(() => { if (onboarding.data && !onboarding.data.completed) setStep(statusStep[onboarding.data.currentStep?.key ?? "people"] ?? 5); }, [onboarding.data]);
-  useEffect(() => { if (affinities.data) setSentiments(Object.fromEntries(affinities.data.map((item) => [item.tag.id, item.sentiment]))); }, [affinities.data]);
-  useEffect(() => { if (!expires) return; const timer = window.setInterval(() => setExpires((value) => Math.max(0, value - 1)), 1000); return () => window.clearInterval(timer); }, [expires > 0]);
-  useEffect(() => { if (!photoFile) { setPhotoPreview(""); return; } const url = URL.createObjectURL(photoFile); setPhotoPreview(url); return () => URL.revokeObjectURL(url); }, [photoFile]);
+  useEffect(() => {
+    if (onboarding.data && !onboarding.data.completed) setStep(statusStep[onboarding.data.currentStep?.key ?? "people"] ?? 5);
+  }, [onboarding.data]);
+  useEffect(() => {
+    if (affinities.data) setSentiments(Object.fromEntries(affinities.data.map((item) => [item.tag.id, item.sentiment])));
+  }, [affinities.data]);
+  useEffect(() => {
+    if (!expires) return;
+    const timer = window.setInterval(() => setExpires((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [expires > 0]);
+  useEffect(() => {
+    if (!photoFile) {
+      setPhotoPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(photoFile);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photoFile]);
 
-  const register = useMutation({ mutationFn: registerUser, onSuccess: (response) => { setUserSession(response); setSession(response.user); setStep(response.user.status === "active" ? 1 : 0); } });
-  const phoneRequest = useMutation({ mutationFn: requestPhoneVerification, onSuccess: (data) => { setExpires(data.expiresInSeconds); setDevelopmentCode(data.developmentCode ?? ""); } });
-  const phoneConfirm = useMutation({ mutationFn: (code: string) => confirmPhoneVerification(phone, code), onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["profile"] }); void queryClient.invalidateQueries({ queryKey: ["onboarding"] }); setStep(2); } });
-  const profileSave = useMutation({ mutationFn: updateMyProfile, onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["onboarding"] }); setStep(3); } });
-  const photoUpload = useMutation({ mutationFn: uploadProfileMedia, onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["profile-media"] }); void queryClient.invalidateQueries({ queryKey: ["onboarding"] }); } });
-  const affinitySave = useMutation({ mutationFn: () => updateProfileAffinities(Object.entries(sentiments).map(([tagId, sentiment]) => ({ tagId, sentiment }))), onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["onboarding"] }); setStep(5); } });
-  const finish = useMutation({ mutationFn: completeOnboarding, onSuccess: () => navigate("/identity") });
+  const register = useMutation({
+    mutationFn: registerUser,
+    onSuccess: (response) => {
+      setUserSession(response);
+      setSession(response.user);
+      setStep(response.user.status === "active" ? 1 : 0);
+    },
+  });
+  const phoneRequest = useMutation({
+    mutationFn: requestPhoneVerification,
+    onSuccess: (data) => {
+      setExpires(data.expiresInSeconds);
+      setDevelopmentCode(data.developmentCode ?? "");
+    },
+  });
+  const phoneConfirm = useMutation({
+    mutationFn: (code: string) => confirmPhoneVerification(phone, code),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["profile"] });
+      void queryClient.invalidateQueries({ queryKey: ["onboarding"] });
+      setStep(2);
+    },
+  });
+  const profileSave = useMutation({
+    mutationFn: updateMyProfile,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["onboarding"] });
+      setStep(3);
+    },
+  });
+  const photoUpload = useMutation({
+    mutationFn: uploadProfileMedia,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["profile-media"] });
+      void queryClient.invalidateQueries({ queryKey: ["onboarding"] });
+    },
+  });
+  const affinitySave = useMutation({
+    mutationFn: () =>
+      updateProfileAffinities(
+        Object.entries(sentiments).map(([tagId, sentiment]) => ({
+          tagId,
+          sentiment,
+        })),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["onboarding"] });
+      setStep(5);
+    },
+  });
+  const finish = useMutation({
+    mutationFn: completeOnboarding,
+    onSuccess: () => navigate("/identity"),
+  });
   const selectedCount = Object.keys(sentiments).length;
   const currentTag = useMemo(() => tags.data?.find((tag) => tag.id === emotionTagId), [emotionTagId, tags.data]);
 
-  if (session?.status === "pending") return <section className="page onboarding-shell"><div className="onboarding-card empty-state"><Sparkles size={42} /><h1>E-postanı doğrula</h1><p>Hesabın oluşturuldu. Gönderdiğimiz doğrulama bağlantısını aç; hesabın aktif olduğunda sihirbaz telefon adımından devam edecek.</p><Link className="primary-action" to="/account">Hesap durumuna dön</Link></div></section>;
+  if (session?.status === "pending")
+    return (
+      <section className="page onboarding-shell">
+        <div className="onboarding-card empty-state">
+          <Sparkles size={42} />
+          <h1>E-postanı doğrula</h1>
+          <p>Hesabın oluşturuldu. Gönderdiğimiz doğrulama bağlantısını aç; hesabın aktif olduğunda sihirbaz telefon adımından devam edecek.</p>
+          <Link className="primary-action" to="/account">
+            Hesap durumuna dön
+          </Link>
+        </div>
+      </section>
+    );
 
-  return <section className="page onboarding-shell">
-    <header className="onboarding-header"><div><span className="eyebrow">Konnektora’ya hoş geldin</span><h1>Profilini birlikte hazırlayalım</h1></div><strong>{Math.round(((step + 1) / steps.length) * 100)}%</strong></header>
-    <nav className="onboarding-progress" aria-label="Onboarding adımları">{steps.map((label, index) => <span className={index < step ? "is-complete" : index === step ? "is-active" : ""} key={label}><b>{index < step ? <Check size={15} /> : index + 1}</b><small>{label}</small></span>)}</nav>
-    <div className="onboarding-card">
-      {step === 0 ? <form onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = new FormData(event.currentTarget); const password = String(form.get("password")); if (password !== String(form.get("passwordAgain"))) return; register.mutate({ name: String(form.get("name")), email: String(form.get("email")), password, accountType, ...(accountType === "corporate" ? { companyName: String(form.get("companyName")), tradeName: String(form.get("tradeName")), companyType: "limited_or_corporation", businessCategory: "event_organizer" } : {}) }); }}><h2>Hesap bilgileri</h2><label>Hesap türü<select value={accountType} onChange={(event) => setAccountType(event.target.value as typeof accountType)}><option value="individual">Bireysel</option><option value="corporate">Kurumsal</option></select></label><label>Ad Soyad<input name="name" minLength={2} required /></label>{accountType === "corporate" ? <><label>İşletme adı<input name="companyName" required /></label><label>Ticari unvan<input name="tradeName" required /></label></> : null}<label>E-posta<input name="email" onBlur={(event) => void checkAvailability({ email: event.target.value }).then((data) => setAvailabilityText(data.emailAvailable ? "E-posta kullanılabilir" : "E-posta kullanımda"))} required type="email" /></label><label>Şifre<input name="password" minLength={8} required type="password" /></label><label>Şifre tekrar<input name="passwordAgain" minLength={8} required type="password" /></label><label className="check-row"><input required type="checkbox" /> <span><Link to="/terms">Koşulları</Link> ve <Link to="/privacy">Gizlilik Politikasını</Link> kabul ediyorum.</span></label>{availabilityText ? <p className="form-help">{availabilityText}</p> : null}<button className="primary-action" disabled={register.isPending} type="submit">Hesabı oluştur <ArrowRight size={18} /></button>{register.isError ? <p className="form-error">Hesap oluşturulamadı. Alanları ve şifre gücünü kontrol et.</p> : null}</form> : null}
+  return (
+    <section className="page onboarding-shell">
+      <header className="onboarding-header">
+        <div>
+          <span className="eyebrow">Konnektora’ya hoş geldin</span>
+          <h1>Profilini birlikte hazırlayalım</h1>
+        </div>
+        <strong>{Math.round(((step + 1) / steps.length) * 100)}%</strong>
+      </header>
+      <nav className="onboarding-progress" aria-label="Onboarding adımları">
+        {steps.map((label, index) => (
+          <span className={index < step ? "is-complete" : index === step ? "is-active" : ""} key={label}>
+            <b>{index < step ? <Check size={15} /> : index + 1}</b>
+            <small>{label}</small>
+          </span>
+        ))}
+      </nav>
+      <div className="onboarding-card">
+        {step === 0 ? (
+          <form
+            onSubmit={(event: FormEvent<HTMLFormElement>) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              const password = String(form.get("password"));
+              if (password !== String(form.get("passwordAgain"))) return;
+              register.mutate({
+                name: String(form.get("name")),
+                email: String(form.get("email")),
+                password,
+                accountType,
+                ...(accountType === "corporate"
+                  ? {
+                      companyName: String(form.get("companyName")),
+                      tradeName: String(form.get("tradeName")),
+                      companyType: "limited_or_corporation",
+                      businessCategory: "event_organizer",
+                    }
+                  : {}),
+              });
+            }}
+          >
+            <h2>Hesap bilgileri</h2>
+            <label>
+              Hesap türü
+              <select value={accountType} onChange={(event) => setAccountType(event.target.value as typeof accountType)}>
+                <option value="individual">Bireysel</option>
+                <option value="corporate">Kurumsal</option>
+              </select>
+            </label>
+            <label>
+              Ad Soyad
+              <input name="name" minLength={2} required />
+            </label>
+            {accountType === "corporate" ? (
+              <>
+                <label>
+                  İşletme adı
+                  <input name="companyName" required />
+                </label>
+                <label>
+                  Ticari unvan
+                  <input name="tradeName" required />
+                </label>
+              </>
+            ) : null}
+            <label>
+              E-posta
+              <input name="email" onBlur={(event) => void checkAvailability({ email: event.target.value }).then((data) => setAvailabilityText(data.emailAvailable ? "E-posta kullanılabilir" : "E-posta kullanımda"))} required type="email" />
+            </label>
+            <label>
+              Şifre
+              <input name="password" minLength={8} required type="password" />
+            </label>
+            <label>
+              Şifre tekrar
+              <input name="passwordAgain" minLength={8} required type="password" />
+            </label>
+            <label className="check-row">
+              <input required type="checkbox" />{" "}
+              <span>
+                <Link to="/terms">Koşulları</Link> ve <Link to="/privacy">Gizlilik Politikasını</Link> kabul ediyorum.
+              </span>
+            </label>
+            {availabilityText ? <p className="form-help">{availabilityText}</p> : null}
+            <button className="primary-action" disabled={register.isPending} type="submit">
+              Hesabı oluştur <ArrowRight size={18} />
+            </button>
+            {register.isError ? <p className="form-error">Hesap oluşturulamadı. Alanları ve şifre gücünü kontrol et.</p> : null}
+          </form>
+        ) : null}
 
-      {step === 1 ? <div><h2>Telefonunu doğrula</h2><p>6 haneli kod iki dakika geçerlidir.</p><form onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); setPhone(String(new FormData(event.currentTarget).get("phone"))); phoneRequest.mutate(String(new FormData(event.currentTarget).get("phone"))); }}><label>Telefon numarası<input defaultValue={profile.data?.phone ?? ""} name="phone" placeholder="+905551112233" required /></label><button className="primary-action" disabled={phoneRequest.isPending || expires > 0} type="submit">{expires ? `${expires} sn` : "Kod gönder"}</button></form>{expires || developmentCode ? <form onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); phoneConfirm.mutate(String(new FormData(event.currentTarget).get("code"))); }}><label>Doğrulama kodu<input autoComplete="one-time-code" defaultValue={developmentCode} inputMode="numeric" maxLength={6} name="code" pattern="[0-9]{6}" required /></label><button className="primary-action" type="submit">Doğrula ve devam et</button></form> : null}</div> : null}
+        {step === 0 ? (
+          <SocialAuthButtons
+            action={socialLogin}
+            onSuccess={(response) => {
+              setUserSession(response);
+              setSession(response.user);
+              setStep(1);
+            }}
+          />
+        ) : null}
 
-      {step === 2 && profile.data ? <form key={profile.data.updatedAt ? String(profile.data.updatedAt) : profile.data.id} onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = new FormData(event.currentTarget); profileSave.mutate({ name: String(form.get("name")), username: String(form.get("username")), country: String(form.get("country")), city: String(form.get("city")), birthDate: String(form.get("birthDate")), gender: String(form.get("gender")) as "male" | "female" || undefined, website: String(form.get("website")) || undefined }); }}><h2>Temel bilgiler</h2><label>Ad Soyad<input defaultValue={profile.data.name} name="name" required /></label><label>Kullanıcı adı<input defaultValue={profile.data.username ?? ""} name="username" onBlur={(event) => void checkAvailability({ username: event.target.value }).then((data) => setAvailabilityText(data.usernameAvailable || event.target.value === profile.data?.username ? "Kullanıcı adı uygun" : "Kullanıcı adı kullanımda"))} pattern="[A-Za-z0-9 .-]+" required /></label><label>Ülke<input defaultValue={profile.data.country ?? ""} name="country" required /></label><label>Şehir<input defaultValue={profile.data.city ?? ""} name="city" /></label><label>Doğum tarihi<input defaultValue={profile.data.birthDate ? String(profile.data.birthDate).slice(0, 10) : ""} name="birthDate" required type="date" /></label><label>Cinsiyet<select defaultValue={profile.data.gender ?? ""} name="gender"><option value="">Belirtmek istemiyorum</option><option value="female">Kadın</option><option value="male">Erkek</option></select></label><label>Web sitesi<input defaultValue={profile.data.website ?? ""} name="website" type="url" /></label>{availabilityText ? <p className="form-help">{availabilityText}</p> : null}{profileSave.isError ? <p className="form-error">Bilgiler kaydedilemedi: {(profileSave.error as Error).message}</p> : null}<WizardButtons back={() => setStep(1)} nextLabel="Kaydet ve devam et" /></form> : null}
-      {step === 2 && profile.isError ? <div className="empty-state"><h2>Profil yüklenemedi</h2><p>{(profile.error as Error).message}</p><button className="secondary-action" onClick={() => profile.refetch()} type="button">Tekrar dene</button></div> : null}
+        {step === 1 ? (
+          <div>
+            <h2>Telefonunu doğrula</h2>
+            <p>6 haneli kod iki dakika geçerlidir.</p>
+            <form
+              onSubmit={(event: FormEvent<HTMLFormElement>) => {
+                event.preventDefault();
+                setPhone(String(new FormData(event.currentTarget).get("phone")));
+                phoneRequest.mutate(String(new FormData(event.currentTarget).get("phone")));
+              }}
+            >
+              <label>
+                Telefon numarası
+                <input defaultValue={profile.data?.phone ?? ""} name="phone" placeholder="+905551112233" required />
+              </label>
+              <button className="primary-action" disabled={phoneRequest.isPending || expires > 0} type="submit">
+                {expires ? `${expires} sn` : "Kod gönder"}
+              </button>
+            </form>
+            {expires || developmentCode ? (
+              <form
+                onSubmit={(event: FormEvent<HTMLFormElement>) => {
+                  event.preventDefault();
+                  phoneConfirm.mutate(String(new FormData(event.currentTarget).get("code")));
+                }}
+              >
+                <label>
+                  Doğrulama kodu
+                  <input autoComplete="one-time-code" defaultValue={developmentCode} inputMode="numeric" maxLength={6} name="code" pattern="[0-9]{6}" required />
+                </label>
+                <button className="primary-action" type="submit">
+                  Doğrula ve devam et
+                </button>
+              </form>
+            ) : null}
+          </div>
+        ) : null}
 
-      {step === 3 ? <div><h2>Profil fotoğrafı</h2><p>En az bir fotoğraf eklemelisin. İlk fotoğraf profil görselin olur.</p><label className="onboarding-upload"><ImagePlus size={36} /><span>Fotoğraf seç</span><input accept="image/jpeg,image/png,image/webp" onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)} type="file" /></label>{photoPreview ? <div className="photo-editor"><div className="photo-crop-frame"><img alt="Düzenlenecek profil fotoğrafı" src={photoPreview} style={{ transform: `scale(${photoZoom}) rotate(${photoRotation}deg)` }} /></div><label>Zoom<input max="2.5" min="1" onChange={(event) => setPhotoZoom(Number(event.target.value))} step="0.1" type="range" value={photoZoom} /></label><div className="photo-editor-actions"><button className="secondary-action" onClick={() => setPhotoRotation((value) => (value + 90) % 360)} type="button">Sağa döndür</button><button className="primary-action" disabled={photoUpload.isPending} onClick={() => void renderProfileImage(photoFile!, photoZoom, photoRotation).then((file) => photoUpload.mutate(file, { onSuccess: () => setPhotoFile(null) }))} type="button">Düzenleyip yükle</button></div></div> : null}<div className="onboarding-media-row">{media.data?.map((item) => item.type === "image" ? <img alt="Profil yüklemesi" key={item.id} src={item.url} /> : <video key={item.id} src={item.url} />)}</div><WizardButtons back={() => setStep(2)} disabled={!media.data?.some((item) => item.type === "image")} next={() => setStep(4)} /></div> : null}
+        {step === 2 && profile.data ? (
+          <form
+            key={profile.data.updatedAt ? String(profile.data.updatedAt) : profile.data.id}
+            onSubmit={(event: FormEvent<HTMLFormElement>) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              profileSave.mutate({
+                name: String(form.get("name")),
+                username: String(form.get("username")),
+                country: String(form.get("country")),
+                city: String(form.get("city")),
+                birthDate: String(form.get("birthDate")),
+                gender: (String(form.get("gender")) as "male" | "female") || undefined,
+                website: String(form.get("website")) || undefined,
+              });
+            }}
+          >
+            <h2>Temel bilgiler</h2>
+            <label>
+              Ad Soyad
+              <input defaultValue={profile.data.name} name="name" required />
+            </label>
+            <label>
+              Kullanıcı adı
+              <input defaultValue={profile.data.username ?? ""} name="username" onBlur={(event) => void checkAvailability({ username: event.target.value }).then((data) => setAvailabilityText(data.usernameAvailable || event.target.value === profile.data?.username ? "Kullanıcı adı uygun" : "Kullanıcı adı kullanımda"))} pattern="[A-Za-z0-9 .-]+" required />
+            </label>
+            <label>
+              Ülke
+              <input defaultValue={profile.data.country ?? ""} name="country" required />
+            </label>
+            <label>
+              Şehir
+              <input defaultValue={profile.data.city ?? ""} name="city" />
+            </label>
+            <label>
+              Doğum tarihi
+              <input defaultValue={profile.data.birthDate ? String(profile.data.birthDate).slice(0, 10) : ""} name="birthDate" required type="date" />
+            </label>
+            <label>
+              Cinsiyet
+              <select defaultValue={profile.data.gender ?? ""} name="gender">
+                <option value="">Belirtmek istemiyorum</option>
+                <option value="female">Kadın</option>
+                <option value="male">Erkek</option>
+              </select>
+            </label>
+            <label>
+              Web sitesi
+              <input defaultValue={profile.data.website ?? ""} name="website" type="url" />
+            </label>
+            {availabilityText ? <p className="form-help">{availabilityText}</p> : null}
+            {profileSave.isError ? <p className="form-error">Bilgiler kaydedilemedi: {(profileSave.error as Error).message}</p> : null}
+            <WizardButtons back={() => setStep(1)} nextLabel="Kaydet ve devam et" />
+          </form>
+        ) : null}
+        {step === 2 && profile.isError ? (
+          <div className="empty-state">
+            <h2>Profil yüklenemedi</h2>
+            <p>{(profile.error as Error).message}</p>
+            <button className="secondary-action" onClick={() => profile.refetch()} type="button">
+              Tekrar dene
+            </button>
+          </div>
+        ) : null}
 
-      {step === 4 ? <div><h2>İlgi alanların</h2><p>Bir tag seç ve sende uyandırdığı duyguyu belirt.</p><div className="onboarding-tag-grid">{tags.data?.map((tag) => <button className={sentiments[tag.id] ? "is-selected" : ""} key={tag.id} onClick={() => setEmotionTagId(tag.id)} type="button">#{tag.name}<small>{sentiments[tag.id] ?? "Seç"}</small></button>)}</div><p className="form-help">{selectedCount} tag seçildi</p><WizardButtons back={() => setStep(3)} disabled={!selectedCount} next={() => affinitySave.mutate()} /></div> : null}
+        {step === 3 ? (
+          <div>
+            <h2>Profil fotoğrafı</h2>
+            <p>En az bir fotoğraf eklemelisin. İlk fotoğraf profil görselin olur.</p>
+            <label className="onboarding-upload">
+              <ImagePlus size={36} />
+              <span>Fotoğraf seç</span>
+              <input accept="image/jpeg,image/png,image/webp" onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)} type="file" />
+            </label>
+            {photoPreview ? (
+              <div className="photo-editor">
+                <div className="photo-crop-frame">
+                  <img
+                    alt="Düzenlenecek profil fotoğrafı"
+                    src={photoPreview}
+                    style={{
+                      transform: `scale(${photoZoom}) rotate(${photoRotation}deg)`,
+                    }}
+                  />
+                </div>
+                <label>
+                  Zoom
+                  <input max="2.5" min="1" onChange={(event) => setPhotoZoom(Number(event.target.value))} step="0.1" type="range" value={photoZoom} />
+                </label>
+                <div className="photo-editor-actions">
+                  <button className="secondary-action" onClick={() => setPhotoRotation((value) => (value + 90) % 360)} type="button">
+                    Sağa döndür
+                  </button>
+                  <button
+                    className="primary-action"
+                    disabled={photoUpload.isPending}
+                    onClick={() =>
+                      void renderProfileImage(photoFile!, photoZoom, photoRotation).then((file) =>
+                        photoUpload.mutate(file, {
+                          onSuccess: () => setPhotoFile(null),
+                        }),
+                      )
+                    }
+                    type="button"
+                  >
+                    Düzenleyip yükle
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            <div className="onboarding-media-row">{media.data?.map((item) => (item.type === "image" ? <img alt="Profil yüklemesi" key={item.id} src={item.url} /> : <video key={item.id} src={item.url} />))}</div>
+            <WizardButtons back={() => setStep(2)} disabled={!media.data?.some((item) => item.type === "image")} next={() => setStep(4)} />
+          </div>
+        ) : null}
 
-      {step === 5 ? <div><h2>Takip edebileceklerin</h2><p>Takip ettiğin üyeler bu işlemden bildirim almaz.</p><div className="onboarding-people">{suggestions.data?.map((member) => <article key={member.id}><span>{member.name.slice(0, 1)}</span><div><strong>{member.username ? `@${member.username}` : member.name}</strong><small>{member.commonTagCount} ortak ilgi · {member.followerCount} takipçi</small></div><button className="secondary-action" onClick={() => followUser(member.id).then(() => void queryClient.invalidateQueries({ queryKey: ["member-suggestions"] }))} type="button"><UserPlus size={17} /> Takip et</button></article>)}</div><WizardButtons back={() => setStep(4)} next={() => finish.mutate()} nextLabel="Kaydet ve tamamla" /></div> : null}
-    </div>
-    {currentTag ? <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Tag duygusu"><div><button aria-label="Kapat" onClick={() => setEmotionTagId("")} type="button">×</button><h2>#{currentTag.name}</h2><p>Bu tag sende hangi duyguyu uyandırıyor?</p>{(["like", "ok", "dislike"] as TagSentiment[]).map((sentiment) => <button className="secondary-action" key={sentiment} onClick={() => { setSentiments((current) => ({ ...current, [currentTag.id]: sentiment })); setEmotionTagId(""); }} type="button">{sentiment === "like" ? "Beğeniyorum" : sentiment === "ok" ? "Sorun değil" : "Beğenmiyorum"}</button>)}</div></div> : null}
-  </section>;
+        {step === 4 ? (
+          <div>
+            <h2>İlgi alanların</h2>
+            <p>Bir tag seç ve sende uyandırdığı duyguyu belirt.</p>
+            <div className="onboarding-tag-grid">
+              {tags.data?.map((tag) => (
+                <button className={sentiments[tag.id] ? "is-selected" : ""} key={tag.id} onClick={() => setEmotionTagId(tag.id)} type="button">
+                  #{tag.name}
+                  <small>{sentiments[tag.id] ?? "Seç"}</small>
+                </button>
+              ))}
+            </div>
+            <p className="form-help">{selectedCount} tag seçildi</p>
+            <WizardButtons back={() => setStep(3)} disabled={!selectedCount} next={() => affinitySave.mutate()} />
+          </div>
+        ) : null}
+
+        {step === 5 ? (
+          <div>
+            <h2>Takip edebileceklerin</h2>
+            <p>Takip ettiğin üyeler bu işlemden bildirim almaz.</p>
+            <Link className="secondary-action contacts-cta" to="/contacts">
+              Telefon ve Google rehberinden arkadaşlarını bul
+            </Link>
+            <div className="onboarding-people">
+              {suggestions.data?.map((member) => (
+                <article key={member.id}>
+                  <span>{member.name.slice(0, 1)}</span>
+                  <div>
+                    <strong>{member.username ? `@${member.username}` : member.name}</strong>
+                    <small>
+                      {member.commonTagCount} ortak ilgi · {member.followerCount} takipçi
+                    </small>
+                  </div>
+                  <button
+                    className="secondary-action"
+                    onClick={() =>
+                      followUser(member.id).then(
+                        () =>
+                          void queryClient.invalidateQueries({
+                            queryKey: ["member-suggestions"],
+                          }),
+                      )
+                    }
+                    type="button"
+                  >
+                    <UserPlus size={17} /> Takip et
+                  </button>
+                </article>
+              ))}
+            </div>
+            <WizardButtons back={() => setStep(4)} next={() => finish.mutate()} nextLabel="Kaydet ve tamamla" />
+          </div>
+        ) : null}
+      </div>
+      {currentTag ? (
+        <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Tag duygusu">
+          <div>
+            <button aria-label="Kapat" onClick={() => setEmotionTagId("")} type="button">
+              ×
+            </button>
+            <h2>#{currentTag.name}</h2>
+            <p>Bu tag sende hangi duyguyu uyandırıyor?</p>
+            {(["like", "ok", "dislike"] as TagSentiment[]).map((sentiment) => (
+              <button
+                className="secondary-action"
+                key={sentiment}
+                onClick={() => {
+                  setSentiments((current) => ({
+                    ...current,
+                    [currentTag.id]: sentiment,
+                  }));
+                  setEmotionTagId("");
+                }}
+                type="button"
+              >
+                {sentiment === "like" ? "Beğeniyorum" : sentiment === "ok" ? "Sorun değil" : "Beğenmiyorum"}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
-function WizardButtons({ back, next, disabled, nextLabel = "Devam et" }: { back: () => void; next?: () => void; disabled?: boolean; nextLabel?: string }) { return <div className="wizard-buttons"><button className="ghost-action" onClick={back} type="button"><ArrowLeft size={18} /> Geri</button><button className="primary-action" disabled={disabled} onClick={next} type={next ? "button" : "submit"}>{nextLabel} <ArrowRight size={18} /></button></div>; }
+function WizardButtons({ back, next, disabled, nextLabel = "Devam et" }: { back: () => void; next?: () => void; disabled?: boolean; nextLabel?: string }) {
+  return (
+    <div className="wizard-buttons">
+      <button className="ghost-action" onClick={back} type="button">
+        <ArrowLeft size={18} /> Geri
+      </button>
+      <button className="primary-action" disabled={disabled} onClick={next} type={next ? "button" : "submit"}>
+        {nextLabel} <ArrowRight size={18} />
+      </button>
+    </div>
+  );
+}
 
 async function renderProfileImage(source: File, zoom: number, rotation: number) {
-  const image = new Image(); const url = URL.createObjectURL(source);
+  const image = new Image();
+  const url = URL.createObjectURL(source);
   try {
-    await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("Fotoğraf açılamadı")); image.src = url; });
-    const size = 1080; const canvas = document.createElement("canvas"); canvas.width = size; canvas.height = size;
-    const context = canvas.getContext("2d"); if (!context) throw new Error("Fotoğraf düzenleyici açılamadı");
-    context.translate(size / 2, size / 2); context.rotate(rotation * Math.PI / 180);
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Fotoğraf açılamadı"));
+      image.src = url;
+    });
+    const size = 1080;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Fotoğraf düzenleyici açılamadı");
+    context.translate(size / 2, size / 2);
+    context.rotate((rotation * Math.PI) / 180);
     const scale = Math.max(size / image.naturalWidth, size / image.naturalHeight) * zoom;
-    context.drawImage(image, -image.naturalWidth * scale / 2, -image.naturalHeight * scale / 2, image.naturalWidth * scale, image.naturalHeight * scale);
-    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Fotoğraf oluşturulamadı")), "image/jpeg", .9));
+    context.drawImage(image, (-image.naturalWidth * scale) / 2, (-image.naturalHeight * scale) / 2, image.naturalWidth * scale, image.naturalHeight * scale);
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => (value ? resolve(value) : reject(new Error("Fotoğraf oluşturulamadı"))), "image/jpeg", 0.9));
     return new File([blob], source.name.replace(/\.[^.]+$/, "") + "-profile.jpg", { type: "image/jpeg" });
-  } finally { URL.revokeObjectURL(url); }
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }

@@ -69,6 +69,16 @@ export class MailService {
     });
   }
 
+  async sendContactInviteEmail(input: { to: string; name: string; invitedByName: string }) {
+    const appUrl = this.getAppUrl();
+    await this.send({
+      to: input.to,
+      subject: `${input.invitedByName} seni Konnektora'ya davet etti`,
+      text: `Merhaba ${input.name}, ${input.invitedByName} seni Konnektora topluluğuna davet etti: ${appUrl}`,
+      html: `<p>Merhaba ${input.name},</p><p><strong>${input.invitedByName}</strong> seni Konnektora topluluğuna davet etti.</p><p><a href="${appUrl}">Konnektora'yı keşfet</a></p>`
+    });
+  }
+
   async sendModerationDecisionEmail(input: { to: string; name: string; decision: string; action: string; note?: string | null }) {
     await this.send({
       to: input.to,
