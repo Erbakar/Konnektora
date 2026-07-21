@@ -31,6 +31,8 @@ export const phoneVerificationResponseSchema = z.object({
   expiresInSeconds: z.number().int().positive(),
   developmentCode: z.string().length(6).optional()
 });
+export const availabilitySchema = z.object({ emailAvailable: z.boolean().nullable(), phoneAvailable: z.boolean().nullable(), usernameAvailable: z.boolean().nullable() });
+export type Availability = z.infer<typeof availabilitySchema>;
 export const privacyAudienceSchema = z.enum(["everybody", "following", "network"]);
 export const privacySettingsSchema = z.object({
   userId: z.string().uuid(),

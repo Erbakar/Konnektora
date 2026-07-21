@@ -1,4 +1,4 @@
-import { ConflictException } from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { hash } from "bcryptjs";
 import { createHash } from "crypto";
@@ -279,5 +279,17 @@ describe("AuthService", () => {
       phone: "+905551112233",
       phoneVerified: true
     });
+  });
+
+  it("checks email, phone and username availability", async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "phone-owner" });
+    prisma.user.findFirst.mockResolvedValue(null);
+    await expect(service.availability({ email: "new@example.com", phone: "+905551112233", username: "new.user" })).resolves.toEqual({ emailAvailable: true, phoneAvailable: false, usernameAvailable: true });
+  });
+
+  it("requires at least one availability field", async () => {
+    const { service } = createService();
+    await expect(service.availability({})).rejects.toBeInstanceOf(BadRequestException);
   });
 });

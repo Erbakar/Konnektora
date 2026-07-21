@@ -111,3 +111,9 @@ export class ConfirmPhoneVerificationDto extends RequestPhoneVerificationDto {
   @Matches(/^\d{6}$/)
   code!: string;
 }
+
+export class AvailabilityQueryDto {
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @Matches(/^\+[1-9]\d{7,14}$/) phone?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(80) @Matches(/^[\p{L}\p{N} .-]+$/u) username?: string;
+}

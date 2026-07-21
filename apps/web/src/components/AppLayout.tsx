@@ -54,7 +54,7 @@ export function AppLayout() {
           </NavLink>
           <NavLink to="/identity"><QrCode size={18} /> Member ID</NavLink>
           <NavLink to="/search"><Search size={18} /> Search</NavLink>
-          <NavLink to="/account">
+          <NavLink to="/onboarding">
             <UserRound size={18} />
             Create
           </NavLink>
@@ -115,7 +115,7 @@ export function AppLayout() {
           </NavLink>
           <NavLink to="/identity" onClick={() => setMenuOpen(false)}><QrCode size={18} /> Member ID</NavLink>
           <NavLink to="/search" onClick={() => setMenuOpen(false)}><Search size={18} /> Search anything</NavLink>
-          <NavLink to="/account" onClick={() => setMenuOpen(false)}>
+          <NavLink to="/onboarding" onClick={() => setMenuOpen(false)}>
             <UserRound size={18} />
             Create
           </NavLink>

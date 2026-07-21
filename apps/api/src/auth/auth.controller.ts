@@ -1,6 +1,6 @@
-import { Body, Controller, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
 import { User } from "@prisma/client";
-import { AcceptInviteDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, TokenDto } from "./auth.dto";
+import { AcceptInviteDto, AvailabilityQueryDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, TokenDto } from "./auth.dto";
 import { CurrentUser } from "./current-user.decorator";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { AuthService } from "./auth.service";
@@ -8,6 +8,9 @@ import { AuthService } from "./auth.service";
 @Controller()
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Get("auth/availability")
+  availability(@Query() query: AvailabilityQueryDto) { return this.authService.availability(query); }
 
   @Post("auth/login")
   login(@Body() body: LoginDto) {

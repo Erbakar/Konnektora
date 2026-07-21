@@ -84,7 +84,7 @@ export function HomePage() {
             <Link className="corp-btn corp-btn-primary" to="/events">
               Explore events
             </Link>
-            <Link className="corp-btn corp-btn-secondary" to="/admin">
+            <Link className="corp-btn corp-btn-secondary" to="/onboarding">
               Join the beta
             </Link>
           </div>

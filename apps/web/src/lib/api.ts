@@ -11,6 +11,7 @@ import {
   adminRoleGroupSchema,
   announcementListSchema,
   announcementSchema,
+  availabilitySchema,
   contentReportSchema,
   conversationListSchema,
   conversationMessagesSchema,
@@ -67,6 +68,7 @@ import {
   type AdminRoleGroup,
   type AdminTagDetail,
   type Announcement,
+  type Availability,
   type BlockedTargetType,
   type CmsPolicy,
   type CmsCategory,
@@ -501,6 +503,13 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname === "/auth/phone/verification/request" && method === "POST") {
     return schema.parse(requestMockPhoneVerification(parseBody<{ phone: string }>(options).phone));
+  }
+
+  if (pathname === "/auth/availability" && method === "GET") {
+    const query = new URLSearchParams(queryString);
+    const users = getAllMockUsers();
+    const email = query.get("email")?.toLowerCase(); const phone = query.get("phone"); const username = query.get("username")?.toLowerCase();
+    return schema.parse({ emailAvailable: email ? !users.some((user) => user.email.toLowerCase() === email) : null, phoneAvailable: phone ? !users.some((user) => user.phone === phone) : null, usernameAvailable: username ? !users.some((user) => user.username?.toLowerCase() === username) : null });
   }
 
   if (pathname === "/auth/phone/verification/confirm" && method === "POST") {
@@ -3075,7 +3084,7 @@ function confirmMockPhoneVerification(input: { phone: string; code: string }) {
     throw new Error("Invalid phone verification code");
   }
   const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
-  const user = users.find((item) => item.id === session.id);
+  const user = getAllMockUsers().find((item) => item.id === session.id);
   if (user) {
     writeStorage(MOCK_USERS_KEY, [{ ...user, phone: input.phone, phoneVerified: true }, ...users.filter((item) => item.id !== user.id)]);
   }
@@ -3160,11 +3169,11 @@ function getMockOnboardingStatus(): OnboardingStatus {
   const profile = getMockProfile();
   const following = listMockFollowing();
   const steps = [
-    { key: "phone" as const, title: "Telefonunu doğrula", completed: profile.phoneVerified, path: "/account#phone-verification" },
-    { key: "personal_info" as const, title: "Temel bilgilerini tamamla", completed: Boolean(profile.username && profile.country && profile.birthDate), path: "/account#profile" },
-    { key: "photo" as const, title: "Profil fotoğrafı ekle", completed: listMockProfileMedia().some((media) => media.type === "image"), path: "/account#profile-media" },
-    { key: "interests" as const, title: "İlgi alanlarını seç", completed: getUserInterestTagIds().length > 0, path: "/account#interests" },
-    { key: "people" as const, title: "Topluluğunu keşfet", completed: following.length > 0, path: "/account#suggestions" }
+    { key: "phone" as const, title: "Telefonunu doğrula", completed: profile.phoneVerified, path: "/onboarding" },
+    { key: "personal_info" as const, title: "Temel bilgilerini tamamla", completed: Boolean(profile.username && profile.country && profile.birthDate), path: "/onboarding" },
+    { key: "photo" as const, title: "Profil fotoğrafı ekle", completed: listMockProfileMedia().some((media) => media.type === "image"), path: "/onboarding" },
+    { key: "interests" as const, title: "İlgi alanlarını seç", completed: getUserInterestTagIds().length > 0, path: "/onboarding" },
+    { key: "people" as const, title: "Topluluğunu keşfet", completed: following.length > 0, path: "/onboarding" }
   ];
   const stored = readStorage<MockUser[]>(MOCK_USERS_KEY, []).find((user) => user.id === profile.id);
   return onboardingStatusSchema.parse({ completed: Boolean(stored?.onboardingCompletedAt), completedAt: stored?.onboardingCompletedAt ?? null, progress: steps.filter((step) => step.completed).length * 20, currentStep: steps.find((step) => !step.completed) ?? null, steps });
@@ -4197,6 +4206,11 @@ export function requestPhoneVerification(phone: string) {
     method: "POST",
     body: JSON.stringify({ phone })
   });
+}
+
+export function checkAvailability(input: { email?: string; phone?: string; username?: string }): Promise<Availability> {
+  const query = new URLSearchParams(); Object.entries(input).forEach(([key, value]) => { if (value) query.set(key, value); });
+  return requestJson(`/auth/availability?${query}`, availabilitySchema);
 }
 
 export function confirmPhoneVerification(phone: string, code: string) {

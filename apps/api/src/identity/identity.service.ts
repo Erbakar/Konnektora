@@ -19,11 +19,11 @@ export class IdentityService {
     ]);
     if (!user) throw new NotFoundException("Kullanıcı bulunamadı.");
     const steps = [
-      { key: "phone" as const, title: "Telefonunu doğrula", completed: user.phoneVerified, path: "/account#phone-verification" },
-      { key: "personal_info" as const, title: "Temel bilgilerini tamamla", completed: Boolean(user.username && user.country && user.birthDate), path: "/account#profile" },
-      { key: "photo" as const, title: "Profil fotoğrafı ekle", completed: photoCount > 0, path: "/account#profile-media" },
-      { key: "interests" as const, title: "İlgi alanlarını seç", completed: interestCount > 0, path: "/account#interests" },
-      { key: "people" as const, title: "Topluluğunu keşfet", completed: followingCount > 0, path: "/account#suggestions" }
+      { key: "phone" as const, title: "Telefonunu doğrula", completed: user.phoneVerified, path: "/onboarding" },
+      { key: "personal_info" as const, title: "Temel bilgilerini tamamla", completed: Boolean(user.username && user.country && user.birthDate), path: "/onboarding" },
+      { key: "photo" as const, title: "Profil fotoğrafı ekle", completed: photoCount > 0, path: "/onboarding" },
+      { key: "interests" as const, title: "İlgi alanlarını seç", completed: interestCount > 0, path: "/onboarding" },
+      { key: "people" as const, title: "Topluluğunu keşfet", completed: followingCount > 0, path: "/onboarding" }
     ];
     const completedCount = steps.filter((step) => step.completed).length;
     return { completed: Boolean(user.onboardingCompletedAt), completedAt: user.onboardingCompletedAt, progress: completedCount * 20, currentStep: steps.find((step) => !step.completed) ?? null, steps };

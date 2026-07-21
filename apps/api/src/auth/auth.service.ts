@@ -6,7 +6,7 @@ import { createHash, randomBytes, randomInt } from "crypto";
 import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { SmsService } from "../sms/sms.service";
-import { AcceptInviteDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, TokenDto } from "./auth.dto";
+import { AcceptInviteDto, AvailabilityQueryDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, TokenDto } from "./auth.dto";
 
 const EMAIL_TOKEN_TTL_MS = {
   verify_email: 1000 * 60 * 60 * 24,
@@ -362,5 +362,15 @@ export class AuthService {
         status: user.status
       }
     };
+  }
+
+  async availability(input: AvailabilityQueryDto) {
+    if (!input.email && !input.phone && !input.username) throw new BadRequestException("Kontrol edilecek bir alan gerekli.");
+    const [emailOwner, phoneOwner, usernameOwner] = await Promise.all([
+      input.email ? this.prisma.user.findUnique({ where: { email: input.email.toLowerCase().trim() }, select: { id: true } }) : null,
+      input.phone ? this.prisma.user.findUnique({ where: { phone: input.phone }, select: { id: true } }) : null,
+      input.username ? this.prisma.user.findFirst({ where: { username: { equals: input.username.trim(), mode: "insensitive" } }, select: { id: true } }) : null
+    ]);
+    return { emailAvailable: input.email ? !emailOwner : null, phoneAvailable: input.phone ? !phoneOwner : null, usernameAvailable: input.username ? !usernameOwner : null };
   }
 }

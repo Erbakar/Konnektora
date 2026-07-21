@@ -19,6 +19,7 @@ const MessagesPage = lazy(() => import("./pages/MessagesPage").then((module) => 
 const IdentityPage = lazy(() => import("./pages/IdentityPage").then((module) => ({ default: module.IdentityPage })));
 const SearchPage = lazy(() => import("./pages/SearchPage").then((module) => ({ default: module.SearchPage })));
 const PublicProfilePage = lazy(() => import("./pages/PublicProfilePage").then((module) => ({ default: module.PublicProfilePage })));
+const OnboardingPage = lazy(() => import("./pages/OnboardingPage").then((module) => ({ default: module.OnboardingPage })));
 const PlacesPage = lazy(() => import("./pages/PlacesPage").then((module) => ({ default: module.PlacesPage })));
 const PlaceDetailPage = lazy(() => import("./pages/PlaceDetailPage").then((module) => ({ default: module.PlaceDetailPage })));
 const PolicyPage = lazy(() => import("./pages/PolicyPage").then((module) => ({ default: module.PolicyPage })));
@@ -40,6 +41,7 @@ const router = createBrowserRouter([
       { path: "identity", element: <IdentityPage /> },
       { path: "search", element: <SearchPage /> },
       { path: "users/:username", element: <PublicProfilePage /> },
+      { path: "onboarding", element: <OnboardingPage /> },
       { path: "account", element: <AccountPage /> },
       { path: "contact", element: <ContactPage /> },
       { path: "verify-email", element: <VerifyEmailPage /> },
