@@ -10,6 +10,7 @@ import { HealthController } from "./health.controller";
 import { MessagesModule } from "./messages/messages.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { ProfileModule } from "./profile/profile.module";
+import { PlacesModule } from "./places/places.module";
 import { ReportsModule } from "./reports/reports.module";
 import { TagsModule } from "./tags/tags.module";
 import { SocialModule } from "./social/social.module";
@@ -26,6 +27,7 @@ import { SocialModule } from "./social/social.module";
     EventsModule,
     MessagesModule,
     ProfileModule,
+    PlacesModule,
     ReportsModule,
     SocialModule,
     TagsModule

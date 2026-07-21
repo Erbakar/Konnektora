@@ -547,6 +547,49 @@ export const adminPlaceSchema = z.object({
   reportCount: z.number().int().nonnegative().optional()
 });
 
+export const placeMemberStatusSchema = z.enum(["invited", "accepted", "declined", "banned"]);
+export const placeMemberRoleSchema = z.enum(["member", "manager", "organizer"]);
+export const placeSchema = adminPlaceSchema.pick({
+  id: true,
+  name: true,
+  slug: true,
+  description: true,
+  status: true,
+  coverImageUrl: true,
+  country: true,
+  city: true,
+  address: true,
+  followerCount: true,
+  inviteCount: true,
+  createdById: true,
+  createdAt: true,
+  updatedAt: true
+}).extend({
+  isFollowing: z.boolean(),
+  viewerMembership: z.object({
+    status: placeMemberStatusSchema,
+    role: placeMemberRoleSchema
+  }).nullable()
+});
+
+export const placeListSchema = z.object({
+  items: z.array(placeSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+  hasNextPage: z.boolean()
+});
+
+export const placeMemberSchema = z.object({
+  placeId: z.string().uuid(),
+  userId: z.string().uuid(),
+  status: placeMemberStatusSchema,
+  role: placeMemberRoleSchema,
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+  user: adminUserSchema.optional()
+});
+
 export const adminMediaSchema = z.object({
   id: z.string().uuid(),
   url: z.string(),
@@ -748,6 +791,11 @@ export type ReportGroupComment = z.infer<typeof reportGroupCommentSchema>;
 export type AdminActivityLog = z.infer<typeof adminActivityLogSchema>;
 export type ModerationDecision = z.infer<typeof moderationDecisionSchema>;
 export type AdminPlace = z.infer<typeof adminPlaceSchema>;
+export type Place = z.infer<typeof placeSchema>;
+export type PlaceList = z.infer<typeof placeListSchema>;
+export type PlaceMember = z.infer<typeof placeMemberSchema>;
+export type PlaceMemberStatus = z.infer<typeof placeMemberStatusSchema>;
+export type PlaceMemberRole = z.infer<typeof placeMemberRoleSchema>;
 export type AdminMedia = z.infer<typeof adminMediaSchema>;
 export type ProfileMedia = z.infer<typeof profileMediaSchema>;
 export type AdminComment = z.infer<typeof adminCommentSchema>;

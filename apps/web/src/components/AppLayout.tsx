@@ -1,4 +1,4 @@
-import { CalendarDays, LayoutDashboard, Menu, Tag, UserRound, X } from "lucide-react";
+import { CalendarDays, LayoutDashboard, MapPin, Menu, Tag, UserRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
@@ -33,6 +33,10 @@ export function AppLayout() {
           <NavLink to="/events?tag=startup">
             <Tag size={18} />
             Tags
+          </NavLink>
+          <NavLink to="/places">
+            <MapPin size={18} />
+            Places
           </NavLink>
           <NavLink to="/account">
             <UserRound size={18} />
@@ -83,6 +87,10 @@ export function AppLayout() {
           <NavLink to="/events?tag=startup" onClick={() => setMenuOpen(false)}>
             <Tag size={18} />
             Tags
+          </NavLink>
+          <NavLink to="/places" onClick={() => setMenuOpen(false)}>
+            <MapPin size={18} />
+            Places
           </NavLink>
           <NavLink to="/account" onClick={() => setMenuOpen(false)}>
             <UserRound size={18} />

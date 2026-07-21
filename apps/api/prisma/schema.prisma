@@ -64,6 +64,19 @@ enum EventParticipantRole {
   manager
 }
 
+enum PlaceMemberStatus {
+  invited
+  accepted
+  declined
+  banned
+}
+
+enum PlaceMemberRole {
+  member
+  manager
+  organizer
+}
+
 enum ReportTargetType {
   event
   tag
@@ -206,6 +219,8 @@ model User {
   readUserMessages          UserMessage[]        @relation("UserMessageReadBy")
   createdPlaces             Place[]              @relation("PlaceCreatedBy")
   updatedPlaces             Place[]              @relation("PlaceUpdatedBy")
+  placeMemberships          PlaceMember[]
+  followedPlaces            PlaceFollow[]
   uploadedMedia             MediaFile[]          @relation("MediaUploadedBy")
   authoredComments          ContentComment[]     @relation("CommentAuthor")
   sentPrivateMessages       PrivateMessage[]     @relation("PrivateMessageSender")
@@ -520,10 +535,42 @@ model Place {
 
   createdBy User? @relation("PlaceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy User? @relation("PlaceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  members   PlaceMember[]
+  followers PlaceFollow[]
 
   @@index([status, createdAt])
   @@index([country, city])
   @@map("places")
+}
+
+model PlaceMember {
+  placeId  String            @map("place_id")
+  userId   String            @map("user_id")
+  status   PlaceMemberStatus @default(invited)
+  role     PlaceMemberRole   @default(member)
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([placeId, userId])
+  @@index([userId, status])
+  @@index([placeId, role, status])
+  @@map("place_members")
+}
+
+model PlaceFollow {
+  placeId   String   @map("place_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([placeId, userId])
+  @@index([userId, createdAt])
+  @@map("place_follows")
 }
 
 model MediaFile {

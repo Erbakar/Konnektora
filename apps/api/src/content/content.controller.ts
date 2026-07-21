@@ -8,7 +8,7 @@ import { diskStorage } from "multer";
 import { resolve } from "path";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { CreateCommentDto, CreateMediaDto, CreatePlaceDto, CreatePrivateMessageDto, CreateReactionDto, ReorderProfileMediaDto } from "./content.dto";
+import { CreateCommentDto, CreateMediaDto, CreatePrivateMessageDto, CreateReactionDto, ReorderProfileMediaDto } from "./content.dto";
 import { ContentService } from "./content.service";
 
 mkdirSync(resolve(process.cwd(), "uploads"), { recursive: true });
@@ -24,17 +24,6 @@ const mediaExtensions: Record<string, string> = {
 @Controller()
 export class ContentController {
   constructor(private readonly contentService: ContentService) {}
-
-  @Get("places")
-  listPlaces() {
-    return this.contentService.listPlaces();
-  }
-
-  @Post("places")
-  @UseGuards(JwtAuthGuard)
-  createPlace(@Body() body: CreatePlaceDto, @CurrentUser() user: User) {
-    return this.contentService.createPlace(body, user);
-  }
 
   @Get("media")
   listMedia(@Query("targetType") targetType?: ReportTargetType, @Query("targetId") targetId?: string) {

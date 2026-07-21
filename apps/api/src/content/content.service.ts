@@ -2,38 +2,12 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { ReportTargetType, User } from "@prisma/client";
 import { unlink } from "fs/promises";
 import { resolve } from "path";
-import { toSlug } from "../common/slug";
 import { PrismaService } from "../prisma/prisma.service";
-import { CreateCommentDto, CreateMediaDto, CreatePlaceDto, CreatePrivateMessageDto, CreateReactionDto } from "./content.dto";
+import { CreateCommentDto, CreateMediaDto, CreatePrivateMessageDto, CreateReactionDto } from "./content.dto";
 
 @Injectable()
 export class ContentService {
   constructor(private readonly prisma: PrismaService) {}
-
-  listPlaces() {
-    return this.prisma.place.findMany({
-      where: { status: "active" },
-      orderBy: [{ followerCount: "desc" }, { name: "asc" }],
-      include: { createdBy: { select: { id: true, email: true, name: true, role: true, status: true } } }
-    });
-  }
-
-  async createPlace(input: CreatePlaceDto, user: User) {
-    const slug = await this.uniquePlaceSlug(input.name);
-    return this.prisma.place.create({
-      data: {
-        name: input.name.trim(),
-        slug,
-        description: input.description?.trim() || null,
-        country: input.country?.trim() || null,
-        city: input.city?.trim() || null,
-        address: input.address?.trim() || null,
-        coverImageUrl: input.coverImageUrl?.trim() || null,
-        createdBy: { connect: { id: user.id } },
-        updatedBy: { connect: { id: user.id } }
-      }
-    });
-  }
 
   listMedia(targetType?: ReportTargetType, targetId?: string) {
     return this.prisma.mediaFile.findMany({
@@ -230,16 +204,4 @@ export class ContentService {
     });
   }
 
-  private async uniquePlaceSlug(name: string) {
-    const base = toSlug(name);
-    let slug = base;
-    let index = 2;
-
-    while (await this.prisma.place.findUnique({ where: { slug }, select: { id: true } })) {
-      slug = `${base}-${index}`;
-      index += 1;
-    }
-
-    return slug;
-  }
 }

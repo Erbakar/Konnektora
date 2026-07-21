@@ -26,6 +26,9 @@ import {
   notificationPreferencesSchema,
   phoneVerificationResponseSchema,
   phoneSchema,
+  placeListSchema,
+  placeMemberSchema,
+  placeSchema,
   profileSchema,
   profileMediaListSchema,
   profileMediaSchema,
@@ -69,6 +72,9 @@ import {
   type Notification,
   type NotificationPreference,
   type PolicyType,
+  type Place,
+  type PlaceList,
+  type PlaceMember,
   type Profile,
   type ProfileMedia,
   type PrivacySettings,
@@ -125,6 +131,8 @@ const MOCK_ANNOUNCEMENTS_KEY = "konnektora_mock_announcements";
 const MOCK_POLICIES_KEY = "konnektora_mock_policies";
 const MOCK_USER_MESSAGES_KEY = "konnektora_mock_user_messages";
 const MOCK_PLACES_KEY = "konnektora_mock_places";
+const MOCK_PLACE_MEMBERS_KEY = "konnektora_mock_place_members";
+const MOCK_PLACE_FOLLOWS_KEY = "konnektora_mock_place_follows";
 const MOCK_MEDIA_KEY = "konnektora_mock_media";
 const MOCK_COMMENTS_KEY = "konnektora_mock_comments";
 const MOCK_PRIVATE_MESSAGES_KEY = "konnektora_mock_private_messages";
@@ -867,6 +875,55 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(listMockUserEvents());
   }
 
+  if (pathname === "/places" && method === "GET") {
+    return schema.parse(listMockPublicPlaces(new URLSearchParams(queryString)));
+  }
+
+  if (pathname === "/places" && method === "POST") {
+    return schema.parse(createMockPublicPlace(parseBody<PlaceInput>(options)));
+  }
+
+  if (pathname === "/me/places" && method === "GET") {
+    return schema.parse(listMockManagedPlaces());
+  }
+
+  if (pathname.startsWith("/me/places/") && method === "PATCH") {
+    return schema.parse(updateMockPublicPlace(pathname.slice("/me/places/".length), parseBody<Partial<PlaceInput>>(options)));
+  }
+
+  if (pathname.startsWith("/me/places/") && method === "DELETE") {
+    return schema.parse(archiveMockPublicPlace(pathname.slice("/me/places/".length)));
+  }
+
+  if (pathname.startsWith("/places/") && pathname.endsWith("/follow") && method === "POST") {
+    return schema.parse(setMockPlaceFollow(pathname.slice("/places/".length, -"/follow".length), true));
+  }
+
+  if (pathname.startsWith("/places/") && pathname.endsWith("/follow") && method === "DELETE") {
+    return schema.parse(setMockPlaceFollow(pathname.slice("/places/".length, -"/follow".length), false));
+  }
+
+  if (pathname.startsWith("/places/") && pathname.endsWith("/members") && method === "GET") {
+    return schema.parse(listMockPlaceMembers(pathname.slice("/places/".length, -"/members".length)));
+  }
+
+  if (pathname.startsWith("/places/") && pathname.endsWith("/invite") && method === "POST") {
+    return schema.parse(inviteMockPlaceMember(pathname.slice("/places/".length, -"/invite".length), parseBody(options)));
+  }
+
+  if (pathname.startsWith("/places/") && pathname.includes("/members/") && method === "PATCH") {
+    const [placeId, userId] = pathname.slice("/places/".length).split("/members/");
+    return schema.parse(updateMockPlaceMember(placeId ?? "", userId ?? "", parseBody(options)));
+  }
+
+  if (pathname.startsWith("/places/") && pathname.endsWith("/membership") && method === "PUT") {
+    return schema.parse(respondMockPlaceInvite(pathname.slice("/places/".length, -"/membership".length), parseBody<{ status: string }>(options).status));
+  }
+
+  if (pathname.startsWith("/places/") && method === "GET") {
+    return schema.parse(getMockPublicPlace(pathname.slice("/places/".length)));
+  }
+
   if (pathname.startsWith("/me/events/") && method === "PATCH" && options.auth === "user") {
     return schema.parse(updateMockEvent(pathname.slice("/me/events/".length), parseBody(options)));
   }
@@ -1265,6 +1322,164 @@ function getMockPlace(id: string): AdminPlace {
   const item = listMockPlaces(new URLSearchParams()).find((place) => place.id === id);
   if (!item) throw new Error("Mock place not found");
   return { ...item, reportCount: listMockReports().filter((report) => report.targetType === "place" && report.targetId === id).length };
+}
+
+function mockPlaceViewer(place: AdminPlace): Place {
+  const user = getUserSession();
+  const follows = readStorage<Array<{ placeId: string; userId: string }>>(MOCK_PLACE_FOLLOWS_KEY, []);
+  const membership = readStorage<PlaceMember[]>(MOCK_PLACE_MEMBERS_KEY, []).find(
+    (item) => item.placeId === place.id && item.userId === user?.id
+  );
+  return {
+    id: place.id,
+    name: place.name,
+    slug: place.slug,
+    description: place.description,
+    status: place.status,
+    coverImageUrl: place.coverImageUrl,
+    country: place.country,
+    city: place.city,
+    address: place.address,
+    followerCount: place.followerCount,
+    inviteCount: place.inviteCount,
+    createdById: place.createdById,
+    createdAt: place.createdAt,
+    updatedAt: place.updatedAt,
+    isFollowing: follows.some((item) => item.placeId === place.id && item.userId === user?.id),
+    viewerMembership: membership ? { status: membership.status, role: membership.role } : null
+  };
+}
+
+function listMockPublicPlaces(params: URLSearchParams): PlaceList {
+  const q = params.get("q")?.trim().toLowerCase();
+  const city = params.get("city")?.trim().toLowerCase();
+  const country = params.get("country")?.trim().toLowerCase();
+  const page = Math.max(1, Number(params.get("page") || 1));
+  const pageSize = Math.min(50, Math.max(1, Number(params.get("pageSize") || 12)));
+  const items = listMockPlaces(new URLSearchParams())
+    .filter((place) => place.status === "active")
+    .filter((place) => !q || JSON.stringify([place.name, place.description, place.address]).toLowerCase().includes(q))
+    .filter((place) => !city || place.city?.toLowerCase() === city)
+    .filter((place) => !country || place.country?.toLowerCase() === country)
+    .map(mockPlaceViewer);
+  const start = (page - 1) * pageSize;
+  return { items: items.slice(start, start + pageSize), total: items.length, page, pageSize, hasNextPage: start + pageSize < items.length };
+}
+
+function getMockPublicPlace(slug: string): Place {
+  const place = listMockPlaces(new URLSearchParams()).find((item) => item.slug === slug && item.status === "active");
+  if (!place) throw new Error("Mock place not found");
+  return mockPlaceViewer(place);
+}
+
+function createMockPublicPlace(input: PlaceInput): Place {
+  const user = getUserSession();
+  if (!user) throw new Error("Mock user session not found");
+  const places = listMockPlaces(new URLSearchParams());
+  const now = new Date().toISOString();
+  const place: AdminPlace = {
+    id: createId(), name: input.name.trim(), slug: uniqueSlug(input.name, places.map((item) => item.slug)),
+    description: input.description?.trim() || null, status: "active", coverImageUrl: input.coverImageUrl || null,
+    country: input.country?.trim() || null, city: input.city?.trim() || null, address: input.address?.trim() || null,
+    followerCount: 0, inviteCount: 0, createdById: user.id, updatedById: user.id,
+    createdAt: now, updatedAt: now, createdBy: user, updatedBy: user, reportCount: 0
+  };
+  writeStorage(MOCK_PLACES_KEY, [place, ...places]);
+  const member: PlaceMember = {
+    placeId: place.id, userId: user.id, status: "accepted", role: "organizer", createdAt: now, updatedAt: now, user
+  };
+  writeStorage(MOCK_PLACE_MEMBERS_KEY, [member, ...readStorage<PlaceMember[]>(MOCK_PLACE_MEMBERS_KEY, [])]);
+  return mockPlaceViewer(place);
+}
+
+function listMockManagedPlaces(): Place[] {
+  const user = getUserSession();
+  const managedIds = new Set(readStorage<PlaceMember[]>(MOCK_PLACE_MEMBERS_KEY, [])
+    .filter((item) => item.userId === user?.id && item.status === "accepted" && ["manager", "organizer"].includes(item.role))
+    .map((item) => item.placeId));
+  return listMockPlaces(new URLSearchParams()).filter((item) => item.createdById === user?.id || managedIds.has(item.id)).map(mockPlaceViewer);
+}
+
+function updateMockPublicPlace(id: string, input: Partial<PlaceInput>): Place {
+  const places = listMockPlaces(new URLSearchParams());
+  const current = places.find((item) => item.id === id);
+  if (!current) throw new Error("Mock place not found");
+  const updated: AdminPlace = {
+    ...current,
+    name: input.name?.trim() || current.name,
+    description: input.description === undefined ? current.description : input.description.trim() || null,
+    country: input.country === undefined ? current.country : input.country.trim() || null,
+    city: input.city === undefined ? current.city : input.city.trim() || null,
+    address: input.address === undefined ? current.address : input.address.trim() || null,
+    coverImageUrl: input.coverImageUrl === undefined ? current.coverImageUrl : input.coverImageUrl || null,
+    updatedAt: new Date().toISOString()
+  };
+  writeStorage(MOCK_PLACES_KEY, [updated, ...places.filter((item) => item.id !== id)]);
+  return mockPlaceViewer(updated);
+}
+
+function archiveMockPublicPlace(id: string) {
+  const places = listMockPlaces(new URLSearchParams());
+  const current = places.find((item) => item.id === id);
+  if (!current) throw new Error("Mock place not found");
+  const updated = { ...current, status: "archived", updatedAt: new Date().toISOString() };
+  writeStorage(MOCK_PLACES_KEY, [updated, ...places.filter((item) => item.id !== id)]);
+  return { id, status: "archived" };
+}
+
+function setMockPlaceFollow(placeId: string, following: boolean) {
+  const user = getUserSession();
+  if (!user) throw new Error("Mock user session not found");
+  const follows = readStorage<Array<{ placeId: string; userId: string }>>(MOCK_PLACE_FOLLOWS_KEY, []);
+  const filtered = follows.filter((item) => !(item.placeId === placeId && item.userId === user.id));
+  writeStorage(MOCK_PLACE_FOLLOWS_KEY, following ? [{ placeId, userId: user.id }, ...filtered] : filtered);
+  const places = listMockPlaces(new URLSearchParams());
+  const current = places.find((item) => item.id === placeId);
+  if (current) {
+    const wasFollowing = follows.some((item) => item.placeId === placeId && item.userId === user.id);
+    const delta = Number(following && !wasFollowing) - Number(!following && wasFollowing);
+    writeStorage(MOCK_PLACES_KEY, [{ ...current, followerCount: Math.max(0, current.followerCount + delta) }, ...places.filter((item) => item.id !== placeId)]);
+  }
+  return { following };
+}
+
+function listMockPlaceMembers(placeId: string) {
+  return readStorage<PlaceMember[]>(MOCK_PLACE_MEMBERS_KEY, []).filter((item) => item.placeId === placeId);
+}
+
+function inviteMockPlaceMember(placeId: string, input: { userId?: string; email?: string; role?: string }): PlaceMember {
+  const target = getAllMockUsers().find((item) => input.userId ? item.id === input.userId : item.email === input.email?.toLowerCase());
+  if (!target) throw new Error("Mock user not found");
+  const members = readStorage<PlaceMember[]>(MOCK_PLACE_MEMBERS_KEY, []);
+  const now = new Date().toISOString();
+  const member: PlaceMember = {
+    placeId, userId: target.id, status: "invited",
+    role: input.role === "manager" || input.role === "organizer" ? input.role : "member",
+    createdAt: now, updatedAt: now,
+    user: { id: target.id, email: target.email, name: target.name, role: target.role ?? "user", status: target.status ?? "active" }
+  };
+  writeStorage(MOCK_PLACE_MEMBERS_KEY, [member, ...members.filter((item) => !(item.placeId === placeId && item.userId === target.id))]);
+  return member;
+}
+
+function updateMockPlaceMember(placeId: string, userId: string, input: { status?: string; role?: string }): PlaceMember {
+  const members = readStorage<PlaceMember[]>(MOCK_PLACE_MEMBERS_KEY, []);
+  const current = members.find((item) => item.placeId === placeId && item.userId === userId);
+  if (!current) throw new Error("Mock place member not found");
+  const updated: PlaceMember = {
+    ...current,
+    status: input.status === "accepted" || input.status === "declined" || input.status === "banned" ? input.status : current.status,
+    role: input.role === "manager" || input.role === "organizer" || input.role === "member" ? input.role : current.role,
+    updatedAt: new Date().toISOString()
+  };
+  writeStorage(MOCK_PLACE_MEMBERS_KEY, [updated, ...members.filter((item) => !(item.placeId === placeId && item.userId === userId))]);
+  return updated;
+}
+
+function respondMockPlaceInvite(placeId: string, status: string) {
+  const user = getUserSession();
+  if (!user) throw new Error("Mock user session not found");
+  return updateMockPlaceMember(placeId, user.id, { status });
 }
 
 function listMockMedia(params: URLSearchParams): AdminMedia[] {
@@ -4377,4 +4592,62 @@ export function checkInEventParticipant(eventId: string, userId: string, auth: A
     auth,
     method: "POST"
   });
+}
+
+export type PlaceInput = {
+  name: string;
+  description?: string;
+  country?: string;
+  city?: string;
+  address?: string;
+  coverImageUrl?: string;
+};
+
+export function listPlaces(params?: URLSearchParams): Promise<PlaceList> {
+  const query = params?.toString();
+  return requestJson(`/places${query ? `?${query}` : ""}`, placeListSchema, { auth: "user" });
+}
+
+export function getPlace(slug: string): Promise<Place> {
+  return requestJson(`/places/${slug}`, placeSchema, { auth: "user" });
+}
+
+export function createPlace(input: PlaceInput): Promise<Place> {
+  return requestJson("/places", placeSchema, { auth: "user", method: "POST", body: JSON.stringify(input) });
+}
+
+export function listMyPlaces(): Promise<Place[]> {
+  return requestJson("/me/places", z.array(placeSchema), { auth: "user" });
+}
+
+export function updateMyPlace(id: string, input: Partial<PlaceInput>): Promise<Place> {
+  return requestJson(`/me/places/${id}`, placeSchema, { auth: "user", method: "PATCH", body: JSON.stringify(input) });
+}
+
+export function archiveMyPlace(id: string): Promise<{ id: string; status: string }> {
+  return requestJson(`/me/places/${id}`, z.object({ id: z.string().uuid(), status: z.string() }), { auth: "user", method: "DELETE" });
+}
+
+export function followPlace(id: string): Promise<{ following: boolean }> {
+  return requestJson(`/places/${id}/follow`, z.object({ following: z.boolean() }), { auth: "user", method: "POST" });
+}
+
+export function unfollowPlace(id: string): Promise<{ following: boolean }> {
+  return requestJson(`/places/${id}/follow`, z.object({ following: z.boolean() }), { auth: "user", method: "DELETE" });
+}
+
+export function listPlaceMembers(id: string): Promise<PlaceMember[]> {
+  return requestJson(`/places/${id}/members`, z.array(placeMemberSchema), { auth: "user" });
+}
+
+export function invitePlaceMember(id: string, input: { userId?: string; email?: string; role?: string }): Promise<PlaceMember> {
+  return requestJson(`/places/${id}/invite`, placeMemberSchema, { auth: "user", method: "POST", body: JSON.stringify(input) });
+}
+
+export function updatePlaceMember(id: string, userId: string, input: { status?: string; role?: string }): Promise<PlaceMember> {
+  return requestJson(`/places/${id}/members/${userId}`, placeMemberSchema, { auth: "user", method: "PATCH", body: JSON.stringify(input) });
+}
+
+export function respondPlaceInvite(id: string, status: "accepted" | "declined"): Promise<PlaceMember> {
+  return requestJson(`/places/${id}/membership`, placeMemberSchema, { auth: "user", method: "PUT", body: JSON.stringify({ status }) });
 }

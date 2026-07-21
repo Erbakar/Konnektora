@@ -1,37 +1,6 @@
 import { ReportTargetType } from "@prisma/client";
 import { ArrayMaxSize, IsArray, IsEnum, IsOptional, IsString, IsUrl, IsUUID, MaxLength, MinLength } from "class-validator";
 
-export class CreatePlaceDto {
-  @IsString()
-  @MinLength(2)
-  @MaxLength(160)
-  name!: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(1000)
-  description?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  country?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  city?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(240)
-  address?: string;
-
-  @IsOptional()
-  @IsUrl()
-  coverImageUrl?: string;
-}
-
 export class CreateMediaDto {
   @IsUrl()
   url!: string;
