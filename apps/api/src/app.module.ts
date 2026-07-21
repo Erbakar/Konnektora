@@ -21,6 +21,7 @@ import { DiscoveryModule } from "./discovery/discovery.module";
 import { PublicProfileModule } from "./public-profile/public-profile.module";
 import { ProfileVerificationModule } from "./profile-verification/profile-verification.module";
 import { PostsModule } from "./posts/posts.module";
+import { FinanceModule } from "./finance/finance.module";
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { PostsModule } from "./posts/posts.module";
     DiscoveryModule,
     AdminModule,
     EventsModule,
+    FinanceModule,
     IdentityModule,
     MessagesModule,
     ProfileModule,

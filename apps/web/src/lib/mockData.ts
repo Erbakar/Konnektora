@@ -51,13 +51,15 @@ function tag(slug: string): Tag {
   return found;
 }
 
-function event(input: Omit<Event, "status" | "timezone" | "language" | "externalRegistrationUrl">): Event {
+function event(input: Omit<Event, "status" | "timezone" | "language" | "externalRegistrationUrl" | "price" | "currency"> & Partial<Pick<Event, "price" | "currency">>): Event {
   return {
     ...input,
     status: "published",
     timezone: input.city ? "Europe/Istanbul" : "UTC",
     language: "en",
-    externalRegistrationUrl: null
+    externalRegistrationUrl: null,
+    price: input.price ?? 0,
+    currency: input.currency ?? "TRY"
   };
 }
 

@@ -168,7 +168,9 @@ export class EventsService {
         organizerName: input.organizerName ?? null,
         externalRegistrationUrl: input.externalRegistrationUrl ?? null,
         coverImageUrl: input.coverImageUrl ?? null,
-        capacity: null,
+        capacity: input.capacity ?? null,
+        price: input.price ?? 0,
+        currency: input.currency ?? "TRY",
         createdBy: userId ? { connect: { id: userId } } : undefined,
         updatedBy: userId ? { connect: { id: userId } } : undefined,
         tags: {
@@ -418,6 +420,8 @@ export class EventsService {
       externalRegistrationUrl: input.externalRegistrationUrl,
       coverImageUrl: input.coverImageUrl,
       capacity: undefined,
+      price: input.price,
+      currency: input.currency,
       updatedBy: userId ? { connect: { id: userId } } : undefined
     };
 
@@ -474,6 +478,7 @@ export class EventsService {
   private mapEvent(event: Prisma.EventGetPayload<{ include: { tags: { include: { tag: true } } } }>) {
     return {
       ...event,
+      price: Number(event.price),
       startsAt: event.startsAt.toISOString(),
       endsAt: event.endsAt?.toISOString() ?? null,
       tags: event.tags.map((eventTag) => eventTag.tag)

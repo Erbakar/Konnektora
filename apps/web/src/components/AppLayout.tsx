@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Home, LayoutDashboard, MapPin, Menu, MessageCircle, QrCode, Search, Tag, UserRound, X } from "lucide-react";
+import { CalendarDays, Home, LayoutDashboard, MapPin, Menu, MessageCircle, QrCode, Search, Tag, UserRound, WalletCards, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
@@ -54,6 +54,7 @@ export function AppLayout() {
             {conversationsQuery.data?.totalUnread ? <span className="nav-unread-badge">{conversationsQuery.data.totalUnread}</span> : null}
           </NavLink>
           <NavLink to="/identity"><QrCode size={18} /> Member ID</NavLink>
+          <NavLink to="/finance"><WalletCards size={18} /> Finance</NavLink>
           <NavLink to="/search"><Search size={18} /> Search</NavLink>
           <NavLink to="/onboarding">
             <UserRound size={18} />
@@ -116,6 +117,7 @@ export function AppLayout() {
             {conversationsQuery.data?.totalUnread ? <span className="nav-unread-badge">{conversationsQuery.data.totalUnread}</span> : null}
           </NavLink>
           <NavLink to="/identity" onClick={() => setMenuOpen(false)}><QrCode size={18} /> Member ID</NavLink>
+          <NavLink to="/finance" onClick={() => setMenuOpen(false)}><WalletCards size={18} /> Finance</NavLink>
           <NavLink to="/search" onClick={() => setMenuOpen(false)}><Search size={18} /> Search anything</NavLink>
           <NavLink to="/onboarding" onClick={() => setMenuOpen(false)}>
             <UserRound size={18} />

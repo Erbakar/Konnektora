@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, CalendarDays, ExternalLink, Flag, MapPin, QrCode, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { Ban, CalendarDays, CreditCard, ExternalLink, Flag, MapPin, QrCode, ShieldCheck, UserPlus, Users } from "lucide-react";
 import QRCode from "qrcode";
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { createBlock, createContentReport, getEvent, getMyEventTicket, getUserSession, listReportRules, requestEventAttendance } from "../lib/api";
+import { confirmEventPayment, createBlock, createContentReport, createEventPayment, getEvent, getMyEventTicket, getUserSession, listReportRules, requestEventAttendance } from "../lib/api";
 
 export function EventDetailPage() {
   const { slug = "" } = useParams();
@@ -25,6 +25,7 @@ export function EventDetailPage() {
   const attendMutation = useMutation({
     mutationFn: requestEventAttendance
   });
+  const paymentMutation = useMutation({ mutationFn: async () => { const intent = await createEventPayment(event!.id, crypto.randomUUID()); return confirmEventPayment(intent.id, `pm_sandbox_${crypto.randomUUID()}`); } });
   const ticketMutation = useMutation({
     mutationFn: getMyEventTicket,
     onSuccess: async (ticket) => {
@@ -82,6 +83,7 @@ export function EventDetailPage() {
         ))}
       </div>
       <div className="detail-actions">
+        {user && event.price > 0 ? <button className="primary-action" disabled={paymentMutation.isPending || paymentMutation.isSuccess} onClick={() => paymentMutation.mutate()}><CreditCard size={18}/>{paymentMutation.isSuccess ? "Ödeme tamamlandı" : paymentMutation.isPending ? "Ödeniyor…" : `${new Intl.NumberFormat("tr-TR", { style: "currency", currency: event.currency }).format(event.price)} · Bilet al`}</button> : null}
         {user ? (
           <button
             className="primary-action"
@@ -131,6 +133,7 @@ export function EventDetailPage() {
           </button>
         ) : null}
       </div>
+      {paymentMutation.isError ? <p className="form-error">Ödeme tamamlanamadı. Lütfen ödeme bilgilerini kontrol edin.</p> : null}
       {reportOpen ? (
         <form
           className="admin-form compact-form"

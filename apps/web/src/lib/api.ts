@@ -21,6 +21,8 @@ import {
   cmsPolicySchema,
   eventListSchema,
   eventSchema,
+  financeDashboardSchema,
+  paymentTransactionSchema,
   eventParticipantSchema,
   eventTicketSchema,
   faqSchema,
@@ -88,6 +90,8 @@ import {
   type DiscoveryItem,
   type DiscoverySearch,
   type Event,
+  type FinanceDashboard,
+  type PaymentTransaction,
   type EventList,
   type EventParticipant,
   type EventTicket,
@@ -3904,6 +3908,8 @@ function createMockEvent(input: AdminEventInput, fallbackOrganizerName = "Konnek
     externalRegistrationUrl: input.externalRegistrationUrl || null,
     coverImageUrl: input.coverImageUrl || null,
     capacity: null,
+    price: 0,
+    currency: "TRY",
     tags: getTagsByIds(input.tagIds ?? [])
   };
 
@@ -4245,6 +4251,14 @@ export function markConversationRead(peerId: string): Promise<{ updated: number 
     method: "PATCH"
   });
 }
+
+export function getFinanceDashboard(): Promise<FinanceDashboard> { return requestJson("/me/finance", financeDashboardSchema, { auth: "user" }); }
+export function updateFinanceSettings(input: { preferredCurrency: string; legalName?: string; taxNumber?: string; taxOffice?: string; billingEmail?: string; country?: string; city?: string; postalCode?: string; addressLine?: string; bankProvider?: string; bankAccountLabel?: string; bankAccountLast4?: string }): Promise<unknown> { return requestJson("/me/finance/settings", z.unknown(), { auth: "user", method: "PATCH", body: JSON.stringify(input) }); }
+export function startFinanceKyc(): Promise<unknown> { return requestJson("/me/finance/kyc", z.unknown(), { auth: "user", method: "POST" }); }
+export function createEventPayment(eventId: string, idempotencyKey: string): Promise<PaymentTransaction> { return requestJson(`/events/${eventId}/payments`, paymentTransactionSchema, { auth: "user", method: "POST", body: JSON.stringify({ idempotencyKey }) }); }
+export function confirmEventPayment(id: string, paymentMethodToken: string): Promise<PaymentTransaction> { return requestJson(`/me/payments/${id}/confirm`, paymentTransactionSchema, { auth: "user", method: "POST", body: JSON.stringify({ paymentMethodToken }) }); }
+export function refundEventPayment(id: string, amount?: number, reason?: string): Promise<PaymentTransaction> { return requestJson(`/me/payments/${id}/refund`, paymentTransactionSchema, { auth: "user", method: "POST", body: JSON.stringify({ amount, reason }) }); }
+export function requestPayout(amount: number): Promise<unknown> { return requestJson("/me/finance/payouts", z.unknown(), { auth: "user", method: "POST", body: JSON.stringify({ amount }) }); }
 
 export function getOnboardingStatus(): Promise<OnboardingStatus> { return requestJson("/me/onboarding", onboardingStatusSchema, { auth: "user" }); }
 export function getDiscoveryFeed(params?: { city?: string; country?: string }): Promise<DiscoveryFeed> { const query = new URLSearchParams(); if (params?.city) query.set("city", params.city); if (params?.country) query.set("country", params.country); return requestJson(`/discover/feed${query.size ? `?${query}` : ""}`, discoveryFeedSchema, { auth: "user" }); }

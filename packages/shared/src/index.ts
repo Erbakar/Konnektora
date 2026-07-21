@@ -369,6 +369,8 @@ export const eventSchema = z.object({
   externalRegistrationUrl: z.string().url().nullable(),
   coverImageUrl: z.string().url().nullable(),
   capacity: z.number().int().positive().nullable(),
+  price: z.number().nonnegative(),
+  currency: z.enum(["TRY", "EUR", "USD", "GBP"]),
   tags: z.array(tagSchema)
 });
 
@@ -379,6 +381,13 @@ export const eventListSchema = z.object({
   pageSize: z.number().int().positive(),
   hasNextPage: z.boolean()
 });
+
+export const paymentStatusSchema = z.enum(["pending", "succeeded", "failed", "refunded", "partially_refunded", "cancelled"]);
+export const financeAccountSchema = z.object({ userId: z.string().uuid(), preferredCurrency: z.string(), bankProvider: z.string().nullable(), bankAccountLabel: z.string().nullable(), bankAccountLast4: z.string().nullable(), kycStatus: z.enum(["not_started", "pending", "approved", "rejected"]), kycProvider: z.string().nullable(), availableBalance: z.coerce.number(), pendingBalance: z.coerce.number(), createdAt: z.string().datetime().or(z.date()), updatedAt: z.string().datetime().or(z.date()) });
+export const billingProfileSchema = z.object({ userId: z.string().uuid(), legalName: z.string().nullable(), taxNumber: z.string().nullable(), taxOffice: z.string().nullable(), billingEmail: z.string().nullable(), country: z.string().nullable(), city: z.string().nullable(), postalCode: z.string().nullable(), addressLine: z.string().nullable(), createdAt: z.string().datetime().or(z.date()), updatedAt: z.string().datetime().or(z.date()) });
+export const paymentTransactionSchema = z.object({ id: z.string().uuid(), eventId: z.string().uuid(), payerId: z.string().uuid(), payeeId: z.string().uuid(), grossAmount: z.coerce.number(), platformFee: z.coerce.number(), netAmount: z.coerce.number(), refundedAmount: z.coerce.number(), currency: z.string(), status: paymentStatusSchema, provider: z.string(), providerRef: z.string().nullable(), idempotencyKey: z.string(), failureReason: z.string().nullable(), paidAt: z.string().datetime().or(z.date()).nullable(), createdAt: z.string().datetime().or(z.date()), updatedAt: z.string().datetime().or(z.date()), event: z.object({ id: z.string().uuid(), title: z.string(), slug: z.string() }).optional(), payer: z.object({ id: z.string().uuid(), name: z.string() }).optional(), payee: z.object({ id: z.string().uuid(), name: z.string() }).optional() });
+export const payoutSchema = z.object({ id: z.string().uuid(), userId: z.string().uuid(), amount: z.coerce.number(), currency: z.string(), status: z.string(), providerRef: z.string().nullable(), requestedAt: z.string().datetime().or(z.date()), processedAt: z.string().datetime().or(z.date()).nullable() });
+export const financeDashboardSchema = z.object({ account: financeAccountSchema, billing: billingProfileSchema.nullable(), transactions: z.array(paymentTransactionSchema), payouts: z.array(payoutSchema), summary: z.object({ availableBalance: z.number(), pendingBalance: z.number(), lifetimeNetRevenue: z.number(), currency: z.string() }) });
 
 export const adminDashboardSchema = z.object({
   publishedEvents: z.number().int().nonnegative(),
@@ -943,6 +952,8 @@ export type CmsPolicy = z.infer<typeof cmsPolicySchema>;
 export type Tag = z.infer<typeof tagSchema>;
 export type AdminTagDetail = z.infer<typeof adminTagDetailSchema>;
 export type Event = z.infer<typeof eventSchema>;
+export type FinanceDashboard = z.infer<typeof financeDashboardSchema>;
+export type PaymentTransaction = z.infer<typeof paymentTransactionSchema>;
 export type EventList = z.infer<typeof eventListSchema>;
 export type AdminDashboard = z.infer<typeof adminDashboardSchema>;
 export type LoginResponse = z.infer<typeof loginResponseSchema>;

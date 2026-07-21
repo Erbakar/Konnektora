@@ -1,0 +1,23 @@
+CREATE TYPE "PaymentStatus" AS ENUM ('pending','succeeded','failed','refunded','partially_refunded','cancelled');
+CREATE TYPE "KycStatus" AS ENUM ('not_started','pending','approved','rejected');
+CREATE TYPE "PayoutStatus" AS ENUM ('pending','processing','paid','failed','cancelled');
+ALTER TABLE "events" ADD COLUMN "price" DECIMAL(10,2) NOT NULL DEFAULT 0;
+ALTER TABLE "events" ADD COLUMN "currency" TEXT NOT NULL DEFAULT 'TRY';
+ALTER TABLE "ticket_refunds" ADD COLUMN "payment_id" TEXT;
+
+CREATE TABLE "billing_profiles" ("user_id" TEXT NOT NULL,"legal_name" TEXT,"tax_number" TEXT,"tax_office" TEXT,"billing_email" TEXT,"country" TEXT,"city" TEXT,"postal_code" TEXT,"address_line" TEXT,"created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updated_at" TIMESTAMP(3) NOT NULL,CONSTRAINT "billing_profiles_pkey" PRIMARY KEY ("user_id"));
+CREATE TABLE "financial_accounts" ("user_id" TEXT NOT NULL,"preferred_currency" TEXT NOT NULL DEFAULT 'TRY',"bank_provider" TEXT,"bank_account_label" TEXT,"bank_account_last4" TEXT,"kyc_status" "KycStatus" NOT NULL DEFAULT 'not_started',"kyc_provider" TEXT,"available_balance" DECIMAL(12,2) NOT NULL DEFAULT 0,"pending_balance" DECIMAL(12,2) NOT NULL DEFAULT 0,"created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updated_at" TIMESTAMP(3) NOT NULL,CONSTRAINT "financial_accounts_pkey" PRIMARY KEY ("user_id"));
+CREATE TABLE "payment_transactions" ("id" TEXT NOT NULL,"event_id" TEXT NOT NULL,"payer_id" TEXT NOT NULL,"payee_id" TEXT NOT NULL,"gross_amount" DECIMAL(10,2) NOT NULL,"platform_fee" DECIMAL(10,2) NOT NULL,"net_amount" DECIMAL(10,2) NOT NULL,"refunded_amount" DECIMAL(10,2) NOT NULL DEFAULT 0,"currency" TEXT NOT NULL,"status" "PaymentStatus" NOT NULL DEFAULT 'pending',"provider" TEXT NOT NULL DEFAULT 'sandbox',"provider_ref" TEXT,"idempotency_key" TEXT NOT NULL,"failure_reason" TEXT,"metadata" JSONB,"paid_at" TIMESTAMP(3),"created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updated_at" TIMESTAMP(3) NOT NULL,CONSTRAINT "payment_transactions_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "payouts" ("id" TEXT NOT NULL,"user_id" TEXT NOT NULL,"amount" DECIMAL(10,2) NOT NULL,"currency" TEXT NOT NULL,"status" "PayoutStatus" NOT NULL DEFAULT 'pending',"provider_ref" TEXT,"requested_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"processed_at" TIMESTAMP(3),CONSTRAINT "payouts_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "payment_transactions_idempotency_key_key" ON "payment_transactions"("idempotency_key");
+CREATE INDEX "payment_transactions_payer_id_created_at_idx" ON "payment_transactions"("payer_id","created_at");
+CREATE INDEX "payment_transactions_payee_id_status_created_at_idx" ON "payment_transactions"("payee_id","status","created_at");
+CREATE INDEX "payment_transactions_event_id_status_idx" ON "payment_transactions"("event_id","status");
+CREATE INDEX "payouts_user_id_status_requested_at_idx" ON "payouts"("user_id","status","requested_at");
+ALTER TABLE "billing_profiles" ADD CONSTRAINT "billing_profiles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "financial_accounts" ADD CONSTRAINT "financial_accounts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "payment_transactions" ADD CONSTRAINT "payment_transactions_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "payment_transactions" ADD CONSTRAINT "payment_transactions_payer_id_fkey" FOREIGN KEY ("payer_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "payment_transactions" ADD CONSTRAINT "payment_transactions_payee_id_fkey" FOREIGN KEY ("payee_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "ticket_refunds" ADD CONSTRAINT "ticket_refunds_payment_id_fkey" FOREIGN KEY ("payment_id") REFERENCES "payment_transactions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "payouts" ADD CONSTRAINT "payouts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

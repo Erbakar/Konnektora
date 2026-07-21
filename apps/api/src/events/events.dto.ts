@@ -5,6 +5,8 @@ import {
   IsEmail,
   IsEnum,
   IsInt,
+  IsIn,
+  IsNumber,
   IsOptional,
   IsString,
   IsUrl,
@@ -153,6 +155,9 @@ export class CreateEventDto {
   @IsInt()
   @Min(1)
   capacity?: number;
+
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) price?: number;
+  @IsOptional() @IsIn(["TRY", "EUR", "USD", "GBP"]) currency?: string;
 
   @IsOptional()
   @IsArray()
