@@ -20,7 +20,7 @@ const REPORT_INCLUDE = {
   rule: true
 };
 
-const ADMIN_USER_SELECT = {
+const TARGET_OWNER_SELECT = {
   id: true,
   email: true,
   name: true,
@@ -33,31 +33,15 @@ const ADMIN_USER_SELECT = {
   city: true,
   district: true,
   address: true,
-  gender: true,
-  birthDate: true,
   website: true,
   companyName: true,
-  tradeName: true,
-  companyType: true,
-  businessCategory: true,
   followerCount: true,
   followingCount: true,
   lastOnlineAt: true,
   emailVerified: true,
-  invitedById: true,
   penaltyScoreLastYear: true,
   penaltyScoreAllTime: true,
-  adminRoleGroupId: true,
-  createdAt: true,
-  updatedAt: true,
-  adminRoleGroup: true,
-  _count: {
-    select: {
-      createdEvents: true,
-      eventParticipations: true,
-      submittedReports: true
-    }
-  }
+  createdAt: true
 } satisfies Prisma.UserSelect;
 
 @Injectable()
@@ -92,15 +76,17 @@ export class ReportsService {
   }
 
   async listAdminReportGroups(scope: "active" | "old" = "active") {
-    const activeStatuses = [ReportStatus.open, ReportStatus.reviewing];
-    const statusFilter = scope === "active" ? { in: activeStatuses } : { notIn: activeStatuses };
     const reports = await this.prisma.contentReport.findMany({
-      where: { status: statusFilter },
       orderBy: [{ createdAt: "desc" }],
       include: REPORT_INCLUDE as any
     });
+    const groups = await this.buildReportGroups(reports);
 
-    return this.buildReportGroups(reports);
+    if (scope === "active") {
+      return groups.filter((group) => group.activeReports > 0);
+    }
+
+    return groups.filter((group) => group.activeReports === 0 && group.oldReports > 0);
   }
 
   async getAdminReportGroup(targetType: ReportTargetType, targetId: string) {
@@ -187,9 +173,17 @@ export class ReportsService {
   ) {
     await this.ensureTargetExists(targetType, targetId);
     this.ensureDecisionActionMatchesTarget(targetType, input.action);
+    const userAction = input.userAction && input.userAction !== "none" ? input.userAction : null;
 
-    if (targetType === ReportTargetType.user && targetId === admin.id && (input.action === "suspend_user" || input.action === "ban_user")) {
-      throw new BadRequestException("Admin kendi hesabını askıya alamaz veya yasaklayamaz.");
+    if (userAction) {
+      this.ensureUserActionAllowed(userAction);
+    }
+
+    if (
+      (input.action === "suspend_user" || userAction === "suspend_user") &&
+      !input.suspensionEndsAt
+    ) {
+      throw new BadRequestException("Askıya alma için askı bitiş zamanı zorunludur.");
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -268,11 +262,37 @@ export class ReportsService {
         userId = user.id;
       }
 
-      if (targetType === ReportTargetType.user && (input.action === "suspend_user" || input.action === "ban_user")) {
-        await tx.user.update({
-          where: { id: targetId },
-          data: { status: input.action === "ban_user" ? UserStatus.banned : UserStatus.suspended }
-        });
+      if (!userId) {
+        const summary = await this.resolveTargetSummary(targetType, targetId);
+        userId = summary?.owner?.id ?? null;
+      }
+
+      const effectiveUserPenalty =
+        targetType === ReportTargetType.user
+          ? input.action
+          : userAction;
+
+      if (userId && (effectiveUserPenalty === "suspend_user" || effectiveUserPenalty === "ban_user" || effectiveUserPenalty === "warn_user")) {
+        if (userId === admin.id && (effectiveUserPenalty === "suspend_user" || effectiveUserPenalty === "ban_user")) {
+          throw new BadRequestException("Admin kendi hesabını askıya alamaz veya yasaklayamaz.");
+        }
+
+        if (effectiveUserPenalty === "suspend_user" || effectiveUserPenalty === "ban_user") {
+          await tx.user.update({
+            where: { id: userId },
+            data: { status: effectiveUserPenalty === "ban_user" ? UserStatus.banned : UserStatus.suspended }
+          });
+        }
+
+        if (input.penaltyScore > 0) {
+          await tx.user.update({
+            where: { id: userId },
+            data: {
+              penaltyScoreLastYear: { increment: input.penaltyScore },
+              penaltyScoreAllTime: { increment: input.penaltyScore }
+            }
+          });
+        }
       }
 
       const decision = await (tx as any).moderationDecision.create({
@@ -338,18 +358,20 @@ export class ReportsService {
 
       if ((tx as any).adminActivityLog) {
         await (tx as any).adminActivityLog.create({
-        data: {
-          actorId: admin.id,
-          action: "moderation_decision_created",
-          targetType,
-          targetId,
-          note: input.note?.trim() || this.defaultDecisionNote(input),
-          metadata: {
-            decision: input.decision,
-            action: input.action,
-            penaltyScore: input.penaltyScore
+          data: {
+            actorId: admin.id,
+            action: "moderation_decision_created",
+            targetType,
+            targetId,
+            note: input.note?.trim() || this.defaultDecisionNote(input),
+            metadata: {
+              decision: input.decision,
+              action: input.action,
+              userAction: userAction ?? "none",
+              penaltyScore: input.penaltyScore,
+              suspensionEndsAt: input.suspensionEndsAt ?? null
+            }
           }
-        }
         });
       }
 
@@ -359,7 +381,7 @@ export class ReportsService {
               to: decision.user.email,
               name: decision.user.name,
               decision: input.decision,
-              action: input.action,
+              action: userAction && userAction !== input.action ? `${input.action} + ${userAction}` : input.action,
               note: input.note
             })
           : Promise.resolve(),
@@ -655,7 +677,7 @@ export class ReportsService {
       const event = await this.prisma.event.findUnique({
         where: { id: targetId },
         include: {
-          createdBy: { select: ADMIN_USER_SELECT },
+          createdBy: { select: TARGET_OWNER_SELECT },
           _count: { select: { participants: true, media: true } }
         } as any
       });
@@ -686,7 +708,7 @@ export class ReportsService {
       const tag = await this.prisma.tag.findUnique({
         where: { id: targetId },
         include: {
-          createdBy: { select: ADMIN_USER_SELECT },
+          createdBy: { select: TARGET_OWNER_SELECT },
           _count: { select: { events: true, interestedUsers: true } }
         } as any
       });
@@ -715,7 +737,7 @@ export class ReportsService {
     }
 
     if (targetType === ReportTargetType.user || targetType === ReportTargetType.username || targetType === ReportTargetType.website_url) {
-      const user = await this.prisma.user.findUnique({ where: { id: targetId }, select: ADMIN_USER_SELECT });
+      const user = await this.prisma.user.findUnique({ where: { id: targetId }, select: TARGET_OWNER_SELECT });
       if (!user) return null;
       return {
         title: user.username ? `@${user.username}` : user.name,
@@ -734,7 +756,7 @@ export class ReportsService {
     if (targetType === ReportTargetType.place) {
       const place = await this.prisma.place.findUnique({
         where: { id: targetId },
-        include: { createdBy: { select: ADMIN_USER_SELECT } } as any
+        include: { createdBy: { select: TARGET_OWNER_SELECT } } as any
       });
       if (!place) return null;
       return {
@@ -753,7 +775,7 @@ export class ReportsService {
     if (targetType === ReportTargetType.media) {
       const media = await this.prisma.mediaFile.findUnique({
         where: { id: targetId },
-        include: { uploadedBy: { select: ADMIN_USER_SELECT } } as any
+        include: { uploadedBy: { select: TARGET_OWNER_SELECT } } as any
       });
       if (!media) return null;
       return {
@@ -770,8 +792,8 @@ export class ReportsService {
       const comment = await this.prisma.contentComment.findUnique({
         where: { id: targetId },
         include: {
-          author: { select: ADMIN_USER_SELECT },
-          parent: { select: { id: true, body: true, author: { select: ADMIN_USER_SELECT } } },
+          author: { select: TARGET_OWNER_SELECT },
+          parent: { select: { id: true, body: true, author: { select: TARGET_OWNER_SELECT } } },
           _count: { select: { replies: true } }
         } as any
       });
@@ -793,7 +815,7 @@ export class ReportsService {
     if (targetType === ReportTargetType.private_message) {
       const message = await this.prisma.privateMessage.findUnique({
         where: { id: targetId },
-        include: { sender: { select: ADMIN_USER_SELECT }, recipient: { select: ADMIN_USER_SELECT } } as any
+        include: { sender: { select: TARGET_OWNER_SELECT }, recipient: { select: TARGET_OWNER_SELECT } } as any
       });
       if (!message) return null;
       const sender = (message as any).sender;
@@ -873,7 +895,15 @@ export class ReportsService {
       return;
     }
 
-    throw new BadRequestException("Ceza aksiyonu şikayet hedefiyle uyumlu değil.");
+    throw new BadRequestException("İçerik aksiyonu şikayet hedefiyle uyumlu değil.");
+  }
+
+  private ensureUserActionAllowed(action: string) {
+    if (action === "warn_user" || action === "suspend_user" || action === "ban_user") {
+      return;
+    }
+
+    throw new BadRequestException("Geçersiz kullanıcı müdahalesi.");
   }
 
   private defaultDecisionNote(input: CreateModerationDecisionDto) {

@@ -200,7 +200,7 @@ export const announcementSchema = z.object({
 
 export const announcementListSchema = z.array(announcementSchema);
 
-export const policyTypeSchema = z.enum(["privacy", "terms", "cookies"]);
+export const policyTypeSchema = z.enum(["privacy", "terms", "cookies", "about"]);
 
 export const cmsPolicySchema = z.object({
   id: z.string().uuid(),
@@ -648,6 +648,28 @@ export const notificationSchema = z.object({
   createdAt: z.string().datetime().or(z.date()).optional()
 });
 
+const reportTargetOwnerSchema = adminUserSchema
+  .extend({
+    status: userStatusSchema.optional(),
+    username: z.string().nullable().optional(),
+    accountType: z.string().optional(),
+    phone: z.string().nullable().optional(),
+    country: z.string().nullable().optional(),
+    city: z.string().nullable().optional(),
+    district: z.string().nullable().optional(),
+    address: z.string().nullable().optional(),
+    website: z.string().nullable().optional(),
+    companyName: z.string().nullable().optional(),
+    followerCount: z.number().int().nonnegative().optional(),
+    followingCount: z.number().int().nonnegative().optional(),
+    lastOnlineAt: z.string().datetime().or(z.date()).nullable().optional(),
+    emailVerified: z.boolean().optional(),
+    penaltyScoreLastYear: z.number().int().nonnegative().optional(),
+    penaltyScoreAllTime: z.number().int().nonnegative().optional(),
+    createdAt: z.string().datetime().or(z.date()).optional()
+  })
+  .passthrough();
+
 export const reportGroupSchema = z.object({
   targetType: reportTargetTypeSchema,
   targetId: z.string().uuid(),
@@ -656,7 +678,7 @@ export const reportGroupSchema = z.object({
       title: z.string(),
       subtitle: z.string().nullable().optional(),
       status: z.string().nullable().optional(),
-      owner: adminManagedUserSchema.nullable().optional(),
+      owner: reportTargetOwnerSchema.nullable().optional(),
       metrics: z.record(z.string(), z.number().int().nonnegative()).optional(),
       payload: z.record(z.string(), z.unknown()).optional()
     })
