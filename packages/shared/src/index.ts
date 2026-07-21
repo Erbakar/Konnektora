@@ -85,6 +85,33 @@ export const memberCardSchema = z.object({
   following: z.boolean()
 });
 export const memberCardsSchema = z.array(memberCardSchema);
+export const onboardingStepSchema = z.object({
+  key: z.enum(["phone", "personal_info", "photo", "interests", "people"]),
+  title: z.string(),
+  completed: z.boolean(),
+  path: z.string()
+});
+export const onboardingStatusSchema = z.object({
+  completed: z.boolean(),
+  completedAt: z.string().datetime().or(z.date()).nullable(),
+  progress: z.number().int().min(0).max(100),
+  currentStep: onboardingStepSchema.nullable(),
+  steps: z.array(onboardingStepSchema)
+});
+export const memberPassSchema = z.object({
+  member: memberCardSchema.pick({ id: true, name: true, username: true, city: true, country: true, followerCount: true }),
+  qrPayload: z.string(),
+  nfcPayload: z.string(),
+  version: z.number().int().positive()
+});
+export const memberScanSchema = z.object({
+  id: z.string().uuid(),
+  method: z.enum(["qr", "nfc"]),
+  createdAt: z.string().datetime().or(z.date()),
+  member: memberCardSchema.pick({ id: true, name: true, username: true, city: true, country: true, followerCount: true }),
+  following: z.boolean()
+});
+export const memberScansSchema = z.array(memberScanSchema);
 export const userStatusSchema = z.enum(["invited", "pending", "active", "disabled", "frozen", "deleted", "suspended", "banned"]);
 export const eventParticipantStatusSchema = z.enum([
   "invited",
@@ -794,6 +821,9 @@ export type NotificationPreference = z.infer<typeof notificationPreferenceSchema
 export type BlockedTargetType = z.infer<typeof blockedTargetTypeSchema>;
 export type UserBlock = z.infer<typeof userBlockSchema>;
 export type MemberCard = z.infer<typeof memberCardSchema>;
+export type OnboardingStatus = z.infer<typeof onboardingStatusSchema>;
+export type MemberPass = z.infer<typeof memberPassSchema>;
+export type MemberScan = z.infer<typeof memberScanSchema>;
 export type TagSentiment = z.infer<typeof tagSentimentSchema>;
 export type TagAffinity = z.infer<typeof tagAffinitySchema>;
 export type TagComment = z.infer<typeof tagCommentSchema>;

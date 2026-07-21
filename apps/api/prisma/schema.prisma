@@ -187,6 +187,8 @@ model User {
   invitedById          String?    @map("invited_by")
   penaltyScoreLastYear Int        @default(0) @map("penalty_score_last_year")
   penaltyScoreAllTime  Int        @default(0) @map("penalty_score_all_time")
+  onboardingCompletedAt DateTime? @map("onboarding_completed_at")
+  memberPassVersion    Int        @default(1) @map("member_pass_version")
   createdAt            DateTime   @default(now()) @map("created_at")
   updatedAt            DateTime   @updatedAt @map("updated_at")
 
@@ -227,11 +229,28 @@ model User {
   receivedPrivateMessages   PrivateMessage[]     @relation("PrivateMessageRecipient")
   contentReactions          ContentReaction[]
   contentViews              ContentView[]
+  scansMade                 MemberScan[] @relation("MemberScanScanner")
+  scansReceived             MemberScan[] @relation("MemberScanMember")
 
   @@index([accountType, status])
   @@index([country, city])
   @@index([lastOnlineAt])
   @@map("users")
+}
+
+model MemberScan {
+  id        String   @id @default(uuid())
+  scannerId String   @map("scanner_id")
+  memberId  String   @map("member_id")
+  method    String   @default("qr")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  scanner User @relation("MemberScanScanner", fields: [scannerId], references: [id], onDelete: Cascade)
+  member  User @relation("MemberScanMember", fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([scannerId, createdAt])
+  @@index([memberId, createdAt])
+  @@map("member_scans")
 }
 
 model UserFollow {

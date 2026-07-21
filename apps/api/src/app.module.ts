@@ -15,6 +15,7 @@ import { PlacesModule } from "./places/places.module";
 import { ReportsModule } from "./reports/reports.module";
 import { TagsModule } from "./tags/tags.module";
 import { SocialModule } from "./social/social.module";
+import { IdentityModule } from "./identity/identity.module";
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { SocialModule } from "./social/social.module";
     ContentModule,
     AdminModule,
     EventsModule,
+    IdentityModule,
     MessagesModule,
     ProfileModule,
     PlacesModule,

@@ -23,8 +23,12 @@ import {
   faqSchema,
   loginResponseSchema,
   memberCardsSchema,
+  memberPassSchema,
+  memberScanSchema,
+  memberScansSchema,
   moderationDecisionSchema,
   notificationSchema,
+  onboardingStatusSchema,
   notificationPreferencesSchema,
   phoneVerificationResponseSchema,
   phoneSchema,
@@ -73,8 +77,11 @@ import {
   type Faq,
   type LoginResponse,
   type MemberCard,
+  type MemberPass,
+  type MemberScan,
   type ModerationDecision,
   type Notification,
+  type OnboardingStatus,
   type NotificationPreference,
   type PolicyType,
   type Place,
@@ -151,6 +158,7 @@ const MOCK_USER_BLOCKS_KEY = "konnektora_mock_user_blocks";
 const MOCK_USER_FOLLOWS_KEY = "konnektora_mock_user_follows";
 const MOCK_TAG_COMMENTS_KEY = "konnektora_mock_tag_comments";
 const MOCK_PROFILE_MEDIA_KEY = "konnektora_mock_profile_media";
+const MOCK_MEMBER_SCANS_KEY = "konnektora_mock_member_scans";
 const MOCK_ADMIN_TOKEN = "mock-admin-token";
 
 export const isMockApiMode = USE_MOCK_FALLBACK;
@@ -188,6 +196,8 @@ type MockUser = {
   penaltyScoreAllTime?: number;
   createdAt?: string;
   updatedAt?: string;
+  onboardingCompletedAt?: string | null;
+  memberPassVersion?: number;
 };
 
 export type ProfileUpdateInput = {
@@ -586,6 +596,13 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   if (pathname.startsWith("/me/conversations/") && pathname.endsWith("/read") && method === "PATCH") {
     return schema.parse(markMockConversationRead(pathname.slice("/me/conversations/".length, -"/read".length)));
   }
+
+  if (pathname === "/me/onboarding" && method === "GET") return schema.parse(getMockOnboardingStatus());
+  if (pathname === "/me/onboarding/complete" && method === "POST") return schema.parse(completeMockOnboarding());
+  if (pathname === "/me/member-pass" && method === "GET") return schema.parse(getMockMemberPass());
+  if (pathname === "/me/member-pass/rotate" && method === "PATCH") return schema.parse(rotateMockMemberPass());
+  if (pathname === "/me/member-scans" && method === "GET") return schema.parse(listMockMemberScans());
+  if (pathname === "/me/member-scans" && method === "POST") return schema.parse(scanMockMember(parseBody<{ payload: string; method: "qr" | "nfc" }>(options)));
 
   if (pathname.startsWith("/tags/") && pathname.endsWith("/comments") && method === "GET") {
     return schema.parse(listMockTagComments(pathname.slice("/tags/".length, -"/comments".length)));
@@ -3129,6 +3146,57 @@ function getMockProfile(): Profile {
   });
 }
 
+function getMockOnboardingStatus(): OnboardingStatus {
+  const profile = getMockProfile();
+  const following = listMockFollowing();
+  const steps = [
+    { key: "phone" as const, title: "Telefonunu doğrula", completed: profile.phoneVerified, path: "/account#phone-verification" },
+    { key: "personal_info" as const, title: "Temel bilgilerini tamamla", completed: Boolean(profile.username && profile.country && profile.birthDate), path: "/account#profile" },
+    { key: "photo" as const, title: "Profil fotoğrafı ekle", completed: listMockProfileMedia().some((media) => media.type === "image"), path: "/account#profile-media" },
+    { key: "interests" as const, title: "İlgi alanlarını seç", completed: getUserInterestTagIds().length > 0, path: "/account#interests" },
+    { key: "people" as const, title: "Topluluğunu keşfet", completed: following.length > 0, path: "/account#suggestions" }
+  ];
+  const stored = readStorage<MockUser[]>(MOCK_USERS_KEY, []).find((user) => user.id === profile.id);
+  return onboardingStatusSchema.parse({ completed: Boolean(stored?.onboardingCompletedAt), completedAt: stored?.onboardingCompletedAt ?? null, progress: steps.filter((step) => step.completed).length * 20, currentStep: steps.find((step) => !step.completed) ?? null, steps });
+}
+
+function completeMockOnboarding() {
+  const status = getMockOnboardingStatus();
+  if (status.steps.slice(0, 4).some((step) => !step.completed)) throw new Error("Zorunlu onboarding adımları eksik");
+  const session = getUserSession();
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  writeStorage(MOCK_USERS_KEY, users.map((user) => user.id === session?.id ? { ...user, onboardingCompletedAt: new Date().toISOString() } : user));
+  return getMockOnboardingStatus();
+}
+
+function getMockMemberPass(): MemberPass {
+  const profile = getMockProfile();
+  const user = readStorage<MockUser[]>(MOCK_USERS_KEY, []).find((item) => item.id === profile.id);
+  const version = user?.memberPassVersion ?? 1;
+  const payload = `konnektora://member?token=mock-${profile.id}-v${version}`;
+  return memberPassSchema.parse({ member: { id: profile.id, name: profile.name, username: profile.username, city: profile.city, country: profile.country, followerCount: user?.followerCount ?? 0 }, qrPayload: payload, nfcPayload: payload, version });
+}
+
+function rotateMockMemberPass() {
+  const profile = getMockProfile();
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  writeStorage(MOCK_USERS_KEY, users.map((user) => user.id === profile.id ? { ...user, memberPassVersion: (user.memberPassVersion ?? 1) + 1 } : user));
+  return getMockMemberPass();
+}
+
+function listMockMemberScans(): MemberScan[] { return readStorage<MemberScan[]>(MOCK_MEMBER_SCANS_KEY, []); }
+
+function scanMockMember(input: { payload: string; method: "qr" | "nfc" }): MemberScan {
+  const match = input.payload.match(/mock-([0-9a-f-]{36})-v\d+/i);
+  const session = getUserSession();
+  const target = match ? getAllMockUsers().find((user) => user.id === match[1]) : undefined;
+  if (!session || !target || target.id === session.id) throw new Error("Üye kartı geçersiz");
+  followMockUser(target.id);
+  const item = memberScanSchema.parse({ id: createId(), method: input.method, createdAt: new Date().toISOString(), member: { id: target.id, name: target.name, username: target.username, city: target.city, country: target.country, followerCount: target.followerCount }, following: true });
+  writeStorage(MOCK_MEMBER_SCANS_KEY, [item, ...listMockMemberScans()]);
+  return item;
+}
+
 function listMockProfileMedia(): ProfileMedia[] {
   return readStorage<ProfileMedia[]>(MOCK_PROFILE_MEDIA_KEY, []).sort((left, right) => left.sortOrder - right.sortOrder);
 }
@@ -3961,6 +4029,13 @@ export function markConversationRead(peerId: string): Promise<{ updated: number 
     method: "PATCH"
   });
 }
+
+export function getOnboardingStatus(): Promise<OnboardingStatus> { return requestJson("/me/onboarding", onboardingStatusSchema, { auth: "user" }); }
+export function completeOnboarding(): Promise<OnboardingStatus> { return requestJson("/me/onboarding/complete", onboardingStatusSchema, { auth: "user", method: "POST" }); }
+export function getMemberPass(): Promise<MemberPass> { return requestJson("/me/member-pass", memberPassSchema, { auth: "user" }); }
+export function rotateMemberPass(): Promise<MemberPass> { return requestJson("/me/member-pass/rotate", memberPassSchema, { auth: "user", method: "PATCH" }); }
+export function listMemberScans(): Promise<MemberScan[]> { return requestJson("/me/member-scans", memberScansSchema, { auth: "user" }); }
+export function scanMember(payload: string, method: "qr" | "nfc"): Promise<MemberScan> { return requestJson("/me/member-scans", memberScanSchema, { auth: "user", method: "POST", body: JSON.stringify({ payload, method }) }); }
 
 export function updateProfileInterests(tagIds: string[]): Promise<Tag[]> {
   return requestJson("/profile/interests", z.array(tagSchema), {
