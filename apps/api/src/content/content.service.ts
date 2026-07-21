@@ -3,7 +3,7 @@ import { ReportTargetType, User } from "@prisma/client";
 import { unlink } from "fs/promises";
 import { resolve } from "path";
 import { PrismaService } from "../prisma/prisma.service";
-import { CreateCommentDto, CreateMediaDto, CreatePrivateMessageDto, CreateReactionDto } from "./content.dto";
+import { CreateCommentDto, CreateMediaDto, CreateReactionDto } from "./content.dto";
 
 @Injectable()
 export class ContentService {
@@ -142,33 +142,6 @@ export class ContentService {
         targetId: input.targetId,
         parent: input.parentId ? { connect: { id: input.parentId } } : undefined,
         author: { connect: { id: user.id } },
-        body: input.body.trim()
-      }
-    });
-  }
-
-  listPrivateMessages(user: User) {
-    return this.prisma.privateMessage.findMany({
-      where: {
-        status: "active",
-        OR: [{ senderId: user.id }, { recipientId: user.id }]
-      },
-      orderBy: [{ createdAt: "desc" }],
-      include: {
-        sender: { select: { id: true, email: true, name: true, role: true, status: true } },
-        recipient: { select: { id: true, email: true, name: true, role: true, status: true } }
-      }
-    });
-  }
-
-  async createPrivateMessage(input: CreatePrivateMessageDto, user: User) {
-    const recipient = await this.prisma.user.findUnique({ where: { id: input.recipientId }, select: { id: true } });
-    if (!recipient) throw new NotFoundException("Alıcı bulunamadı.");
-
-    return this.prisma.privateMessage.create({
-      data: {
-        sender: { connect: { id: user.id } },
-        recipient: { connect: { id: input.recipientId } },
         body: input.body.trim()
       }
     });

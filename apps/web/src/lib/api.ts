@@ -12,6 +12,8 @@ import {
   announcementListSchema,
   announcementSchema,
   contentReportSchema,
+  conversationListSchema,
+  conversationMessagesSchema,
   cmsCategorySchema,
   cmsPolicySchema,
   eventListSchema,
@@ -33,6 +35,7 @@ import {
   profileMediaListSchema,
   profileMediaSchema,
   privacySettingsSchema,
+  privateChatMessageSchema,
   reportGroupCommentSchema,
   reportGroupDetailSchema,
   reportGroupNoteSchema,
@@ -61,6 +64,8 @@ import {
   type CmsPolicy,
   type CmsCategory,
   type ContentReport,
+  type ConversationList,
+  type ConversationMessages,
   type Event,
   type EventList,
   type EventParticipant,
@@ -77,6 +82,7 @@ import {
   type PlaceMember,
   type Profile,
   type ProfileMedia,
+  type PrivateChatMessage,
   type PrivacySettings,
   type ReportRule,
   type ReportGroup,
@@ -136,6 +142,7 @@ const MOCK_PLACE_FOLLOWS_KEY = "konnektora_mock_place_follows";
 const MOCK_MEDIA_KEY = "konnektora_mock_media";
 const MOCK_COMMENTS_KEY = "konnektora_mock_comments";
 const MOCK_PRIVATE_MESSAGES_KEY = "konnektora_mock_private_messages";
+const MOCK_CHAT_MESSAGES_KEY = "konnektora_mock_chat_messages";
 const MOCK_NOTIFICATIONS_KEY = "konnektora_mock_notifications";
 const MOCK_PHONE_VERIFICATIONS_KEY = "konnektora_mock_phone_verifications";
 const MOCK_PRIVACY_SETTINGS_KEY = "konnektora_mock_privacy_settings";
@@ -561,6 +568,23 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
 
   if (pathname.startsWith("/social/following/") && method === "DELETE") {
     return schema.parse(unfollowMockUser(pathname.slice("/social/following/".length)));
+  }
+
+  if (pathname === "/me/conversations" && method === "GET") {
+    return schema.parse(listMockConversations());
+  }
+
+  if (pathname.startsWith("/me/conversations/") && pathname.endsWith("/messages") && method === "GET") {
+    const peerId = pathname.slice("/me/conversations/".length, -"/messages".length);
+    return schema.parse(listMockConversationMessages(peerId, new URLSearchParams(queryString)));
+  }
+
+  if (pathname === "/me/private-messages" && method === "POST") {
+    return schema.parse(sendMockPrivateMessage(parseBody<{ recipientId: string; body: string }>(options)));
+  }
+
+  if (pathname.startsWith("/me/conversations/") && pathname.endsWith("/read") && method === "PATCH") {
+    return schema.parse(markMockConversationRead(pathname.slice("/me/conversations/".length, -"/read".length)));
   }
 
   if (pathname.startsWith("/tags/") && pathname.endsWith("/comments") && method === "GET") {
@@ -3344,6 +3368,77 @@ function unfollowMockUser(targetUserId: string) {
   return { ok: true, following: false };
 }
 
+function listMockChatMessages(): PrivateChatMessage[] {
+  return readStorage<PrivateChatMessage[]>(MOCK_CHAT_MESSAGES_KEY, []);
+}
+
+function listMockConversations(): ConversationList {
+  const current = getUserSession();
+  if (!current) throw new Error("Mock user session not found");
+  const users = getAllMockUsers();
+  const grouped = new Map<string, ConversationList["items"][number]>();
+  for (const message of [...listMockChatMessages()].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())) {
+    const peerId = message.senderId === current.id ? message.recipientId : message.senderId;
+    if (!peerId) continue;
+    const peer = users.find((item) => item.id === peerId);
+    if (!peer) continue;
+    const unread = message.recipientId === current.id && !message.readAt ? 1 : 0;
+    const existing = grouped.get(peerId);
+    if (existing) existing.unreadCount += unread;
+    else grouped.set(peerId, {
+      peer: { id: peer.id, name: peer.name, username: peer.username ?? null, status: peer.status ?? "active" },
+      lastMessage: message,
+      unreadCount: unread
+    });
+  }
+  const items = [...grouped.values()];
+  return { items, totalUnread: items.reduce((sum, item) => sum + item.unreadCount, 0) };
+}
+
+function listMockConversationMessages(peerId: string, params: URLSearchParams): ConversationMessages {
+  const current = getUserSession();
+  if (!current) throw new Error("Mock user session not found");
+  const page = Math.max(1, Number(params.get("page") || 1));
+  const pageSize = Math.min(100, Math.max(1, Number(params.get("pageSize") || 50)));
+  const messages = listMockChatMessages()
+    .filter((message) =>
+      (message.senderId === current.id && message.recipientId === peerId) ||
+      (message.senderId === peerId && message.recipientId === current.id)
+    )
+    .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
+  const start = Math.max(0, messages.length - page * pageSize);
+  const end = messages.length - (page - 1) * pageSize;
+  return { items: messages.slice(start, end), total: messages.length, page, pageSize, hasNextPage: start > 0 };
+}
+
+function sendMockPrivateMessage(input: { recipientId: string; body: string }): PrivateChatMessage {
+  const current = getUserSession();
+  if (!current || input.recipientId === current.id) throw new Error("Mock message recipient invalid");
+  const now = new Date().toISOString();
+  const message: PrivateChatMessage = {
+    id: createId(), senderId: current.id, recipientId: input.recipientId, body: input.body.trim(), status: "active",
+    readAt: null, createdAt: now, updatedAt: now
+  };
+  writeStorage(MOCK_CHAT_MESSAGES_KEY, [...listMockChatMessages(), message]);
+  return message;
+}
+
+function markMockConversationRead(peerId: string) {
+  const current = getUserSession();
+  if (!current) throw new Error("Mock user session not found");
+  let updated = 0;
+  const now = new Date().toISOString();
+  const messages = listMockChatMessages().map((message) => {
+    if (message.senderId === peerId && message.recipientId === current.id && !message.readAt) {
+      updated += 1;
+      return { ...message, readAt: now, updatedAt: now };
+    }
+    return message;
+  });
+  writeStorage(MOCK_CHAT_MESSAGES_KEY, messages);
+  return { updated };
+}
+
 function listMockTagComments(tagId: string): TagComment[] {
   const session = getUserSession();
   const blockedUsers = new Set(listMockBlocks().filter((block) => block.targetType === "user").map((block) => block.targetId));
@@ -3842,6 +3937,29 @@ export function followUser(targetUserId: string): Promise<{ ok: boolean; followi
 
 export function unfollowUser(targetUserId: string): Promise<{ ok: boolean; following: boolean }> {
   return requestJson(`/social/following/${targetUserId}`, z.object({ ok: z.boolean(), following: z.boolean() }), { auth: "user", method: "DELETE" });
+}
+
+export function listConversations(): Promise<ConversationList> {
+  return requestJson("/me/conversations", conversationListSchema, { auth: "user" });
+}
+
+export function listConversationMessages(peerId: string, page = 1): Promise<ConversationMessages> {
+  return requestJson(`/me/conversations/${peerId}/messages?page=${page}&pageSize=50`, conversationMessagesSchema, { auth: "user" });
+}
+
+export function sendPrivateMessage(recipientId: string, body: string): Promise<PrivateChatMessage> {
+  return requestJson("/me/private-messages", privateChatMessageSchema, {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify({ recipientId, body })
+  });
+}
+
+export function markConversationRead(peerId: string): Promise<{ updated: number }> {
+  return requestJson(`/me/conversations/${peerId}/read`, z.object({ updated: z.number().int().nonnegative() }), {
+    auth: "user",
+    method: "PATCH"
+  });
 }
 
 export function updateProfileInterests(tagIds: string[]): Promise<Tag[]> {

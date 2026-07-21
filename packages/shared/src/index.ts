@@ -651,6 +651,41 @@ export const adminPrivateMessageSchema = z.object({
   reportCount: z.number().int().nonnegative().optional()
 });
 
+export const privateChatMessageSchema = z.object({
+  id: z.string().uuid(),
+  senderId: z.string().uuid().nullable(),
+  recipientId: z.string().uuid().nullable(),
+  body: z.string().min(1).max(5000),
+  status: z.string(),
+  readAt: z.string().datetime().or(z.date()).nullable(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date())
+});
+
+export const conversationSchema = z.object({
+  peer: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    username: z.string().nullable(),
+    status: userStatusSchema
+  }),
+  lastMessage: privateChatMessageSchema,
+  unreadCount: z.number().int().nonnegative()
+});
+
+export const conversationListSchema = z.object({
+  items: z.array(conversationSchema),
+  totalUnread: z.number().int().nonnegative()
+});
+
+export const conversationMessagesSchema = z.object({
+  items: z.array(privateChatMessageSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+  hasNextPage: z.boolean()
+});
+
 export const userMessageSchema = z.object({
   id: z.string().uuid(),
   type: userMessageTypeSchema,
@@ -800,6 +835,10 @@ export type AdminMedia = z.infer<typeof adminMediaSchema>;
 export type ProfileMedia = z.infer<typeof profileMediaSchema>;
 export type AdminComment = z.infer<typeof adminCommentSchema>;
 export type AdminPrivateMessage = z.infer<typeof adminPrivateMessageSchema>;
+export type PrivateChatMessage = z.infer<typeof privateChatMessageSchema>;
+export type Conversation = z.infer<typeof conversationSchema>;
+export type ConversationList = z.infer<typeof conversationListSchema>;
+export type ConversationMessages = z.infer<typeof conversationMessagesSchema>;
 export type UserMessage = z.infer<typeof userMessageSchema>;
 export type UserMessageList = z.infer<typeof userMessageListSchema>;
 export type Notification = z.infer<typeof notificationSchema>;

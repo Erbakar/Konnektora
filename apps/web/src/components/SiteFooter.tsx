@@ -13,6 +13,7 @@ export function SiteFooter() {
             <strong>Discover</strong>
             <Link to="/events">Events</Link>
             <Link to="/places">Places</Link>
+            <Link to="/messages">Messages</Link>
             <Link to="/events?tag=startup">Tags</Link>
             <Link to="/events?tag=networking">Networking</Link>
           </div>

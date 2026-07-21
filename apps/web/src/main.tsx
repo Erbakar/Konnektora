@@ -15,6 +15,7 @@ const EventDetailPage = lazy(() => import("./pages/EventDetailPage").then((modul
 const EventsPage = lazy(() => import("./pages/EventsPage").then((module) => ({ default: module.EventsPage })));
 const HomePage = lazy(() => import("./pages/HomePage").then((module) => ({ default: module.HomePage })));
 const MobileAppPage = lazy(() => import("./pages/MobileAppPage").then((module) => ({ default: module.MobileAppPage })));
+const MessagesPage = lazy(() => import("./pages/MessagesPage").then((module) => ({ default: module.MessagesPage })));
 const PlacesPage = lazy(() => import("./pages/PlacesPage").then((module) => ({ default: module.PlacesPage })));
 const PlaceDetailPage = lazy(() => import("./pages/PlaceDetailPage").then((module) => ({ default: module.PlaceDetailPage })));
 const PolicyPage = lazy(() => import("./pages/PolicyPage").then((module) => ({ default: module.PolicyPage })));
@@ -32,6 +33,7 @@ const router = createBrowserRouter([
       { path: "events/:slug", element: <EventDetailPage /> },
       { path: "places", element: <PlacesPage /> },
       { path: "places/:slug", element: <PlaceDetailPage /> },
+      { path: "messages", element: <MessagesPage /> },
       { path: "account", element: <AccountPage /> },
       { path: "contact", element: <ContactPage /> },
       { path: "verify-email", element: <VerifyEmailPage /> },

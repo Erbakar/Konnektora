@@ -43,16 +43,6 @@ export class CreateCommentDto {
   body!: string;
 }
 
-export class CreatePrivateMessageDto {
-  @IsString()
-  recipientId!: string;
-
-  @IsString()
-  @MinLength(1)
-  @MaxLength(5000)
-  body!: string;
-}
-
 export class CreateReactionDto {
   @IsEnum(ReportTargetType)
   targetType!: ReportTargetType;

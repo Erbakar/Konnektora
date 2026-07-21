@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { AdminModule } from "./admin/admin.module";
 import { AuthModule } from "./auth/auth.module";
 import { CmsModule } from "./cms/cms.module";
+import { ChatModule } from "./chat/chat.module";
 import { ContentAdminModule } from "./content-admin/content-admin.module";
 import { ContentModule } from "./content/content.module";
 import { EventsModule } from "./events/events.module";
@@ -21,6 +22,7 @@ import { SocialModule } from "./social/social.module";
     PrismaModule,
     AuthModule,
     CmsModule,
+    ChatModule,
     ContentAdminModule,
     ContentModule,
     AdminModule,

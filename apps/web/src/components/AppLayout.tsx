@@ -1,11 +1,20 @@
-import { CalendarDays, LayoutDashboard, MapPin, Menu, Tag, UserRound, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { CalendarDays, LayoutDashboard, MapPin, Menu, MessageCircle, Tag, UserRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
+import { getUserSession, listConversations } from "../lib/api";
 
 export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
+  const user = getUserSession();
+  const conversationsQuery = useQuery({
+    queryKey: ["conversations", user?.id],
+    queryFn: listConversations,
+    enabled: Boolean(user),
+    refetchInterval: 30_000
+  });
 
   useEffect(() => {
     setMenuOpen(false);
@@ -37,6 +46,11 @@ export function AppLayout() {
           <NavLink to="/places">
             <MapPin size={18} />
             Places
+          </NavLink>
+          <NavLink to="/messages">
+            <MessageCircle size={18} />
+            Messages
+            {conversationsQuery.data?.totalUnread ? <span className="nav-unread-badge">{conversationsQuery.data.totalUnread}</span> : null}
           </NavLink>
           <NavLink to="/account">
             <UserRound size={18} />
@@ -91,6 +105,11 @@ export function AppLayout() {
           <NavLink to="/places" onClick={() => setMenuOpen(false)}>
             <MapPin size={18} />
             Places
+          </NavLink>
+          <NavLink to="/messages" onClick={() => setMenuOpen(false)}>
+            <MessageCircle size={18} />
+            Messages
+            {conversationsQuery.data?.totalUnread ? <span className="nav-unread-badge">{conversationsQuery.data.totalUnread}</span> : null}
           </NavLink>
           <NavLink to="/account" onClick={() => setMenuOpen(false)}>
             <UserRound size={18} />

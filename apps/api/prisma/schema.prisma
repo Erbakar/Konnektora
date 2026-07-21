@@ -622,6 +622,7 @@ model PrivateMessage {
   recipientId String?  @map("recipient_id")
   body        String
   status      String   @default("active")
+  readAt      DateTime? @map("read_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -629,6 +630,7 @@ model PrivateMessage {
   recipient User? @relation("PrivateMessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
 
   @@index([senderId, recipientId])
+  @@index([recipientId, readAt, createdAt])
   @@index([status, createdAt])
   @@map("private_messages")
 }

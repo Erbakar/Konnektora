@@ -8,7 +8,7 @@ import { diskStorage } from "multer";
 import { resolve } from "path";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { CreateCommentDto, CreateMediaDto, CreatePrivateMessageDto, CreateReactionDto, ReorderProfileMediaDto } from "./content.dto";
+import { CreateCommentDto, CreateMediaDto, CreateReactionDto, ReorderProfileMediaDto } from "./content.dto";
 import { ContentService } from "./content.service";
 
 mkdirSync(resolve(process.cwd(), "uploads"), { recursive: true });
@@ -92,18 +92,6 @@ export class ContentController {
   @UseGuards(JwtAuthGuard)
   createComment(@Body() body: CreateCommentDto, @CurrentUser() user: User) {
     return this.contentService.createComment(body, user);
-  }
-
-  @Get("me/private-messages")
-  @UseGuards(JwtAuthGuard)
-  listPrivateMessages(@CurrentUser() user: User) {
-    return this.contentService.listPrivateMessages(user);
-  }
-
-  @Post("me/private-messages")
-  @UseGuards(JwtAuthGuard)
-  createPrivateMessage(@Body() body: CreatePrivateMessageDto, @CurrentUser() user: User) {
-    return this.contentService.createPrivateMessage(body, user);
   }
 
   @Post("reactions")
