@@ -246,6 +246,8 @@ model User {
   authoredComments          ContentComment[]     @relation("CommentAuthor")
   sentPrivateMessages       PrivateMessage[]     @relation("PrivateMessageSender")
   receivedPrivateMessages   PrivateMessage[]     @relation("PrivateMessageRecipient")
+  messageReactions         MessageReaction[]
+  conversationPreferences ConversationPreference[] @relation("ConversationPreferenceOwner")
   contentReactions          ContentReaction[]
   contentViews              ContentView[]
   scansMade                 MemberScan[] @relation("MemberScanScanner")
@@ -791,18 +793,57 @@ model PrivateMessage {
   senderId    String?  @map("sender_id")
   recipientId String?  @map("recipient_id")
   body        String
+  replyToId   String?  @map("reply_to_id")
+  attachmentUrl  String? @map("attachment_url")
+  attachmentType String? @map("attachment_type")
+  attachmentName String? @map("attachment_name")
+  attachmentSize Int?    @map("attachment_size")
   status      String   @default("active")
   readAt      DateTime? @map("read_at")
+  editedAt    DateTime? @map("edited_at")
+  deletedAt   DateTime? @map("deleted_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   sender    User? @relation("PrivateMessageSender", fields: [senderId], references: [id], onDelete: SetNull)
   recipient User? @relation("PrivateMessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+  replyTo   PrivateMessage?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   PrivateMessage[] @relation("MessageReplies")
+  reactions MessageReaction[]
 
   @@index([senderId, recipientId])
   @@index([recipientId, readAt, createdAt])
   @@index([status, createdAt])
   @@map("private_messages")
+}
+
+model MessageReaction {
+  messageId String   @map("message_id")
+  userId    String   @map("user_id")
+  emoji     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  message PrivateMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId, emoji])
+  @@index([messageId])
+  @@map("message_reactions")
+}
+
+model ConversationPreference {
+  userId    String   @map("user_id")
+  peerId    String   @map("peer_id")
+  pinned    Boolean  @default(false)
+  muted     Boolean  @default(false)
+  archived  Boolean  @default(false)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation("ConversationPreferenceOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, peerId])
+  @@index([userId, archived, pinned])
+  @@map("conversation_preferences")
 }
 
 model ContentReaction {

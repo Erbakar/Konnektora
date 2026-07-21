@@ -10,9 +10,11 @@ describe("ChatService", () => {
   const userFollow = { findMany: jest.fn(), findFirst: jest.fn() };
   const notificationPreference = { findUnique: jest.fn() };
   const notification = { create: jest.fn() };
+  const conversationPreference = { findMany: jest.fn(), upsert: jest.fn() };
+  const messageReaction = { findUnique: jest.fn(), create: jest.fn(), delete: jest.fn() };
   const tx = { privateMessage, notification };
   const prisma = {
-    privateMessage, userBlock, user, privacySettings, userFollow, notificationPreference, notification,
+    privateMessage, userBlock, user, privacySettings, userFollow, notificationPreference, notification, conversationPreference, messageReaction,
     $transaction: jest.fn(async (operation: unknown) =>
       typeof operation === "function" ? operation(tx) : Promise.all(operation as Promise<unknown>[])
     )
@@ -29,6 +31,7 @@ describe("ChatService", () => {
     userFollow.findMany.mockResolvedValue([]);
     userFollow.findFirst.mockResolvedValue(null);
     notificationPreference.findUnique.mockResolvedValue(null);
+    conversationPreference.findMany.mockResolvedValue([]);
   });
 
   it("groups messages by peer and counts unread messages", async () => {
@@ -41,7 +44,7 @@ describe("ChatService", () => {
     const result = await service.listConversations(sender.id);
 
     expect(result.items).toHaveLength(1);
-    expect(result.items[0]).toMatchObject({ peer, unreadCount: 1, lastMessage: { id: "m2" } });
+    expect(result.items[0]).toMatchObject({ peer, unreadCount: 1, lastMessage: { id: "m2" }, preference: { pinned: false, muted: false, archived: false } });
     expect(result.totalUnread).toBe(1);
   });
 
@@ -73,7 +76,7 @@ describe("ChatService", () => {
     privateMessage.create.mockResolvedValue(message);
 
     await expect(service.send(sender, { recipientId: peer.id, body: " hello " })).resolves.toEqual(message);
-    expect(privateMessage.create).toHaveBeenCalledWith({ data: { senderId: sender.id, recipientId: peer.id, body: "hello" } });
+    expect(privateMessage.create).toHaveBeenCalledWith({ data: expect.objectContaining({ senderId: sender.id, recipientId: peer.id, body: "hello" }) });
     expect(notification.create).not.toHaveBeenCalled();
   });
 });

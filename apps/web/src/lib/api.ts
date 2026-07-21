@@ -30,6 +30,7 @@ import {
   contactImportResultSchema,
   memberPassSchema,
   memberScanSchema,
+  messageSearchResultSchema,
   memberScansSchema,
   moderationDecisionSchema,
   notificationSchema,
@@ -99,6 +100,7 @@ import {
   type ContactImportResult,
   type MemberPass,
   type MemberScan,
+  type MessageSearchResult,
   type ModerationDecision,
   type Notification,
   type OnboardingStatus,
@@ -702,8 +704,17 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   }
 
   if (pathname === "/me/private-messages" && method === "POST") {
-    return schema.parse(sendMockPrivateMessage(parseBody<{ recipientId: string; body: string }>(options)));
+    if (options.body instanceof FormData) return schema.parse(sendMockPrivateMessage({ recipientId: String(options.body.get("recipientId")), body: String(options.body.get("body")), replyToId: String(options.body.get("replyToId") || "") || undefined }));
+    return schema.parse(sendMockPrivateMessage(parseBody<{ recipientId: string; body: string; replyToId?: string }>(options)));
   }
+
+  if (pathname === "/me/messages/search" && method === "GET") return schema.parse(searchMockMessages(new URLSearchParams(queryString).get("q") ?? ""));
+  if (pathname.startsWith("/me/private-messages/") && pathname.endsWith("/reactions") && method === "POST") return schema.parse(toggleMockMessageReaction(pathname.slice("/me/private-messages/".length, -"/reactions".length), parseBody<{ emoji: string }>(options).emoji));
+  if (pathname.startsWith("/me/private-messages/") && method === "PATCH") return schema.parse(editMockPrivateMessage(pathname.slice("/me/private-messages/".length), parseBody<{ body: string }>(options).body));
+  if (pathname.startsWith("/me/private-messages/") && method === "DELETE") return schema.parse(deleteMockPrivateMessage(pathname.slice("/me/private-messages/".length)));
+  if (pathname.startsWith("/me/conversations/") && pathname.endsWith("/typing") && method === "GET") return schema.parse({ typing: false });
+  if (pathname.startsWith("/me/conversations/") && pathname.endsWith("/typing") && method === "POST") return schema.parse({ ok: true });
+  if (pathname.startsWith("/me/conversations/") && pathname.endsWith("/preferences") && method === "PATCH") return schema.parse({ userId: getUserSession()?.id, peerId: pathname.split("/")[3], ...parseBody<Record<string, boolean>>(options), updatedAt: new Date().toISOString() });
 
   if (pathname.startsWith("/me/conversations/") && pathname.endsWith("/read") && method === "PATCH") {
     return schema.parse(markMockConversationRead(pathname.slice("/me/conversations/".length, -"/read".length)));
@@ -3662,17 +3673,22 @@ function listMockConversationMessages(peerId: string, params: URLSearchParams): 
   return { items: messages.slice(start, end), total: messages.length, page, pageSize, hasNextPage: start > 0 };
 }
 
-function sendMockPrivateMessage(input: { recipientId: string; body: string }): PrivateChatMessage {
+function sendMockPrivateMessage(input: { recipientId: string; body: string; replyToId?: string }): PrivateChatMessage {
   const current = getUserSession();
   if (!current || input.recipientId === current.id) throw new Error("Mock message recipient invalid");
   const now = new Date().toISOString();
   const message: PrivateChatMessage = {
     id: createId(), senderId: current.id, recipientId: input.recipientId, body: input.body.trim(), status: "active",
-    readAt: null, createdAt: now, updatedAt: now
+    readAt: null, replyToId: input.replyToId ?? null, replyTo: input.replyToId ? listMockChatMessages().find((item) => item.id === input.replyToId) ?? null : null, reactions: [], createdAt: now, updatedAt: now
   };
   writeStorage(MOCK_CHAT_MESSAGES_KEY, [...listMockChatMessages(), message]);
   return message;
 }
+
+function editMockPrivateMessage(id: string, body: string) { const now = new Date().toISOString(); let result: PrivateChatMessage | undefined; const messages = listMockChatMessages().map((item) => item.id === id ? (result = { ...item, body: body.trim(), editedAt: now, updatedAt: now }) : item); writeStorage(MOCK_CHAT_MESSAGES_KEY, messages); return result; }
+function deleteMockPrivateMessage(id: string) { const now = new Date().toISOString(); let result: PrivateChatMessage | undefined; const messages = listMockChatMessages().map((item) => item.id === id ? (result = { ...item, body: "Bu mesaj silindi", status: "deleted", deletedAt: now, attachmentUrl: null, updatedAt: now }) : item); writeStorage(MOCK_CHAT_MESSAGES_KEY, messages); return result; }
+function toggleMockMessageReaction(id: string, emoji: string) { const current = getUserSession(); if (!current) throw new Error("Session required"); let active = true; const messages = listMockChatMessages().map((item) => { if (item.id !== id) return item; const reactions = item.reactions ?? []; const exists = reactions.some((reaction) => reaction.userId === current.id && reaction.emoji === emoji); active = !exists; return { ...item, reactions: exists ? reactions.filter((reaction) => !(reaction.userId === current.id && reaction.emoji === emoji)) : [...reactions, { userId: current.id, emoji }] }; }); writeStorage(MOCK_CHAT_MESSAGES_KEY, messages); return { active, emoji }; }
+function searchMockMessages(query: string): MessageSearchResult[] { const current = getUserSession(); if (!current || query.trim().length < 2) return []; const users = getAllMockUsers(); return listMockChatMessages().filter((item) => (item.senderId === current.id || item.recipientId === current.id) && item.body.toLocaleLowerCase("tr").includes(query.toLocaleLowerCase("tr"))).map((item) => { const peerId = item.senderId === current.id ? item.recipientId : item.senderId; const peer = users.find((user) => user.id === peerId); return { ...item, peer: peer ? { id: peer.id, name: peer.name, username: peer.username ?? null, status: peer.status ?? "active" } : null }; }); }
 
 function markMockConversationRead(peerId: string) {
   const current = getUserSession();
@@ -4206,13 +4222,22 @@ export function listConversationMessages(peerId: string, page = 1): Promise<Conv
   return requestJson(`/me/conversations/${peerId}/messages?page=${page}&pageSize=50`, conversationMessagesSchema, { auth: "user" });
 }
 
-export function sendPrivateMessage(recipientId: string, body: string): Promise<PrivateChatMessage> {
+export function sendPrivateMessage(recipientId: string, body: string, options?: { replyToId?: string; attachment?: File }): Promise<PrivateChatMessage> {
+  const form = new FormData(); form.set("recipientId", recipientId); form.set("body", body); if (options?.replyToId) form.set("replyToId", options.replyToId); if (options?.attachment) form.set("attachment", options.attachment);
   return requestJson("/me/private-messages", privateChatMessageSchema, {
     auth: "user",
     method: "POST",
-    body: JSON.stringify({ recipientId, body })
+    body: form
   });
 }
+
+export function searchPrivateMessages(query: string): Promise<MessageSearchResult[]> { return requestJson(`/me/messages/search?q=${encodeURIComponent(query)}`, z.array(messageSearchResultSchema), { auth: "user" }); }
+export function editPrivateMessage(id: string, body: string): Promise<PrivateChatMessage> { return requestJson(`/me/private-messages/${id}`, privateChatMessageSchema, { auth: "user", method: "PATCH", body: JSON.stringify({ body }) }); }
+export function deletePrivateMessage(id: string): Promise<PrivateChatMessage> { return requestJson(`/me/private-messages/${id}`, privateChatMessageSchema, { auth: "user", method: "DELETE" }); }
+export function toggleMessageReaction(id: string, emoji: string): Promise<{ active: boolean; emoji: string }> { return requestJson(`/me/private-messages/${id}/reactions`, z.object({ active: z.boolean(), emoji: z.string() }), { auth: "user", method: "POST", body: JSON.stringify({ emoji }) }); }
+export function sendTyping(peerId: string): Promise<{ ok: boolean }> { return requestJson(`/me/conversations/${peerId}/typing`, z.object({ ok: z.boolean() }), { auth: "user", method: "POST" }); }
+export function getTyping(peerId: string): Promise<{ typing: boolean }> { return requestJson(`/me/conversations/${peerId}/typing`, z.object({ typing: z.boolean() }), { auth: "user" }); }
+export function updateConversationPreference(peerId: string, input: { pinned?: boolean; muted?: boolean; archived?: boolean }): Promise<unknown> { return requestJson(`/me/conversations/${peerId}/preferences`, z.unknown(), { auth: "user", method: "PATCH", body: JSON.stringify(input) }); }
 
 export function markConversationRead(peerId: string): Promise<{ updated: number }> {
   return requestJson(`/me/conversations/${peerId}/read`, z.object({ updated: z.number().int().nonnegative() }), {

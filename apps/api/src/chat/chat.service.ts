@@ -1,16 +1,17 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrivateMessage, User, UserStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import { ConversationMessagesQueryDto, SendPrivateMessageDto } from "./chat.dto";
+import { ConversationMessagesQueryDto, ConversationPreferenceDto, EditPrivateMessageDto, MessageReactionDto, SendPrivateMessageDto } from "./chat.dto";
 
 const peerSelect = { id: true, name: true, username: true, status: true } as const;
 
 @Injectable()
 export class ChatService {
+  private readonly typing = new Map<string, number>();
   constructor(private readonly prisma: PrismaService) {}
 
   async listConversations(userId: string) {
-    const [messages, blocks] = await Promise.all([
+    const [messages, blocks, preferences] = await Promise.all([
       this.prisma.privateMessage.findMany({
         where: { status: "active", OR: [{ senderId: userId }, { recipientId: userId }] },
         orderBy: { createdAt: "desc" },
@@ -20,7 +21,8 @@ export class ChatService {
       this.prisma.userBlock.findMany({
         where: { targetType: "user", OR: [{ userId }, { targetId: userId }] },
         select: { userId: true, targetId: true }
-      })
+      }),
+      this.prisma.conversationPreference.findMany({ where: { userId } })
     ]);
     const blockedIds = new Set(blocks.map((block) => block.userId === userId ? block.targetId : block.userId));
     const conversations = new Map<string, { peer: NonNullable<(typeof messages)[number]["sender"]>; lastMessage: PrivateMessage; unreadCount: number }>();
@@ -32,7 +34,9 @@ export class ChatService {
       if (current) current.unreadCount += unread;
       else conversations.set(peer.id, { peer, lastMessage: this.stripRelations(message), unreadCount: unread });
     }
-    const items = [...conversations.values()];
+    const preferenceMap = new Map(preferences.map((item) => [item.peerId, item]));
+    const items = [...conversations.values()].map((item) => ({ ...item, preference: preferenceMap.get(item.peer.id) ?? { pinned: false, muted: false, archived: false } }))
+      .sort((left, right) => Number(right.preference.pinned) - Number(left.preference.pinned) || new Date(right.lastMessage.createdAt).getTime() - new Date(left.lastMessage.createdAt).getTime());
     return { items, totalUnread: items.reduce((sum, item) => sum + item.unreadCount, 0) };
   }
 
@@ -48,23 +52,27 @@ export class ChatService {
       ]
     };
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.privateMessage.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
+      this.prisma.privateMessage.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize, include: { replyTo: { select: { id: true, body: true, senderId: true, status: true } }, reactions: { select: { emoji: true, userId: true } } } }),
       this.prisma.privateMessage.count({ where })
     ]);
     return { items: items.reverse(), total, page, pageSize, hasNextPage: page * pageSize < total };
   }
 
-  async send(sender: User, input: SendPrivateMessageDto) {
+  async send(sender: User, input: SendPrivateMessageDto, file?: Express.Multer.File) {
     if (sender.id === input.recipientId) throw new BadRequestException("Kullanıcı kendisine mesaj gönderemez.");
     const recipient = await this.prisma.user.findUnique({ where: { id: input.recipientId }, select: peerSelect });
     if (!recipient || recipient.status !== UserStatus.active) throw new NotFoundException("Alıcı bulunamadı.");
     await this.ensureMessagingAllowed(sender.id, recipient.id);
+    if (input.replyToId) {
+      const reply = await this.prisma.privateMessage.findFirst({ where: { id: input.replyToId, status: "active", OR: [{ senderId: sender.id, recipientId: recipient.id }, { senderId: recipient.id, recipientId: sender.id }] }, select: { id: true } });
+      if (!reply) throw new BadRequestException("Yanıtlanan mesaj bu konuşmada bulunamadı.");
+    }
     const preference = await this.prisma.notificationPreference.findUnique({
       where: { userId_topic: { userId: recipient.id, topic: "private_message" } }, select: { channel: true }
     });
     return this.prisma.$transaction(async (tx) => {
       const message = await tx.privateMessage.create({
-        data: { senderId: sender.id, recipientId: recipient.id, body: input.body.trim() }
+        data: { senderId: sender.id, recipientId: recipient.id, body: input.body.trim(), replyToId: input.replyToId, attachmentUrl: file ? `/uploads/${file.filename}` : undefined, attachmentType: file?.mimetype, attachmentName: file?.originalname, attachmentSize: file?.size }
       });
       if (preference?.channel !== "none") {
         await tx.notification.create({
@@ -81,6 +89,42 @@ export class ChatService {
       return message;
     });
   }
+
+  async search(userId: string, query: string) {
+    const term = query.trim();
+    if (term.length < 2) return [];
+    const items = await this.prisma.privateMessage.findMany({ where: { status: "active", body: { contains: term, mode: "insensitive" }, OR: [{ senderId: userId }, { recipientId: userId }] }, orderBy: { createdAt: "desc" }, take: 50, include: { sender: { select: peerSelect }, recipient: { select: peerSelect } } });
+    return items.map((message) => ({ ...this.stripRelations(message), peer: message.senderId === userId ? message.recipient : message.sender }));
+  }
+
+  async edit(userId: string, id: string, input: EditPrivateMessageDto) {
+    const message = await this.prisma.privateMessage.findUnique({ where: { id } });
+    if (!message || message.status !== "active") throw new NotFoundException("Mesaj bulunamadı.");
+    if (message.senderId !== userId) throw new ForbiddenException("Yalnız kendi mesajınızı düzenleyebilirsiniz.");
+    if (Date.now() - message.createdAt.getTime() > 15 * 60_000) throw new BadRequestException("Mesajlar yalnız ilk 15 dakika düzenlenebilir.");
+    return this.prisma.privateMessage.update({ where: { id }, data: { body: input.body.trim(), editedAt: new Date() }, include: { replyTo: { select: { id: true, body: true, senderId: true, status: true } }, reactions: { select: { emoji: true, userId: true } } } });
+  }
+
+  async remove(userId: string, id: string) {
+    const message = await this.prisma.privateMessage.findUnique({ where: { id } });
+    if (!message || message.status !== "active") throw new NotFoundException("Mesaj bulunamadı.");
+    if (message.senderId !== userId) throw new ForbiddenException("Yalnız kendi mesajınızı silebilirsiniz.");
+    return this.prisma.privateMessage.update({ where: { id }, data: { status: "deleted", body: "Bu mesaj silindi", attachmentUrl: null, attachmentType: null, attachmentName: null, attachmentSize: null, deletedAt: new Date() } });
+  }
+
+  async toggleReaction(userId: string, id: string, input: MessageReactionDto) {
+    const message = await this.prisma.privateMessage.findFirst({ where: { id, status: "active", OR: [{ senderId: userId }, { recipientId: userId }] }, select: { id: true } });
+    if (!message) throw new NotFoundException("Mesaj bulunamadı.");
+    const key = { messageId_userId_emoji: { messageId: id, userId, emoji: input.emoji } };
+    const existing = await this.prisma.messageReaction.findUnique({ where: key });
+    if (existing) await this.prisma.messageReaction.delete({ where: key });
+    else await this.prisma.messageReaction.create({ data: { messageId: id, userId, emoji: input.emoji } });
+    return { active: !existing, emoji: input.emoji };
+  }
+
+  setTyping(userId: string, peerId: string) { this.typing.set(`${userId}:${peerId}`, Date.now() + 6000); return { ok: true }; }
+  getTyping(userId: string, peerId: string) { return { typing: (this.typing.get(`${peerId}:${userId}`) ?? 0) > Date.now() }; }
+  async setPreference(userId: string, peerId: string, input: ConversationPreferenceDto) { await this.ensureConversationVisible(userId, peerId); return this.prisma.conversationPreference.upsert({ where: { userId_peerId: { userId, peerId } }, create: { userId, peerId, ...input }, update: input }); }
 
   async markRead(userId: string, peerId: string) {
     await this.ensureConversationVisible(userId, peerId);
@@ -123,7 +167,9 @@ export class ChatService {
   }
 
   private stripRelations<T extends { sender?: unknown; recipient?: unknown }>(message: T) {
-    const { sender: _sender, recipient: _recipient, ...data } = message;
+    const data = { ...message };
+    delete data.sender;
+    delete data.recipient;
     return data;
   }
 }

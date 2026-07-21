@@ -1,103 +1,57 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, MessageCircle, Send } from "lucide-react";
-import { type FormEvent, useEffect, useMemo } from "react";
+import { Archive, ArrowLeft, Check, CheckCheck, Edit3, File, ImagePlus, MessageCircle, MoreVertical, Pin, Reply, Search, Send, Smile, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import type { FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import {
-  getUserSession, listConversationMessages, listConversations, listMemberSuggestions,
-  markConversationRead, sendPrivateMessage
-} from "../lib/api";
+import type { PrivateChatMessage } from "@konnektora/shared";
+import { deletePrivateMessage, editPrivateMessage, getTyping, getUserSession, listConversationMessages, listConversations, listMemberSuggestions, markConversationRead, searchPrivateMessages, sendPrivateMessage, sendTyping, toggleMessageReaction, updateConversationPreference } from "../lib/api";
+
+const emojis = ["❤️", "👍", "😂", "😮", "😢", "🎉"];
 
 export function MessagesPage() {
-  const user = getUserSession();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const queryClient = useQueryClient();
-  const conversationsQuery = useQuery({ queryKey: ["conversations", user?.id], queryFn: listConversations, enabled: Boolean(user) });
-  const suggestionsQuery = useQuery({ queryKey: ["member-suggestions", user?.id], queryFn: listMemberSuggestions, enabled: Boolean(user) });
-  const selectedPeerId = searchParams.get("peer") ?? "";
-  const messagesQuery = useQuery({
-    queryKey: ["conversation-messages", selectedPeerId],
-    queryFn: () => listConversationMessages(selectedPeerId),
-    enabled: Boolean(user && selectedPeerId)
-  });
-  const readMutation = useMutation({
-    mutationFn: markConversationRead,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["conversations", user?.id] })
-  });
-  const sendMutation = useMutation({
-    mutationFn: (body: string) => sendPrivateMessage(selectedPeerId, body),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["conversation-messages", selectedPeerId] });
-      void queryClient.invalidateQueries({ queryKey: ["conversations", user?.id] });
-    }
-  });
-  const conversations = conversationsQuery.data?.items ?? [];
-  const selectedConversation = conversations.find((item) => item.peer.id === selectedPeerId);
-  const selectedSuggestion = suggestionsQuery.data?.find((item) => item.id === selectedPeerId);
-  const selectedPeer = selectedConversation?.peer ?? (selectedSuggestion ? {
-    id: selectedSuggestion.id, name: selectedSuggestion.name, username: selectedSuggestion.username, status: "active" as const
-  } : null);
-  const newRecipients = useMemo(
-    () => (suggestionsQuery.data ?? []).filter((member) => member.id !== user?.id && !conversations.some((item) => item.peer.id === member.id)),
-    [conversations, suggestionsQuery.data, user?.id]
-  );
+  const user = getUserSession(); const [params, setParams] = useSearchParams(); const client = useQueryClient();
+  const peerId = params.get("peer") ?? ""; const [query, setQuery] = useState(""); const [showArchived, setShowArchived] = useState(false);
+  const conversations = useQuery({ queryKey: ["conversations", user?.id], queryFn: listConversations, enabled: Boolean(user), refetchInterval: 15_000 });
+  const suggestions = useQuery({ queryKey: ["member-suggestions", user?.id], queryFn: listMemberSuggestions, enabled: Boolean(user) });
+  const messages = useQuery({ queryKey: ["conversation-messages", peerId], queryFn: () => listConversationMessages(peerId), enabled: Boolean(user && peerId), refetchInterval: 5_000 });
+  const typing = useQuery({ queryKey: ["typing", peerId], queryFn: () => getTyping(peerId), enabled: Boolean(user && peerId), refetchInterval: 2_000 });
+  const searchResults = useQuery({ queryKey: ["message-search", query], queryFn: () => searchPrivateMessages(query), enabled: query.trim().length >= 2 });
+  const refresh = () => { void client.invalidateQueries({ queryKey: ["conversation-messages", peerId] }); void client.invalidateQueries({ queryKey: ["conversations"] }); };
+  useEffect(() => { const selected = conversations.data?.items.find((item) => item.peer.id === peerId); if (selected?.unreadCount) void markConversationRead(peerId).then(refresh); }, [peerId, conversations.data?.items]);
+  if (!user) return <section className="page empty-state"><MessageCircle size={40}/><h1>Mesajlar</h1><p>Konuşmalarını görmek için giriş yap.</p><Link className="primary-action" to="/account">Giriş yap</Link></section>;
+  const list = (conversations.data?.items ?? []).filter((item) => Boolean(item.preference?.archived) === showArchived);
+  const selectedConversation = conversations.data?.items.find((item) => item.peer.id === peerId);
+  const suggested = suggestions.data?.find((item) => item.id === peerId);
+  const peer = selectedConversation?.peer ?? (suggested ? { id: suggested.id, name: suggested.name, username: suggested.username, status: "active" as const } : null);
+  const newRecipients = (suggestions.data ?? []).filter((item) => item.id !== user.id && !(conversations.data?.items ?? []).some((conversation) => conversation.peer.id === item.id));
+  return <section className={`page messages-layout advanced-messages${peerId ? " has-selection" : ""}`}>
+    <aside className="conversation-sidebar"><div className="message-sidebar-head"><div><h1>Mesajlar</h1><span>{conversations.data?.totalUnread ?? 0} okunmamış</span></div><button className={showArchived ? "active" : ""} title="Arşiv" onClick={() => setShowArchived((value) => !value)}><Archive size={18}/></button></div>
+      <div className="message-search"><Search size={17}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Mesajlarda ara…"/><>{query ? <button onClick={() => setQuery("")}><X size={15}/></button> : null}</></div>
+      {query.trim().length >= 2 ? <div className="message-search-results">{searchResults.data?.map((item) => <button key={item.id} onClick={() => { if (item.peer) setParams({ peer: item.peer.id }); setQuery(""); }}><strong>{item.peer?.name}</strong><span>{item.body}</span></button>)}{!searchResults.isLoading && !searchResults.data?.length ? <small>Sonuç bulunamadı.</small> : null}</div> : <>
+      <label className="new-conversation-field">Yeni konuşma<select value="" onChange={(event) => event.target.value && setParams({ peer: event.target.value })}><option value="">Üye seç</option>{newRecipients.map((member) => <option key={member.id} value={member.id}>{member.username ? `@${member.username}` : member.name}</option>)}</select></label>
+      <div className="conversation-list">{list.map((conversation) => <button className={conversation.peer.id === peerId ? "conversation-card is-active" : "conversation-card"} key={conversation.peer.id} onClick={() => setParams({ peer: conversation.peer.id })}><span className="conversation-avatar">{conversation.peer.name[0]}</span><span><strong>{conversation.peer.name}{conversation.preference?.pinned ? <Pin size={12}/> : null}{conversation.preference?.muted ? <VolumeX size={12}/> : null}</strong><small>{conversation.lastMessage.attachmentUrl ? "📎 " : ""}{conversation.lastMessage.body}</small></span>{conversation.unreadCount ? <b>{conversation.unreadCount}</b> : null}</button>)}{!list.length ? <p className="form-help">{showArchived ? "Arşivlenmiş konuşma yok." : "Henüz konuşman yok."}</p> : null}</div></>}
+    </aside>
+    <div className="message-thread">{peer ? <MessageThread peer={peer} messages={messages.data?.items ?? []} currentUserId={user.id} typing={Boolean(typing.data?.typing)} preference={selectedConversation?.preference} onBack={() => setParams({})} onChanged={refresh}/> : <div className="empty-state"><MessageCircle size={44}/><h2>Bir konuşma seç</h2><p>Mesajların burada görüntülenecek.</p></div>}</div>
+  </section>;
+}
 
-  useEffect(() => {
-    if (selectedPeerId && selectedConversation?.unreadCount) readMutation.mutate(selectedPeerId);
-  }, [selectedPeerId, selectedConversation?.unreadCount]);
+function MessageThread({ peer, messages, currentUserId, typing, preference, onBack, onChanged }: { peer: { id: string; name: string; username?: string | null }; messages: PrivateChatMessage[]; currentUserId: string; typing: boolean; preference?: { pinned: boolean; muted: boolean; archived: boolean }; onBack: () => void; onChanged: () => void }) {
+  const [body, setBody] = useState(""); const [replyTo, setReplyTo] = useState<PrivateChatMessage | null>(null); const [editing, setEditing] = useState<PrivateChatMessage | null>(null); const [attachment, setAttachment] = useState<File | null>(null); const [menu, setMenu] = useState(false); const fileRef = useRef<HTMLInputElement>(null); const streamRef = useRef<HTMLDivElement>(null); const typingTimer = useRef<number | undefined>(undefined);
+  const send = useMutation({ mutationFn: () => sendPrivateMessage(peer.id, body || (attachment ? "Dosya" : ""), { replyToId: replyTo?.id, attachment: attachment ?? undefined }), onSuccess: () => { setBody(""); setReplyTo(null); setAttachment(null); onChanged(); } });
+  const edit = useMutation({ mutationFn: () => editPrivateMessage(editing!.id, body), onSuccess: () => { setBody(""); setEditing(null); onChanged(); } });
+  const remove = useMutation({ mutationFn: deletePrivateMessage, onSuccess: onChanged });
+  const react = useMutation({ mutationFn: ({ id, emoji }: { id: string; emoji: string }) => toggleMessageReaction(id, emoji), onSuccess: onChanged });
+  const preferenceMutation = useMutation({ mutationFn: (input: { pinned?: boolean; muted?: boolean; archived?: boolean }) => updateConversationPreference(peer.id, input), onSuccess: () => { setMenu(false); onChanged(); } });
+  useEffect(() => { streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight }); }, [messages.length]);
+  function type(value: string) { setBody(value); window.clearTimeout(typingTimer.current); void sendTyping(peer.id); typingTimer.current = window.setTimeout(() => undefined, 3000); }
+  function submit(event: FormEvent) { event.preventDefault(); if (!body.trim() && !attachment) return; if (editing) edit.mutate(); else send.mutate(); }
+  return <><header className="message-thread-header"><button className="ghost-action messages-back" onClick={onBack}><ArrowLeft size={18}/> Geri</button><div className="thread-peer-avatar">{peer.name[0]}</div><div><strong>{peer.name}</strong><span>{typing ? "yazıyor…" : peer.username ? `@${peer.username}` : "Konnektora üyesi"}</span></div><div className="thread-menu"><button onClick={() => setMenu((value) => !value)}><MoreVertical size={19}/></button>{menu ? <div><button onClick={() => preferenceMutation.mutate({ pinned: !preference?.pinned })}><Pin size={15}/>{preference?.pinned ? "Sabitlemeyi kaldır" : "Sabitle"}</button><button onClick={() => preferenceMutation.mutate({ muted: !preference?.muted })}>{preference?.muted ? <Volume2 size={15}/> : <VolumeX size={15}/>}{preference?.muted ? "Sesi aç" : "Sessize al"}</button><button onClick={() => preferenceMutation.mutate({ archived: !preference?.archived })}><Archive size={15}/>{preference?.archived ? "Arşivden çıkar" : "Arşivle"}</button></div> : null}</div></header>
+    <div className="message-stream" ref={streamRef} aria-live="polite">{messages.map((message) => <MessageBubble key={message.id} message={message} mine={message.senderId === currentUserId} currentUserId={currentUserId} onReply={() => { setReplyTo(message); setEditing(null); }} onEdit={() => { setEditing(message); setReplyTo(null); setBody(message.body); }} onDelete={() => window.confirm("Mesaj silinsin mi?") && remove.mutate(message.id)} onReact={(emoji) => react.mutate({ id: message.id, emoji })}/>)}{typing ? <div className="typing-bubble"><i/><i/><i/></div> : null}{!messages.length ? <p className="empty-state">İlk mesajı sen gönder.</p> : null}</div>
+    {(replyTo || editing || attachment) ? <div className="composer-context"><div>{replyTo ? <><Reply size={15}/><span><strong>{replyTo.senderId === currentUserId ? "Sen" : peer.name}</strong>{replyTo.body}</span></> : editing ? <><Edit3 size={15}/><span><strong>Mesajı düzenle</strong>{editing.body}</span></> : <><File size={15}/><span><strong>Ek</strong>{attachment?.name}</span></>}</div><button onClick={() => { setReplyTo(null); setEditing(null); setAttachment(null); setBody(""); }}><X size={17}/></button></div> : null}
+    <form className="message-composer advanced-composer" onSubmit={submit}><input ref={fileRef} hidden type="file" accept="image/*,video/mp4,application/pdf,text/plain" onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}/><button type="button" title="Dosya ekle" onClick={() => fileRef.current?.click()}><ImagePlus size={20}/></button><textarea aria-label="Mesaj" value={body} onChange={(event) => type(event.target.value)} maxLength={5000} placeholder="Bir mesaj yaz…" rows={1}/><button className="primary-action" disabled={send.isPending || edit.isPending}><Send size={18}/><span>Gönder</span></button></form></>;
+}
 
-  if (!user) {
-    return <section className="page empty-state"><MessageCircle size={40} /><h1>Mesajlar</h1><p>Konuşmalarını görmek için giriş yap.</p><Link className="primary-action" to="/account">Giriş yap</Link></section>;
-  }
-
-  return (
-    <section className={`page messages-layout${selectedPeerId ? " has-selection" : ""}`}>
-      <aside className="conversation-sidebar">
-        <div className="section-header compact"><h1>Mesajlar</h1><span>{conversationsQuery.data?.totalUnread ?? 0} okunmamış</span></div>
-        <label className="new-conversation-field">Yeni konuşma
-          <select value="" onChange={(event) => event.target.value && setSearchParams({ peer: event.target.value })}>
-            <option value="">Üye seç</option>
-            {newRecipients.map((member) => <option key={member.id} value={member.id}>{member.username ? `@${member.username}` : member.name}</option>)}
-          </select>
-        </label>
-        <div className="conversation-list">
-          {conversations.map((conversation) => (
-            <button className={conversation.peer.id === selectedPeerId ? "conversation-card is-active" : "conversation-card"} key={conversation.peer.id} onClick={() => setSearchParams({ peer: conversation.peer.id })} type="button">
-              <span className="conversation-avatar">{conversation.peer.name.slice(0, 1).toUpperCase()}</span>
-              <span><strong>{conversation.peer.username ? `@${conversation.peer.username}` : conversation.peer.name}</strong><small>{conversation.lastMessage.body}</small></span>
-              {conversation.unreadCount ? <b>{conversation.unreadCount}</b> : null}
-            </button>
-          ))}
-          {!conversationsQuery.isLoading && conversations.length === 0 ? <p className="form-help">Henüz konuşman yok. Benzer üyelerden birini seçerek başlayabilirsin.</p> : null}
-        </div>
-      </aside>
-      <div className="message-thread">
-        {selectedPeer ? (
-          <>
-            <header className="message-thread-header">
-              <button className="ghost-action messages-back" onClick={() => setSearchParams({})} type="button"><ArrowLeft size={18} /> Geri</button>
-              <div><strong>{selectedPeer.name}</strong><span>{selectedPeer.username ? `@${selectedPeer.username}` : "Konnektora üyesi"}</span></div>
-            </header>
-            <div className="message-stream" aria-live="polite">
-              {messagesQuery.data?.hasNextPage ? <p className="form-help">Daha eski mesajlar sonraki sayfalarda mevcut.</p> : null}
-              {messagesQuery.data?.items.map((message) => (
-                <article className={message.senderId === user.id ? "message-bubble is-mine" : "message-bubble"} key={message.id}>
-                  <p>{message.body}</p>
-                  <time dateTime={String(message.createdAt)}>{new Intl.DateTimeFormat("tr-TR", { dateStyle: "short", timeStyle: "short" }).format(new Date(message.createdAt))}</time>
-                </article>
-              ))}
-              {!messagesQuery.isLoading && !messagesQuery.data?.items.length ? <p className="empty-state">İlk mesajı sen gönder.</p> : null}
-            </div>
-            <form className="message-composer" onSubmit={(event: FormEvent<HTMLFormElement>) => {
-              event.preventDefault(); const form = new FormData(event.currentTarget); const body = String(form.get("body") || "").trim();
-              if (body) sendMutation.mutate(body); event.currentTarget.reset();
-            }}>
-              <textarea aria-label="Mesaj" maxLength={5000} name="body" placeholder="Bir mesaj yaz…" required rows={2} />
-              <button className="primary-action" disabled={sendMutation.isPending} type="submit"><Send size={18} /> Gönder</button>
-            </form>
-            {sendMutation.isError ? <p className="form-error">Mesaj gönderilemedi. Alıcının gizlilik ayarı veya engel durumu buna izin vermiyor olabilir.</p> : null}
-          </>
-        ) : <div className="empty-state"><MessageCircle size={44} /><h2>Bir konuşma seç</h2><p>Mesajların burada görüntülenecek.</p></div>}
-      </div>
-    </section>
-  );
+function MessageBubble({ message, mine, currentUserId, onReply, onEdit, onDelete, onReact }: { message: PrivateChatMessage; mine: boolean; currentUserId: string; onReply: () => void; onEdit: () => void; onDelete: () => void; onReact: (emoji: string) => void }) {
+  const [actions, setActions] = useState(false); const grouped = useMemo(() => Object.entries((message.reactions ?? []).reduce<Record<string, string[]>>((all, reaction) => ({ ...all, [reaction.emoji]: [...(all[reaction.emoji] ?? []), reaction.userId] }), {})), [message.reactions]);
+  return <article className={mine ? "message-bubble is-mine" : "message-bubble"}><div className="bubble-actions"><button onClick={onReply} title="Yanıtla"><Reply size={14}/></button><button onClick={() => setActions((value) => !value)} title="Tepki"><Smile size={14}/></button>{mine && message.status === "active" ? <><button onClick={onEdit} title="Düzenle"><Edit3 size={14}/></button><button onClick={onDelete} title="Sil"><Trash2 size={14}/></button></> : null}</div>{actions ? <div className="reaction-picker">{emojis.map((emoji) => <button key={emoji} onClick={() => { onReact(emoji); setActions(false); }}>{emoji}</button>)}</div> : null}{message.replyTo ? <div className="reply-preview"><Reply size={13}/>{message.replyTo.body}</div> : null}<p className={message.status === "deleted" ? "deleted-message" : ""}>{message.body}</p>{message.attachmentUrl ? message.attachmentType?.startsWith("image/") ? <a href={message.attachmentUrl} target="_blank"><img className="message-image" src={message.attachmentUrl} alt={message.attachmentName ?? "Mesaj görseli"}/></a> : <a className="message-file" href={message.attachmentUrl} target="_blank"><File size={18}/><span>{message.attachmentName ?? "Dosya"}<small>{message.attachmentSize ? `${Math.ceil(message.attachmentSize / 1024)} KB` : ""}</small></span></a> : null}<footer><time>{new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit" }).format(new Date(message.createdAt))}{message.editedAt ? " · düzenlendi" : ""}</time>{mine ? message.readAt ? <CheckCheck size={15} aria-label="Okundu"/> : <Check size={15} aria-label="Gönderildi"/> : null}</footer>{grouped.length ? <div className="message-reactions">{grouped.map(([emoji, users]) => <button className={users.includes(currentUserId) ? "active" : ""} key={emoji} onClick={() => onReact(emoji)}>{emoji} {users.length}</button>)}</div> : null}</article>;
 }

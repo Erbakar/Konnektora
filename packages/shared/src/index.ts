@@ -759,10 +759,19 @@ export const privateChatMessageSchema = z.object({
   senderId: z.string().uuid().nullable(),
   recipientId: z.string().uuid().nullable(),
   body: z.string().min(1).max(5000),
+  replyToId: z.string().uuid().nullable().optional(),
+  attachmentUrl: z.string().nullable().optional(),
+  attachmentType: z.string().nullable().optional(),
+  attachmentName: z.string().nullable().optional(),
+  attachmentSize: z.number().int().nonnegative().nullable().optional(),
   status: z.string(),
   readAt: z.string().datetime().or(z.date()).nullable(),
+  editedAt: z.string().datetime().or(z.date()).nullable().optional(),
+  deletedAt: z.string().datetime().or(z.date()).nullable().optional(),
   createdAt: z.string().datetime().or(z.date()),
-  updatedAt: z.string().datetime().or(z.date())
+  updatedAt: z.string().datetime().or(z.date()),
+  replyTo: z.object({ id: z.string().uuid(), body: z.string(), senderId: z.string().uuid().nullable(), status: z.string() }).nullable().optional(),
+  reactions: z.array(z.object({ emoji: z.string(), userId: z.string().uuid() })).optional()
 });
 
 export const conversationSchema = z.object({
@@ -773,7 +782,12 @@ export const conversationSchema = z.object({
     status: userStatusSchema
   }),
   lastMessage: privateChatMessageSchema,
-  unreadCount: z.number().int().nonnegative()
+  unreadCount: z.number().int().nonnegative(),
+  preference: z.object({ pinned: z.boolean(), muted: z.boolean(), archived: z.boolean() }).optional()
+});
+
+export const messageSearchResultSchema = privateChatMessageSchema.extend({
+  peer: z.object({ id: z.string().uuid(), name: z.string(), username: z.string().nullable(), status: userStatusSchema }).nullable()
 });
 
 export const conversationListSchema = z.object({
@@ -950,6 +964,7 @@ export type ProfileMedia = z.infer<typeof profileMediaSchema>;
 export type AdminComment = z.infer<typeof adminCommentSchema>;
 export type AdminPrivateMessage = z.infer<typeof adminPrivateMessageSchema>;
 export type PrivateChatMessage = z.infer<typeof privateChatMessageSchema>;
+export type MessageSearchResult = z.infer<typeof messageSearchResultSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
 export type ConversationList = z.infer<typeof conversationListSchema>;
 export type ConversationMessages = z.infer<typeof conversationMessagesSchema>;
