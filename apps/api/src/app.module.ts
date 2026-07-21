@@ -16,6 +16,7 @@ import { ReportsModule } from "./reports/reports.module";
 import { TagsModule } from "./tags/tags.module";
 import { SocialModule } from "./social/social.module";
 import { IdentityModule } from "./identity/identity.module";
+import { DiscoveryModule } from "./discovery/discovery.module";
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { IdentityModule } from "./identity/identity.module";
     ChatModule,
     ContentAdminModule,
     ContentModule,
+    DiscoveryModule,
     AdminModule,
     EventsModule,
     IdentityModule,

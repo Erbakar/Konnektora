@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { HomeEventTile } from "../components/HomeEventTile";
-import { listAnnouncements, listEvents, listTags } from "../lib/api";
+import { DiscoveryCard } from "../components/DiscoveryCard";
+import { getDiscoveryFeed, listAnnouncements, listEvents, listTags } from "../lib/api";
 
 const categoryMeta: Record<string, { icon: typeof Rocket; copy: string }> = {
   startup: {
@@ -58,6 +59,7 @@ export function HomePage() {
     queryKey: ["announcements", "home"],
     queryFn: listAnnouncements
   });
+  const { data: discovery } = useQuery({ queryKey: ["discovery-feed"], queryFn: () => getDiscoveryFeed() });
   const events = eventList?.items ?? [];
 
   const localEvents = events.filter((event) => event.city).slice(0, 8);
@@ -86,6 +88,7 @@ export function HomePage() {
               Join the beta
             </Link>
           </div>
+          <form className="hero-search" action="/search"><Search size={20} /><input aria-label="Search anything" name="q" placeholder="Search anything" minLength={2} required /><button type="submit">Search</button></form>
         </div>
       </section>
 
@@ -104,6 +107,13 @@ export function HomePage() {
           ))}
         </section>
       ) : null}
+
+      {discovery ? <section className="corp-section discovery-feed-section">
+        <div className="corp-section-head"><div><h2>Community feed</h2><p>Popüler hesaplar, yeni üyeler ve gündemdeki ilgi alanları.</p></div><Link className="corp-link" to="/search">Search anything <ArrowRight size={18} /></Link></div>
+        <h3>Popüler hesaplar</h3><div className="discovery-row">{discovery.popularMembers.slice(0, 6).map((item) => <DiscoveryCard item={item} key={item.id} />)}</div>
+        <h3>Yeni üyeler</h3><div className="discovery-row">{discovery.newMembers.slice(0, 6).map((item) => <DiscoveryCard item={item} key={item.id} />)}</div>
+        <h3>Trending tags</h3><div className="discovery-row compact">{discovery.trendingTags.slice(0, 8).map((item) => <DiscoveryCard item={item} key={item.id} />)}</div>
+      </section> : null}
 
       <section className="corp-section">
         <div className="corp-section-head">

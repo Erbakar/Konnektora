@@ -112,6 +112,27 @@ export const memberScanSchema = z.object({
   following: z.boolean()
 });
 export const memberScansSchema = z.array(memberScanSchema);
+export const discoveryItemSchema = z.object({
+  kind: z.enum(["user", "tag", "event", "place"]),
+  id: z.string().uuid(),
+  title: z.string(),
+  subtitle: z.string().nullable(),
+  href: z.string(),
+  imageUrl: z.string().nullable(),
+  meta: z.string().nullable()
+});
+export const discoveryFeedSchema = z.object({
+  popularMembers: z.array(discoveryItemSchema),
+  newMembers: z.array(discoveryItemSchema),
+  localEvents: z.array(discoveryItemSchema),
+  trendingTags: z.array(discoveryItemSchema),
+  popularPlaces: z.array(discoveryItemSchema)
+});
+export const discoverySearchSchema = z.object({
+  query: z.string(),
+  total: z.number().int().nonnegative(),
+  items: z.array(discoveryItemSchema)
+});
 export const userStatusSchema = z.enum(["invited", "pending", "active", "disabled", "frozen", "deleted", "suspended", "banned"]);
 export const eventParticipantStatusSchema = z.enum([
   "invited",
@@ -824,6 +845,9 @@ export type MemberCard = z.infer<typeof memberCardSchema>;
 export type OnboardingStatus = z.infer<typeof onboardingStatusSchema>;
 export type MemberPass = z.infer<typeof memberPassSchema>;
 export type MemberScan = z.infer<typeof memberScanSchema>;
+export type DiscoveryItem = z.infer<typeof discoveryItemSchema>;
+export type DiscoveryFeed = z.infer<typeof discoveryFeedSchema>;
+export type DiscoverySearch = z.infer<typeof discoverySearchSchema>;
 export type TagSentiment = z.infer<typeof tagSentimentSchema>;
 export type TagAffinity = z.infer<typeof tagAffinitySchema>;
 export type TagComment = z.infer<typeof tagCommentSchema>;

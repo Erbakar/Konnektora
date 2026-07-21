@@ -14,6 +14,8 @@ import {
   contentReportSchema,
   conversationListSchema,
   conversationMessagesSchema,
+  discoveryFeedSchema,
+  discoverySearchSchema,
   cmsCategorySchema,
   cmsPolicySchema,
   eventListSchema,
@@ -70,6 +72,9 @@ import {
   type ContentReport,
   type ConversationList,
   type ConversationMessages,
+  type DiscoveryFeed,
+  type DiscoveryItem,
+  type DiscoverySearch,
   type Event,
   type EventList,
   type EventParticipant,
@@ -603,6 +608,8 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   if (pathname === "/me/member-pass/rotate" && method === "PATCH") return schema.parse(rotateMockMemberPass());
   if (pathname === "/me/member-scans" && method === "GET") return schema.parse(listMockMemberScans());
   if (pathname === "/me/member-scans" && method === "POST") return schema.parse(scanMockMember(parseBody<{ payload: string; method: "qr" | "nfc" }>(options)));
+  if (pathname === "/discover/feed" && method === "GET") return schema.parse(getMockDiscoveryFeed(new URLSearchParams(queryString)));
+  if (pathname === "/discover/search" && method === "GET") return schema.parse(searchMockDiscovery(new URLSearchParams(queryString).get("q") ?? ""));
 
   if (pathname.startsWith("/tags/") && pathname.endsWith("/comments") && method === "GET") {
     return schema.parse(listMockTagComments(pathname.slice("/tags/".length, -"/comments".length)));
@@ -3160,6 +3167,39 @@ function getMockOnboardingStatus(): OnboardingStatus {
   return onboardingStatusSchema.parse({ completed: Boolean(stored?.onboardingCompletedAt), completedAt: stored?.onboardingCompletedAt ?? null, progress: steps.filter((step) => step.completed).length * 20, currentStep: steps.find((step) => !step.completed) ?? null, steps });
 }
 
+function mockUserDiscoveryItem(user: MockUser): DiscoveryItem { return { kind: "user", id: user.id, title: user.name, subtitle: user.username ? `@${user.username}` : null, href: `/messages?peer=${user.id}`, imageUrl: null, meta: `${user.followerCount ?? 0} takipçi${user.city || user.country ? ` · ${user.city ?? user.country}` : ""}` }; }
+function mockTagDiscoveryItem(tag: Tag): DiscoveryItem { return { kind: "tag", id: tag.id, title: `#${tag.name}`, subtitle: tag.description, href: `/events?tag=${tag.slug}`, imageUrl: null, meta: `${tag.usageCount} kullanım` }; }
+function mockEventDiscoveryItem(event: Event): DiscoveryItem { return { kind: "event", id: event.id, title: event.title, subtitle: event.summary, href: `/events/${event.slug}`, imageUrl: event.coverImageUrl, meta: `${event.city ?? "Online"} · ${event.startsAt}` }; }
+function mockPlaceDiscoveryItem(place: AdminPlace): DiscoveryItem { return { kind: "place", id: place.id, title: place.name, subtitle: place.description, href: `/places/${place.slug}`, imageUrl: place.coverImageUrl, meta: `${place.followerCount} takipçi${place.city ? ` · ${place.city}` : ""}` }; }
+
+function getMockDiscoveryFeed(params: URLSearchParams): DiscoveryFeed {
+  const profile = getUserSession() ? getMockProfile() : null;
+  const city = (params.get("city") || profile?.city || "").toLowerCase();
+  const country = (params.get("country") || profile?.country || "").toLowerCase();
+  const members = getAllMockUsers().filter((user) => user.status !== "banned");
+  const events = getStoredEvents().filter((event) => event.status === "published" && (!city || event.city?.toLowerCase() === city) && (!country || !city && event.country?.toLowerCase() === country));
+  const places = listMockPlaces(new URLSearchParams()).filter((place) => place.status === "active" && (!city || place.city?.toLowerCase() === city) && (!country || !city && place.country?.toLowerCase() === country));
+  return discoveryFeedSchema.parse({
+    popularMembers: [...members].sort((a, b) => (b.followerCount ?? 0) - (a.followerCount ?? 0)).slice(0, 8).map(mockUserDiscoveryItem),
+    newMembers: [...members].sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))).slice(0, 8).map(mockUserDiscoveryItem),
+    localEvents: (events.length ? events : getStoredEvents().filter((event) => event.status === "published")).slice(0, 8).map(mockEventDiscoveryItem),
+    trendingTags: [...getStoredTags()].sort((a, b) => b.usageCount - a.usageCount).slice(0, 10).map(mockTagDiscoveryItem),
+    popularPlaces: (places.length ? places : listMockPlaces(new URLSearchParams()).filter((place) => place.status === "active")).slice(0, 8).map(mockPlaceDiscoveryItem)
+  });
+}
+
+function searchMockDiscovery(query: string): DiscoverySearch {
+  const needle = query.trim().toLowerCase();
+  const matches = (value: unknown) => JSON.stringify(value).toLowerCase().includes(needle);
+  const items = [
+    ...getAllMockUsers().filter(matches).slice(0, 10).map(mockUserDiscoveryItem),
+    ...getStoredTags().filter(matches).slice(0, 10).map(mockTagDiscoveryItem),
+    ...getStoredEvents().filter((event) => event.status === "published" && matches(event)).slice(0, 10).map(mockEventDiscoveryItem),
+    ...listMockPlaces(new URLSearchParams()).filter((place) => place.status === "active" && matches(place)).slice(0, 10).map(mockPlaceDiscoveryItem)
+  ];
+  return discoverySearchSchema.parse({ query: query.trim(), total: items.length, items });
+}
+
 function completeMockOnboarding() {
   const status = getMockOnboardingStatus();
   if (status.steps.slice(0, 4).some((step) => !step.completed)) throw new Error("Zorunlu onboarding adımları eksik");
@@ -4031,6 +4071,8 @@ export function markConversationRead(peerId: string): Promise<{ updated: number 
 }
 
 export function getOnboardingStatus(): Promise<OnboardingStatus> { return requestJson("/me/onboarding", onboardingStatusSchema, { auth: "user" }); }
+export function getDiscoveryFeed(params?: { city?: string; country?: string }): Promise<DiscoveryFeed> { const query = new URLSearchParams(); if (params?.city) query.set("city", params.city); if (params?.country) query.set("country", params.country); return requestJson(`/discover/feed${query.size ? `?${query}` : ""}`, discoveryFeedSchema, { auth: "user" }); }
+export function searchDiscovery(query: string): Promise<DiscoverySearch> { return requestJson(`/discover/search?q=${encodeURIComponent(query)}`, discoverySearchSchema, { auth: "user" }); }
 export function completeOnboarding(): Promise<OnboardingStatus> { return requestJson("/me/onboarding/complete", onboardingStatusSchema, { auth: "user", method: "POST" }); }
 export function getMemberPass(): Promise<MemberPass> { return requestJson("/me/member-pass", memberPassSchema, { auth: "user" }); }
 export function rotateMemberPass(): Promise<MemberPass> { return requestJson("/me/member-pass/rotate", memberPassSchema, { auth: "user", method: "PATCH" }); }
