@@ -11,6 +11,7 @@ const AcceptInvitePage = lazy(() => import("./pages/AuthTokenPage").then((module
 const ResetPasswordPage = lazy(() => import("./pages/AuthTokenPage").then((module) => ({ default: module.ResetPasswordPage })));
 const VerifyEmailPage = lazy(() => import("./pages/AuthTokenPage").then((module) => ({ default: module.VerifyEmailPage })));
 const ContactPage = lazy(() => import("./pages/ContactPage").then((module) => ({ default: module.ContactPage })));
+const HelpCenterPage = lazy(() => import("./pages/HelpCenterPage").then((module) => ({ default: module.HelpCenterPage })));
 const ContactsPage = lazy(() => import("./pages/ContactsPage").then((module) => ({ default: module.ContactsPage })));
 const EventDetailPage = lazy(() => import("./pages/EventDetailPage").then((module) => ({ default: module.EventDetailPage })));
 const EventsPage = lazy(() => import("./pages/EventsPage").then((module) => ({ default: module.EventsPage })));
@@ -52,6 +53,11 @@ const router = createBrowserRouter([
       { path: "onboarding", element: <OnboardingPage /> },
       { path: "account", element: <AccountPage /> },
       { path: "contact", element: <ContactPage /> },
+      { path: "help", element: <HelpCenterPage /> },
+      { path: "help/faqs", element: <HelpCenterPage /> },
+      { path: "help/faqs/:categorySlug", element: <HelpCenterPage /> },
+      { path: "help/faq/:faqId", element: <HelpCenterPage /> },
+      { path: "help/search", element: <HelpCenterPage /> },
       { path: "contacts", element: <ContactsPage /> },
       { path: "verify-email", element: <VerifyEmailPage /> },
       { path: "reset-password", element: <ResetPasswordPage /> },

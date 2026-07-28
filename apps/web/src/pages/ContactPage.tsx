@@ -1,5 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
+import { ArrowLeft } from "lucide-react";
+import { Link } from "react-router-dom";
 import { createUserMessage, type UserMessageInput } from "../lib/api";
 import type { UserMessageType } from "@konnektora/shared";
 
@@ -30,7 +32,8 @@ export function ContactPage() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const input: UserMessageInput = {
       type: messageType,
       category: String(form.get("category") || "") || undefined,
@@ -43,17 +46,18 @@ export function ContactPage() {
     };
 
     mutation.mutate(input, {
-      onSuccess: () => event.currentTarget.reset()
+      onSuccess: () => formElement.reset()
     });
   }
 
   return (
     <section className="page contact-page">
+      <Link className="back-link" to="/help"><ArrowLeft size={16} /> Yardım merkezine dön</Link>
       <div className="section-header">
         <div>
           <p className="eyebrow">Support</p>
-          <h1>Konnektora ile iletişime geç</h1>
-          <p className="lead">FAQ sorusu, hesap dondurma talebi veya genel mesaj gönderebilirsin.</p>
+          <h1>Bize mesaj gönder</h1>
+          <p className="lead">Konuyu seç, mesajını ilet; destek ekibimiz en kısa sürede yanıtlasın.</p>
         </div>
       </div>
       <form className="admin-form compact-form" onSubmit={handleSubmit}>
@@ -98,7 +102,7 @@ export function ContactPage() {
         <button className="primary-action" disabled={mutation.isPending} type="submit">
           {mutation.isPending ? "Gönderiliyor" : "Mesaj gönder"}
         </button>
-        {mutation.data ? <p className="form-success">Mesajın alındı. Admin panelde incelenecek.</p> : null}
+        {mutation.data ? <div className="support-success" role="status"><strong>Mesajınız gönderildi.</strong><span>En kısa sürede size yanıt vereceğiz.</span></div> : null}
         {mutation.isError ? <p className="form-error">Mesaj gönderilemedi. Lütfen tekrar dene.</p> : null}
       </form>
     </section>

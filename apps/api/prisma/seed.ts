@@ -48,6 +48,36 @@ async function main() {
     }
   });
 
+  const faqCategories = await Promise.all(
+    [
+      { id: "10000000-0000-4000-8000-000000000001", name: "Hesap ve profil", slug: "hesap-ve-profil", description: "Hesap, profil ve gizlilik ayarları" },
+      { id: "10000000-0000-4000-8000-000000000002", name: "Etkinlikler", slug: "etkinlikler", description: "Katılım, davet ve etkinlik yönetimi" },
+      { id: "10000000-0000-4000-8000-000000000003", name: "Ödemeler", slug: "odemeler", description: "Ödeme, iade ve faturalandırma" }
+    ].map((category) => prisma.cmsCategory.upsert({
+      where: { slug: category.slug },
+      update: { name: category.name, description: category.description, type: "faq", status: "active" },
+      create: { ...category, type: "faq", status: "active" }
+    }))
+  );
+
+  const faqCategoryBySlug = new Map(faqCategories.map((category) => [category.slug, category.id]));
+  const seededFaqs = [
+    { id: "20000000-0000-4000-8000-000000000001", category: "hesap-ve-profil", title: "Profil bilgilerimi nasıl güncellerim?", body: "Hesap sayfasındaki Profil bölümünü açın. Bilgilerinizi düzenledikten sonra değişiklikleri kaydedin." },
+    { id: "20000000-0000-4000-8000-000000000002", category: "hesap-ve-profil", title: "Hesabımı nasıl güvende tutabilirim?", body: "Benzersiz bir parola kullanın, iletişim bilgilerinizi doğrulayın ve tanımadığınız cihazlardaki oturumları kapatın." },
+    { id: "20000000-0000-4000-8000-000000000003", category: "etkinlikler", title: "Bir etkinliğe nasıl katılırım?", body: "Etkinlik detay sayfasında Katıl seçeneğini kullanın. Onay gerektiren etkinliklerde organizatörün yanıtı size bildirilir." },
+    { id: "20000000-0000-4000-8000-000000000004", category: "odemeler", title: "İade süreci nasıl işler?", body: "Uygun işlemler için etkinlik ve ödeme detaylarından iade durumunu takip edebilirsiniz. Sonuç finans hareketlerinize yansıtılır." }
+  ];
+
+  for (const faq of seededFaqs) {
+    const categoryId = faqCategoryBySlug.get(faq.category);
+    if (!categoryId) throw new Error(`Seed FAQ category not found: ${faq.category}`);
+    await prisma.faq.upsert({
+      where: { id: faq.id },
+      update: { categoryId, title: faq.title, body: faq.body, status: "active" },
+      create: { id: faq.id, categoryId, title: faq.title, body: faq.body, status: "active" }
+    });
+  }
+
   const categories = await Promise.all(
     [
       { name: "Sektör", slug: "sektor", sortOrder: 1 },

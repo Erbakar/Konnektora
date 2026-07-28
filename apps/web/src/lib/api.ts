@@ -2447,10 +2447,22 @@ function updateMockRoleGroup(id: string, input: Partial<RoleGroupInput> & { stat
   return updatedRoleGroup;
 }
 
-function listMockCmsCategories(): CmsCategory[] {
-  const faqs = readStorage<Faq[]>(MOCK_FAQS_KEY, []);
+const DEFAULT_MOCK_FAQ_CATEGORIES: CmsCategory[] = [
+  { id: "10000000-0000-4000-8000-000000000001", name: "Hesap ve profil", slug: "hesap-ve-profil", description: "Hesap, profil ve gizlilik ayarları", type: "faq", status: "active" },
+  { id: "10000000-0000-4000-8000-000000000002", name: "Etkinlikler", slug: "etkinlikler", description: "Katılım, davet ve etkinlik yönetimi", type: "faq", status: "active" },
+  { id: "10000000-0000-4000-8000-000000000003", name: "Ödemeler", slug: "odemeler", description: "Ödeme, iade ve faturalandırma", type: "faq", status: "active" }
+];
+const DEFAULT_MOCK_FAQS: Faq[] = [
+  { id: "20000000-0000-4000-8000-000000000001", categoryId: DEFAULT_MOCK_FAQ_CATEGORIES[0]!.id, title: "Profil bilgilerimi nasıl güncellerim?", body: "Hesap sayfasındaki Profil bölümünü açın. Bilgilerinizi düzenledikten sonra değişiklikleri kaydedin.", status: "active" },
+  { id: "20000000-0000-4000-8000-000000000002", categoryId: DEFAULT_MOCK_FAQ_CATEGORIES[0]!.id, title: "Hesabımı nasıl güvende tutabilirim?", body: "Benzersiz bir parola kullanın, iletişim bilgilerinizi doğrulayın ve tanımadığınız cihazlardaki oturumları kapatın.", status: "active" },
+  { id: "20000000-0000-4000-8000-000000000003", categoryId: DEFAULT_MOCK_FAQ_CATEGORIES[1]!.id, title: "Bir etkinliğe nasıl katılırım?", body: "Etkinlik detay sayfasında Katıl seçeneğini kullanın. Onay gerektiren etkinliklerde organizatörün yanıtı size bildirilir.", status: "active" },
+  { id: "20000000-0000-4000-8000-000000000004", categoryId: DEFAULT_MOCK_FAQ_CATEGORIES[2]!.id, title: "İade süreci nasıl işler?", body: "Uygun işlemler için etkinlik ve ödeme detaylarından iade durumunu takip edebilirsiniz. Sonuç finans hareketlerinize yansıtılır.", status: "active" }
+];
 
-  return readStorage<CmsCategory[]>(MOCK_CMS_CATEGORIES_KEY, []).map((category) => ({
+function listMockCmsCategories(): CmsCategory[] {
+  const faqs = readStorage<Faq[]>(MOCK_FAQS_KEY, DEFAULT_MOCK_FAQS);
+
+  return readStorage<CmsCategory[]>(MOCK_CMS_CATEGORIES_KEY, DEFAULT_MOCK_FAQ_CATEGORIES).map((category) => ({
     ...category,
     type: category.type ?? "faq",
     _count: { faqs: faqs.filter((faq) => faq.categoryId === category.id).length }
@@ -2509,7 +2521,7 @@ function deleteMockCmsCategory(id: string) {
 function listMockFaqs(): Faq[] {
   const categories = listMockCmsCategories();
 
-  return readStorage<Faq[]>(MOCK_FAQS_KEY, []).map((faq) => ({
+  return readStorage<Faq[]>(MOCK_FAQS_KEY, DEFAULT_MOCK_FAQS).map((faq) => ({
     ...faq,
     category: categories.find((category) => category.id === faq.categoryId)
   }));
@@ -4485,6 +4497,10 @@ export function createUserMessage(input: UserMessageInput): Promise<UserMessage>
     method: "POST",
     body: JSON.stringify(input)
   });
+}
+
+export function listPublicFaqs(): Promise<Faq[]> {
+  return requestJson("/faqs", z.array(faqSchema));
 }
 
 export function createMyMessage(input: UserMessageInput): Promise<UserMessage> {

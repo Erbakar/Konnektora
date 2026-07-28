@@ -30,6 +30,7 @@ export function SiteFooter() {
             </a>
             <Link to="/admin">Admin login</Link>
             <Link to="/contact">Contact</Link>
+            <Link to="/help">Help center</Link>
             <Link to="/about">About</Link>
             <Link to="/privacy">Privacy</Link>
             <Link to="/terms">Terms</Link>
