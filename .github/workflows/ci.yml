@@ -20,7 +20,10 @@ jobs:
           cache: npm
 
       - name: Install
-        run: npm install
+        run: npm ci
+
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=critical
 
       - name: Generate Prisma client
         run: npm run db:generate

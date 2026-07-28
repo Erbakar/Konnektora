@@ -26,13 +26,22 @@ const databaseUrl = resolveDatabaseUrl();
 const prisma = new PrismaClient(databaseUrl ? { datasourceUrl: databaseUrl } : undefined);
 
 async function main() {
+  const production = process.env.NODE_ENV === "production";
+  if (production && process.env.ALLOW_PRODUCTION_SEED !== "true") {
+    throw new Error("Production seed kapalı. Bilinçli çalıştırmak için ALLOW_PRODUCTION_SEED=true ayarlayın.");
+  }
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? (production ? "" : "ChangeMe123!");
+  const demoPassword = process.env.SEED_DEMO_PASSWORD ?? (production ? "" : "ChangeMe123!");
+  if (production && (adminPassword.length < 14 || demoPassword.length < 14)) {
+    throw new Error("Production seed parolaları en az 14 karakter olmalıdır.");
+  }
   const admin = await prisma.user.upsert({
     where: { email: "admin@konnektora.local" },
     update: {},
     create: {
       email: "admin@konnektora.local",
       name: "Konnektora Admin",
-      passwordHash: await hash("ChangeMe123!", 10),
+      passwordHash: await hash(adminPassword, 12),
       role: "super_admin"
     }
   });
@@ -43,7 +52,7 @@ async function main() {
     create: {
       email: "user@konnektora.local",
       name: "Konnektora User",
-      passwordHash: await hash("ChangeMe123!", 10),
+      passwordHash: await hash(demoPassword, 12),
       role: "user"
     }
   });

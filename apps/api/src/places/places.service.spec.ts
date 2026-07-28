@@ -16,6 +16,7 @@ describe("PlacesService", () => {
   const privacySettings = { findUnique: jest.fn() };
   const userFollow = { findMany: jest.fn(), findFirst: jest.fn() };
   const notification = { create: jest.fn() };
+  const notifications = { dispatch: jest.fn() };
   const tx = { place, placeMember, placeFollow, notification };
   const prisma = {
     place, placeMember, placeFollow, user, userBlock, privacySettings, userFollow, notification,
@@ -23,7 +24,7 @@ describe("PlacesService", () => {
       typeof operation === "function" ? operation(tx) : Promise.all(operation as Promise<unknown>[])
     )
   };
-  const service = new PlacesService(prisma as never);
+  const service = new PlacesService(prisma as never, notifications as never);
   const actor = { id: "11111111-1111-4111-8111-111111111111", role: "user", name: "Owner" } as any;
 
   beforeEach(() => {
@@ -93,11 +94,10 @@ describe("PlacesService", () => {
     placeMember.findUnique.mockResolvedValue(null);
     placeMember.upsert.mockResolvedValue({ placeId: "place-1", userId: invitedUser.id, status: "invited", role: "member" });
     place.update.mockResolvedValue({});
-    notification.create.mockResolvedValue({});
 
     await service.invite("place-1", { email: invitedUser.email }, actor);
 
-    expect(notification.create).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: invitedUser.id, type: "place_invite", targetId: "place-1" }) });
+    expect(notifications.dispatch).toHaveBeenCalledWith(expect.objectContaining({ userId: invitedUser.id, type: "place_invite", targetId: "place-1" }));
     expect(place.update).toHaveBeenCalledWith({ where: { id: "place-1" }, data: { inviteCount: { increment: 1 } } });
   });
 

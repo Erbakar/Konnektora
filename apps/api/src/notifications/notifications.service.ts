@@ -15,6 +15,23 @@ type NotificationInput = {
   targetId?: string;
 };
 
+const topicByType: Record<string, NotificationTopic> = {
+  private_message: NotificationTopic.private_message,
+  mention: NotificationTopic.mention,
+  comment: NotificationTopic.comment,
+  event_invite: NotificationTopic.event_invite,
+  event_manager: NotificationTopic.event_manager,
+  place_invite: NotificationTopic.place_invite,
+  place_manager: NotificationTopic.place_manager,
+  tag_request: NotificationTopic.tag_request,
+  login: NotificationTopic.login,
+  password_changed: NotificationTopic.password_changed,
+  email_changed: NotificationTopic.email_changed,
+  phone_changed: NotificationTopic.phone_changed,
+  corporate_kyc: NotificationTopic.admin_message,
+  admin_message: NotificationTopic.admin_message
+};
+
 const emailOnly = new Set<NotificationTopic>([
   NotificationTopic.password_changed,
   NotificationTopic.email_changed,
@@ -71,6 +88,46 @@ export class NotificationsService {
 
   publicKey() {
     return { publicKey: this.push.publicKey() };
+  }
+
+  listDeliveries(status?: string) {
+    return this.prisma.notificationDelivery.findMany({
+      where: status ? { status } : {},
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: {
+        notification: { select: { type: true, title: true, body: true, targetType: true, targetId: true } },
+        user: { select: { id: true, name: true, email: true } }
+      }
+    });
+  }
+
+  async retryDelivery(id: string) {
+    const delivery = await this.prisma.notificationDelivery.findUnique({
+      where: { id },
+      include: {
+        notification: true,
+        user: { select: { id: true, name: true, email: true } }
+      }
+    });
+    if (!delivery) return null;
+    await this.prisma.notificationDelivery.update({ where: { id }, data: { status: "pending", lastError: null } });
+    await this.deliver(delivery.notificationId, delivery.channel, delivery.user, {
+      userId: delivery.userId,
+      topic: topicByType[delivery.notification.type] ?? NotificationTopic.admin_message,
+      type: delivery.notification.type,
+      title: delivery.notification.title,
+      body: delivery.notification.body,
+      targetType: delivery.notification.targetType ?? undefined,
+      targetId: delivery.notification.targetId ?? undefined
+    });
+    return this.prisma.notificationDelivery.findUnique({
+      where: { id },
+      include: {
+        notification: { select: { type: true, title: true, body: true, targetType: true, targetId: true } },
+        user: { select: { id: true, name: true, email: true } }
+      }
+    });
   }
 
   private async deliver(notificationId: string, channel: string, user: { id: string; name: string; email: string }, input: NotificationInput) {

@@ -905,6 +905,15 @@ export function AdminDashboardPage() {
                   { label: "Durum", value: "Aktif" }
                 ]}
               />
+              <DashboardModuleCard
+                Icon={MessageSquare}
+                label="Bildirim Operasyonu"
+                onClick={() => { window.location.href = "/admin/notifications"; }}
+                stats={[
+                  { label: "Kanallar", value: 2 },
+                  { label: "Teslimat", value: "İzleniyor" }
+                ]}
+              />
             </div>
           </div>
         )}

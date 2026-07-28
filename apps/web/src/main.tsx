@@ -19,6 +19,7 @@ const HomePage = lazy(() => import("./pages/HomePage").then((module) => ({ defau
 const FeedPage = lazy(() => import("./pages/FeedPage").then((module) => ({ default: module.FeedPage })));
 const FinancePage = lazy(() => import("./pages/FinancePage").then((module) => ({ default: module.FinancePage })));
 const AdminKycPage = lazy(() => import("./pages/AdminKycPage").then((module) => ({ default: module.AdminKycPage })));
+const AdminNotificationOperationsPage = lazy(() => import("./pages/AdminNotificationOperationsPage").then((module) => ({ default: module.AdminNotificationOperationsPage })));
 const CorporateKycPage = lazy(() => import("./pages/CorporateKycPage").then((module) => ({ default: module.CorporateKycPage })));
 const MobileAppPage = lazy(() => import("./pages/MobileAppPage").then((module) => ({ default: module.MobileAppPage })));
 const MessagesPage = lazy(() => import("./pages/MessagesPage").then((module) => ({ default: module.MessagesPage })));
@@ -64,6 +65,7 @@ const router = createBrowserRouter([
       { path: "accept-invite", element: <AcceptInvitePage /> },
       { path: "admin", element: <AdminDashboardPage /> },
       { path: "admin/kyc", element: <AdminKycPage /> },
+      { path: "admin/notifications", element: <AdminNotificationOperationsPage /> },
       { path: ":type", element: <PolicyPage /> }
     ]
   }

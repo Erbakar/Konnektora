@@ -3,12 +3,13 @@ import { PlaceMemberRole, PlaceMemberStatus, Prisma, User } from "@prisma/client
 import { toSlug } from "../common/slug";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreatePlaceDto, InvitePlaceMemberDto, PlaceQueryDto, UpdatePlaceDto, UpdatePlaceMemberDto } from "./places.dto";
+import { NotificationsService } from "../notifications/notifications.service";
 
 const memberUserSelect = { id: true, email: true, name: true, role: true, status: true } as const;
 
 @Injectable()
 export class PlacesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly notifications: NotificationsService) {}
 
   async list(query: PlaceQueryDto, viewerId?: string) {
     const page = query.page ?? 1;
@@ -160,17 +161,17 @@ export class PlacesService {
         update: { status: "invited", role }
       });
       if (!existing) await tx.place.update({ where: { id: placeId }, data: { inviteCount: { increment: 1 } } });
-      await tx.notification.create({
-        data: {
-          userId: user.id,
-          type: role === PlaceMemberRole.manager || role === PlaceMemberRole.organizer ? "place_manager" : "place_invite",
-          title: role === PlaceMemberRole.member ? "Mekân daveti" : "Mekân yöneticiliği daveti",
-          body: `${place.name} mekânına davet edildiniz.`,
-          targetType: "place",
-          targetId: placeId
-        }
-      });
       return saved;
+    });
+    const type = role === PlaceMemberRole.manager || role === PlaceMemberRole.organizer ? "place_manager" : "place_invite";
+    await this.notifications.dispatch({
+      userId: user.id,
+      topic: type,
+      type,
+      title: role === PlaceMemberRole.member ? "Mekân daveti" : "Mekân yöneticiliği daveti",
+      body: `${place.name} mekânına davet edildiniz.`,
+      targetType: "place",
+      targetId: placeId
     });
     return { ...member, user: this.pickUser(user) };
   }

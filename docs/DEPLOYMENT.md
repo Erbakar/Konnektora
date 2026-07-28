@@ -54,6 +54,7 @@ RESEND_API_KEY=<resend-api-key>
 VAPID_SUBJECT=mailto:support@your-domain.com
 VAPID_PUBLIC_KEY=<web-push-public-key>
 VAPID_PRIVATE_KEY=<web-push-private-key>
+ALLOW_PRODUCTION_SEED=false
 ```
 
 Web Push anahtarlarını bir kez `npx web-push generate-vapid-keys` komutuyla üretin. Aynı anahtar çiftini kalıcı olarak saklayın; anahtar değişirse mevcut tarayıcı abonelikleri yeniden oluşturulmalıdır.
@@ -145,14 +146,14 @@ npm run db:seed
 
 Bu işlem admin kullanıcısını, demo user'ı, tag'leri ve başlangıç mock event datasını oluşturur.
 
-Admin:
+Lokal geliştirme admini:
 
 ```text
 email: admin@konnektora.local
 password: ChangeMe123!
 ```
 
-Production'a geçmeden admin şifresi ve seed stratejisi değiştirilmeli.
+Production seed varsayılan olarak kapalıdır. Bilinçli seed sırasında `ALLOW_PRODUCTION_SEED=true`, en az 14 karakterlik benzersiz `SEED_ADMIN_PASSWORD` ve `SEED_DEMO_PASSWORD` zorunludur. Seed tamamlandıktan sonra bu secret'ları ortamdan kaldırın.
 
 ## 5. Netlify Frontend Ayarı
 
@@ -178,6 +179,7 @@ Backend henüz hazır değilken Netlify demo için `VITE_MOCK_API=true` kullanı
 ## 6. Kontrol Listesi
 
 - `https://konnektora.netlify.app/api/health` `{ ok: true }` dönüyor mu?
+- `/api/health/live` ve `/api/health/ready` monitorları aktif mi?
 - `https://konnektora.netlify.app/api/events` JSON dönüyor mu?
 - `https://konnektora-api.onrender.com/health` `{ ok: true }` dönüyor mu?
 - `https://konnektora-api.onrender.com/events` JSON dönüyor mu?
@@ -188,6 +190,8 @@ Backend henüz hazır değilken Netlify demo için `VITE_MOCK_API=true` kullanı
 - `/verify-email`, `/reset-password`, `/accept-invite` token sayfaları frontend'de açılıyor mu?
 - API logs içinde email gönderimleri için Resend hatası veya dev mail logu görünüyor mu?
 - Render API logs içinde CORS veya database hatası var mı?
+- `SMOKE_BASE_URL=https://konnektora.netlify.app/api npm run ops:smoke` başarılı mı?
+- İlk şifreli backup alındı ve staging restore tatbikatı tamamlandı mı?
 
 ## 7. Sık Hatalar
 

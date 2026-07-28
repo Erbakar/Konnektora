@@ -1,6 +1,9 @@
 require("reflect-metadata");
 
 const express = require("express");
+const { randomUUID } = require("crypto");
+const rateLimit = require("express-rate-limit").rateLimit;
+const helmet = require("helmet");
 const serverless = require("serverless-http");
 const { ValidationPipe } = require("@nestjs/common");
 const { ConfigService } = require("@nestjs/config");
@@ -12,11 +15,21 @@ let cachedHandler;
 
 async function createHandler() {
   const expressApp = express();
-
+  expressApp.set("trust proxy", 1);
   expressApp.use((req, _res, next) => {
     req.url = req.url.replace(/^\/(?:api|\.netlify\/functions\/api)(?=\/|$)/, "") || "/";
     next();
   });
+  expressApp.use(helmet({ crossOriginResourcePolicy: false }));
+  expressApp.use((req, res, next) => {
+    const requestId = String(req.headers["x-request-id"] || "").slice(0, 100) || randomUUID();
+    res.setHeader("x-request-id", requestId);
+    const startedAt = Date.now();
+    res.on("finish", () => console.log(JSON.stringify({ level: "info", event: "http_request", requestId, method: req.method, path: req.url.split("?")[0], status: res.statusCode, durationMs: Date.now() - startedAt })));
+    next();
+  });
+  expressApp.use(rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: "draft-7", legacyHeaders: false, skip: (req) => req.path.startsWith("/health") }));
+  expressApp.use("/auth", rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: "draft-7", legacyHeaders: false }));
 
   const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
     logger: ["error", "warn", "log"]

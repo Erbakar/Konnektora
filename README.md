@@ -151,11 +151,6 @@ WEB_ORIGIN=https://konnektora.netlify.app
 - Seed içinde her ana tag için 4 mock event ve detay sayfası datası
 - Prisma veri modeli ve seed data
 
-## Sonraki Teknik Adımlar
+## Production operasyonu
 
-1. Deploy ortamında `npm run db:deploy` ve `npm run db:generate` komutlarını Node 22 ile çalıştır.
-2. Resend veya seçilecek mail provider için `EMAIL_FROM` ve `RESEND_API_KEY` değerlerini production'a gir.
-3. SMS sağlayıcısı için `SMS_WEBHOOK_URL` ve gerekiyorsa `SMS_API_KEY` değerlerini production'a gir.
-4. Profil, event, moderation ve doğrulama akışları için e2e/smoke testleri ekle.
-5. Harita/distance filtrelerini veri modelindeki koordinatlarla bağla.
-6. Production seed/admin şifresi stratejisini gerçek operasyon sürecine göre sertleştir.
+Production migration, sağlayıcı yapılandırması ve platform kurulumu için [Deployment rehberini](docs/DEPLOYMENT.md), sağlık kontrolleri, bildirim teslimatları, backup/restore, incident akışı ve launch kriterleri için [Operasyon runbook'unu](docs/OPERATIONS.md) kullan.

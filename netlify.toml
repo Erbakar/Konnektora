@@ -20,6 +20,8 @@
     "class-transformer",
     "class-validator",
     "express",
+    "express-rate-limit",
+    "helmet",
     "passport",
     "reflect-metadata",
     "rxjs",

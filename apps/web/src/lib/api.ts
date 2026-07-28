@@ -4226,6 +4226,26 @@ export function removePushSubscription(endpoint: string): Promise<{ ok: true }> 
   return requestJson("/notifications/push/subscriptions", z.object({ ok: z.literal(true) }), { auth: "user", method: "DELETE", body: JSON.stringify({ endpoint }) });
 }
 
+const notificationDeliverySchema = z.object({
+  id: z.string(),
+  channel: z.string(),
+  status: z.string(),
+  provider: z.string().nullable(),
+  attempts: z.number(),
+  lastError: z.string().nullable(),
+  sentAt: z.string().datetime().or(z.date()).nullable(),
+  createdAt: z.string().datetime().or(z.date()),
+  notification: z.object({ type: z.string(), title: z.string(), body: z.string(), targetType: z.string().nullable(), targetId: z.string().nullable() }),
+  user: z.object({ id: z.string(), name: z.string(), email: z.string() })
+});
+export type NotificationDelivery = z.infer<typeof notificationDeliverySchema>;
+export function listAdminNotificationDeliveries(status?: string): Promise<NotificationDelivery[]> {
+  return requestJson(`/admin/notifications/deliveries${status ? `?status=${status}` : ""}`, z.array(notificationDeliverySchema), { auth: true });
+}
+export function retryAdminNotificationDelivery(id: string): Promise<NotificationDelivery> {
+  return requestJson(`/admin/notifications/deliveries/${id}/retry`, notificationDeliverySchema, { auth: true, method: "POST" });
+}
+
 export function listBlocks(): Promise<UserBlock[]> {
   return requestJson("/profile/blocks", userBlocksSchema, { auth: "user" });
 }
