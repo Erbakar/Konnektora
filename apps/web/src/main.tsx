@@ -17,6 +17,8 @@ const EventsPage = lazy(() => import("./pages/EventsPage").then((module) => ({ d
 const HomePage = lazy(() => import("./pages/HomePage").then((module) => ({ default: module.HomePage })));
 const FeedPage = lazy(() => import("./pages/FeedPage").then((module) => ({ default: module.FeedPage })));
 const FinancePage = lazy(() => import("./pages/FinancePage").then((module) => ({ default: module.FinancePage })));
+const AdminKycPage = lazy(() => import("./pages/AdminKycPage").then((module) => ({ default: module.AdminKycPage })));
+const CorporateKycPage = lazy(() => import("./pages/CorporateKycPage").then((module) => ({ default: module.CorporateKycPage })));
 const MobileAppPage = lazy(() => import("./pages/MobileAppPage").then((module) => ({ default: module.MobileAppPage })));
 const MessagesPage = lazy(() => import("./pages/MessagesPage").then((module) => ({ default: module.MessagesPage })));
 const IdentityPage = lazy(() => import("./pages/IdentityPage").then((module) => ({ default: module.IdentityPage })));
@@ -38,6 +40,7 @@ const router = createBrowserRouter([
       { index: true, element: <HomePage /> },
       { path: "feed", element: <FeedPage /> },
       { path: "finance", element: <FinancePage /> },
+      { path: "finance/kyc", element: <CorporateKycPage /> },
       { path: "events", element: <EventsPage /> },
       { path: "events/:slug", element: <EventDetailPage /> },
       { path: "places", element: <PlacesPage /> },
@@ -54,6 +57,7 @@ const router = createBrowserRouter([
       { path: "reset-password", element: <ResetPasswordPage /> },
       { path: "accept-invite", element: <AcceptInvitePage /> },
       { path: "admin", element: <AdminDashboardPage /> },
+      { path: "admin/kyc", element: <AdminKycPage /> },
       { path: ":type", element: <PolicyPage /> }
     ]
   }

@@ -22,6 +22,7 @@ import { PublicProfileModule } from "./public-profile/public-profile.module";
 import { ProfileVerificationModule } from "./profile-verification/profile-verification.module";
 import { PostsModule } from "./posts/posts.module";
 import { FinanceModule } from "./finance/finance.module";
+import { CorporateKycModule } from "./corporate-kyc/corporate-kyc.module";
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { FinanceModule } from "./finance/finance.module";
     ContentAdminModule,
     ContentModule,
     ContactsModule,
+    CorporateKycModule,
     DiscoveryModule,
     AdminModule,
     EventsModule,

@@ -13,6 +13,8 @@ import {
   announcementSchema,
   availabilitySchema,
   contentReportSchema,
+  corporateKycApplicationSchema,
+  corporateKycDocumentSchema,
   conversationListSchema,
   conversationMessagesSchema,
   discoveryFeedSchema,
@@ -84,6 +86,8 @@ import {
   type CmsPolicy,
   type CmsCategory,
   type ContentReport,
+  type CorporateKycApplication,
+  type CorporateKycDocument,
   type ConversationList,
   type ConversationMessages,
   type DiscoveryFeed,
@@ -4259,6 +4263,16 @@ export function createEventPayment(eventId: string, idempotencyKey: string): Pro
 export function confirmEventPayment(id: string, paymentMethodToken: string): Promise<PaymentTransaction> { return requestJson(`/me/payments/${id}/confirm`, paymentTransactionSchema, { auth: "user", method: "POST", body: JSON.stringify({ paymentMethodToken }) }); }
 export function refundEventPayment(id: string, amount?: number, reason?: string): Promise<PaymentTransaction> { return requestJson(`/me/payments/${id}/refund`, paymentTransactionSchema, { auth: "user", method: "POST", body: JSON.stringify({ amount, reason }) }); }
 export function requestPayout(amount: number): Promise<unknown> { return requestJson("/me/finance/payouts", z.unknown(), { auth: "user", method: "POST", body: JSON.stringify({ amount }) }); }
+export function getCorporateKyc(): Promise<CorporateKycApplication> { return requestJson("/me/corporate-kyc", corporateKycApplicationSchema, { auth: "user" }); }
+export function saveCorporateKyc(input: Record<string, unknown>): Promise<CorporateKycApplication> { return requestJson("/me/corporate-kyc", corporateKycApplicationSchema, { auth: "user", method: "PATCH", body: JSON.stringify(input) }); }
+export function uploadCorporateKycDocument(type: string, file: File): Promise<CorporateKycDocument> { const form = new FormData(); form.set("file", file); return requestJson(`/me/corporate-kyc/documents/${type}`, corporateKycDocumentSchema, { auth: "user", method: "POST", body: form }); }
+export function deleteCorporateKycDocument(id: string): Promise<{ success: boolean }> { return requestJson(`/me/corporate-kyc/documents/${id}`, z.object({ success: z.boolean() }), { auth: "user", method: "DELETE" }); }
+export function submitCorporateKyc(): Promise<CorporateKycApplication> { return requestJson("/me/corporate-kyc/submit", corporateKycApplicationSchema, { auth: "user", method: "POST" }); }
+export function listAdminCorporateKyc(status?: string): Promise<CorporateKycApplication[]> { return requestJson(`/admin/corporate-kyc${status ? `?status=${status}` : ""}`, z.array(corporateKycApplicationSchema), { auth: true }); }
+export function getAdminCorporateKyc(id: string): Promise<CorporateKycApplication> { return requestJson(`/admin/corporate-kyc/${id}`, corporateKycApplicationSchema, { auth: true }); }
+export function decideAdminCorporateKyc(id: string, status: "approved"|"rejected", reason?: string): Promise<CorporateKycApplication> { return requestJson(`/admin/corporate-kyc/${id}/decision`, corporateKycApplicationSchema, { auth: true, method: "PATCH", body: JSON.stringify({ status, reason }) }); }
+export async function downloadCorporateKycDocument(id: string): Promise<Blob> { const response = await fetch(`${API_URL}/me/corporate-kyc/documents/${id}/download`, { headers: { Authorization: `Bearer ${getUserToken() ?? ""}` } }); if (!response.ok) throw new Error("Belge indirilemedi."); return response.blob(); }
+export async function downloadAdminCorporateKycDocument(id: string): Promise<Blob> { const response = await fetch(`${API_URL}/admin/corporate-kyc/documents/${id}/download`, { headers: { Authorization: `Bearer ${getAdminToken() ?? ""}` } }); if (!response.ok) throw new Error("Belge indirilemedi."); return response.blob(); }
 
 export function getOnboardingStatus(): Promise<OnboardingStatus> { return requestJson("/me/onboarding", onboardingStatusSchema, { auth: "user" }); }
 export function getDiscoveryFeed(params?: { city?: string; country?: string }): Promise<DiscoveryFeed> { const query = new URLSearchParams(); if (params?.city) query.set("city", params.city); if (params?.country) query.set("country", params.country); return requestJson(`/discover/feed${query.size ? `?${query}` : ""}`, discoveryFeedSchema, { auth: "user" }); }
