@@ -21,7 +21,8 @@ export function PlacesPage() {
 
   function updateFilter(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
-    value ? next.set(key, value) : next.delete(key);
+    if (value) next.set(key, value);
+    else next.delete(key);
     if (key !== "page") next.delete("page");
     setSearchParams(next);
   }

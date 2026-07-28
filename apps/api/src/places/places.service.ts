@@ -251,7 +251,8 @@ export class PlacesService {
   }
 
   private toPublicPlace(place: any) {
-    const { followers, members, updatedById: _updatedById, ...data } = place;
+    const { followers, members, ...data } = place;
+    delete data.updatedById;
     return { ...data, isFollowing: followers.length > 0, viewerMembership: members[0] ?? null };
   }
 
