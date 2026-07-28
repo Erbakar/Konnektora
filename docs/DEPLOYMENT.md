@@ -51,7 +51,12 @@ NODE_ENV=production
 VITE_MOCK_API=false
 EMAIL_FROM=Konnektora <noreply@your-domain.com>
 RESEND_API_KEY=<resend-api-key>
+VAPID_SUBJECT=mailto:support@your-domain.com
+VAPID_PUBLIC_KEY=<web-push-public-key>
+VAPID_PRIVATE_KEY=<web-push-private-key>
 ```
+
+Web Push anahtarlarını bir kez `npx web-push generate-vapid-keys` komutuyla üretin. Aynı anahtar çiftini kalıcı olarak saklayın; anahtar değişirse mevcut tarayıcı abonelikleri yeniden oluşturulmalıdır.
 
 Netlify Database aktif edildiğinde connection string `@netlify/database` üzerinden sağlanır. API runtime bunu otomatik `DATABASE_URL` fallback'i olarak kullanır; harici Postgres kullanılmayacaksa `DATABASE_URL` manuel tanımlamak gerekmez.
 

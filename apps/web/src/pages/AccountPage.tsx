@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import type { AccountType, Event, EventParticipant, MemberCard, NotificationPreference, PrivacyAudience, ProfileMedia, Tag, TagAffinity, TagSentiment, SocialProvider } from "@konnektora/shared";
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
 import { ProfileVerificationPanel } from "../components/ProfileVerificationPanel";
+import { PushNotificationControl } from "../components/PushNotificationControl";
 import { getSocialCredential } from "../lib/socialProviders";
 import { type AdminEventInput, type RegistrationInput, archiveMyEvent, checkInEventParticipant, changePassword, connectSocialAccount, confirmPhoneVerification, clearUserSession, createUserEvent, createUserTag, createTagComment, deactivateAccount, deleteProfileMedia, deleteTagComment, getProfileAffinities, getMyProfile, getNotificationPreferences, getPrivacySettings, getUserSession, getUserToken, followUser, inviteEventParticipant, isMockApiMode, listMyNotifications, listBlocks, listFollowing, listMemberSuggestions, listEventParticipants, listMyEvents, listProfileMedia, listSocialAccounts, listTags, listTagComments, markMyNotificationRead, makeProfilePicture, registerUser, reactivateAccount, removeBlock, removeSocialAccount, requestEmailVerification, requestPhoneVerification, requestPasswordReset, reorderProfileMedia, resolveMediaUrl, scanEventTicket, setUserSession, updateEventParticipantStatus, updateMyEvent, updateProfileAffinities, unfollowUser, updateMyProfile, updateNotificationPreferences, updatePrivacySettings, uploadProfileMedia, userLogin, socialLogin } from "../lib/api";
 
@@ -870,6 +871,7 @@ export function AccountPage() {
             {notificationPreferencesQuery.data ? (
               <form className="admin-form" onSubmit={handleNotificationPreferencesSubmit}>
                 <h2>Bildirim tercihleri</h2>
+                <PushNotificationControl />
                 <div className="form-grid">
                   {notificationPreferencesQuery.data.map((preference) => (
                     <label key={preference.topic}>

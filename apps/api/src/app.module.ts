@@ -23,6 +23,7 @@ import { ProfileVerificationModule } from "./profile-verification/profile-verifi
 import { PostsModule } from "./posts/posts.module";
 import { FinanceModule } from "./finance/finance.module";
 import { CorporateKycModule } from "./corporate-kyc/corporate-kyc.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { CorporateKycModule } from "./corporate-kyc/corporate-kyc.module";
     FinanceModule,
     IdentityModule,
     MessagesModule,
+    NotificationsModule,
     ProfileModule,
     PublicProfileModule,
     ProfileVerificationModule,

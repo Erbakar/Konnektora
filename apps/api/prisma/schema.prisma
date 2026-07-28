@@ -252,7 +252,9 @@ model User {
   moderationDecisions       ModerationDecision[] @relation("ModerationDecisionUser")
   issuedModerationDecisions ModerationDecision[] @relation("ModerationDecisionActor")
   notifications             Notification[]
+  notificationDeliveries    NotificationDelivery[]
   adminActivityLogs         AdminActivityLog[]
+  pushSubscriptions         PushSubscription[]
   emailTokens               EmailToken[]
   phoneVerifications        PhoneVerification[]
   privacySettings           PrivacySettings?
@@ -1153,9 +1155,49 @@ model Notification {
   createdAt  DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
 
   @@index([userId, readAt, createdAt])
   @@map("notifications")
+}
+
+model NotificationDelivery {
+  id             String    @id @default(uuid())
+  notificationId String    @map("notification_id")
+  userId         String    @map("user_id")
+  channel        String
+  status         String    @default("pending")
+  provider       String?
+  providerId     String?   @map("provider_id")
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+  sentAt         DateTime? @map("sent_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel])
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@map("notification_deliveries")
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 model AdminActivityLog {

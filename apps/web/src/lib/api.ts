@@ -673,6 +673,18 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     return schema.parse(updateMockNotificationPreferences(parseBody<{ preferences: NotificationPreference[] }>(options).preferences));
   }
 
+  if (pathname === "/notifications/push/public-key" && method === "GET") {
+    return schema.parse({ publicKey: null });
+  }
+
+  if (pathname === "/notifications/push/subscriptions" && method === "POST") {
+    return schema.parse({ id: createId() });
+  }
+
+  if (pathname === "/notifications/push/subscriptions" && method === "DELETE") {
+    return schema.parse({ ok: true });
+  }
+
   if (pathname === "/profile/blocks" && method === "GET") {
     return schema.parse(listMockBlocks());
   }
@@ -4199,6 +4211,19 @@ export function updateNotificationPreferences(preferences: NotificationPreferenc
     method: "PUT",
     body: JSON.stringify({ preferences })
   });
+}
+
+export async function getPushPublicKey(): Promise<string | null> {
+  const result = await requestJson("/notifications/push/public-key", z.object({ publicKey: z.string().nullable() }));
+  return result.publicKey;
+}
+
+export function registerPushSubscription(input: { endpoint: string; p256dh: string; auth: string }): Promise<{ id: string }> {
+  return requestJson("/notifications/push/subscriptions", z.object({ id: z.string() }), { auth: "user", method: "POST", body: JSON.stringify(input) });
+}
+
+export function removePushSubscription(endpoint: string): Promise<{ ok: true }> {
+  return requestJson("/notifications/push/subscriptions", z.object({ ok: z.literal(true) }), { auth: "user", method: "DELETE", body: JSON.stringify({ endpoint }) });
 }
 
 export function listBlocks(): Promise<UserBlock[]> {

@@ -14,6 +14,19 @@ export class MailService {
 
   constructor(private readonly configService: ConfigService) {}
 
+  async sendNotificationEmail(input: { to: string; name: string; title: string; body: string; targetType?: string; targetId?: string }) {
+    const appUrl = this.getAppUrl();
+    const targetUrl = input.targetType && input.targetId ? `${appUrl}/${input.targetType === "post" ? "feed" : input.targetType + "s"}/${input.targetId}` : `${appUrl}/account`;
+    const safeName = this.escapeHtml(input.name);
+    const safeBody = this.escapeHtml(input.body);
+    return this.send({
+      to: input.to,
+      subject: input.title,
+      text: `Merhaba ${input.name}, ${input.body} ${targetUrl}`,
+      html: `<p>Merhaba ${safeName},</p><p>${safeBody}</p><p><a href="${targetUrl}">Konnektora'da görüntüle</a></p>`
+    });
+  }
+
   async sendAccountActivatedEmail(input: { to: string; name: string }) {
     const appUrl = this.getAppUrl();
 
@@ -108,13 +121,13 @@ export class MailService {
     });
   }
 
-  private async send(message: MailMessage) {
+  private async send(message: MailMessage): Promise<{ provider: string; providerId?: string }> {
     const apiKey = this.configService.get<string>("RESEND_API_KEY");
     const from = this.configService.get<string>("EMAIL_FROM");
 
     if (!apiKey || !from) {
       this.logger.log(`[mail:dev] ${message.subject} -> ${message.to}`);
-      return;
+      return { provider: "development" };
     }
 
     try {
@@ -136,13 +149,21 @@ export class MailService {
       if (!response.ok) {
         const details = await response.text();
         this.logger.error(`Mail gönderilemedi: ${response.status} ${details}`);
+        throw new Error(`E-posta sağlayıcısı ${response.status} yanıtı verdi.`);
       }
+      const payload = await response.json() as { id?: string };
+      return { provider: "resend", providerId: payload.id };
     } catch (error) {
       this.logger.error("Mail provider'a ulaşılamadı.", error);
+      throw error;
     }
   }
 
   private getAppUrl() {
     return this.configService.get<string>("PUBLIC_APP_URL")?.replace(/\/$/, "") ?? "http://localhost:5173";
+  }
+
+  private escapeHtml(value: string) {
+    return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character]!);
   }
 }

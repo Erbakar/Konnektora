@@ -4,12 +4,13 @@ import { unlink } from "fs/promises";
 import { resolve } from "path";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreatePostCommentDto, CreatePostDto, FeedQueryDto } from "./posts.dto";
+import { NotificationsService } from "../notifications/notifications.service";
 
 const authorSelect = { id: true, name: true, username: true, profileVerifiedAt: true } as const;
 
 @Injectable()
 export class PostsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly notifications: NotificationsService) {}
 
   async feed(query: FeedQueryDto, viewer?: User) {
     const blockedIds = viewer ? await this.blockedUserIds(viewer.id) : [];
@@ -91,9 +92,9 @@ export class PostsService {
     const comment = await this.prisma.$transaction(async (tx) => {
       const created = await tx.postComment.create({ data: { postId, authorId: user.id, parentId: input.parentId, body: input.body.trim() }, include: { author: { select: authorSelect } } });
       await tx.post.update({ where: { id: postId }, data: { commentCount: { increment: 1 } } });
-      if (post.authorId !== user.id) await tx.notification.create({ data: { userId: post.authorId, type: "comment", title: "Gönderine yorum geldi", body: `${user.name}: ${input.body.trim().slice(0, 120)}`, targetType: "post", targetId: postId } });
       return created;
     });
+    if (post.authorId !== user.id) await this.notifications.dispatch({ userId: post.authorId, topic: "comment", type: "comment", title: "Gönderine yorum geldi", body: `${user.name}: ${input.body.trim().slice(0, 120)}`, targetType: "post", targetId: postId });
     await this.notifyMentions(postId, input.body, user.id);
     const avatar = await this.avatars([user.id]);
     return { ...comment, author: { ...comment.author, avatarUrl: avatar.get(user.id) ?? null } };
@@ -125,5 +126,5 @@ export class PostsService {
   private async blockedUserIds(userId: string) { const rows = await this.prisma.userBlock.findMany({ where: { OR: [{ userId, targetType: "user" }, { targetType: "user", targetId: userId }] }, select: { userId: true, targetId: true } }); return [...new Set(rows.map((row) => row.userId === userId ? row.targetId : row.userId))]; }
   private async avatars(ids: string[]) { const media = await this.prisma.mediaFile.findMany({ where: { contentType: ReportTargetType.user, contentId: { in: [...new Set(ids)] }, status: "active", isProfilePicture: true }, select: { contentId: true, url: true } }); return new Map(media.map((item) => [item.contentId, item.url])); }
   private presentPost(post: any, avatars: Map<string, string>) { return { ...post, liked: Boolean(post.likes?.length), likes: undefined, author: { ...post.author, avatarUrl: avatars.get(post.authorId) ?? null } }; }
-  private async notifyMentions(postId: string, body: string, actorId: string) { const usernames = [...new Set([...body.matchAll(/@([a-zA-Z0-9_.]{2,30})/g)].map((match) => match[1]!.toLowerCase()))]; if (!usernames.length) return; const users = await this.prisma.user.findMany({ where: { username: { in: usernames }, status: "active", id: { not: actorId } }, select: { id: true } }); if (users.length) await this.prisma.notification.createMany({ data: users.map((user) => ({ userId: user.id, type: "mention", title: "Bir gönderide senden bahsedildi", body: body.slice(0, 160), targetType: "post", targetId: postId })) }); }
+  private async notifyMentions(postId: string, body: string, actorId: string) { const usernames = [...new Set([...body.matchAll(/@([a-zA-Z0-9_.]{2,30})/g)].map((match) => match[1]!.toLowerCase()))]; if (!usernames.length) return; const users = await this.prisma.user.findMany({ where: { username: { in: usernames }, status: "active", id: { not: actorId } }, select: { id: true } }); await Promise.all(users.map((user) => this.notifications.dispatch({ userId: user.id, topic: "mention", type: "mention", title: "Bir gönderide senden bahsedildi", body: body.slice(0, 160), targetType: "post", targetId: postId }))); }
 }

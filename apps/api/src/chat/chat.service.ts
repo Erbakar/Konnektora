@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrivateMessage, User, UserStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { ConversationMessagesQueryDto, ConversationPreferenceDto, EditPrivateMessageDto, MessageReactionDto, SendPrivateMessageDto } from "./chat.dto";
 
 const peerSelect = { id: true, name: true, username: true, status: true } as const;
@@ -8,7 +9,7 @@ const peerSelect = { id: true, name: true, username: true, status: true } as con
 @Injectable()
 export class ChatService {
   private readonly typing = new Map<string, number>();
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly notifications: NotificationsService) {}
 
   async listConversations(userId: string) {
     const [messages, blocks, preferences] = await Promise.all([
@@ -67,27 +68,22 @@ export class ChatService {
       const reply = await this.prisma.privateMessage.findFirst({ where: { id: input.replyToId, status: "active", OR: [{ senderId: sender.id, recipientId: recipient.id }, { senderId: recipient.id, recipientId: sender.id }] }, select: { id: true } });
       if (!reply) throw new BadRequestException("Yanıtlanan mesaj bu konuşmada bulunamadı.");
     }
-    const preference = await this.prisma.notificationPreference.findUnique({
-      where: { userId_topic: { userId: recipient.id, topic: "private_message" } }, select: { channel: true }
-    });
-    return this.prisma.$transaction(async (tx) => {
+    const message = await this.prisma.$transaction(async (tx) => {
       const message = await tx.privateMessage.create({
         data: { senderId: sender.id, recipientId: recipient.id, body: input.body.trim(), replyToId: input.replyToId, attachmentUrl: file ? `/uploads/${file.filename}` : undefined, attachmentType: file?.mimetype, attachmentName: file?.originalname, attachmentSize: file?.size }
       });
-      if (preference?.channel !== "none") {
-        await tx.notification.create({
-          data: {
-            userId: recipient.id,
-            type: "private_message",
-            title: `${sender.name} sana mesaj gönderdi`,
-            body: input.body.trim().slice(0, 160),
-            targetType: "user",
-            targetId: sender.id
-          }
-        });
-      }
       return message;
     });
+    await this.notifications.dispatch({
+      userId: recipient.id,
+      topic: "private_message",
+      type: "private_message",
+      title: `${sender.name} sana mesaj gönderdi`,
+      body: input.body.trim().slice(0, 160),
+      targetType: "user",
+      targetId: sender.id
+    });
+    return message;
   }
 
   async search(userId: string, query: string) {

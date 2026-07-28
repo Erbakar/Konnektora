@@ -11,6 +11,7 @@ describe("ChatService", () => {
   const notificationPreference = { findUnique: jest.fn() };
   const notification = { create: jest.fn() };
   const conversationPreference = { findMany: jest.fn(), upsert: jest.fn() };
+  const notifications = { dispatch: jest.fn() };
   const messageReaction = { findUnique: jest.fn(), create: jest.fn(), delete: jest.fn() };
   const tx = { privateMessage, notification };
   const prisma = {
@@ -19,7 +20,7 @@ describe("ChatService", () => {
       typeof operation === "function" ? operation(tx) : Promise.all(operation as Promise<unknown>[])
     )
   };
-  const service = new ChatService(prisma as never);
+  const service = new ChatService(prisma as never, notifications as never);
   const sender = { id: "11111111-1111-4111-8111-111111111111", name: "Sender" } as any;
   const peer = { id: "22222222-2222-4222-8222-222222222222", name: "Peer", username: "peer", status: UserStatus.active };
 
@@ -69,14 +70,13 @@ describe("ChatService", () => {
     expect(privateMessage.create).not.toHaveBeenCalled();
   });
 
-  it("stores a message without notification when the recipient opted out", async () => {
+  it("stores a message and delegates channel delivery", async () => {
     const message = { id: "m1", senderId: sender.id, recipientId: peer.id, body: "hello" };
     user.findUnique.mockResolvedValue(peer);
-    notificationPreference.findUnique.mockResolvedValue({ channel: "none" });
     privateMessage.create.mockResolvedValue(message);
 
     await expect(service.send(sender, { recipientId: peer.id, body: " hello " })).resolves.toEqual(message);
     expect(privateMessage.create).toHaveBeenCalledWith({ data: expect.objectContaining({ senderId: sender.id, recipientId: peer.id, body: "hello" }) });
-    expect(notification.create).not.toHaveBeenCalled();
+    expect(notifications.dispatch).toHaveBeenCalledWith(expect.objectContaining({ userId: peer.id, topic: "private_message" }));
   });
 });
