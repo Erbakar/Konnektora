@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import type { PolicyType } from "@konnektora/shared";
-import { getPolicy } from "../lib/api";
+import { getFallbackPolicy, getPolicy } from "../lib/api";
+import { useLanguage } from "../lib/i18n";
 
 const policyRouteTypes: Record<string, PolicyType> = {
   privacy: "privacy",
@@ -11,18 +12,20 @@ const policyRouteTypes: Record<string, PolicyType> = {
 };
 
 const fallbackTitles: Record<PolicyType, string> = {
-  privacy: "Privacy Policy",
-  terms: "Terms of Use",
-  cookies: "Cookie Policy",
-  about: "About Us"
+  privacy: "Gizlilik Politikası",
+  terms: "Kullanım Koşulları",
+  cookies: "Çerez Politikası",
+  about: "Hakkımızda"
 };
 
 export function PolicyPage() {
   const { type = "privacy" } = useParams();
+  const { language } = useLanguage();
   const policyType = policyRouteTypes[type] ?? "privacy";
   const policyQuery = useQuery({
     queryKey: ["policy", policyType],
-    queryFn: () => getPolicy(policyType)
+    queryFn: () => getPolicy(policyType),
+    placeholderData: getFallbackPolicy(policyType)
   });
 
   return (
@@ -37,13 +40,11 @@ export function PolicyPage() {
         </p>
       </div>
       <article className="policy-content">
-        {policyQuery.isLoading ? (
-          <p>Yükleniyor...</p>
-        ) : policyQuery.data ? (
+        {policyQuery.data ? (
           <div dangerouslySetInnerHTML={{ __html: policyQuery.data.body }} />
         ) : (
           <div>
-            <p>Bu policy sayfası henüz yayınlanmadı.</p>
+            <p>{language === "tr" ? "Bu politika sayfası henüz yayınlanmadı." : "This policy has not been published yet."}</p>
             <Link className="corp-link" to="/">
               Ana sayfaya dön
             </Link>

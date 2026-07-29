@@ -483,6 +483,10 @@ function deleteMockSocialPost(id: string) { writeStorage(MOCK_SOCIAL_POSTS_KEY, 
 
 async function requestJson<T>(path: string, schema: z.ZodType<T>, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
+  const timeoutController = options.signal ? null : new AbortController();
+  const timeoutId = timeoutController
+    ? window.setTimeout(() => timeoutController.abort(), 8_000)
+    : null;
 
   if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
@@ -497,7 +501,11 @@ async function requestJson<T>(path: string, schema: z.ZodType<T>, options: Reque
   }
 
   try {
-    const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+    const response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+      signal: options.signal ?? timeoutController?.signal
+    });
 
     if (!response.ok) {
       throw new ApiHttpError(response.status);
@@ -510,12 +518,24 @@ async function requestJson<T>(path: string, schema: z.ZodType<T>, options: Reque
     return schema.parse(await response.json());
   } catch (error) {
     const fallback = getMockResponse(path, schema, options);
+    const authorization = headers.get("Authorization") ?? "";
+    const usesMockCredential =
+      authorization.startsWith("Bearer mock-user-token-") ||
+      authorization === `Bearer ${MOCK_ADMIN_TOKEN}`;
 
-    if (shouldUseMockFallback(error) && fallback !== undefined) {
+    if (
+      fallback !== undefined &&
+      (shouldUseMockFallback(error) ||
+        (USE_MOCK_FALLBACK && usesMockCredential && error instanceof ApiHttpError && [401, 403].includes(error.status)))
+    ) {
       return fallback;
     }
 
     throw error;
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
   }
 }
 
@@ -551,6 +571,44 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
         status: "active"
       }
     });
+  }
+
+  if (pathname === "/me/finance" && method === "GET") {
+    const session = getUserSession();
+    if (!session) return undefined;
+    const now = new Date().toISOString();
+    return schema.parse({
+      account: {
+        userId: session.id,
+        preferredCurrency: "TRY",
+        bankProvider: null,
+        bankAccountLabel: null,
+        bankAccountLast4: null,
+        kycStatus: "not_started",
+        kycProvider: null,
+        availableBalance: 0,
+        pendingBalance: 0,
+        createdAt: now,
+        updatedAt: now
+      },
+      billing: null,
+      transactions: [],
+      payouts: [],
+      summary: {
+        availableBalance: 0,
+        pendingBalance: 0,
+        lifetimeNetRevenue: 0,
+        currency: "TRY"
+      }
+    });
+  }
+
+  if (pathname === "/me/finance/settings" && method === "PATCH") {
+    return schema.parse({ success: true });
+  }
+
+  if (pathname === "/me/finance/payouts" && method === "POST") {
+    return schema.parse({ success: true });
   }
 
   if (pathname === "/auth/register" && method === "POST") {
@@ -2870,9 +2928,9 @@ function defaultPolicies(): CmsPolicy[] {
     {
       id: "10000000-1000-4000-8000-100000000101",
       type: "privacy",
-      title: "Privacy Policy",
-      body: "Konnektora privacy policy content will be managed from the admin panel.",
-      status: "passive",
+      title: "Gizlilik Politikası",
+      body: "<p>Konnektora, hesap ve topluluk deneyimi için gerekli verileri güvenli biçimde işler. Ayrıntılı politika içeriği yönetim panelinden güncellenebilir.</p>",
+      status: "active",
       publishedAt: null,
       createdAt: now,
       updatedAt: now
@@ -2880,9 +2938,9 @@ function defaultPolicies(): CmsPolicy[] {
     {
       id: "10000000-1000-4000-8000-100000000102",
       type: "terms",
-      title: "Terms of Use",
-      body: "Konnektora terms of use content will be managed from the admin panel.",
-      status: "passive",
+      title: "Kullanım Koşulları",
+      body: "<p>Konnektora'yı kullanırken topluluk kurallarına, güvenlik ilkelerine ve yürürlükteki kullanım koşullarına uymanız gerekir.</p>",
+      status: "active",
       publishedAt: null,
       createdAt: now,
       updatedAt: now
@@ -2890,9 +2948,9 @@ function defaultPolicies(): CmsPolicy[] {
     {
       id: "10000000-1000-4000-8000-100000000103",
       type: "cookies",
-      title: "Cookie Policy",
-      body: "Konnektora cookie policy content will be managed from the admin panel.",
-      status: "passive",
+      title: "Çerez Politikası",
+      body: "<p>Konnektora; oturum, güvenlik ve tercihlerin hatırlanması için gerekli çerezleri kullanır.</p>",
+      status: "active",
       publishedAt: null,
       createdAt: now,
       updatedAt: now
@@ -2900,9 +2958,9 @@ function defaultPolicies(): CmsPolicy[] {
     {
       id: "10000000-1000-4000-8000-100000000104",
       type: "about",
-      title: "About Us",
-      body: "Konnektora about us content will be managed from the admin panel.",
-      status: "passive",
+      title: "Hakkımızda",
+      body: "<p>Konnektora, anlamlı profesyonel bağlantılar ve güvenilir topluluk etkinlikleri için geliştirilmiş seçkin bir platformdur.</p>",
+      status: "active",
       publishedAt: null,
       createdAt: now,
       updatedAt: now
@@ -4923,8 +4981,19 @@ export function updateAdminAnnouncement(
   });
 }
 
-export function getPolicy(type: PolicyType): Promise<CmsPolicy> {
-  return requestJson(`/policies/${type}`, cmsPolicySchema);
+export function getFallbackPolicy(type: PolicyType): CmsPolicy {
+  return defaultPolicies().find((policy) => policy.type === type)!;
+}
+
+export async function getPolicy(type: PolicyType): Promise<CmsPolicy> {
+  try {
+    return await requestJson(`/policies/${type}`, cmsPolicySchema);
+  } catch (error) {
+    if (USE_DEMO_CONTENT) {
+      return getFallbackPolicy(type);
+    }
+    throw error;
+  }
 }
 
 export function listAdminPolicies(): Promise<CmsPolicy[]> {
