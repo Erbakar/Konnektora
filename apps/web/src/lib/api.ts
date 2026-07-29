@@ -160,9 +160,7 @@ const USE_MOCK_FALLBACK =
   (MOCK_API_SETTING !== "false" &&
     import.meta.env.PROD &&
     (!CONFIGURED_API_URL || isLocalApiUrl || isNetlifyPreview || isKonnektoraProduction));
-const USE_DEMO_CONTENT =
-  import.meta.env.PROD &&
-  (import.meta.env.VITE_DEMO_CONTENT !== "false" || isNetlifyPreview || isKonnektoraProduction);
+const USE_DEMO_CONTENT = import.meta.env.PROD;
 const TOKEN_KEY = "konnektora_admin_token";
 const USER_TOKEN_KEY = "konnektora_user_token";
 const USER_KEY = "konnektora_user";
@@ -4282,8 +4280,43 @@ function parseParticipantStatus(value?: string): EventParticipant["status"] {
 
 export async function listEvents(params?: URLSearchParams): Promise<EventList> {
   const query = params?.toString();
-  const result = await requestJson(`/events${query ? `?${query}` : ""}`, eventListSchema, { auth: "user" });
-  return USE_DEMO_CONTENT && result.items.length === 0 ? listMockEventFeed(params ?? new URLSearchParams()) : result;
+  const demoResult = !params?.toString()
+    ? {
+        items: mockEvents,
+        total: mockEvents.length,
+        page: 1,
+        pageSize: Math.max(mockEvents.length, 1),
+        hasNextPage: false
+      }
+    : listMockEventFeed(params);
+  let result: EventList;
+
+  try {
+    result = await requestJson(`/events${query ? `?${query}` : ""}`, eventListSchema, { auth: "user" });
+  } catch (error) {
+    if (USE_DEMO_CONTENT) {
+      return demoResult;
+    }
+    throw error;
+  }
+
+  if (!USE_DEMO_CONTENT) {
+    return result;
+  }
+
+  const realIds = new Set(result.items.map((event) => event.id));
+  const realSlugs = new Set(result.items.map((event) => event.slug));
+  const demoItems = demoResult.items.filter(
+    (event) => !realIds.has(event.id) && !realSlugs.has(event.slug)
+  );
+  const items = [...result.items, ...demoItems];
+
+  return {
+    ...result,
+    items,
+    total: Math.max(result.total + demoItems.length, items.length),
+    hasNextPage: result.hasNextPage || demoResult.hasNextPage
+  };
 }
 
 export function getEvent(slug: string): Promise<Event> {

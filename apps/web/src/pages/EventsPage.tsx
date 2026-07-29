@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { EventCard } from "../components/EventCard";
 import { listEvents, listTags } from "../lib/api";
+import { mockEvents, mockTags } from "../lib/mockData";
 
 export function EventsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -14,10 +15,37 @@ export function EventsPage() {
   const selectedCountry = searchParams.get("country") ?? "";
   const selectedPage = Number(searchParams.get("page") ?? "1");
 
-  const { data: tags = [] } = useQuery({ queryKey: ["tags"], queryFn: listTags });
+  const { data: tags = [] } = useQuery({
+    queryKey: ["tags"],
+    queryFn: listTags,
+    placeholderData: mockTags
+  });
   const { data: eventList, isLoading } = useQuery({
     queryKey: ["events", searchParams.toString()],
-    queryFn: () => listEvents(searchParams)
+    queryFn: () => listEvents(searchParams),
+    placeholderData: () => {
+      const selectedItems = mockEvents.filter((event) =>
+        (!selectedTag || event.tags.some((tag) => tag.slug === selectedTag)) &&
+        (!selectedFormat || event.format === selectedFormat) &&
+        (!selectedQuery ||
+          [event.title, event.summary, event.description, event.organizerName ?? ""]
+            .join(" ")
+            .toLocaleLowerCase("tr-TR")
+            .includes(selectedQuery.toLocaleLowerCase("tr-TR"))) &&
+        (!selectedDateFrom || new Date(event.startsAt) >= new Date(selectedDateFrom)) &&
+        (!selectedDateTo || new Date(event.startsAt) <= new Date(`${selectedDateTo}T23:59:59.999Z`)) &&
+        (!selectedCity || event.city?.toLocaleLowerCase("tr-TR").includes(selectedCity.toLocaleLowerCase("tr-TR"))) &&
+        (!selectedCountry || event.country?.toLocaleLowerCase("tr-TR").includes(selectedCountry.toLocaleLowerCase("tr-TR")))
+      );
+
+      return {
+        items: selectedItems,
+        total: selectedItems.length,
+        page: 1,
+        pageSize: 24,
+        hasNextPage: false
+      };
+    }
   });
   const events = eventList?.items ?? [];
 
