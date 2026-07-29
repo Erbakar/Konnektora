@@ -2,7 +2,9 @@ import { useMutation } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
+import { EmailInput, PhoneInput } from "../components/FormInputs";
 import { createUserMessage, type UserMessageInput } from "../lib/api";
+import { normalizePhone } from "../lib/formats";
 import type { UserMessageType } from "@konnektora/shared";
 
 const MESSAGE_TYPE_OPTIONS: Array<{ value: UserMessageType; label: string; categories: string[] }> = [
@@ -39,7 +41,7 @@ export function ContactPage() {
       category: String(form.get("category") || "") || undefined,
       name: String(form.get("name")),
       email: String(form.get("email")),
-      phone: String(form.get("phone") || "") || undefined,
+      phone: normalizePhone(String(form.get("phone") || "")) || undefined,
       body: String(form.get("body")),
       appVersion: "web",
       systemInfo: window.navigator.userAgent
@@ -89,11 +91,13 @@ export function ContactPage() {
         </label>
         <label>
           Email
-          <input name="email" required type="email" placeholder="email@example.com" />
+          <EmailInput name="email" required />
+          <span className="form-help">Örnek: ada@ornek.com</span>
         </label>
         <label>
           Telefon
-          <input name="phone" placeholder="+90 5xx xxx xx xx" />
+          <PhoneInput name="phone" />
+          <span className="form-help">Örnek: +90 555 111 22 33</span>
         </label>
         <label>
           Mesaj

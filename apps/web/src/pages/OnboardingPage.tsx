@@ -3,8 +3,10 @@ import { ArrowLeft, ArrowRight, Check, ImagePlus, Sparkles, UserPlus } from "luc
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { TagSentiment } from "@konnektora/shared";
+import { EmailInput, PhoneInput, VerificationCodeInput } from "../components/FormInputs";
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
 import { checkAvailability, completeOnboarding, confirmPhoneVerification, followUser, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, uploadProfileMedia } from "../lib/api";
+import { normalizeEmail, normalizePhone } from "../lib/formats";
 
 const steps = ["Hesap", "Telefon", "Temel bilgiler", "Profil fotoğrafı", "İlgi alanları", "Topluluk"];
 const statusStep: Record<string, number> = {
@@ -24,6 +26,7 @@ export function OnboardingPage() {
   const [phone, setPhone] = useState("");
   const [expires, setExpires] = useState(0);
   const [developmentCode, setDevelopmentCode] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState("");
   const [photoZoom, setPhotoZoom] = useState(1);
@@ -96,6 +99,7 @@ export function OnboardingPage() {
     onSuccess: (data) => {
       setExpires(data.expiresInSeconds);
       setDevelopmentCode(data.developmentCode ?? "");
+      setVerificationCode(data.developmentCode ?? "");
     },
   });
   const phoneConfirm = useMutation({
@@ -181,7 +185,7 @@ export function OnboardingPage() {
               if (password !== String(form.get("passwordAgain"))) return;
               register.mutate({
                 name: String(form.get("name")),
-                email: String(form.get("email")),
+                email: normalizeEmail(String(form.get("email"))),
                 password,
                 accountType,
                 ...(accountType === "corporate"
@@ -205,7 +209,7 @@ export function OnboardingPage() {
             </label>
             <label>
               Ad Soyad
-              <input name="name" minLength={2} required />
+              <input autoComplete="name" name="name" minLength={2} placeholder="Adın ve soyadın" required />
             </label>
             {accountType === "corporate" ? (
               <>
@@ -221,7 +225,8 @@ export function OnboardingPage() {
             ) : null}
             <label>
               E-posta
-              <input name="email" onBlur={(event) => void checkAvailability({ email: event.target.value }).then((data) => setAvailabilityText(data.emailAvailable ? "E-posta kullanılabilir" : "E-posta kullanımda"))} required type="email" />
+              <EmailInput name="email" onBlur={(event) => void checkAvailability({ email: normalizeEmail(event.target.value) }).then((data) => setAvailabilityText(data.emailAvailable ? "E-posta kullanılabilir" : "E-posta kullanımda"))} required />
+              <span className="form-help">Örnek: ada@ornek.com</span>
             </label>
             <label>
               Şifre
@@ -263,13 +268,16 @@ export function OnboardingPage() {
             <form
               onSubmit={(event: FormEvent<HTMLFormElement>) => {
                 event.preventDefault();
-                setPhone(String(new FormData(event.currentTarget).get("phone")));
-                phoneRequest.mutate(String(new FormData(event.currentTarget).get("phone")));
+                const normalized = normalizePhone(String(new FormData(event.currentTarget).get("phone")));
+                setPhone(normalized);
+                setVerificationCode("");
+                phoneRequest.mutate(normalized);
               }}
             >
               <label>
                 Telefon numarası
-                <input defaultValue={profile.data?.phone ?? ""} name="phone" placeholder="+905551112233" required />
+                <PhoneInput defaultValue={profile.data?.phone ?? ""} name="phone" pattern="\+?[0-9 ]{10,19}" required />
+                <span className="form-help">0555… veya +90 555… biçiminde yazabilirsin.</span>
               </label>
               <button className="primary-action" disabled={phoneRequest.isPending || expires > 0} type="submit">
                 {expires ? `${expires} sn` : "Kod gönder"}
@@ -279,16 +287,18 @@ export function OnboardingPage() {
               <form
                 onSubmit={(event: FormEvent<HTMLFormElement>) => {
                   event.preventDefault();
-                  phoneConfirm.mutate(String(new FormData(event.currentTarget).get("code")));
+                  phoneConfirm.mutate(verificationCode);
                 }}
               >
                 <label>
                   Doğrulama kodu
-                  <input autoComplete="one-time-code" defaultValue={developmentCode} inputMode="numeric" maxLength={6} name="code" pattern="[0-9]{6}" required />
+                  <VerificationCodeInput autoFocus name="code" onChange={(event) => setVerificationCode(event.target.value)} required value={verificationCode} />
+                  <span className="form-help">Telefonuna gelen 6 haneli kodu yaz.</span>
                 </label>
-                <button className="primary-action" type="submit">
-                  Doğrula ve devam et
+                <button className="primary-action" disabled={phoneConfirm.isPending || verificationCode.length !== 6} type="submit">
+                  {phoneConfirm.isPending ? "Doğrulanıyor…" : "Doğrula ve devam et"}
                 </button>
+                {phoneConfirm.isError ? <p className="form-error">Kod hatalı veya süresi dolmuş. Yeni kod isteyip tekrar dene.</p> : null}
               </form>
             ) : null}
           </div>

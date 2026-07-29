@@ -3,10 +3,12 @@ import { Check, ClipboardCheck, Image, LogOut, Plus, Trash2, UserRound, Users, X
 import { type FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 import type { AccountType, Event, EventParticipant, MemberCard, NotificationPreference, PrivacyAudience, ProfileMedia, Tag, TagAffinity, TagSentiment, SocialProvider } from "@konnektora/shared";
+import { EmailInput, PhoneInput, VerificationCodeInput } from "../components/FormInputs";
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
 import { ProfileVerificationPanel } from "../components/ProfileVerificationPanel";
 import { PushNotificationControl } from "../components/PushNotificationControl";
 import { getSocialCredential } from "../lib/socialProviders";
+import { normalizeEmail, normalizePhone } from "../lib/formats";
 import { type AdminEventInput, type RegistrationInput, archiveMyEvent, checkInEventParticipant, changePassword, connectSocialAccount, confirmPhoneVerification, clearUserSession, createUserEvent, createUserTag, createTagComment, deactivateAccount, deleteProfileMedia, deleteTagComment, getProfileAffinities, getMyProfile, getNotificationPreferences, getPrivacySettings, getUserSession, getUserToken, followUser, inviteEventParticipant, isMockApiMode, listMyNotifications, listBlocks, listFollowing, listMemberSuggestions, listEventParticipants, listMyEvents, listProfileMedia, listSocialAccounts, listTags, listTagComments, markMyNotificationRead, makeProfilePicture, registerUser, reactivateAccount, removeBlock, removeSocialAccount, requestEmailVerification, requestPhoneVerification, requestPasswordReset, reorderProfileMedia, resolveMediaUrl, scanEventTicket, setUserSession, updateEventParticipantStatus, updateMyEvent, updateProfileAffinities, unfollowUser, updateMyProfile, updateNotificationPreferences, updatePrivacySettings, uploadProfileMedia, userLogin, socialLogin } from "../lib/api";
 
 export function AccountPage() {
@@ -354,7 +356,7 @@ export function AccountPage() {
     const form = new FormData(event.currentTarget);
     authMutation.mutate({
       name: String(form.get("name") || ""),
-      email: String(form.get("email")),
+      email: normalizeEmail(String(form.get("email"))),
       password: String(form.get("password")),
       accountType: String(form.get("accountType") || "individual") as AccountType,
       companyName: String(form.get("companyName") || "") || undefined,
@@ -476,7 +478,7 @@ export function AccountPage() {
 
   function handlePhoneRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    requestPhoneMutation.mutate(String(new FormData(event.currentTarget).get("phone") || "").trim());
+    requestPhoneMutation.mutate(normalizePhone(String(new FormData(event.currentTarget).get("phone") || "")));
   }
 
   function handlePhoneConfirmation(event: FormEvent<HTMLFormElement>) {
@@ -609,7 +611,8 @@ export function AccountPage() {
             ) : null}
             <label>
               Email
-              <input autoComplete="email" name="email" placeholder="user@konnektora.local" required type="email" />
+              <EmailInput name="email" required />
+              <span className="form-help">Örnek: ada@ornek.com</span>
             </label>
             <label>
               Şifre
@@ -799,7 +802,8 @@ export function AccountPage() {
               {!pendingPhone ? (
                 <label>
                   Yeni telefon numarası
-                  <input name="phone" pattern="\+[1-9][0-9]{7,14}" placeholder="+905551112233" required type="tel" />
+                  <PhoneInput name="phone" pattern="\+?[0-9 ]{10,19}" required />
+                  <span className="form-help">Örnek: +90 555 111 22 33</span>
                 </label>
               ) : (
                 <>
@@ -807,7 +811,7 @@ export function AccountPage() {
                   {developmentPhoneCode ? <p className="form-help">Geliştirme kodu: {developmentPhoneCode}</p> : null}
                   <label>
                     Doğrulama kodu
-                    <input autoComplete="one-time-code" inputMode="numeric" maxLength={6} minLength={6} name="code" pattern="[0-9]{6}" required />
+                    <VerificationCodeInput defaultValue={developmentPhoneCode ?? ""} name="code" required />
                   </label>
                 </>
               )}
