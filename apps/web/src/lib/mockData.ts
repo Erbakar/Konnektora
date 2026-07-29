@@ -63,7 +63,7 @@ function event(input: Omit<Event, "status" | "timezone" | "language" | "external
   };
 }
 
-export const mockEvents: Event[] = [
+const mockEventTemplates: Event[] = [
   event({
     id: "aaaaaaaa-0001-4000-8000-000000000001",
     title: "Global Startup Demo Night",
@@ -353,3 +353,23 @@ export const mockEvents: Event[] = [
     tags: [tag("founder")]
   })
 ];
+
+function futureDate(daysFromNow: number, hour: number) {
+  const date = new Date();
+  date.setUTCHours(hour, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() + daysFromNow);
+  return date.toISOString();
+}
+
+export const mockEvents: Event[] = mockEventTemplates.map((item, index) => {
+  const startsAt = futureDate(3 + index * 2, 15 + (index % 4));
+  const duration = item.endsAt
+    ? new Date(item.endsAt).getTime() - new Date(item.startsAt).getTime()
+    : 2 * 60 * 60 * 1000;
+
+  return {
+    ...item,
+    startsAt,
+    endsAt: new Date(new Date(startsAt).getTime() + duration).toISOString()
+  };
+});

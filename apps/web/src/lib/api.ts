@@ -154,9 +154,13 @@ const MOCK_API_SETTING = import.meta.env.VITE_MOCK_API;
 const isBrowser = typeof window !== "undefined";
 const isLocalApiUrl = API_URL.includes("localhost") || API_URL.includes("127.0.0.1");
 const isNetlifyPreview = isBrowser && window.location.hostname.endsWith("netlify.app");
+const isKonnektoraProduction = isBrowser && window.location.hostname.endsWith("konnektora.com");
 const USE_MOCK_FALLBACK =
   MOCK_API_SETTING === "true" ||
-  (MOCK_API_SETTING !== "false" && import.meta.env.PROD && (!CONFIGURED_API_URL || isLocalApiUrl || isNetlifyPreview));
+  (MOCK_API_SETTING !== "false" &&
+    import.meta.env.PROD &&
+    (!CONFIGURED_API_URL || isLocalApiUrl || isNetlifyPreview || isKonnektoraProduction));
+const USE_DEMO_CONTENT = import.meta.env.VITE_DEMO_CONTENT !== "false" && import.meta.env.PROD;
 const TOKEN_KEY = "konnektora_admin_token";
 const USER_TOKEN_KEY = "konnektora_user_token";
 const USER_KEY = "konnektora_user";
@@ -334,8 +338,10 @@ export function clearUserSession() {
   localStorage.removeItem(USER_KEY);
 }
 
-export function listSocialPosts(scope: "all" | "following" = "all", page = 1): Promise<SocialPostFeed> {
-  return requestJson(`/feed/posts?scope=${scope}&page=${page}&pageSize=20`, socialPostFeedSchema, { auth: "user" });
+export async function listSocialPosts(scope: "all" | "following" = "all", page = 1): Promise<SocialPostFeed> {
+  const query = new URLSearchParams({ scope, page: String(page), pageSize: "20" });
+  const result = await requestJson(`/feed/posts?${query}`, socialPostFeedSchema, { auth: "user" });
+  return USE_DEMO_CONTENT && result.items.length === 0 ? listMockSocialPosts(query) : result;
 }
 
 export function createSocialPost(body: string, visibility: PostVisibility, media: File[]): Promise<SocialPost> {
@@ -461,7 +467,9 @@ function mockSocialSeed(): SocialPost[] {
   const now = Date.now();
   return [
     { id: "71000000-0000-4000-8000-000000000001", authorId: "72000000-0000-4000-8000-000000000001", body: "Konnektora topluluğuna merhaba! Yeni bağlantılar, gerçek sohbetler ve birlikte üretmek için buradayız. 🌱", visibility: "everybody", status: "active", likeCount: 18, commentCount: 1, liked: false, createdAt: new Date(now - 32 * 60_000).toISOString(), updatedAt: new Date(now - 32 * 60_000).toISOString(), author: { id: "72000000-0000-4000-8000-000000000001", name: "Derya Akın", username: "derya", profileVerifiedAt: new Date(now - 86_400_000).toISOString(), avatarUrl: null }, media: [] },
-    { id: "71000000-0000-4000-8000-000000000002", authorId: "72000000-0000-4000-8000-000000000002", body: "Bu hafta İstanbul'da ürün geliştirme ve yapay zekâ üzerine küçük bir buluşma organize ediyoruz. Katılmak isteyenler yorum bırakabilir.", visibility: "everybody", status: "active", likeCount: 9, commentCount: 0, liked: false, createdAt: new Date(now - 3 * 3_600_000).toISOString(), updatedAt: new Date(now - 3 * 3_600_000).toISOString(), author: { id: "72000000-0000-4000-8000-000000000002", name: "Mert Yalın", username: "mertyalin", profileVerifiedAt: null, avatarUrl: null }, media: [] }
+    { id: "71000000-0000-4000-8000-000000000002", authorId: "72000000-0000-4000-8000-000000000002", body: "Bu hafta İstanbul'da ürün geliştirme ve yapay zekâ üzerine küçük bir buluşma organize ediyoruz. Katılmak isteyenler yorum bırakabilir.", visibility: "everybody", status: "active", likeCount: 9, commentCount: 0, liked: false, createdAt: new Date(now - 3 * 3_600_000).toISOString(), updatedAt: new Date(now - 3 * 3_600_000).toISOString(), author: { id: "72000000-0000-4000-8000-000000000002", name: "Mert Yalın", username: "mertyalin", profileVerifiedAt: null, avatarUrl: null }, media: [] },
+    { id: "71000000-0000-4000-8000-000000000003", authorId: "72000000-0000-4000-8000-000000000003", body: "Berlin Climate Tech buluşmasından üç önemli not: erken müşteri doğrulaması, regülasyon takibi ve doğru pilot ortağı. Detayları etkinlikte konuşalım.", visibility: "everybody", status: "active", likeCount: 14, commentCount: 2, liked: false, createdAt: new Date(now - 7 * 3_600_000).toISOString(), updatedAt: new Date(now - 7 * 3_600_000).toISOString(), author: { id: "72000000-0000-4000-8000-000000000003", name: "Selin Özer", username: "selinozer", profileVerifiedAt: null, avatarUrl: null }, media: [] },
+    { id: "71000000-0000-4000-8000-000000000004", authorId: "72000000-0000-4000-8000-000000000004", body: "Yeni yatırım dönemine hazırlanan ekipler için pitch deck kliniği açtık. Dört ekip, iki mentor ve tamamen uygulanabilir geri bildirimler.", visibility: "everybody", status: "active", likeCount: 21, commentCount: 3, liked: false, createdAt: new Date(now - 12 * 3_600_000).toISOString(), updatedAt: new Date(now - 12 * 3_600_000).toISOString(), author: { id: "72000000-0000-4000-8000-000000000004", name: "Emre Kaya", username: "emrekaya", profileVerifiedAt: new Date(now - 172_800_000).toISOString(), avatarUrl: null }, media: [] }
   ];
 }
 
@@ -1203,45 +1211,7 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   }
 
   if (pathname === "/events") {
-    const params = new URLSearchParams(queryString);
-    const selectedTag = params.get("tag");
-    const selectedFormat = params.get("format");
-    const search = params.get("q")?.toLowerCase().trim();
-    const dateFrom = params.get("dateFrom");
-    const dateTo = params.get("dateTo");
-    const city = params.get("city")?.toLowerCase().trim();
-    const country = params.get("country")?.toLowerCase().trim();
-    const page = Math.max(Number(params.get("page") || "1"), 1);
-    const pageSize = Math.min(Math.max(Number(params.get("pageSize") || "24"), 1), 50);
-    const blocks = listMockBlocks();
-    const blockedEventIds = new Set(blocks.filter((block) => block.targetType === "event").map((block) => block.targetId));
-    const blockedTagIds = new Set(blocks.filter((block) => block.targetType === "tag").map((block) => block.targetId));
-    const events = getStoredEvents().filter(
-      (eventItem) =>
-        eventItem.status === "published" &&
-        !blockedEventIds.has(eventItem.id) &&
-        !eventItem.tags.some((tag) => blockedTagIds.has(tag.id)) &&
-        (!selectedTag || eventItem.tags.some((tagItem) => tagItem.slug === selectedTag)) &&
-        (!selectedFormat || eventItem.format === selectedFormat) &&
-        (!search ||
-          [eventItem.title, eventItem.summary, eventItem.description, eventItem.organizerName ?? ""]
-            .join(" ")
-            .toLowerCase()
-            .includes(search)) &&
-        (!dateFrom || new Date(eventItem.startsAt) >= new Date(dateFrom)) &&
-        (!dateTo || new Date(eventItem.startsAt) <= new Date(dateTo)) &&
-        (!city || eventItem.city?.toLowerCase() === city) &&
-        (!country || eventItem.country?.toLowerCase() === country)
-    );
-    const start = (page - 1) * pageSize;
-
-    return schema.parse({
-      items: events.slice(start, start + pageSize),
-      total: events.length,
-      page,
-      pageSize,
-      hasNextPage: start + pageSize < events.length
-    });
+    return schema.parse(listMockEventFeed(new URLSearchParams(queryString)));
   }
 
   if (pathname.startsWith("/events/")) {
@@ -1270,6 +1240,47 @@ function getStoredTags(): Tag[] {
   const storedTags = readStorage<Tag[]>(MOCK_TAGS_KEY, []);
   const storedSlugs = new Set(storedTags.map((tag) => tag.slug));
   return [...storedTags, ...mockTags.filter((tag) => !storedSlugs.has(tag.slug))];
+}
+
+function listMockEventFeed(params: URLSearchParams): EventList {
+  const selectedTag = params.get("tag");
+  const selectedFormat = params.get("format");
+  const search = params.get("q")?.toLowerCase().trim();
+  const dateFrom = params.get("dateFrom");
+  const dateTo = params.get("dateTo");
+  const city = params.get("city")?.toLowerCase().trim();
+  const country = params.get("country")?.toLowerCase().trim();
+  const page = Math.max(Number(params.get("page") || "1"), 1);
+  const pageSize = Math.min(Math.max(Number(params.get("pageSize") || "24"), 1), 50);
+  const blocks = listMockBlocks();
+  const blockedEventIds = new Set(blocks.filter((block) => block.targetType === "event").map((block) => block.targetId));
+  const blockedTagIds = new Set(blocks.filter((block) => block.targetType === "tag").map((block) => block.targetId));
+  const events = getStoredEvents().filter(
+    (eventItem) =>
+      eventItem.status === "published" &&
+      !blockedEventIds.has(eventItem.id) &&
+      !eventItem.tags.some((tag) => blockedTagIds.has(tag.id)) &&
+      (!selectedTag || eventItem.tags.some((tagItem) => tagItem.slug === selectedTag)) &&
+      (!selectedFormat || eventItem.format === selectedFormat) &&
+      (!search ||
+        [eventItem.title, eventItem.summary, eventItem.description, eventItem.organizerName ?? ""]
+          .join(" ")
+          .toLowerCase()
+          .includes(search)) &&
+      (!dateFrom || new Date(eventItem.startsAt) >= new Date(dateFrom)) &&
+      (!dateTo || new Date(eventItem.startsAt) <= new Date(dateTo)) &&
+      (!city || eventItem.city?.toLowerCase() === city) &&
+      (!country || eventItem.country?.toLowerCase() === country)
+  );
+  const start = (page - 1) * pageSize;
+
+  return {
+    items: events.slice(start, start + pageSize),
+    total: events.length,
+    page,
+    pageSize,
+    hasNextPage: start + pageSize < events.length
+  };
 }
 
 function setStoredEvents(events: Event[]) {
@@ -1494,6 +1505,66 @@ function defaultMockPlaces(): AdminPlace[] {
       address: "Mitte",
       followerCount: 42,
       inviteCount: 8,
+      createdById: "88888888-8888-4888-8888-888888888888",
+      updatedById: null,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: basicMockUser("88888888-8888-4888-8888-888888888888"),
+      updatedBy: null,
+      reportCount: 0
+    },
+    {
+      id: "60000000-6000-4000-8000-000000000002",
+      name: "Galata Product House",
+      slug: "galata-product-house",
+      description: "Ürün ekipleri, bağımsız geliştiriciler ve kurucular için çalışma ve etkinlik alanı.",
+      status: "active",
+      coverImageUrl: "https://images.unsplash.com/photo-1497366754035-f200968a6e72",
+      country: "Türkiye",
+      city: "Istanbul",
+      address: "Galata",
+      followerCount: 118,
+      inviteCount: 24,
+      createdById: "88888888-8888-4888-8888-888888888888",
+      updatedById: null,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: basicMockUser("88888888-8888-4888-8888-888888888888"),
+      updatedBy: null,
+      reportCount: 0
+    },
+    {
+      id: "60000000-6000-4000-8000-000000000003",
+      name: "Amsterdam Founder Loft",
+      slug: "amsterdam-founder-loft",
+      description: "Founder breakfast, yatırımcı görüşmeleri ve küçük topluluk buluşmaları için sakin bir merkez.",
+      status: "active",
+      coverImageUrl: "https://images.unsplash.com/photo-1497366811353-6870744d04b2",
+      country: "Netherlands",
+      city: "Amsterdam",
+      address: "De Pijp",
+      followerCount: 86,
+      inviteCount: 16,
+      createdById: "88888888-8888-4888-8888-888888888888",
+      updatedById: null,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: basicMockUser("88888888-8888-4888-8888-888888888888"),
+      updatedBy: null,
+      reportCount: 0
+    },
+    {
+      id: "60000000-6000-4000-8000-000000000004",
+      name: "London Community Studio",
+      slug: "london-community-studio",
+      description: "Demo geceleri, yaratıcı atölyeler ve küratörlü networking oturumları için esnek stüdyo.",
+      status: "active",
+      coverImageUrl: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4",
+      country: "United Kingdom",
+      city: "London",
+      address: "Shoreditch",
+      followerCount: 154,
+      inviteCount: 31,
       createdById: "88888888-8888-4888-8888-888888888888",
       updatedById: null,
       createdAt: now,
@@ -2400,6 +2471,39 @@ function getAllMockUsers(): MockUser[] {
       followerCount: 8,
       followingCount: 21,
       lastOnlineAt: new Date().toISOString()
+    },
+    {
+      id: "72000000-0000-4000-8000-000000000003",
+      email: "selin@konnektora.local",
+      name: "Selin Özer",
+      username: "selinozer",
+      password: "ChangeMe123!",
+      role: "user",
+      status: "active",
+      accountType: "individual",
+      country: "Germany",
+      city: "Berlin",
+      emailVerified: true,
+      followerCount: 64,
+      followingCount: 38,
+      lastOnlineAt: new Date(Date.now() - 18 * 60_000).toISOString()
+    },
+    {
+      id: "72000000-0000-4000-8000-000000000004",
+      email: "emre@konnektora.local",
+      name: "Emre Kaya",
+      username: "emrekaya",
+      password: "ChangeMe123!",
+      role: "user",
+      status: "active",
+      accountType: "individual",
+      country: "Türkiye",
+      city: "Istanbul",
+      emailVerified: true,
+      profileVerifiedAt: new Date(Date.now() - 172_800_000).toISOString(),
+      followerCount: 91,
+      followingCount: 45,
+      lastOnlineAt: new Date(Date.now() - 42 * 60_000).toISOString()
     }
   ];
   const storedIds = new Set(storedUsers.map((user) => user.id));
@@ -2597,7 +2701,61 @@ function deleteMockFaq(id: string) {
 }
 
 function listMockAnnouncements(): Announcement[] {
-  return readStorage<Announcement[]>(MOCK_ANNOUNCEMENTS_KEY, []);
+  const now = Date.now();
+  const seeded: Announcement[] = [
+    {
+      id: "81000000-0000-4000-8000-000000000001",
+      title: "Yeni dönem etkinlik takvimi açıldı",
+      body: "Startup, networking, yatırım ve founder kategorilerindeki yeni buluşmaları keşfedin.",
+      target: "all",
+      targetLastLoginFrom: null,
+      targetLastLoginTo: null,
+      targetJoinedFrom: null,
+      targetJoinedTo: null,
+      targetAppVersion: null,
+      publishMode: "scheduled",
+      status: "active",
+      publishAt: new Date(now - 86_400_000).toISOString(),
+      expiresAt: null,
+      createdAt: new Date(now - 86_400_000).toISOString(),
+      updatedAt: new Date(now - 86_400_000).toISOString()
+    },
+    {
+      id: "81000000-0000-4000-8000-000000000002",
+      title: "Topluluk buluşmaları büyüyor",
+      body: "Berlin, İstanbul, Amsterdam ve Londra'daki yeni Konnektora mekânları yayında.",
+      target: "all",
+      targetLastLoginFrom: null,
+      targetLastLoginTo: null,
+      targetJoinedFrom: null,
+      targetJoinedTo: null,
+      targetAppVersion: null,
+      publishMode: "scheduled",
+      status: "active",
+      publishAt: new Date(now - 43_200_000).toISOString(),
+      expiresAt: null,
+      createdAt: new Date(now - 43_200_000).toISOString(),
+      updatedAt: new Date(now - 43_200_000).toISOString()
+    },
+    {
+      id: "81000000-0000-4000-8000-000000000003",
+      title: "Profilini tamamla, doğru kişilerle eşleş",
+      body: "İlgi alanlarını ve şehir bilgini ekleyerek daha ilgili öneriler alabilirsin.",
+      target: "all",
+      targetLastLoginFrom: null,
+      targetLastLoginTo: null,
+      targetJoinedFrom: null,
+      targetJoinedTo: null,
+      targetAppVersion: null,
+      publishMode: "scheduled",
+      status: "active",
+      publishAt: new Date(now - 21_600_000).toISOString(),
+      expiresAt: null,
+      createdAt: new Date(now - 21_600_000).toISOString(),
+      updatedAt: new Date(now - 21_600_000).toISOString()
+    }
+  ];
+  return readStorage<Announcement[]>(MOCK_ANNOUNCEMENTS_KEY, seeded);
 }
 
 function listMockPublicAnnouncements(): Announcement[] {
@@ -4120,17 +4278,19 @@ function parseParticipantStatus(value?: string): EventParticipant["status"] {
     : "requested";
 }
 
-export function listEvents(params?: URLSearchParams): Promise<EventList> {
+export async function listEvents(params?: URLSearchParams): Promise<EventList> {
   const query = params?.toString();
-  return requestJson(`/events${query ? `?${query}` : ""}`, eventListSchema, { auth: "user" });
+  const result = await requestJson(`/events${query ? `?${query}` : ""}`, eventListSchema, { auth: "user" });
+  return USE_DEMO_CONTENT && result.items.length === 0 ? listMockEventFeed(params ?? new URLSearchParams()) : result;
 }
 
 export function getEvent(slug: string): Promise<Event> {
   return requestJson(`/events/${slug}`, eventSchema, { auth: "user" });
 }
 
-export function listTags(): Promise<Tag[]> {
-  return requestJson("/tags", z.array(tagSchema), { auth: "user" });
+export async function listTags(): Promise<Tag[]> {
+  const result = await requestJson("/tags", z.array(tagSchema), { auth: "user" });
+  return USE_DEMO_CONTENT && result.length === 0 ? getStoredTags().filter((tag) => tag.status === "active") : result;
 }
 
 export function createUserTag(input: { name: string; description?: string }): Promise<Tag> {
@@ -4332,7 +4492,14 @@ export async function downloadCorporateKycDocument(id: string): Promise<Blob> { 
 export async function downloadAdminCorporateKycDocument(id: string): Promise<Blob> { const response = await fetch(`${API_URL}/admin/corporate-kyc/documents/${id}/download`, { headers: { Authorization: `Bearer ${getAdminToken() ?? ""}` } }); if (!response.ok) throw new Error("Belge indirilemedi."); return response.blob(); }
 
 export function getOnboardingStatus(): Promise<OnboardingStatus> { return requestJson("/me/onboarding", onboardingStatusSchema, { auth: "user" }); }
-export function getDiscoveryFeed(params?: { city?: string; country?: string }): Promise<DiscoveryFeed> { const query = new URLSearchParams(); if (params?.city) query.set("city", params.city); if (params?.country) query.set("country", params.country); return requestJson(`/discover/feed${query.size ? `?${query}` : ""}`, discoveryFeedSchema, { auth: "user" }); }
+export async function getDiscoveryFeed(params?: { city?: string; country?: string }): Promise<DiscoveryFeed> {
+  const query = new URLSearchParams();
+  if (params?.city) query.set("city", params.city);
+  if (params?.country) query.set("country", params.country);
+  const result = await requestJson(`/discover/feed${query.size ? `?${query}` : ""}`, discoveryFeedSchema, { auth: "user" });
+  const isEmpty = result.popularMembers.length === 0 && result.newMembers.length === 0 && result.trendingTags.length === 0;
+  return USE_DEMO_CONTENT && isEmpty ? getMockDiscoveryFeed(query) : result;
+}
 export function getPublicProfile(username: string): Promise<PublicProfile> { return requestJson(`/users/${encodeURIComponent(username)}`, publicProfileSchema, { auth: "user" }); }
 export function searchDiscovery(query: string): Promise<DiscoverySearch> { return requestJson(`/discover/search?q=${encodeURIComponent(query)}`, discoverySearchSchema, { auth: "user" }); }
 export function completeOnboarding(): Promise<OnboardingStatus> { return requestJson("/me/onboarding/complete", onboardingStatusSchema, { auth: "user", method: "POST" }); }
@@ -4685,8 +4852,9 @@ export function deleteAdminFaq(id: string): Promise<{ ok: true }> {
   });
 }
 
-export function listAnnouncements(): Promise<Announcement[]> {
-  return requestJson("/announcements", announcementListSchema);
+export async function listAnnouncements(): Promise<Announcement[]> {
+  const result = await requestJson("/announcements", announcementListSchema);
+  return USE_DEMO_CONTENT && result.length === 0 ? listMockPublicAnnouncements() : result;
 }
 
 export function listAdminAnnouncements(): Promise<Announcement[]> {
@@ -5116,9 +5284,10 @@ export type PlaceInput = {
   coverImageUrl?: string;
 };
 
-export function listPlaces(params?: URLSearchParams): Promise<PlaceList> {
+export async function listPlaces(params?: URLSearchParams): Promise<PlaceList> {
   const query = params?.toString();
-  return requestJson(`/places${query ? `?${query}` : ""}`, placeListSchema, { auth: "user" });
+  const result = await requestJson(`/places${query ? `?${query}` : ""}`, placeListSchema, { auth: "user" });
+  return USE_DEMO_CONTENT && result.items.length === 0 ? listMockPublicPlaces(params ?? new URLSearchParams()) : result;
 }
 
 export function getPlace(slug: string): Promise<Place> {
