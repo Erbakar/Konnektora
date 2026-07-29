@@ -1,46 +1,48 @@
 import { Link } from "react-router-dom";
+import { useLanguage } from "../lib/i18n";
 
 export function SiteFooter() {
+  const { t } = useLanguage();
   return (
     <footer className="site-footer">
       <div className="site-footer-inner">
         <div className="site-footer-brand">
           <img alt="Konnektora" src="/brand/konnektora-logo.svg" />
-          <p>The curated community platform for global events, trusted guest lists and meaningful connections.</p>
+          <p>{t("footerCopy")}</p>
         </div>
         <div className="site-footer-columns">
           <div>
-            <strong>Discover</strong>
-            <Link to="/events">Events</Link>
-            <Link to="/places">Places</Link>
-            <Link to="/messages">Messages</Link>
-            <Link to="/events?tag=startup">Tags</Link>
-            <Link to="/events?tag=networking">Networking</Link>
+            <strong>{t("discover")}</strong>
+            <Link to="/events">{t("events")}</Link>
+            <Link to="/places">{t("places")}</Link>
+            <Link to="/messages">{t("messages")}</Link>
+            <Link to="/events?tag=startup">{t("tags")}</Link>
+            <Link to="/events?tag=networking">{t("networking")}</Link>
           </div>
           <div>
-            <strong>Community</strong>
-            <Link to="/events?tag=founder">Founders</Link>
-            <Link to="/events?tag=yatirim">Investment</Link>
-            <Link to="/admin">Organizer tools</Link>
+            <strong>{t("community")}</strong>
+            <Link to="/events?tag=founder">{t("founders")}</Link>
+            <Link to="/events?tag=yatirim">{t("investment")}</Link>
+            <Link to="/admin">{t("organizerTools")}</Link>
           </div>
           <div>
             <strong>Konnektora</strong>
             <a href="https://github.com/Erbakar/Konnektora" rel="noreferrer" target="_blank">
               GitHub
             </a>
-            <Link to="/admin">Admin login</Link>
-            <Link to="/contact">Contact</Link>
-            <Link to="/help">Help center</Link>
-            <Link to="/about">About</Link>
-            <Link to="/privacy">Privacy</Link>
-            <Link to="/terms">Terms</Link>
-            <Link to="/cookies">Cookies</Link>
+            <Link to="/admin">{t("adminLogin")}</Link>
+            <Link to="/contact">{t("contact")}</Link>
+            <Link to="/help">{t("help")}</Link>
+            <Link to="/about">{t("about")}</Link>
+            <Link to="/privacy">{t("privacy")}</Link>
+            <Link to="/terms">{t("terms")}</Link>
+            <Link to="/cookies">{t("cookies")}</Link>
           </div>
         </div>
       </div>
       <div className="site-footer-bottom">
         <span>© {new Date().getFullYear()} Konnektora</span>
-        <span>Closed beta · EU MVP</span>
+        <span>{t("closedBeta")}</span>
       </div>
     </footer>
   );

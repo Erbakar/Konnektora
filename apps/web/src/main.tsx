@@ -3,6 +3,7 @@ import React, { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
+import { LanguageProvider } from "./lib/i18n";
 import "./styles.css";
 
 const AccountPage = lazy(() => import("./pages/AccountPage").then((module) => ({ default: module.AccountPage })));
@@ -73,10 +74,12 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <Suspense fallback={<div className="page route-loading" role="status">Sayfa yükleniyor…</div>}>
-        <RouterProvider router={router} />
-      </Suspense>
-    </QueryClientProvider>
+    <LanguageProvider>
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<div className="page route-loading" role="status">Sayfa yükleniyor…</div>}>
+          <RouterProvider router={router} />
+        </Suspense>
+      </QueryClientProvider>
+    </LanguageProvider>
   </React.StrictMode>
 );

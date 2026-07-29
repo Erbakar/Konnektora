@@ -72,8 +72,8 @@ export function PlacesPage() {
           {placeList?.items.map((place) => (
             <article className="event-card" key={place.id}>
               {place.coverImageUrl ? <Link className="event-card-media" to={`/places/${place.slug}`}><img alt="" src={place.coverImageUrl} /></Link> : null}
-              <div><span className="eyebrow">Place</span><h2><Link to={`/places/${place.slug}`}>{place.name}</Link></h2></div>
-              <p>{place.description || "Konnektora community place"}</p>
+              <div><span className="eyebrow">Mekân</span><h2><Link to={`/places/${place.slug}`}>{place.name}</Link></h2></div>
+              <p>{place.description || "Konnektora topluluk mekânı"}</p>
               <div className="event-card-meta"><span><MapPin size={15} />{[place.city, place.country].filter(Boolean).join(", ") || "Konum belirtilmedi"}</span><span><Users size={15} />{place.followerCount} takipçi</span></div>
             </article>
           ))}

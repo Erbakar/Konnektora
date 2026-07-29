@@ -65,7 +65,7 @@ export function IdentityPage() {
     <section className="page identity-page">
       <header className="identity-hero">
         <div>
-          <span className="eyebrow">Konnektora Identity</span>
+          <span className="eyebrow">Konnektora Kimlik</span>
           <h1>Onboarding ve üye kartın</h1>
           <p>
             Profilini tamamla, QR veya NFC ile tanıştığın kişileri hızlıca takip

@@ -20,6 +20,7 @@ import { HomeEventTile } from "../components/HomeEventTile";
 import { DiscoveryCard } from "../components/DiscoveryCard";
 import { getDiscoveryFeed, listAnnouncements, listEvents, listTags } from "../lib/api";
 import { mockEvents } from "../lib/mockData";
+import { useLanguage } from "../lib/i18n";
 
 const categoryMeta: Record<string, { icon: typeof Rocket; copy: string }> = {
   startup: {
@@ -50,6 +51,57 @@ const popularCities = [
 ];
 
 export function HomePage() {
+  const { language } = useLanguage();
+  const c = language === "tr" ? {
+    eyebrow: "Seçkin topluluk platformu",
+    title: "Niyetin güvenilir bağlantılara dönüştüğü yer.",
+    lead: "Startup demolarından yatırımcı buluşmalarına Konnektora; kurucuların, profesyonellerin ve topluluk yöneticilerinin etkinlik keşfetmesini, davetli listelerini yönetmesini ve kapalı bir platformda anlamlı ağlar kurmasını sağlar.",
+    explore: "Etkinlikleri keşfet", join: "Topluluğa katıl", searchPlaceholder: "Her şeyi ara", search: "Ara",
+    curated: "Senin için seçildi", pulse: "Topluluğun nabzını yakala.",
+    pulseCopy: "Yeni bağlantılar kur, yükselen profilleri keşfet ve gündemdeki konulara katıl.",
+    discoverCommunity: "Topluluğu keşfet", popular: "Popüler hesaplar",
+    popularCopy: "Bu hafta topluluğun dikkatini çeken üyeler", newMembers: "Yeni üyeler",
+    newMembersCopy: "Ağa yeni katılan, tanışmaya açık insanlar", trends: "Gündemdeki ilgi alanları",
+    trendsCopy: "Topluluğun şu anda konuştuğu başlıklar", allCategories: "Tüm kategoriler",
+    europe: "Avrupa ve ötesindeki etkinlikler", europeCopy: "Üretenler, yatırımcılar ve topluluk liderleri için seçilmiş buluşmalar.",
+    allEvents: "Tüm etkinlikler", online: "Yaklaşan online etkinlikler",
+    onlineCopy: "Her yerden katıl, önemli insanlarla buluş.", categories: "Popüler kategorileri keşfet",
+    categoriesCopy: "Aradığın konuyla başla.", cities: "Konnektora'daki popüler şehirler",
+    citiesCopy: "Şehir şehir global bir ağ kuruyoruz.", how: "Konnektora nasıl çalışır?",
+    howCopy: "Topluluk odaklı etkinlikler için güvenilir bir döngü.", discoverEvents: "Etkinlikleri ve grupları keşfet",
+    discoverEventsCopy: "Önemsediğin konularda seçkin etkinlikleri kimlerin düzenlediğini gör.", start: "Keşfetmeye başla",
+    findPeople: "Doğru insanları bul", findPeopleCopy: "Ortak ilgi alanları, davetler ve onay akışlarıyla bağlantı kur.",
+    host: "Güvenle etkinlik düzenle", hostCopy: "Etkinlik oluştur, davetli listelerini yönet ve topluluğunu güvenle büyüt.",
+    organizer: "Organizatör araçları", communityFirst: "Önce topluluk", connections: "Bağlantılar Konnektora'da kurulur",
+    connectionsCopy: "Üyeler doğru insanlarla tanışmak, seçilmiş buluşmalara katılmak ve kalabalık gelmeden profesyonel ilişkiler kurmak için Konnektora'yı kullanır.",
+    joinCommunity: "Topluluğa katıl", curatedEvents: "seçilmiş etkinlik", activeTags: "aktif ilgi alanı",
+    global: "varsayılan olarak global", finalTitle: "Kapılar açılmadan önce ağını kur.",
+    finalCopy: "Konnektora; gerçek etkinlikler için yeterli yapıya, doğru kullanıcılarla gelişmek için gereken odağa sahip kontrollü bir topluluk deneyimi sunar.",
+    openFeed: "Etkinlik akışını aç"
+  } : {
+    eyebrow: "The curated community platform", title: "Where intent becomes trusted connections.",
+    lead: "From startup demos to investor roundtables, Konnektora helps founders, operators and community builders discover events, manage guest lists and grow meaningful networks in one closed platform.",
+    explore: "Explore events", join: "Join the beta", searchPlaceholder: "Search anything", search: "Search",
+    curated: "Curated for you", pulse: "Feel the pulse of the community.",
+    pulseCopy: "Build new connections, discover rising profiles and join trending conversations.",
+    discoverCommunity: "Explore community", popular: "Popular accounts", popularCopy: "Members catching attention this week",
+    newMembers: "New members", newMembersCopy: "New people open to connecting", trends: "Trending interests",
+    trendsCopy: "Topics the community is discussing now", allCategories: "All categories",
+    europe: "Events across Europe & beyond", europeCopy: "Curated rooms for builders, investors and community leaders.",
+    allEvents: "See all events", online: "Upcoming online events", onlineCopy: "Join from anywhere. Meet where it matters.",
+    categories: "Explore top categories", categoriesCopy: "Start with what you are looking for.",
+    cities: "Popular cities on Konnektora", citiesCopy: "We are building a global network, city by city.",
+    how: "How Konnektora works", howCopy: "A trusted loop for community-led events.",
+    discoverEvents: "Discover events and groups", discoverEventsCopy: "See who is hosting curated events for the topics you care about.",
+    start: "Start exploring", findPeople: "Find your people", findPeopleCopy: "Connect over shared interests through tags, invites and approval flows.",
+    host: "Host with confidence", hostCopy: "Create events, manage guest lists and keep your community accountable.",
+    organizer: "Organizer tools", communityFirst: "Community-first", connections: "Connections are made on Konnektora",
+    connectionsCopy: "Members use Konnektora to meet the right people, join curated rooms, get invited to the right events and build professional relationships before the crowd arrives.",
+    joinCommunity: "Join the community", curatedEvents: "curated events", activeTags: "active tags",
+    global: "global by default", finalTitle: "Build the network before opening the doors.",
+    finalCopy: "Konnektora is shaped for a controlled community launch with enough structure for real events and enough focus to improve with the right users.",
+    openFeed: "Open event feed"
+  };
   const { data: eventList } = useQuery({
     queryKey: ["events", "home"],
     queryFn: () => listEvents(),
@@ -80,25 +132,18 @@ export function HomePage() {
     <div className="corp-home">
       <section className="corp-hero">
         <div className="corp-hero-inner">
-          <p className="corp-eyebrow">The curated community platform</p>
-          <h1>
-            Where intent becomes
-            <span> trusted connections.</span>
-          </h1>
-          <p className="corp-hero-lead">
-            From startup demos to investor roundtables, Konnektora helps founders, operators and
-            community builders discover events, manage guest lists and grow meaningful networks in one
-            closed platform.
-          </p>
+          <p className="corp-eyebrow">{c.eyebrow}</p>
+          <h1>{c.title.split(" ").slice(0, 3).join(" ")}<span> {c.title.split(" ").slice(3).join(" ")}</span></h1>
+          <p className="corp-hero-lead">{c.lead}</p>
           <div className="corp-hero-actions">
             <Link className="corp-btn corp-btn-primary" to="/events">
-              Explore events
+              {c.explore}
             </Link>
             <Link className="corp-btn corp-btn-secondary" to="/onboarding">
-              Join the beta
+              {c.join}
             </Link>
           </div>
-          <form className="hero-search" action="/search"><Search size={20} /><input aria-label="Search anything" name="q" placeholder="Search anything" minLength={2} required /><button type="submit">Search</button></form>
+          <form className="hero-search" action="/search"><Search size={20} /><input aria-label={c.searchPlaceholder} name="q" placeholder={c.searchPlaceholder} minLength={2} required /><button type="submit">{c.search}</button></form>
         </div>
       </section>
 
@@ -122,12 +167,12 @@ export function HomePage() {
         <section className="corp-section discovery-feed-section">
           <div className="discovery-feed-hero">
             <div>
-              <span className="discovery-kicker"><Sparkles size={15} /> Curated for you</span>
-              <h2>Topluluğun nabzını yakala.</h2>
-              <p>Yeni bağlantılar kur, yükselen profilleri keşfet ve gündemdeki konulara katıl.</p>
+              <span className="discovery-kicker"><Sparkles size={15} /> {c.curated}</span>
+              <h2>{c.pulse}</h2>
+              <p>{c.pulseCopy}</p>
             </div>
             <Link className="discovery-search-action" to="/search">
-              Topluluğu keşfet <ArrowRight size={18} />
+              {c.discoverCommunity} <ArrowRight size={18} />
             </Link>
           </div>
 
@@ -135,7 +180,7 @@ export function HomePage() {
             <section className="discovery-member-panel discovery-member-panel-featured">
               <header>
                 <span><TrendingUp size={18} /></span>
-                <div><h3>Popüler hesaplar</h3><p>Bu hafta topluluğun dikkatini çeken üyeler</p></div>
+                <div><h3>{c.popular}</h3><p>{c.popularCopy}</p></div>
               </header>
               <div className="discovery-row">
                 {discovery.popularMembers.slice(0, 4).map((item) => <DiscoveryCard item={item} key={item.id} />)}
@@ -144,7 +189,7 @@ export function HomePage() {
             <section className="discovery-member-panel">
               <header>
                 <span><UserRoundPlus size={18} /></span>
-                <div><h3>Yeni üyeler</h3><p>Ağa yeni katılan, tanışmaya açık insanlar</p></div>
+                <div><h3>{c.newMembers}</h3><p>{c.newMembersCopy}</p></div>
               </header>
               <div className="discovery-row">
                 {discovery.newMembers.slice(0, 4).map((item) => <DiscoveryCard item={item} key={item.id} />)}
@@ -154,8 +199,8 @@ export function HomePage() {
 
           <section className="discovery-trends">
             <header>
-              <div><span className="discovery-trends-icon"><Hash size={20} /></span><div><h3>Gündemdeki ilgi alanları</h3><p>Topluluğun şu anda konuştuğu başlıklar</p></div></div>
-              <Link to="/events">Tüm kategoriler <ArrowRight size={16} /></Link>
+              <div><span className="discovery-trends-icon"><Hash size={20} /></span><div><h3>{c.trends}</h3><p>{c.trendsCopy}</p></div></div>
+              <Link to="/events">{c.allCategories} <ArrowRight size={16} /></Link>
             </header>
             <div className="discovery-row compact">
               {discovery.trendingTags.slice(0, 8).map((item) => <DiscoveryCard item={item} key={item.id} />)}
@@ -168,12 +213,12 @@ export function HomePage() {
         <div className="corp-section-head">
           <div>
             <h2>
-              Events across <span className="corp-accent">Europe & beyond</span>
+              {c.europe}
             </h2>
-            <p>Curated rooms for builders, investors and community leaders.</p>
+            <p>{c.europeCopy}</p>
           </div>
           <Link className="corp-link" to="/events">
-            See all events
+            {c.allEvents}
             <ArrowRight size={18} />
           </Link>
         </div>
@@ -187,11 +232,11 @@ export function HomePage() {
       <section className="corp-section corp-section-muted">
         <div className="corp-section-head">
           <div>
-            <h2>Upcoming online events</h2>
-            <p>Join from anywhere. Meet where it matters.</p>
+            <h2>{c.online}</h2>
+            <p>{c.onlineCopy}</p>
           </div>
           <Link className="corp-link" to="/events">
-            See all events
+            {c.allEvents}
             <ArrowRight size={18} />
           </Link>
         </div>
@@ -205,14 +250,20 @@ export function HomePage() {
       <section className="corp-section">
         <div className="corp-section-head corp-section-head-center">
           <div>
-            <h2>Explore top categories</h2>
-            <p>Start with what you are looking for.</p>
+            <h2>{c.categories}</h2>
+            <p>{c.categoriesCopy}</p>
           </div>
         </div>
         <div className="corp-category-grid">
           {tags.map((tag) => {
             const meta = categoryMeta[tag.slug] ?? { icon: Briefcase, copy: "Find relevant people and events." };
             const Icon = meta.icon;
+            const turkishCategoryCopy: Record<string, string> = {
+              startup: "Demo geceleri, ürün klinikleri ve üretici buluşmaları.",
+              networking: "Anlamlı profesyonel bağlantılar için seçilmiş ortamlar.",
+              yatirim: "Yatırımcı buluşmaları, fon hazırlığı ve sermaye oturumları.",
+              founder: "Kurucu çemberleri, eşleşme atölyeleri ve dayanışma grupları."
+            };
 
             return (
               <Link className="corp-category-card" key={tag.id} to={`/events?tag=${tag.slug}`}>
@@ -220,7 +271,7 @@ export function HomePage() {
                   <Icon size={22} />
                 </span>
                 <strong>{tag.name}</strong>
-                <span>{meta.copy}</span>
+                <span>{language === "tr" ? turkishCategoryCopy[tag.slug] ?? "İlgili insanları ve etkinlikleri keşfet." : meta.copy}</span>
               </Link>
             );
           })}
@@ -230,8 +281,8 @@ export function HomePage() {
       <section className="corp-section corp-section-muted">
         <div className="corp-section-head corp-section-head-center">
           <div>
-            <h2>Popular cities on Konnektora</h2>
-            <p>We are building a global network, city by city.</p>
+            <h2>{c.cities}</h2>
+            <p>{c.citiesCopy}</p>
           </div>
         </div>
         <div className="corp-city-grid">
@@ -248,30 +299,30 @@ export function HomePage() {
       <section className="corp-section">
         <div className="corp-section-head corp-section-head-center">
           <div>
-            <h2>How Konnektora works</h2>
-            <p>A trusted loop for community-led events.</p>
+            <h2>{c.how}</h2>
+            <p>{c.howCopy}</p>
           </div>
         </div>
         <div className="corp-steps">
           <article>
             <Search size={28} />
-            <strong>Discover events and groups</strong>
-            <p>See who is hosting curated events for the topics you care about.</p>
+            <strong>{c.discoverEvents}</strong>
+            <p>{c.discoverEventsCopy}</p>
             <Link className="corp-link" to="/events">
-              Start exploring
+              {c.start}
             </Link>
           </article>
           <article>
             <UserPlus size={28} />
-            <strong>Find your people</strong>
-            <p>Connect over shared interests through tags, invites and approval flows.</p>
+            <strong>{c.findPeople}</strong>
+            <p>{c.findPeopleCopy}</p>
           </article>
           <article>
             <Sparkles size={28} />
-            <strong>Host with confidence</strong>
-            <p>Create events, manage guest lists and keep your community accountable.</p>
+            <strong>{c.host}</strong>
+            <p>{c.hostCopy}</p>
             <Link className="corp-link" to="/admin">
-              Organizer tools
+              {c.organizer}
             </Link>
           </article>
         </div>
@@ -279,44 +330,38 @@ export function HomePage() {
 
       <section className="corp-proof">
         <div className="corp-proof-copy">
-          <p className="corp-eyebrow">Community-first</p>
-          <h2>Connections are made on Konnektora</h2>
-          <p>
-            Members use Konnektora to meet the right people, join curated rooms, get invited to the
-            right events and build professional relationships before the crowd arrives.
-          </p>
+          <p className="corp-eyebrow">{c.communityFirst}</p>
+          <h2>{c.connections}</h2>
+          <p>{c.connectionsCopy}</p>
           <Link className="corp-btn corp-btn-primary" to="/events">
-            Join the community
+            {c.joinCommunity}
           </Link>
         </div>
         <div className="corp-proof-stats">
           <div>
             <strong>{events.length || "15+"}</strong>
-            <span>curated events</span>
+            <span>{c.curatedEvents}</span>
           </div>
           <div>
             <strong>{tags.length || "4"}</strong>
-            <span>active tags</span>
+            <span>{c.activeTags}</span>
           </div>
           <div>
             <strong>
               <Globe2 size={28} />
             </strong>
-            <span>global by default</span>
+            <span>{c.global}</span>
           </div>
         </div>
       </section>
 
       <section className="corp-cta-band">
         <div>
-          <h2>Build the network before opening the doors.</h2>
-          <p>
-            Konnektora is shaped for a controlled community launch with enough structure for real
-            events and enough focus to improve with the right users.
-          </p>
+          <h2>{c.finalTitle}</h2>
+          <p>{c.finalCopy}</p>
         </div>
         <Link className="corp-btn corp-btn-light" to="/events">
-          Open event feed
+          {c.openFeed}
           <ArrowRight size={18} />
         </Link>
       </section>

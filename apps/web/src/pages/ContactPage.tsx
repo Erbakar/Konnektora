@@ -55,7 +55,7 @@ export function ContactPage() {
       <Link className="back-link" to="/help"><ArrowLeft size={16} /> Yardım merkezine dön</Link>
       <div className="section-header">
         <div>
-          <p className="eyebrow">Support</p>
+          <p className="eyebrow">Destek</p>
           <h1>Bize mesaj gönder</h1>
           <p className="lead">Konuyu seç, mesajını ilet; destek ekibimiz en kısa sürede yanıtlasın.</p>
         </div>

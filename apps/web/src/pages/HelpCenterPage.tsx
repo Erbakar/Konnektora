@@ -120,7 +120,7 @@ export function HelpCenterPage() {
   return (
     <main className="page help-center-page">
       <section className="help-hero">
-        <span className="eyebrow">Konnektora Support</span>
+        <span className="eyebrow">Konnektora Destek</span>
         <h1>Yardım merkezi</h1>
         <p>Nasıl yardımcı olabiliriz?</p>
         <SearchForm search={search} setSearch={setSearch} submit={submitSearch} />

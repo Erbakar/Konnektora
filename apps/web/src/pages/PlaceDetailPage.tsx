@@ -45,7 +45,7 @@ export function PlaceDetailPage() {
   return (
     <article className="page detail-page">
       {place.coverImageUrl ? <div className="detail-media"><img alt="" src={place.coverImageUrl} /></div> : null}
-      <p className="eyebrow">Konnektora Place</p>
+      <p className="eyebrow">Konnektora Mekân</p>
       <h1>{place.name}</h1>
       <div className="detail-meta"><span><MapPin size={16} />{[place.address, place.city, place.country].filter(Boolean).join(", ") || "Konum belirtilmedi"}</span><span><Users size={16} />{place.followerCount} takipçi</span></div>
       <div className="detail-actions">

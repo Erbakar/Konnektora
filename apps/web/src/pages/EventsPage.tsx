@@ -66,8 +66,8 @@ export function EventsPage() {
           <select value={selectedFormat} onChange={(event) => updateFilter("format", event.target.value)}>
             <option value="">Tümü</option>
             <option value="online">Online</option>
-            <option value="offline">Offline</option>
-            <option value="hybrid">Hybrid</option>
+            <option value="offline">Fiziksel</option>
+            <option value="hybrid">Hibrit</option>
           </select>
         </label>
         <label>
@@ -80,11 +80,11 @@ export function EventsPage() {
         </label>
         <label>
           Şehir
-          <input placeholder="Istanbul" value={selectedCity} onChange={(event) => updateFilter("city", event.target.value)} />
+          <input placeholder="İstanbul" value={selectedCity} onChange={(event) => updateFilter("city", event.target.value)} />
         </label>
         <label>
           Ülke
-          <input placeholder="Turkey" value={selectedCountry} onChange={(event) => updateFilter("country", event.target.value)} />
+          <input placeholder="Türkiye" value={selectedCountry} onChange={(event) => updateFilter("country", event.target.value)} />
         </label>
       </aside>
       <div>
