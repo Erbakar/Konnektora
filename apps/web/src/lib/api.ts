@@ -160,7 +160,9 @@ const USE_MOCK_FALLBACK =
   (MOCK_API_SETTING !== "false" &&
     import.meta.env.PROD &&
     (!CONFIGURED_API_URL || isLocalApiUrl || isNetlifyPreview || isKonnektoraProduction));
-const USE_DEMO_CONTENT = import.meta.env.VITE_DEMO_CONTENT !== "false" && import.meta.env.PROD;
+const USE_DEMO_CONTENT =
+  import.meta.env.PROD &&
+  (import.meta.env.VITE_DEMO_CONTENT !== "false" || isNetlifyPreview || isKonnektoraProduction);
 const TOKEN_KEY = "konnektora_admin_token";
 const USER_TOKEN_KEY = "konnektora_user_token";
 const USER_KEY = "konnektora_user";
@@ -4285,6 +4287,14 @@ export async function listEvents(params?: URLSearchParams): Promise<EventList> {
 }
 
 export function getEvent(slug: string): Promise<Event> {
+  const demoEvent = USE_DEMO_CONTENT
+    ? getStoredEvents().find((event) => event.status === "published" && event.slug === slug)
+    : undefined;
+
+  if (demoEvent) {
+    return Promise.resolve(demoEvent);
+  }
+
   return requestJson(`/events/${slug}`, eventSchema, { auth: "user" });
 }
 

@@ -74,7 +74,7 @@ export function EventDetailPage() {
         </span>
         <span>
           <ShieldCheck size={16} />
-          {event.organizerName || "Konnektora community"}
+          {event.organizerName || "Konnektora topluluğu"}
         </span>
       </div>
       <div className="tag-row">
@@ -92,12 +92,12 @@ export function EventDetailPage() {
             type="button"
           >
             <Users size={18} />
-            {attendMutation.isPending ? "Sending" : "Attend"}
+            {attendMutation.isPending ? "Gönderiliyor" : "Katıl"}
           </button>
         ) : (
           <Link className="primary-action" to="/account">
             <Users size={18} />
-            Log in to attend
+            Katılmak için giriş yap
           </Link>
         )}
         <a
@@ -107,7 +107,7 @@ export function EventDetailPage() {
           )}`}
         >
           <UserPlus size={18} />
-          Invite
+          Davet et
         </a>
         {user ? (
           <button className="ghost-action" onClick={() => setReportOpen((current) => !current)} type="button">
