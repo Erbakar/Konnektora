@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Briefcase,
   Globe2,
+  Hash,
   Lightbulb,
   MapPin,
   Megaphone,
@@ -10,6 +11,7 @@ import {
   Search,
   Sparkles,
   TrendingUp,
+  UserRoundPlus,
   UserPlus,
   Users
 } from "lucide-react";
@@ -108,12 +110,51 @@ export function HomePage() {
         </section>
       ) : null}
 
-      {discovery ? <section className="corp-section discovery-feed-section">
-        <div className="corp-section-head"><div><h2>Community feed</h2><p>Popüler hesaplar, yeni üyeler ve gündemdeki ilgi alanları.</p></div><Link className="corp-link" to="/search">Search anything <ArrowRight size={18} /></Link></div>
-        <h3>Popüler hesaplar</h3><div className="discovery-row">{discovery.popularMembers.slice(0, 6).map((item) => <DiscoveryCard item={item} key={item.id} />)}</div>
-        <h3>Yeni üyeler</h3><div className="discovery-row">{discovery.newMembers.slice(0, 6).map((item) => <DiscoveryCard item={item} key={item.id} />)}</div>
-        <h3>Trending tags</h3><div className="discovery-row compact">{discovery.trendingTags.slice(0, 8).map((item) => <DiscoveryCard item={item} key={item.id} />)}</div>
-      </section> : null}
+      {discovery ? (
+        <section className="corp-section discovery-feed-section">
+          <div className="discovery-feed-hero">
+            <div>
+              <span className="discovery-kicker"><Sparkles size={15} /> Curated for you</span>
+              <h2>Topluluğun nabzını yakala.</h2>
+              <p>Yeni bağlantılar kur, yükselen profilleri keşfet ve gündemdeki konulara katıl.</p>
+            </div>
+            <Link className="discovery-search-action" to="/search">
+              Topluluğu keşfet <ArrowRight size={18} />
+            </Link>
+          </div>
+
+          <div className="discovery-member-layout">
+            <section className="discovery-member-panel discovery-member-panel-featured">
+              <header>
+                <span><TrendingUp size={18} /></span>
+                <div><h3>Popüler hesaplar</h3><p>Bu hafta topluluğun dikkatini çeken üyeler</p></div>
+              </header>
+              <div className="discovery-row">
+                {discovery.popularMembers.slice(0, 4).map((item) => <DiscoveryCard item={item} key={item.id} />)}
+              </div>
+            </section>
+            <section className="discovery-member-panel">
+              <header>
+                <span><UserRoundPlus size={18} /></span>
+                <div><h3>Yeni üyeler</h3><p>Ağa yeni katılan, tanışmaya açık insanlar</p></div>
+              </header>
+              <div className="discovery-row">
+                {discovery.newMembers.slice(0, 4).map((item) => <DiscoveryCard item={item} key={item.id} />)}
+              </div>
+            </section>
+          </div>
+
+          <section className="discovery-trends">
+            <header>
+              <div><span className="discovery-trends-icon"><Hash size={20} /></span><div><h3>Gündemdeki ilgi alanları</h3><p>Topluluğun şu anda konuştuğu başlıklar</p></div></div>
+              <Link to="/events">Tüm kategoriler <ArrowRight size={16} /></Link>
+            </header>
+            <div className="discovery-row compact">
+              {discovery.trendingTags.slice(0, 8).map((item) => <DiscoveryCard item={item} key={item.id} />)}
+            </div>
+          </section>
+        </section>
+      ) : null}
 
       <section className="corp-section">
         <div className="corp-section-head">
