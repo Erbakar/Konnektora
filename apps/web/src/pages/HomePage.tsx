@@ -19,6 +19,7 @@ import { Link } from "react-router-dom";
 import { HomeEventTile } from "../components/HomeEventTile";
 import { DiscoveryCard } from "../components/DiscoveryCard";
 import { getDiscoveryFeed, listAnnouncements, listEvents, listTags } from "../lib/api";
+import { mockEvents } from "../lib/mockData";
 
 const categoryMeta: Record<string, { icon: typeof Rocket; copy: string }> = {
   startup: {
@@ -49,9 +50,16 @@ const popularCities = [
 ];
 
 export function HomePage() {
-  const { data: eventList, isLoading: eventsLoading } = useQuery({
+  const { data: eventList } = useQuery({
     queryKey: ["events", "home"],
-    queryFn: () => listEvents()
+    queryFn: () => listEvents(),
+    placeholderData: {
+      items: mockEvents,
+      total: mockEvents.length,
+      page: 1,
+      pageSize: mockEvents.length,
+      hasNextPage: false
+    }
   });
   const { data: tags = [] } = useQuery({
     queryKey: ["tags", "home"],
@@ -170,13 +178,9 @@ export function HomePage() {
           </Link>
         </div>
         <div className="corp-carousel" aria-label="Featured events">
-          {eventsLoading
-            ? Array.from({ length: 4 }).map((_, index) => (
-                <div className="home-event-tile home-event-tile-skeleton" key={index} />
-              ))
-            : (localEvents.length ? localEvents : featuredEvents).map((event) => (
-                <HomeEventTile event={event} key={event.id} />
-              ))}
+          {(localEvents.length ? localEvents : featuredEvents).map((event) => (
+            <HomeEventTile event={event} key={event.id} />
+          ))}
         </div>
       </section>
 
