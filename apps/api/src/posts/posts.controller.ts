@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FilesInterceptor } from "@nestjs/platform-express";
 import { User } from "@prisma/client";
 import { randomUUID } from "crypto";
@@ -9,7 +9,7 @@ import { resolve } from "path";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
-import { CreatePostCommentDto, CreatePostDto, FeedQueryDto } from "./posts.dto";
+import { CreatePostCommentDto, CreatePostDto, FeedQueryDto, UpdatePostDto } from "./posts.dto";
 import { PostsService } from "./posts.service";
 
 mkdirSync(resolve(process.cwd(), "uploads"), { recursive: true });
@@ -22,6 +22,7 @@ export class PostsController {
   @Post("posts") @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor("media", 4, { storage: diskStorage({ destination: resolve(process.cwd(), "uploads"), filename: (_request, file, callback) => callback(null, `${randomUUID()}${extensions[file.mimetype] ?? ""}`) }), limits: { fileSize: 10 * 1024 * 1024 }, fileFilter: (_request, file, callback) => { const allowed = Boolean(extensions[file.mimetype]); callback(allowed ? null : new BadRequestException("Yalnız görsel veya MP4/WebM video yüklenebilir."), allowed); } }))
   async create(@Body() body: CreatePostDto, @UploadedFiles() files: Express.Multer.File[] = [], @CurrentUser() user: User) { try { return await this.posts.create(body, files, user); } catch (error) { await Promise.all(files.map((file) => unlink(file.path).catch(() => undefined))); throw error; } }
+  @Patch("posts/:id") @UseGuards(JwtAuthGuard) update(@Param("id") id: string, @Body() body: UpdatePostDto, @CurrentUser() user: User) { return this.posts.update(id, body, user); }
   @Delete("posts/:id") @UseGuards(JwtAuthGuard) remove(@Param("id") id: string, @CurrentUser() user: User) { return this.posts.remove(id, user); }
   @Post("posts/:id/like") @UseGuards(JwtAuthGuard) like(@Param("id") id: string, @CurrentUser() user: User) { return this.posts.toggleLike(id, user); }
   @Get("posts/:id/comments") @UseGuards(OptionalJwtAuthGuard) comments(@Param("id") id: string, @CurrentUser() user?: User) { return this.posts.comments(id, user); }

@@ -266,6 +266,7 @@ export type ProfileUpdateInput = {
 export type RegistrationInput = {
   name: string;
   email: string;
+  phone: string;
   password: string;
   accountType: "individual" | "corporate";
   companyName?: string;
@@ -338,10 +339,16 @@ export function clearUserSession() {
   localStorage.removeItem(USER_KEY);
 }
 
-export async function listSocialPosts(scope: "all" | "following" = "all", page = 1): Promise<SocialPostFeed> {
+export async function listSocialPosts(scope: "popular" | "all" | "following" | "for_you" = "all", page = 1, range?: { from?: string; to?: string }): Promise<SocialPostFeed> {
   const query = new URLSearchParams({ scope, page: String(page), pageSize: "20" });
+  if (range?.from) query.set("from", range.from);
+  if (range?.to) query.set("to", range.to);
   const result = await requestJson(`/feed/posts?${query}`, socialPostFeedSchema, { auth: "user" });
   return USE_DEMO_CONTENT && result.items.length === 0 ? listMockSocialPosts(query) : result;
+}
+
+export function updateSocialPost(id: string, body: string): Promise<SocialPost> {
+  return requestJson(`/posts/${id}`, socialPostSchema, { method: "PATCH", body: JSON.stringify({ body }), auth: "user" });
 }
 
 export function createSocialPost(body: string, visibility: PostVisibility, media: File[]): Promise<SocialPost> {
@@ -624,7 +631,7 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
     const email = `demo.${input.provider}@konnektora.local`;
     let response: LoginResponse;
     try { response = loginMockUser({ email, password: "DemoSocial!1" }); }
-    catch { response = registerMockUser({ name: `${input.provider === "google" ? "Google" : "Facebook"} Demo`, email, password: "DemoSocial!1", accountType: "individual" }); }
+    catch { response = registerMockUser({ name: `${input.provider === "google" ? "Google" : "Facebook"} Demo`, email, phone: input.provider === "google" ? "+905550000001" : "+905550000002", password: "DemoSocial!1", accountType: "individual" }); }
     const users = getAllMockUsers(); writeStorage(MOCK_USERS_KEY, users.map((item) => item.id === response.user.id ? { ...item, status: "active", emailVerified: true } : item));
     return schema.parse({ ...response, user: { ...response.user, status: "active", emailVerified: true } });
   }
@@ -3563,6 +3570,10 @@ function getMockDiscoveryFeed(params: URLSearchParams): DiscoveryFeed {
     localEvents: (events.length ? events : getStoredEvents().filter((event) => event.status === "published")).slice(0, 8).map(mockEventDiscoveryItem),
     trendingTags: [...getStoredTags()].sort((a, b) => b.usageCount - a.usageCount).slice(0, 10).map(mockTagDiscoveryItem),
     popularPlaces: (places.length ? places : listMockPlaces(new URLSearchParams()).filter((place) => place.status === "active")).slice(0, 8).map(mockPlaceDiscoveryItem)
+    ,activities: [
+      ...getStoredEvents().filter((event) => event.status === "published").slice(0, 8).map((event) => ({ ...mockEventDiscoveryItem(event), action: "Etkinlik oluşturuldu", occurredAt: event.startsAt, ownerId: null })),
+      ...listMockPlaces(new URLSearchParams()).filter((place) => place.status === "active").slice(0, 8).map((place) => ({ ...mockPlaceDiscoveryItem(place), action: "Mekân oluşturuldu", occurredAt: place.createdAt ?? new Date().toISOString(), ownerId: place.createdById ?? null }))
+    ].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
   });
 }
 
@@ -4593,10 +4604,12 @@ export async function downloadCorporateKycDocument(id: string): Promise<Blob> { 
 export async function downloadAdminCorporateKycDocument(id: string): Promise<Blob> { const response = await fetch(`${API_URL}/admin/corporate-kyc/documents/${id}/download`, { headers: { Authorization: `Bearer ${getAdminToken() ?? ""}` } }); if (!response.ok) throw new Error("Belge indirilemedi."); return response.blob(); }
 
 export function getOnboardingStatus(): Promise<OnboardingStatus> { return requestJson("/me/onboarding", onboardingStatusSchema, { auth: "user" }); }
-export async function getDiscoveryFeed(params?: { city?: string; country?: string }): Promise<DiscoveryFeed> {
+export async function getDiscoveryFeed(params?: { city?: string; country?: string; from?: string; to?: string }): Promise<DiscoveryFeed> {
   const query = new URLSearchParams();
   if (params?.city) query.set("city", params.city);
   if (params?.country) query.set("country", params.country);
+  if (params?.from) query.set("from", params.from);
+  if (params?.to) query.set("to", params.to);
   const result = await requestJson(`/discover/feed${query.size ? `?${query}` : ""}`, discoveryFeedSchema, { auth: "user" });
   const isEmpty = result.popularMembers.length === 0 && result.newMembers.length === 0 && result.trendingTags.length === 0;
   return USE_DEMO_CONTENT && isEmpty ? getMockDiscoveryFeed(query) : result;

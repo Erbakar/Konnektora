@@ -1,13 +1,13 @@
 import { IsEmail, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf } from "class-validator";
 
-const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).+$/;
+const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/;
 
 class StrongPasswordDto {
   @IsString()
   @MinLength(8)
   @MaxLength(128)
   @Matches(strongPassword, {
-    message: "Şifre en az bir büyük harf, bir küçük harf ve bir özel karakter içermelidir.",
+    message: "Şifre en az bir büyük harf, bir küçük harf ve bir rakam içermelidir.",
   })
   password!: string;
 }
@@ -29,6 +29,12 @@ export class RegisterDto extends StrongPasswordDto {
   @IsString()
   @MinLength(2)
   name!: string;
+
+  @IsString()
+  @Matches(/^\+[1-9]\d{7,14}$/, {
+    message: "Telefon numarası E.164 formatında olmalıdır.",
+  })
+  phone!: string;
 
   @IsOptional()
   @IsIn(["individual", "corporate"])
@@ -87,7 +93,7 @@ export class ChangePasswordDto {
   @MinLength(8)
   @MaxLength(128)
   @Matches(strongPassword, {
-    message: "Şifre en az bir büyük harf, bir küçük harf ve bir özel karakter içermelidir.",
+    message: "Şifre en az bir büyük harf, bir küçük harf ve bir rakam içermelidir.",
   })
   newPassword!: string;
 }

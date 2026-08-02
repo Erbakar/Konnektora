@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Home, LayoutDashboard, MapPin, Menu, MessageCircle, QrCode, Search, Tag, UserRound, WalletCards, X } from "lucide-react";
+import { Bell, CalendarDays, Home, LayoutDashboard, MapPin, Menu, MessageCircle, QrCode, Search, Tag, UserRound, WalletCards, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
@@ -42,7 +42,7 @@ export function AppLayout() {
             <CalendarDays size={18} />
             {t("events")}
           </NavLink>
-          <NavLink to="/events?tag=startup">
+          <NavLink to="/tags">
             <Tag size={18} />
             {t("tags")}
           </NavLink>
@@ -55,6 +55,7 @@ export function AppLayout() {
             {t("messages")}
             {conversationsQuery.data?.totalUnread ? <span className="nav-unread-badge">{conversationsQuery.data.totalUnread}</span> : null}
           </NavLink>
+          <NavLink to="/notifications"><Bell size={18} /> Bildirimler</NavLink>
           <NavLink to="/identity"><QrCode size={18} /> {t("memberId")}</NavLink>
           <NavLink to="/finance"><WalletCards size={18} /> {t("finance")}</NavLink>
           <NavLink to="/search"><Search size={18} /> {t("search")}</NavLink>
@@ -113,7 +114,7 @@ export function AppLayout() {
             <CalendarDays size={18} />
             {t("events")}
           </NavLink>
-          <NavLink to="/events?tag=startup" onClick={() => setMenuOpen(false)}>
+          <NavLink to="/tags" onClick={() => setMenuOpen(false)}>
             <Tag size={18} />
             {t("tags")}
           </NavLink>
@@ -126,6 +127,7 @@ export function AppLayout() {
             {t("messages")}
             {conversationsQuery.data?.totalUnread ? <span className="nav-unread-badge">{conversationsQuery.data.totalUnread}</span> : null}
           </NavLink>
+          <NavLink to="/notifications" onClick={() => setMenuOpen(false)}><Bell size={18} /> Bildirimler</NavLink>
           <NavLink to="/identity" onClick={() => setMenuOpen(false)}><QrCode size={18} /> {t("memberId")}</NavLink>
           <NavLink to="/finance" onClick={() => setMenuOpen(false)}><WalletCards size={18} /> {t("finance")}</NavLink>
           <NavLink to="/search" onClick={() => setMenuOpen(false)}><Search size={18} /> {t("search")}</NavLink>

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, Check, MapPin, UserPlus, Users, X } from "lucide-react";
 import { type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { RichText } from "../components/RichText";
 import {
   archiveMyPlace, createBlock, followPlace, getPlace, getUserSession, invitePlaceMember, listPlaceMembers,
   respondPlaceInvite, unfollowPlace, updateMyPlace, updatePlaceMember
@@ -53,7 +54,7 @@ export function PlaceDetailPage() {
         {user ? <button className="ghost-action" disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()} type="button"><Ban size={18} /> Engelle</button> : null}
       </div>
       {place.viewerMembership?.status === "invited" ? <section className="admin-form compact-form"><strong>Mekân daveti</strong><div className="row-actions"><button className="primary-action" onClick={() => respondMutation.mutate("accepted")}><Check size={16} /> Kabul et</button><button className="danger-action" onClick={() => respondMutation.mutate("declined")}><X size={16} /> Reddet</button></div></section> : null}
-      <p className="detail-copy">{place.description || "Bu mekân için henüz açıklama eklenmemiş."}</p>
+      <p className="detail-copy"><RichText text={place.description || "Bu mekân için henüz açıklama eklenmemiş."}/></p>
       {canManage ? <form className="admin-form" onSubmit={(event: FormEvent<HTMLFormElement>) => {
         event.preventDefault(); const form = new FormData(event.currentTarget);
         updateMutation.mutate({

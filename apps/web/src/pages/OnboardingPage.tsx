@@ -28,6 +28,7 @@ export function OnboardingPage() {
   const [developmentCode, setDevelopmentCode] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoQueue, setPhotoQueue] = useState<File[]>([]);
   const [photoPreview, setPhotoPreview] = useState("");
   const [photoZoom, setPhotoZoom] = useState(1);
   const [photoRotation, setPhotoRotation] = useState(0);
@@ -186,6 +187,7 @@ export function OnboardingPage() {
               register.mutate({
                 name: String(form.get("name")),
                 email: normalizeEmail(String(form.get("email"))),
+                phone: normalizePhone(String(form.get("phone"))),
                 password,
                 accountType,
                 ...(accountType === "corporate"
@@ -229,12 +231,18 @@ export function OnboardingPage() {
               <span className="form-help">Örnek: ada@ornek.com</span>
             </label>
             <label>
+              GSM numarası
+              <PhoneInput name="phone" pattern="\+?[0-9 ]{10,19}" required />
+              <span className="form-help">GSM doğrulaması bir sonraki adımda zorunludur.</span>
+            </label>
+            <label>
               Şifre
-              <input name="password" minLength={8} required type="password" />
+              <input name="password" minLength={8} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required type="password" />
+              <span className="form-help">En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam içermeli.</span>
             </label>
             <label>
               Şifre tekrar
-              <input name="passwordAgain" minLength={8} required type="password" />
+              <input name="passwordAgain" minLength={8} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required type="password" />
             </label>
             <label className="check-row">
               <input required type="checkbox" />{" "}
@@ -311,24 +319,25 @@ export function OnboardingPage() {
               event.preventDefault();
               const form = new FormData(event.currentTarget);
               profileSave.mutate({
-                name: String(form.get("name")),
+                name: profile.data.name,
                 username: String(form.get("username")),
                 country: String(form.get("country")),
                 city: String(form.get("city")),
-                birthDate: String(form.get("birthDate")),
+                birthDate: String(form.get("birthDate")) ? `${String(form.get("birthDate"))}T00:00:00.000Z` : undefined,
                 gender: (String(form.get("gender")) as "male" | "female") || undefined,
-                website: String(form.get("website")) || undefined,
+                website: normalizeWebsite(String(form.get("website"))),
               });
             }}
           >
             <h2>Temel bilgiler</h2>
             <label>
-              Ad Soyad
-              <input defaultValue={profile.data.name} name="name" required />
-            </label>
-            <label>
               Kullanıcı adı
-              <input defaultValue={profile.data.username ?? ""} name="username" onBlur={(event) => void checkAvailability({ username: event.target.value }).then((data) => setAvailabilityText(data.usernameAvailable || event.target.value === profile.data?.username ? "Kullanıcı adı uygun" : "Kullanıcı adı kullanımda"))} pattern="[A-Za-z0-9 .-]+" required />
+              <input defaultValue={profile.data.username ?? ""} name="username" onChange={(event) => {
+                const value = event.target.value.trim();
+                if (value.length < 2) return setAvailabilityText("Kullanıcı adı en az 2 karakter olmalı");
+                void checkAvailability({ username: value }).then((data) => setAvailabilityText(data.usernameAvailable || value === profile.data?.username ? "Kullanıcı adı uygun" : "Kullanıcı adı kullanımda"));
+              }} pattern="[A-Za-z0-9 .-]+" required />
+              {availabilityText ? <span className={availabilityText.includes("uygun") ? "form-success" : "form-error"}>{availabilityText}</span> : null}
             </label>
             <label>
               Ülke
@@ -352,9 +361,8 @@ export function OnboardingPage() {
             </label>
             <label>
               Web sitesi
-              <input defaultValue={profile.data.website ?? ""} name="website" type="url" />
+              <input defaultValue={profile.data.website ?? ""} name="website" placeholder="ornek.com (isteğe bağlı)" />
             </label>
-            {availabilityText ? <p className="form-help">{availabilityText}</p> : null}
             {profileSave.isError ? <p className="form-error">Bilgiler kaydedilemedi: {(profileSave.error as Error).message}</p> : null}
             <WizardButtons back={() => setStep(1)} nextLabel="Kaydet ve devam et" />
           </form>
@@ -376,7 +384,11 @@ export function OnboardingPage() {
             <label className="onboarding-upload">
               <ImagePlus size={36} />
               <span>Fotoğraf seç</span>
-              <input accept="image/jpeg,image/png,image/webp" onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)} type="file" />
+              <input accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                setPhotoQueue(files);
+                setPhotoFile(files[0] ?? null);
+              }} type="file" />
             </label>
             {photoPreview ? (
               <div className="photo-editor">
@@ -403,7 +415,11 @@ export function OnboardingPage() {
                     onClick={() =>
                       void renderProfileImage(photoFile!, photoZoom, photoRotation).then((file) =>
                         photoUpload.mutate(file, {
-                          onSuccess: () => setPhotoFile(null),
+                          onSuccess: () => {
+                            const remaining = photoQueue.slice(1);
+                            setPhotoQueue(remaining);
+                            setPhotoFile(remaining[0] ?? null);
+                          },
                         }),
                       )
                     }
@@ -542,4 +558,10 @@ async function renderProfileImage(source: File, zoom: number, rotation: number) 
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+function normalizeWebsite(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }

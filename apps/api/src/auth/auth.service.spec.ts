@@ -92,7 +92,7 @@ describe("AuthService", () => {
     });
   });
 
-  it("marks an invited user pending and sends verification when they register with the same email", async () => {
+  it("activates an invited user for phone onboarding and sends optional email verification", async () => {
     const { service, prisma, mailService } = createService();
     const invitedUser = {
       id: "user-1",
@@ -108,7 +108,7 @@ describe("AuthService", () => {
       ...invitedUser,
       name: "Active Invitee",
       passwordHash: "new-hash",
-      status: "pending",
+      status: "active",
     };
 
     prisma.user.findUnique.mockResolvedValue(invitedUser);
@@ -117,6 +117,7 @@ describe("AuthService", () => {
     const result = await service.register({
       email: "INVITEE@example.com",
       name: "Active Invitee",
+      phone: "+905551110001",
       password: "StrongerPass123!",
     });
 
@@ -124,7 +125,7 @@ describe("AuthService", () => {
       where: { id: invitedUser.id },
       data: expect.objectContaining({
         name: "Active Invitee",
-        status: "pending",
+        status: "active",
       }),
     });
     expect(result).toEqual({
@@ -162,6 +163,7 @@ describe("AuthService", () => {
       service.register({
         email: "active@example.com",
         name: "Active User",
+        phone: "+905551110002",
         password: "StrongerPass123!",
       }),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -187,6 +189,7 @@ describe("AuthService", () => {
     await service.register({
       email: corporateUser.email,
       name: corporateUser.name,
+      phone: "+905551110003",
       password: "StrongerPass123!",
       accountType: "corporate",
       companyName: "Example",

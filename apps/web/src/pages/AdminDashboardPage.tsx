@@ -17,6 +17,7 @@ import {
   X
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { RichText } from "../components/RichText";
 import {
   type AdminEventInput,
   type AnnouncementInput,
@@ -980,7 +981,7 @@ export function AdminDashboardPage() {
             items={commentsQuery.data ?? []}
             isPending={updateCommentMutation.isPending}
             onStatusChange={(id, status) => updateCommentMutation.mutate({ id, status })}
-            renderPrimary={(item: AdminComment) => item.body}
+            renderPrimary={(item: AdminComment) => <RichText text={item.body} />}
             renderSecondary={(item: AdminComment) => `${item.targetType} · ${item.author?.email ?? "Anonim"}`}
             renderMeta={(item: AdminComment) => `${item.likeCount} beğeni · ${item._count?.replies ?? 0} cevap · ${item.reportCount ?? 0} şikayet`}
           />
@@ -993,7 +994,7 @@ export function AdminDashboardPage() {
             items={privateMessagesQuery.data ?? []}
             isPending={updatePrivateMessageMutation.isPending}
             onStatusChange={(id, status) => updatePrivateMessageMutation.mutate({ id, status })}
-            renderPrimary={(item: AdminPrivateMessage) => item.body}
+            renderPrimary={(item: AdminPrivateMessage) => <RichText text={item.body} />}
             renderSecondary={(item: AdminPrivateMessage) => `${item.sender?.email ?? "Bilinmiyor"} → ${item.recipient?.email ?? "Bilinmiyor"}`}
             renderMeta={(item: AdminPrivateMessage) => `${item.reportCount ?? 0} şikayet · ${formatDateTime(item.createdAt)}`}
           />
@@ -2202,7 +2203,7 @@ function UserMessageDetail({
       </div>
       <div className="admin-list-item">
         <strong>Kullanıcı mesajı</strong>
-        <p className="form-help">{message.body}</p>
+        <p className="form-help"><RichText text={message.body} /></p>
       </div>
       <button
         className={message.status === "unread" ? "secondary-action" : "ghost-action"}
@@ -2985,7 +2986,7 @@ function AdminContentPanel<T extends { id: string; status: string; createdAt?: s
   items: T[];
   onStatusChange: (id: string, status: string) => void;
   renderMeta: (item: T) => string;
-  renderPrimary: (item: T) => string;
+  renderPrimary: (item: T) => ReactNode;
   renderSecondary: (item: T) => string;
   title: string;
 }) {
@@ -3479,7 +3480,7 @@ function ReportAdminPanel({
                 <div className="admin-list-row" key={comment.id}>
                   <div>
                     <strong>{comment.createdBy?.email ?? "Admin"}</strong>
-                    <span>{comment.body}</span>
+                    <span><RichText text={comment.body} /></span>
                   </div>
                   <span className="status-pill status-reviewing">{comment.createdAt ? formatDateTime(comment.createdAt) : "yorum"}</span>
                 </div>

@@ -159,8 +159,13 @@ select:focus-visible {
 .post-actions { display: grid; grid-template-columns: 1fr 1fr; padding: 5px 0; }.post-actions button { justify-content: center; padding: 9px; }.post-actions button.liked { color: #d83b58; }
 .post-comments { border-top: 1px solid #edf0ee; display: grid; gap: 12px; padding-top: 14px; }.post-comment { display: flex; gap: 9px; }.comment-avatar { height: 30px; width: 30px; }.post-comment > div:last-child { background: #f2f5f3; border-radius: 12px; padding: 8px 11px; }.post-comment strong { font-size: 13px; }.post-comment p { font-size: 14px; margin: 3px 0; }.post-comment small { color: #87928c; }.post-comments form { display: flex; gap: 7px; }.post-comments input { background: #f3f6f4; border: 1px solid #e1e7e3; border-radius: 12px; flex: 1; padding: 11px 13px; }.post-comments form button { background: #1d6545; border: 0; border-radius: 11px; color: #fff; padding: 0 12px; }
 .feed-state { align-items: center; background: #f4f7f5; border-radius: 18px; color: #68766f; display: flex; flex-direction: column; gap: 7px; padding: 42px; text-align: center; }
+.feed-activity-card { display: grid; gap: 12px; }
+.feed-activity-card h2 { font-size: 21px; margin: 0; }
+.feed-activity-card h2 a { color: #17241e; text-decoration: none; }
+.feed-activity-card p, .feed-activity-card small { color: #68766f; margin: 0; }
+.activity-cover { aspect-ratio: 16 / 7; border-radius: 14px; object-fit: cover; width: 100%; }
 
-.advanced-messages { height: calc(100vh - 112px); max-width: 1280px; padding-bottom: 24px; }
+.advanced-messages { box-sizing: border-box; height: calc(100vh - 112px); margin-inline: auto; max-width: 1280px; padding-bottom: 24px; width: 100%; }
 .message-sidebar-head { align-items: center; display: flex; justify-content: space-between; padding: 4px 4px 14px; }.message-sidebar-head h1 { margin: 0; }.message-sidebar-head span { color: #7a8780; font-size: 12px; }.message-sidebar-head button, .message-search button, .thread-menu > button { background: transparent; border: 0; border-radius: 9px; padding: 7px; }.message-sidebar-head button.active { background: #e4eee7; color: #185238; }
 .message-search { align-items: center; background: #f2f5f3; border: 1px solid #e2e8e4; border-radius: 12px; display: flex; gap: 7px; margin-bottom: 12px; padding: 0 10px; }.message-search input { background: transparent; border: 0; flex: 1; outline: 0; padding: 11px 0; }
 .message-search-results { display: grid; gap: 4px; }.message-search-results button { background: transparent; border: 0; border-radius: 10px; display: grid; padding: 10px; text-align: left; }.message-search-results button:hover { background: #edf3ef; }.message-search-results span { color: #69776f; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1063,8 +1068,12 @@ select:focus-visible {
   font-weight: 800;
 }
 
-.new-conversation-field select {
+.new-conversation-field select,
+.new-conversation-field input {
+  border: 1px solid #dfe7e1;
+  border-radius: 10px;
   min-height: 42px;
+  padding: 9px 11px;
 }
 
 .conversation-list {
@@ -1194,6 +1203,8 @@ select:focus-visible {
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
   padding: 14px;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .message-composer textarea {
