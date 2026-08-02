@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { EventCard } from "../components/EventCard";
 import { listEvents, listTags } from "../lib/api";
 import { mockEvents, mockTags } from "../lib/mockData";
@@ -118,7 +118,7 @@ export function EventsPage() {
       <div>
         <div className="section-header">
           <h1>Etkinlikler</h1>
-          <span>{isLoading ? "Yükleniyor" : `${eventList?.total ?? 0} sonuç`}</span>
+          <div className="row-actions"><span>{isLoading ? "Yükleniyor" : `${eventList?.total ?? 0} sonuç`}</span><Link className="primary-action" to="/account#events">Etkinlik oluştur</Link></div>
         </div>
         <div className="event-grid">
           {events.map((event) => (

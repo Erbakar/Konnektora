@@ -3,6 +3,7 @@ import { Ban, CalendarDays, CreditCard, ExternalLink, Flag, MapPin, QrCode, Shie
 import QRCode from "qrcode";
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { RichText } from "../components/RichText";
 import { confirmEventPayment, createBlock, createContentReport, createEventPayment, getEvent, getMyEventTicket, getUserSession, listReportRules, requestEventAttendance } from "../lib/api";
 
 export function EventDetailPage() {
@@ -198,7 +199,7 @@ export function EventDetailPage() {
       {ticketMutation.isError ? <p className="form-error">Bilet yalnızca onaylanmış katılımcılar için oluşturulabilir.</p> : null}
       {reportMutation.data ? <p className="form-success">Rapor alındı. Admin panelde incelenecek.</p> : null}
       {reportMutation.isError ? <p className="form-error">Rapor gönderilemedi. Lütfen tekrar dene.</p> : null}
-      <p className="detail-copy">{event.description}</p>
+      <p className="detail-copy"><RichText text={event.description}/></p>
       {event.externalRegistrationUrl ? (
         <a className="primary-action" href={event.externalRegistrationUrl} rel="noreferrer" target="_blank">
           Kayıt sayfası

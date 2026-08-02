@@ -7,15 +7,17 @@ import { EmailInput, PhoneInput, VerificationCodeInput } from "../components/For
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
 import { ProfileVerificationPanel } from "../components/ProfileVerificationPanel";
 import { PushNotificationControl } from "../components/PushNotificationControl";
+import { RichText } from "../components/RichText";
 import { getSocialCredential } from "../lib/socialProviders";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
-import { type AdminEventInput, type RegistrationInput, archiveMyEvent, checkInEventParticipant, changePassword, connectSocialAccount, confirmPhoneVerification, clearUserSession, createUserEvent, createUserTag, createTagComment, deactivateAccount, deleteProfileMedia, deleteTagComment, getProfileAffinities, getMyProfile, getNotificationPreferences, getPrivacySettings, getUserSession, getUserToken, followUser, inviteEventParticipant, isMockApiMode, listMyNotifications, listBlocks, listFollowing, listMemberSuggestions, listEventParticipants, listMyEvents, listProfileMedia, listSocialAccounts, listTags, listTagComments, markMyNotificationRead, makeProfilePicture, registerUser, reactivateAccount, removeBlock, removeSocialAccount, requestEmailVerification, requestPhoneVerification, requestPasswordReset, reorderProfileMedia, resolveMediaUrl, scanEventTicket, setUserSession, updateEventParticipantStatus, updateMyEvent, updateProfileAffinities, unfollowUser, updateMyProfile, updateNotificationPreferences, updatePrivacySettings, uploadProfileMedia, userLogin, socialLogin } from "../lib/api";
+import { type AdminEventInput, type RegistrationInput, archiveMyEvent, checkAvailability, checkInEventParticipant, changePassword, connectSocialAccount, confirmPhoneVerification, clearUserSession, createUserEvent, createUserTag, createTagComment, deactivateAccount, deleteProfileMedia, deleteTagComment, getProfileAffinities, getMyProfile, getNotificationPreferences, getPrivacySettings, getUserSession, getUserToken, followUser, inviteEventParticipant, isMockApiMode, listMyNotifications, listBlocks, listFollowing, listMemberSuggestions, listEventParticipants, listMyEvents, listProfileMedia, listSocialAccounts, listTags, listTagComments, markMyNotificationRead, makeProfilePicture, registerUser, reactivateAccount, removeBlock, removeSocialAccount, requestEmailVerification, requestPhoneVerification, requestPasswordReset, reorderProfileMedia, resolveMediaUrl, scanEventTicket, setUserSession, updateEventParticipantStatus, updateMyEvent, updateProfileAffinities, unfollowUser, updateMyProfile, updateNotificationPreferences, updatePrivacySettings, uploadProfileMedia, userLogin, socialLogin } from "../lib/api";
 
 export function AccountPage() {
   const queryClient = useQueryClient();
   const [user, setUser] = useState(() => getUserSession());
   const [mode, setMode] = useState<"login" | "register">("register");
   const [registrationAccountType, setRegistrationAccountType] = useState<AccountType>("individual");
+  const [showFrozenConfirmation, setShowFrozenConfirmation] = useState(() => window.sessionStorage.getItem("konnektora_account_frozen") === "1");
   const [pendingPhone, setPendingPhone] = useState<string | null>(null);
   const [developmentPhoneCode, setDevelopmentPhoneCode] = useState<string | null>(null);
   const [commentTagId, setCommentTagId] = useState("");
@@ -256,11 +258,8 @@ export function AccountPage() {
     mutationFn: deactivateAccount,
     onSuccess: () => {
       clearUserSession();
-      setUser(null);
-      setNotice({
-        tone: "success",
-        message: "Hesabınız donduruldu. Dilediğiniz zaman yeniden aktifleştirebilirsiniz.",
-      });
+      window.sessionStorage.setItem("konnektora_account_frozen", "1");
+      window.location.assign("/account");
     },
     onError: () =>
       setNotice({
@@ -357,6 +356,7 @@ export function AccountPage() {
     authMutation.mutate({
       name: String(form.get("name") || ""),
       email: normalizeEmail(String(form.get("email"))),
+      phone: normalizePhone(String(form.get("phone") || "")),
       password: String(form.get("password")),
       accountType: String(form.get("accountType") || "individual") as AccountType,
       companyName: String(form.get("companyName") || "") || undefined,
@@ -443,7 +443,7 @@ export function AccountPage() {
       address: value("address"),
       gender: value("gender") as "male" | "female" | undefined,
       birthDate: birthDate ? new Date(`${birthDate}T00:00:00.000Z`).toISOString() : undefined,
-      website: value("website"),
+      website: normalizeWebsite(value("website")),
       companyName: value("companyName"),
       tradeName: value("tradeName"),
       companyType: value("companyType"),
@@ -496,7 +496,7 @@ export function AccountPage() {
     const audience = (name: string) => String(form.get(name)) as PrivacyAudience;
     privacyMutation.mutate({
       messageAudience: audience("messageAudience"),
-      directoryDiscoverable: form.get("directoryDiscoverable") === "on",
+      directoryDiscoverable: form.get("directoryDiscoverable") === "true",
       eventAudience: audience("eventAudience"),
       eventInviteAudience: audience("eventInviteAudience"),
       placeAudience: audience("placeAudience"),
@@ -530,6 +530,18 @@ export function AccountPage() {
       </div>
 
       {notice ? <p className={notice.tone === "success" ? "form-success" : "form-error"}>{notice.message}</p> : null}
+      {showFrozenConfirmation ? (
+        <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Hesap donduruldu">
+          <div>
+            <button aria-label="Kapat" onClick={() => {
+              window.sessionStorage.removeItem("konnektora_account_frozen");
+              setShowFrozenConfirmation(false);
+            }} type="button">×</button>
+            <h2>Hesap donduruldu</h2>
+            <p>Oturumun güvenli biçimde kapatıldı. Dilediğin zaman giriş bilgilerinle hesabını yeniden aktifleştirebilirsin.</p>
+          </div>
+        </div>
+      ) : null}
       {user?.status === "pending" ? (
         <button className="secondary-action" disabled={resendVerificationMutation.isPending} onClick={() => resendVerificationMutation.mutate(user.email)} type="button">
           Doğrulama emailini tekrar gönder
@@ -614,10 +626,24 @@ export function AccountPage() {
               <EmailInput name="email" required />
               <span className="form-help">Örnek: ada@ornek.com</span>
             </label>
+            {mode === "register" ? (
+              <label>
+                GSM numarası
+                <PhoneInput name="phone" required />
+                <span className="form-help">Hesabın açıldıktan sonra bu numarayı doğrulaman gerekir.</span>
+              </label>
+            ) : null}
             <label>
               Şifre
-              <input autoComplete={mode === "login" ? "current-password" : "new-password"} maxLength={128} minLength={8} name="password" pattern={mode === "register" ? "(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" : undefined} required title={mode === "register" ? "En az 8 karakter, bir büyük harf, bir küçük harf ve bir özel karakter kullanın." : undefined} type="password" />
+              <input autoComplete={mode === "login" ? "current-password" : "new-password"} maxLength={128} minLength={8} name="password" pattern={mode === "register" ? "(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,128}" : undefined} required title={mode === "register" ? "En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam kullanın." : undefined} type="password" />
+              {mode === "register" ? <span className="form-help">En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam içermeli.</span> : null}
             </label>
+            {mode === "register" ? (
+              <label className="check-row">
+                <input required type="checkbox" />
+                <span><Link to="/terms">Kullanım Koşullarını</Link> ve <Link to="/privacy">Gizlilik Politikasını</Link> kabul ediyorum.</span>
+              </label>
+            ) : null}
             <button className="primary-action" disabled={authMutation.isPending} type="submit">
               <UserRound size={18} />
               {mode === "register" ? "Üye ol" : "Giriş yap"}
@@ -729,7 +755,14 @@ export function AccountPage() {
                   </label>
                   <label>
                     Kullanıcı adı
-                    <input defaultValue={profileQuery.data.username ?? ""} name="username" minLength={2} maxLength={80} pattern="[A-Za-zÀ-ž0-9 .-]+" />
+                    <input defaultValue={profileQuery.data.username ?? ""} name="username" minLength={2} maxLength={80} pattern="[A-Za-zÀ-ž0-9 .-]+" onChange={(event) => {
+                      const value = event.target.value.trim();
+                      if (value.length < 2) return;
+                      void checkAvailability({ username: value }).then((result) => setNotice({
+                        tone: result.usernameAvailable || value === profileQuery.data?.username ? "success" : "error",
+                        message: result.usernameAvailable || value === profileQuery.data?.username ? "Kullanıcı adı uygun." : "Kullanıcı adı kullanımda.",
+                      }));
+                    }} />
                   </label>
                   <label>
                     Telefon
@@ -738,7 +771,7 @@ export function AccountPage() {
                   </label>
                   <label>
                     Web sitesi
-                    <input defaultValue={profileQuery.data.website ?? ""} name="website" placeholder="https://" type="url" />
+                    <input defaultValue={profileQuery.data.website ?? ""} name="website" placeholder="ornek.com (isteğe bağlı)" />
                   </label>
                   <label>
                     Ülke
@@ -837,8 +870,11 @@ export function AccountPage() {
                 <p className="form-help">Network: takip ettikleriniz ve onların takip ettiği kişiler.</p>
                 <PrivacyAudienceField defaultValue={privacyQuery.data.messageAudience} label="Kimler özel mesaj gönderebilir?" name="messageAudience" />
                 <label>
-                  <input defaultChecked={privacyQuery.data.directoryDiscoverable} name="directoryDiscoverable" type="checkbox" />
                   Rehberinde kayıtlı olduğum üyeler beni bulabilsin
+                  <select defaultValue={String(privacyQuery.data.directoryDiscoverable)} name="directoryDiscoverable">
+                    <option value="true">Evet</option>
+                    <option value="false">Hayır</option>
+                  </select>
                 </label>
                 <PrivacyAudienceField defaultValue={privacyQuery.data.eventAudience} label="Etkinliklerimi kimler görebilir?" name="eventAudience" />
                 <PrivacyAudienceField defaultValue={privacyQuery.data.eventInviteAudience} label="Kimler etkinliğe davet edebilir?" name="eventInviteAudience" />
@@ -903,11 +939,13 @@ export function AccountPage() {
               <div className="form-grid">
                 <label>
                   Yeni şifre
-                  <input autoComplete="new-password" maxLength={128} minLength={8} name="newPassword" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" required type="password" />
+                  <input autoComplete="new-password" maxLength={128} minLength={8} name="newPassword" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required type="password" />
+                  <span className="form-help">En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam içermeli.</span>
                 </label>
                 <label>
                   Yeni şifre tekrar
-                  <input autoComplete="new-password" maxLength={128} minLength={8} name="newPasswordAgain" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" required type="password" />
+                  <input autoComplete="new-password" maxLength={128} minLength={8} name="newPasswordAgain" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required type="password" />
+                  <span className="form-help">Yukarıdaki güçlü şifreyle aynı olmalı.</span>
                 </label>
               </div>
               <button className="secondary-action" disabled={changePasswordMutation.isPending} type="submit">
@@ -940,7 +978,7 @@ export function AccountPage() {
                     <div className="admin-list-row" key={notification.id}>
                       <div>
                         <strong>{notification.title}</strong>
-                        <span>{notification.body}</span>
+                        <span><RichText text={notification.body} /></span>
                         <span>
                           {notification.createdAt
                             ? new Intl.DateTimeFormat("tr-TR", {
@@ -1028,7 +1066,7 @@ export function AccountPage() {
                       <div className="admin-list-row" key={comment.id}>
                         <div>
                           <strong>{comment.author?.username ? `@${comment.author.username}` : (comment.author?.name ?? "Silinmiş kullanıcı")}</strong>
-                          <span>{comment.body}</span>
+                          <span><RichText text={comment.body} /></span>
                         </div>
                         {comment.canDelete ? (
                           <button className="ghost-action" onClick={() => deleteTagCommentMutation.mutate(comment.id)} type="button">
@@ -1227,14 +1265,14 @@ function ProfileMediaPanel({ media, userId }: { media: ProfileMedia[]; userId: s
         onSubmit={(event) => {
           event.preventDefault();
           const input = event.currentTarget.elements.namedItem("profileMedia") as HTMLInputElement;
-          const file = input.files?.[0];
-          if (file) uploadMutation.mutate(file);
+          const files = Array.from(input.files ?? []).slice(0, Math.max(0, 50 - media.length));
+          files.forEach((file) => uploadMutation.mutate(file));
           event.currentTarget.reset();
         }}
       >
         <label>
           Yeni fotoğraf veya video
-          <input accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" name="profileMedia" required type="file" />
+          <input accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" multiple name="profileMedia" required type="file" />
         </label>
         <button className="secondary-action" disabled={isPending || media.length >= 50} type="submit">
           <Image size={16} />
@@ -1273,6 +1311,11 @@ function ProfileMediaPanel({ media, userId }: { media: ProfileMedia[]; userId: s
       </div>
     </section>
   );
+}
+
+function normalizeWebsite(value?: string) {
+  if (!value) return undefined;
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
 }
 
 function MyEventsPanel({ events, isLoading, tags, userId }: { events: Event[]; isLoading: boolean; tags: Tag[]; userId: string }) {

@@ -1,33 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
-import { type FormEvent, useState } from "react";
+import { type FormEvent } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import { EmailInput, PhoneInput } from "../components/FormInputs";
 import { createUserMessage, type UserMessageInput } from "../lib/api";
 import { normalizePhone } from "../lib/formats";
-import type { UserMessageType } from "@konnektora/shared";
-
-const MESSAGE_TYPE_OPTIONS: Array<{ value: UserMessageType; label: string; categories: string[] }> = [
-  {
-    value: "faq",
-    label: "FAQ sorusu",
-    categories: ["Profile", "Account", "Rules", "Tags", "Events", "Places", "Media Files", "Comments", "Private Messages"]
-  },
-  {
-    value: "account_freeze",
-    label: "Hesap dondurma",
-    categories: []
-  },
-  {
-    value: "write_to_us",
-    label: "Write to us",
-    categories: ["Hata", "Oneriler", "Sikayet", "Reklam", "Is birligi", "Diger"]
-  }
-];
 
 export function ContactPage() {
-  const [messageType, setMessageType] = useState<UserMessageType>("write_to_us");
-  const selectedType = MESSAGE_TYPE_OPTIONS.find((option) => option.value === messageType) ?? MESSAGE_TYPE_OPTIONS[2]!;
   const mutation = useMutation({
     mutationFn: createUserMessage
   });
@@ -37,8 +16,7 @@ export function ContactPage() {
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const input: UserMessageInput = {
-      type: messageType,
-      category: String(form.get("category") || "") || undefined,
+      type: "write_to_us",
       name: String(form.get("name")),
       email: String(form.get("email")),
       phone: normalizePhone(String(form.get("phone") || "")) || undefined,
@@ -59,32 +37,10 @@ export function ContactPage() {
         <div>
           <p className="eyebrow">Destek</p>
           <h1>Bize mesaj gönder</h1>
-          <p className="lead">Konuyu seç, mesajını ilet; destek ekibimiz en kısa sürede yanıtlasın.</p>
+          <p className="lead">Mesajını ilet; sistem doğru destek ekibine otomatik yönlendirsin.</p>
         </div>
       </div>
       <form className="admin-form compact-form" onSubmit={handleSubmit}>
-        <label>
-          Mesaj tipi
-          <select value={messageType} onChange={(event) => setMessageType(event.target.value as UserMessageType)}>
-            {MESSAGE_TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {selectedType.categories.length > 0 ? (
-          <label>
-            Kategori
-            <select name="category" required>
-              {selectedType.categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
         <label>
           Ad soyad
           <input name="name" required minLength={2} placeholder="Adın Soyadın" />

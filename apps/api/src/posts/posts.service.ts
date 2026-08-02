@@ -3,7 +3,7 @@ import { PostVisibility, Prisma, ReportTargetType, User } from "@prisma/client";
 import { unlink } from "fs/promises";
 import { resolve } from "path";
 import { PrismaService } from "../prisma/prisma.service";
-import { CreatePostCommentDto, CreatePostDto, FeedQueryDto } from "./posts.dto";
+import { CreatePostCommentDto, CreatePostDto, FeedQueryDto, UpdatePostDto } from "./posts.dto";
 import { NotificationsService } from "../notifications/notifications.service";
 
 const authorSelect = { id: true, name: true, username: true, profileVerifiedAt: true } as const;
@@ -16,6 +16,7 @@ export class PostsService {
     const blockedIds = viewer ? await this.blockedUserIds(viewer.id) : [];
     const direct = viewer ? await this.followingIds(viewer.id) : [];
     const network = viewer ? await this.networkIds(viewer.id, direct) : [];
+    const personalizedAuthorIds = viewer ? await this.affinityAuthorIds(viewer.id) : [];
     const visible: Prisma.PostWhereInput[] = [{ visibility: PostVisibility.everybody }];
     if (viewer) {
       visible.push(
@@ -28,12 +29,18 @@ export class PostsService {
       status: "active",
       authorId: { notIn: blockedIds },
       OR: visible,
-      ...(query.scope === "following" && viewer ? { authorId: { in: [viewer.id, ...direct], notIn: blockedIds } } : {})
+      ...(query.scope === "following" && viewer ? { authorId: { in: [viewer.id, ...direct], notIn: blockedIds } } : {}),
+      ...(query.scope === "for_you" && viewer && (personalizedAuthorIds.length || viewer.city || viewer.country) ? { author: { OR: [
+        ...(personalizedAuthorIds.length ? [{ id: { in: personalizedAuthorIds } }] : []),
+        ...(viewer.city ? [{ city: { equals: viewer.city, mode: "insensitive" as const } }] : []),
+        ...(viewer.country ? [{ country: { equals: viewer.country, mode: "insensitive" as const } }] : [])
+      ] } } : {}),
+      ...((query.from || query.to) ? { createdAt: { ...(query.from ? { gte: new Date(query.from) } : {}), ...(query.to ? { lte: new Date(query.to) } : {}) } } : {})
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.post.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy: query.scope === "popular" ? [{ likeCount: "desc" }, { commentCount: "desc" }, { createdAt: "desc" }] : { createdAt: "desc" },
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
         include: { author: { select: authorSelect }, media: { orderBy: { sortOrder: "asc" } }, likes: viewer ? { where: { userId: viewer.id }, select: { userId: true } } : false }
@@ -49,6 +56,15 @@ export class PostsService {
       data: { authorId: user.id, body: input.body.trim(), visibility: input.visibility, media: { create: files.map((file, index) => ({ url: `/uploads/${file.filename}`, type: file.mimetype.startsWith("video/") ? "video" : "image", sortOrder: index })) } },
       include: { author: { select: authorSelect }, media: { orderBy: { sortOrder: "asc" } }, likes: { where: { userId: user.id }, select: { userId: true } } }
     });
+    await this.notifyMentions(post.id, input.body, user.id);
+    return this.presentPost(post, await this.avatars([user.id]));
+  }
+
+  async update(id: string, input: UpdatePostDto, user: User) {
+    const existing = await this.prisma.post.findUnique({ where: { id } });
+    if (!existing || existing.status !== "active") throw new NotFoundException("Gönderi bulunamadı.");
+    if (existing.authorId !== user.id) throw new ForbiddenException("Bu gönderiyi düzenleyemezsiniz.");
+    const post = await this.prisma.post.update({ where: { id }, data: { body: input.body.trim() }, include: { author: { select: authorSelect }, media: { orderBy: { sortOrder: "asc" } }, likes: { where: { userId: user.id }, select: { userId: true } } } });
     await this.notifyMentions(post.id, input.body, user.id);
     return this.presentPost(post, await this.avatars([user.id]));
   }
@@ -122,6 +138,12 @@ export class PostsService {
   }
 
   private followingIds(userId: string) { return this.prisma.userFollow.findMany({ where: { followerId: userId }, select: { followingId: true } }).then((rows) => rows.map((row) => row.followingId)); }
+  private async affinityAuthorIds(userId: string) {
+    const interests = await this.prisma.userInterestTag.findMany({ where: { userId, sentiment: { in: ["like", "ok"] } }, select: { tagId: true } });
+    if (!interests.length) return [];
+    const matches = await this.prisma.userInterestTag.findMany({ where: { userId: { not: userId }, tagId: { in: interests.map((item) => item.tagId) }, sentiment: { in: ["like", "ok"] } }, select: { userId: true }, take: 200 });
+    return [...new Set(matches.map((item) => item.userId))];
+  }
   private async networkIds(userId: string, direct: string[]) { const second = direct.length ? await this.prisma.userFollow.findMany({ where: { followerId: { in: direct } }, select: { followingId: true } }) : []; return [...new Set([...direct, ...second.map((row) => row.followingId)])].filter((id) => id !== userId); }
   private async blockedUserIds(userId: string) { const rows = await this.prisma.userBlock.findMany({ where: { OR: [{ userId, targetType: "user" }, { targetType: "user", targetId: userId }] }, select: { userId: true, targetId: true } }); return [...new Set(rows.map((row) => row.userId === userId ? row.targetId : row.userId))]; }
   private async avatars(ids: string[]) { const media = await this.prisma.mediaFile.findMany({ where: { contentType: ReportTargetType.user, contentId: { in: [...new Set(ids)] }, status: "active", isProfilePicture: true }, select: { contentId: true, url: true } }); return new Map(media.map((item) => [item.contentId, item.url])); }

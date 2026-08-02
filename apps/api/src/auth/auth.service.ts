@@ -50,6 +50,8 @@ export class AuthService {
   async register(input: RegisterDto) {
     const email = input.email.toLowerCase().trim();
     const existing = await this.prisma.user.findUnique({ where: { email } });
+    const phoneOwner = await this.prisma.user.findFirst({ where: { phone: input.phone, email: { not: email } }, select: { id: true } });
+    if (phoneOwner) throw new ConflictException("Bu telefon numarası zaten kullanılıyor.");
 
     if (existing) {
       if (existing.status === "active") {
@@ -60,6 +62,8 @@ export class AuthService {
         where: { id: existing.id },
         data: {
           name: input.name.trim(),
+          phone: input.phone,
+          phoneVerified: false,
           accountType: input.accountType ?? existing.accountType,
           companyName: input.accountType === "corporate" ? input.companyName?.trim() : null,
           tradeName: input.accountType === "corporate" ? input.tradeName?.trim() : null,
@@ -67,7 +71,7 @@ export class AuthService {
           businessCategory: input.accountType === "corporate" ? input.businessCategory : null,
           passwordHash: await hash(input.password, 10),
           emailVerified: false,
-          status: "pending",
+          status: "active",
         },
       });
 
@@ -85,6 +89,8 @@ export class AuthService {
       data: {
         email,
         name: input.name.trim(),
+        phone: input.phone,
+        phoneVerified: false,
         passwordHash: await hash(input.password, 10),
         accountType: input.accountType ?? "individual",
         companyName: input.accountType === "corporate" ? input.companyName?.trim() : null,
@@ -92,7 +98,7 @@ export class AuthService {
         companyType: input.accountType === "corporate" ? input.companyType : null,
         businessCategory: input.accountType === "corporate" ? input.businessCategory : null,
         role: "user",
-        status: "pending",
+        status: "active",
       },
     });
 

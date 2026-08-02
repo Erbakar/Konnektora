@@ -28,6 +28,8 @@ const IdentityPage = lazy(() => import("./pages/IdentityPage").then((module) => 
 const SearchPage = lazy(() => import("./pages/SearchPage").then((module) => ({ default: module.SearchPage })));
 const PublicProfilePage = lazy(() => import("./pages/PublicProfilePage").then((module) => ({ default: module.PublicProfilePage })));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage").then((module) => ({ default: module.OnboardingPage })));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage").then((module) => ({ default: module.NotificationsPage })));
+const TagsPage = lazy(() => import("./pages/TagsPage").then((module) => ({ default: module.TagsPage })));
 const PlacesPage = lazy(() => import("./pages/PlacesPage").then((module) => ({ default: module.PlacesPage })));
 const PlaceDetailPage = lazy(() => import("./pages/PlaceDetailPage").then((module) => ({ default: module.PlaceDetailPage })));
 const PolicyPage = lazy(() => import("./pages/PolicyPage").then((module) => ({ default: module.PolicyPage })));
@@ -53,6 +55,9 @@ const router = createBrowserRouter([
       { path: "search", element: <SearchPage /> },
       { path: "users/:username", element: <PublicProfilePage /> },
       { path: "onboarding", element: <OnboardingPage /> },
+      { path: "notifications", element: <NotificationsPage /> },
+      { path: "tags", element: <TagsPage /> },
+      { path: "tags/:slug", element: <TagsPage /> },
       { path: "account", element: <AccountPage /> },
       { path: "contact", element: <ContactPage /> },
       { path: "help", element: <HelpCenterPage /> },

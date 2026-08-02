@@ -18,6 +18,7 @@ import {
 import { Link } from "react-router-dom";
 import { HomeEventTile } from "../components/HomeEventTile";
 import { DiscoveryCard } from "../components/DiscoveryCard";
+import { RichText } from "../components/RichText";
 import { getDiscoveryFeed, listAnnouncements, listEvents, listTags } from "../lib/api";
 import { mockEvents } from "../lib/mockData";
 import { useLanguage } from "../lib/i18n";
@@ -156,7 +157,7 @@ export function HomePage() {
               </span>
               <div>
                 <strong>{announcement.title}</strong>
-                <p>{announcement.body}</p>
+                <p><RichText text={announcement.body} /></p>
               </div>
             </article>
           ))}

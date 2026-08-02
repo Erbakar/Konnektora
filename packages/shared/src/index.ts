@@ -144,12 +144,18 @@ export const discoveryItemSchema = z.object({
   imageUrl: z.string().nullable(),
   meta: z.string().nullable()
 });
+export const discoveryActivitySchema = discoveryItemSchema.extend({
+  action: z.string(),
+  occurredAt: z.string().datetime().or(z.date()),
+  ownerId: z.string().uuid().nullable()
+});
 export const discoveryFeedSchema = z.object({
   popularMembers: z.array(discoveryItemSchema),
   newMembers: z.array(discoveryItemSchema),
   localEvents: z.array(discoveryItemSchema),
   trendingTags: z.array(discoveryItemSchema),
-  popularPlaces: z.array(discoveryItemSchema)
+  popularPlaces: z.array(discoveryItemSchema),
+  activities: z.array(discoveryActivitySchema)
 });
 export const discoverySearchSchema = z.object({
   query: z.string(),
