@@ -104,14 +104,14 @@ async function main() {
   const [sector, format, audience] = categories;
   const tags = await Promise.all(
     [
-      { name: "Startup", slug: "startup", categoryId: sector.id },
-      { name: "Networking", slug: "networking", categoryId: format.id },
-      { name: "Yatırım", slug: "yatirim", categoryId: sector.id },
-      { name: "Founder", slug: "founder", categoryId: audience.id }
+      { name: "Startup", slug: "startup", categoryId: sector.id, description: "Yeni ürünler geliştiren girişim ekipleri, erken aşama büyüme ve pazara çıkış deneyimleri." },
+      { name: "Networking", slug: "networking", categoryId: format.id, description: "Ortak hedefleri olan profesyonellerle tanışma, bağlantı kurma ve iş birliği fırsatları." },
+      { name: "Yatırım", slug: "yatirim", categoryId: sector.id, description: "Yatırım hazırlığı, fonlama süreçleri, yatırımcı görüşmeleri ve finansman stratejileri." },
+      { name: "Founder", slug: "founder", categoryId: audience.id, description: "Kurucuların ürün, ekip, liderlik ve şirket kurma yolculuğundaki deneyim paylaşımları." }
     ].map((tag) =>
       prisma.tag.upsert({
         where: { slug: tag.slug },
-        update: { name: tag.name, categoryId: tag.categoryId, status: "active" },
+        update: { name: tag.name, description: tag.description, categoryId: tag.categoryId, status: "active" },
         create: {
           ...tag,
           createdById: admin.id,
@@ -132,6 +132,87 @@ async function main() {
 
     return tag.id;
   };
+
+  const places = await Promise.all(
+    [
+      {
+        name: "Istanbul Founder Hub",
+        slug: "istanbul-founder-hub",
+        description: "Kurucular, yatırımcılar ve ürün ekipleri için buluşma ve ortak çalışma alanı.",
+        country: "Turkey",
+        city: "Istanbul",
+        address: "Levent",
+        coverImageUrl: "https://images.unsplash.com/photo-1497366754035-f200968a6e72",
+        followerCount: 248
+      },
+      {
+        name: "Berlin Innovation Loft",
+        slug: "berlin-innovation-loft",
+        description: "Teknoloji toplulukları, atölyeler ve demo geceleri için esnek etkinlik alanı.",
+        country: "Germany",
+        city: "Berlin",
+        address: "Kreuzberg",
+        coverImageUrl: "https://images.unsplash.com/photo-1497366811353-6870744d04b2",
+        followerCount: 192
+      },
+      {
+        name: "Amsterdam Community House",
+        slug: "amsterdam-community-house",
+        description: "Ürün geliştiren ekiplerin kahvaltı, networking ve mentorluk buluşmaları için topluluk evi.",
+        country: "Netherlands",
+        city: "Amsterdam",
+        address: "De Pijp",
+        coverImageUrl: "https://images.unsplash.com/photo-1524758631624-e2822e304c36",
+        followerCount: 176
+      },
+      {
+        name: "London Community Studio",
+        slug: "london-community-studio",
+        description: "Demo geceleri, yaratıcı atölyeler ve seçilmiş networking oturumları için stüdyo.",
+        country: "United Kingdom",
+        city: "London",
+        address: "Shoreditch",
+        coverImageUrl: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4",
+        followerCount: 154
+      }
+    ].map((place) => prisma.place.upsert({
+      where: { slug: place.slug },
+      update: { ...place, status: "active", updatedById: admin.id },
+      create: { ...place, status: "active", createdById: admin.id, updatedById: admin.id }
+    }))
+  );
+
+  await Promise.all(places.flatMap((place) => [
+    prisma.placeMember.upsert({
+      where: { placeId_userId: { placeId: place.id, userId: admin.id } },
+      update: { status: "accepted", role: "organizer" },
+      create: { placeId: place.id, userId: admin.id, status: "accepted", role: "organizer" }
+    }),
+    prisma.placeMember.upsert({
+      where: { placeId_userId: { placeId: place.id, userId: demoUser.id } },
+      update: { status: "accepted", role: "member" },
+      create: { placeId: place.id, userId: demoUser.id, status: "accepted", role: "member" }
+    }),
+    prisma.placeFollow.upsert({
+      where: { placeId_userId: { placeId: place.id, userId: demoUser.id } },
+      update: {},
+      create: { placeId: place.id, userId: demoUser.id }
+    })
+  ]));
+
+  const tagConversations = [
+    { id: "71000000-0000-4000-8000-000000000001", slug: "startup", body: "Bu hafta MVP doğrulama ve ilk kullanıcı görüşmeleri üzerine çalışan ekiplerle deneyim paylaşmak isterim." },
+    { id: "71000000-0000-4000-8000-000000000002", slug: "networking", body: "İstanbul’daki ürün ve teknoloji topluluklarının yaklaşan buluşmalarını burada paylaşabiliriz." },
+    { id: "71000000-0000-4000-8000-000000000003", slug: "yatirim", body: "Seed turuna hazırlanan ekipler için data room kontrol listesi ve yatırımcı görüşmesi notları paylaşacağım." },
+    { id: "71000000-0000-4000-8000-000000000004", slug: "founder", body: "Kurucu olarak ekip büyütürken öğrendiğiniz en önemli dersi merak ediyorum. Benim için erken ve açık iletişim öne çıkıyor." }
+  ];
+
+  await prisma.contentComment.deleteMany({ where: { id: { in: ["seed-tag-comment-startup", "seed-tag-comment-networking", "seed-tag-comment-investment", "seed-tag-comment-founder"] } } });
+  await Promise.all(tagConversations.map((comment) => prisma.contentComment.upsert({
+    where: { id: comment.id },
+    update: { targetId: getTagId(comment.slug), body: comment.body, status: "active", authorId: demoUser.id },
+    create: { id: comment.id, targetType: "tag", targetId: getTagId(comment.slug), authorId: demoUser.id, body: comment.body, status: "active" }
+  })));
 
   await prisma.event.deleteMany({ where: { slug: "eu-startup-networking-night" } });
 

@@ -4375,7 +4375,7 @@ export async function listEvents(params?: URLSearchParams): Promise<EventList> {
   let result: EventList;
 
   try {
-    result = await requestJson(`/events${query ? `?${query}` : ""}`, eventListSchema, { auth: "user" });
+    result = await requestJson(`/events${query ? `?${query}` : ""}`, eventListSchema);
   } catch (error) {
     if (USE_DEMO_CONTENT) {
       return demoResult;
@@ -4415,7 +4415,7 @@ export function getEvent(slug: string): Promise<Event> {
 }
 
 export async function listTags(): Promise<Tag[]> {
-  const result = await requestJson("/tags", z.array(tagSchema), { auth: "user" });
+  const result = await requestJson("/tags", z.array(tagSchema));
   return USE_DEMO_CONTENT && result.length === 0 ? getStoredTags().filter((tag) => tag.status === "active") : result;
 }
 
@@ -4653,7 +4653,7 @@ export function updateProfileAffinities(affinities: Array<{ tagId: string; senti
 }
 
 export function listTagComments(tagId: string): Promise<TagComment[]> {
-  return requestJson(`/tags/${tagId}/comments`, tagCommentsSchema, { auth: "user" });
+  return requestJson(`/tags/${tagId}/comments`, tagCommentsSchema);
 }
 
 export function createTagComment(tagId: string, body: string): Promise<TagComment> {
@@ -5448,12 +5448,12 @@ export type PlaceInput = {
 
 export async function listPlaces(params?: URLSearchParams): Promise<PlaceList> {
   const query = params?.toString();
-  const result = await requestJson(`/places${query ? `?${query}` : ""}`, placeListSchema, { auth: "user" });
+  const result = await requestJson(`/places${query ? `?${query}` : ""}`, placeListSchema);
   return USE_DEMO_CONTENT && result.items.length === 0 ? listMockPublicPlaces(params ?? new URLSearchParams()) : result;
 }
 
 export function getPlace(slug: string): Promise<Place> {
-  return requestJson(`/places/${slug}`, placeSchema, { auth: "user" });
+  return requestJson(`/places/${slug}`, placeSchema);
 }
 
 export function createPlace(input: PlaceInput): Promise<Place> {
