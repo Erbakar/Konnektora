@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MapPin, Plus, Users } from "lucide-react";
+import { Building2, LoaderCircle, MapPin, Plus, RefreshCw, Users } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { createPlace, getUserSession, listPlaces, type PlaceInput } from "../lib/api";
@@ -44,15 +44,15 @@ export function PlacesPage() {
 
   const placeList = placesQuery.data;
   return (
-    <section className="page two-column">
-      <aside className="filters">
+    <section className="page two-column places-page">
+      <aside className="filters places-filters">
         <h2>Mekân filtreleri</h2>
         <label>Arama<input value={searchParams.get("q") ?? ""} onChange={(event) => updateFilter("q", event.target.value)} placeholder="Hub, kafe, stüdyo..." /></label>
         <label>Şehir<input value={searchParams.get("city") ?? ""} onChange={(event) => updateFilter("city", event.target.value)} placeholder="İstanbul" /></label>
         <label>Ülke<input value={searchParams.get("country") ?? ""} onChange={(event) => updateFilter("country", event.target.value)} placeholder="Türkiye" /></label>
         {user ? <button className="primary-action" onClick={() => setCreateOpen((open) => !open)} type="button"><Plus size={18} /> Mekân oluştur</button> : null}
       </aside>
-      <div>
+      <div className="places-content">
         <div className="section-header"><h1>Mekânlar</h1><span>{placesQuery.isLoading ? "Yükleniyor" : `${placeList?.total ?? 0} sonuç`}</span></div>
         {createOpen ? (
           <form className="admin-form" onSubmit={submitPlace}>
@@ -69,9 +69,11 @@ export function PlacesPage() {
             {createMutation.isError ? <p className="form-error">Mekân oluşturulamadı. Alanları kontrol et.</p> : null}
           </form>
         ) : null}
-        <div className="event-grid">
+        {placesQuery.isLoading ? <div className="empty-state"><LoaderCircle className="spin" size={34}/><p>Mekânlar yükleniyor…</p></div> : null}
+        {placesQuery.isError ? <div className="empty-state"><Building2 size={40}/><h2>Mekânlar yüklenemedi</h2><p>Bağlantını kontrol edip yeniden deneyebilirsin.</p><button className="secondary-action" onClick={() => void placesQuery.refetch()}><RefreshCw size={17}/>Yeniden dene</button></div> : null}
+        <div className="event-grid place-grid">
           {placeList?.items.map((place) => (
-            <article className="event-card" key={place.id}>
+            <article className="event-card place-card" key={place.id}>
               {place.coverImageUrl ? <Link className="event-card-media" to={`/places/${place.slug}`}><img alt="" src={place.coverImageUrl} /></Link> : null}
               <div><span className="eyebrow">Mekân</span><h2><Link to={`/places/${place.slug}`}>{place.name}</Link></h2></div>
               <p><RichText text={place.description || "Konnektora topluluk mekânı"} /></p>
@@ -79,7 +81,7 @@ export function PlacesPage() {
             </article>
           ))}
         </div>
-        {!placesQuery.isLoading && !placeList?.items.length ? <p className="empty-state">Bu filtrelerle mekân bulunamadı.</p> : null}
+        {!placesQuery.isLoading && !placesQuery.isError && !placeList?.items.length ? <div className="empty-state"><Building2 size={40}/><h2>{searchParams.size ? "Bu filtrelerle mekân bulunamadı" : "Henüz mekân eklenmedi"}</h2><p>{searchParams.size ? "Filtreleri değiştirerek yeniden deneyebilirsin." : "Topluluk mekânları oluşturulduğunda burada listelenecek."}</p>{user && !searchParams.size ? <button className="primary-action" onClick={() => setCreateOpen(true)}><Plus size={18}/>İlk mekânı oluştur</button> : null}</div> : null}
         {placeList ? <div className="pagination-row">
           <button className="secondary-action" disabled={selectedPage <= 1} onClick={() => updateFilter("page", String(selectedPage - 1))}>Önceki</button>
           <span>Sayfa {placeList.page}</span>

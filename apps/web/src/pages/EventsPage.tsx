@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
+import { CalendarX, LoaderCircle, RefreshCw } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { EventCard } from "../components/EventCard";
 import { listEvents, listTags } from "../lib/api";
-import { mockEvents, mockTags } from "../lib/mockData";
+import { mockTags } from "../lib/mockData";
 
 export function EventsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -20,32 +21,9 @@ export function EventsPage() {
     queryFn: listTags,
     placeholderData: mockTags
   });
-  const { data: eventList, isLoading } = useQuery({
+  const { data: eventList, isLoading, isError, refetch } = useQuery({
     queryKey: ["events", searchParams.toString()],
-    queryFn: () => listEvents(searchParams),
-    placeholderData: () => {
-      const selectedItems = mockEvents.filter((event) =>
-        (!selectedTag || event.tags.some((tag) => tag.slug === selectedTag)) &&
-        (!selectedFormat || event.format === selectedFormat) &&
-        (!selectedQuery ||
-          [event.title, event.summary, event.description, event.organizerName ?? ""]
-            .join(" ")
-            .toLocaleLowerCase("tr-TR")
-            .includes(selectedQuery.toLocaleLowerCase("tr-TR"))) &&
-        (!selectedDateFrom || new Date(event.startsAt) >= new Date(selectedDateFrom)) &&
-        (!selectedDateTo || new Date(event.startsAt) <= new Date(`${selectedDateTo}T23:59:59.999Z`)) &&
-        (!selectedCity || event.city?.toLocaleLowerCase("tr-TR").includes(selectedCity.toLocaleLowerCase("tr-TR"))) &&
-        (!selectedCountry || event.country?.toLocaleLowerCase("tr-TR").includes(selectedCountry.toLocaleLowerCase("tr-TR")))
-      );
-
-      return {
-        items: selectedItems,
-        total: selectedItems.length,
-        page: 1,
-        pageSize: 24,
-        hasNextPage: false
-      };
-    }
+    queryFn: () => listEvents(searchParams)
   });
   const events = eventList?.items ?? [];
 
@@ -66,7 +44,7 @@ export function EventsPage() {
   }
 
   return (
-    <section className="page two-column">
+    <section className="page two-column events-page">
       <aside className="filters">
         <h2>Filtreler</h2>
         <button className={!selectedTag ? "active-filter" : ""} onClick={() => setSearchParams({})}>
@@ -115,17 +93,19 @@ export function EventsPage() {
           <input placeholder="Türkiye" value={selectedCountry} onChange={(event) => updateFilter("country", event.target.value)} />
         </label>
       </aside>
-      <div>
-        <div className="section-header">
+      <div className="events-content">
+        <div className="section-header events-page-header">
           <h1>Etkinlikler</h1>
-          <div className="row-actions"><span>{isLoading ? "Yükleniyor" : `${eventList?.total ?? 0} sonuç`}</span><Link className="primary-action" to="/account#events">Etkinlik oluştur</Link></div>
+          <div className="row-actions"><span>{isLoading ? "Yükleniyor…" : isError ? "Veri alınamadı" : `${eventList?.total ?? 0} sonuç`}</span><Link className="primary-action events-create-button" to="/account#events">Etkinlik oluştur</Link></div>
         </div>
+        {isLoading ? <div className="empty-state"><LoaderCircle className="spin" size={34}/><p>Etkinlikler yükleniyor…</p></div> : null}
+        {isError ? <div className="empty-state"><CalendarX size={40}/><h2>Etkinlikler yüklenemedi</h2><p>Bağlantını kontrol edip yeniden deneyebilirsin.</p><button className="secondary-action" onClick={() => void refetch()}><RefreshCw size={17}/>Yeniden dene</button></div> : null}
         <div className="event-grid">
           {events.map((event) => (
             <EventCard event={event} key={event.id} />
           ))}
         </div>
-        {!isLoading && events.length === 0 ? <p className="empty-state">Bu filtrelerle etkinlik bulunamadı.</p> : null}
+        {!isLoading && !isError && events.length === 0 ? <p className="empty-state">Bu filtrelerle etkinlik bulunamadı.</p> : null}
         {eventList ? (
           <div className="pagination-row">
             <button

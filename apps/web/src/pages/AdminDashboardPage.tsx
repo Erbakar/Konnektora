@@ -17,6 +17,7 @@ import {
   X
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
 import {
   type AdminEventInput,
@@ -194,6 +195,12 @@ const SECTION_TITLES: Record<AdminSection, string> = {
   "email-tokens": "Email Tokenları"
 };
 
+const ADMIN_SECTIONS = new Set<AdminSection>(Object.keys(SECTION_TITLES) as AdminSection[]);
+
+function isAdminSection(value: string | null): value is AdminSection {
+  return value !== null && ADMIN_SECTIONS.has(value as AdminSection);
+}
+
 const REPORT_RULE_TITLE_OPTIONS: Record<ReportTargetType, string[]> = {
   event: [
     "Spam veya yanıltıcı etkinlik",
@@ -313,13 +320,27 @@ const GENDER_OPTIONS = ["Erkek", "Kadin", "Belirtilmemis"];
 
 export function AdminDashboardPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [token, setToken] = useState(() => getAdminToken());
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<AdminSection>("dashboard");
+  const sectionParam = searchParams.get("section");
+  const activeSection: AdminSection = isAdminSection(sectionParam) ? sectionParam : "dashboard";
   const [eventNotice, setEventNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [reportGroupScope, setReportGroupScope] = useState<"active" | "old">("active");
   const [selectedReportGroup, setSelectedReportGroup] = useState<{ targetType: ReportTargetType; targetId: string } | null>(null);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
+
+  function setActiveSection(section: AdminSection) {
+    const nextParams = new URLSearchParams(searchParams);
+
+    if (section === "dashboard") {
+      nextParams.delete("section");
+    } else {
+      nextParams.set("section", section);
+    }
+
+    setSearchParams(nextParams);
+  }
 
   const dashboardQuery = useQuery({
     queryKey: ["admin-dashboard"],
@@ -745,6 +766,7 @@ export function AdminDashboardPage() {
               <span className="admin-nav-group-label">{group.label}</span>
               {group.items.map(({ id, label, Icon }) => (
                 <button
+                  aria-current={activeSection === id ? "page" : undefined}
                   className={`admin-nav-btn${activeSection === id ? " active" : ""}`}
                   key={id}
                   onClick={() => setActiveSection(id)}
@@ -2040,9 +2062,16 @@ function UserMessagesAdminPanel() {
         <span>{messagesQuery.isLoading ? "Yükleniyor" : `${messageList?.total ?? 0} mesaj`}</span>
       </div>
       <p className="admin-section-desc">{meta.description}</p>
-      <div className="segmented-control">
+      <div aria-label="Mesaj türü" className="segmented-control user-message-tabs" role="tablist">
         {(Object.keys(USER_MESSAGE_TYPE_META) as UserMessageType[]).map((item) => (
-          <button className={type === item ? "active" : ""} key={item} onClick={() => selectType(item)} type="button">
+          <button
+            aria-selected={type === item}
+            className={type === item ? "active" : ""}
+            key={item}
+            onClick={() => selectType(item)}
+            role="tab"
+            type="button"
+          >
             {USER_MESSAGE_TYPE_META[item].label}
           </button>
         ))}
@@ -2442,7 +2471,7 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
   }
 
   return (
-    <section className="admin-panel">
+    <section className="admin-panel user-admin-panel">
       <div className="section-header compact">
         <h2>Üye Yönetimi</h2>
         <span>{usersQuery.isLoading ? "Yükleniyor" : `${userList?.total ?? 0} üye`}</span>
@@ -2458,7 +2487,7 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
           Kurumsal Üyeler
         </button>
       </div>
-      <form className="guest-invite-form" onSubmit={handleFilterSubmit}>
+      <form className="guest-invite-form user-admin-filters" onSubmit={handleFilterSubmit}>
         <input name="accountType" type="hidden" value={filters.accountType} />
         <label>
           Arama
@@ -2562,7 +2591,7 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
           <p>Farklı filtreler deneyebilir veya arama terimini değiştirebilirsin.</p>
         </div>
       ) : null}
-      <div className="admin-list">
+      <div className="admin-list user-admin-list">
         {(userList?.items ?? []).map((user) => (
           <UserAdminRow
             isPending={updateMutation.isPending}
@@ -2626,21 +2655,25 @@ function UserAdminRow({
   user: AdminManagedUser;
 }) {
   return (
-    <div className="admin-list-item">
-      <div className="admin-list-row">
-        <div>
+    <article className="admin-list-item user-admin-card">
+      <header className="user-admin-card-header">
+        <div className="user-admin-identity">
           <strong>{user.username ? `@${user.username}` : user.name}</strong>
           <span>
             {user.accountType === "corporate" ? user.companyName || user.tradeName || user.name : user.name} · {user.email}
           </span>
         </div>
-        <span className="muted">{[user.city, user.country].filter(Boolean).join(" - ") || "Konum yok"}</span>
-        <span className="muted">{user.followerCount ?? 0} takipçi</span>
-        <span className="muted">{user.followingCount ?? 0} takip</span>
-        <span className="muted">{user.lastOnlineAt ? formatDateTime(user.lastOnlineAt) : "Son online yok"}</span>
-        <span className={`status-pill status-${user.status}`}>{user.status}</span>
-        <span className="muted">{user.role}</span>
-        <select
+        <div className="user-admin-badges"><span className={`status-pill status-${user.status}`}>{user.status}</span><span className="user-role-pill">{user.role}</span></div>
+      </header>
+      <div className="user-admin-meta">
+        <span><small>Konum</small>{[user.city, user.country].filter(Boolean).join(" - ") || "Belirtilmedi"}</span>
+        <span><small>Takipçi</small>{user.followerCount ?? 0}</span>
+        <span><small>Takip</small>{user.followingCount ?? 0}</span>
+        <span><small>Son online</small>{user.lastOnlineAt ? formatDateTime(user.lastOnlineAt) : "Bilgi yok"}</span>
+        <span><small>Üyelik</small>{user.createdAt ? formatDateTime(user.createdAt) : "Bilgi yok"}</span>
+      </div>
+      <footer className="user-admin-card-footer">
+        <label className="user-role-group-field">Rol grubu<select
           disabled={isPending}
           onChange={(event) =>
             onUpdate({
@@ -2658,8 +2691,7 @@ function UserAdminRow({
                 {roleGroup.name}
               </option>
             ))}
-        </select>
-        <span className="muted">{user.createdAt ? formatDateTime(user.createdAt) : "Üyelik tarihi yok"}</span>
+        </select></label>
         <div className="row-actions">
           <button className="secondary-action" onClick={onSelect} type="button">
             Detay
@@ -2684,8 +2716,8 @@ function UserAdminRow({
             </button>
           ) : null}
         </div>
-      </div>
-    </div>
+      </footer>
+    </article>
   );
 }
 
@@ -3711,7 +3743,7 @@ function TagAdminPanel({
   }
 
   return (
-    <section className="admin-panel">
+    <section className="admin-panel tag-admin-panel">
       <div className="section-header compact">
         <h2>İlgi Alanı / Tag Yönetimi</h2>
         <span>{tags.length} tag</span>
@@ -3750,26 +3782,28 @@ function TagAdminPanel({
           <p>Yeni tag'ler kullanıcıların tag ekleme veya etkinlik oluşturma akışından gelir.</p>
         </div>
       ) : (
-      <div className="admin-list">
+      <div className="admin-list tag-admin-list">
         {tags.map((tag) => (
-          <div className="admin-list-row" key={tag.id}>
-            <div>
+          <div className="admin-list-row tag-admin-row" key={tag.id}>
+            <div className="tag-admin-identity">
               <strong>{tag.name}</strong>
               <span>
                 {tag.status} · {tag.usageCount} kullanım
               </span>
             </div>
-            <button className="secondary-action" onClick={() => setEditingTagId(tag.id)} type="button">
-              Düzenle
-            </button>
-            <button className="ghost-action" onClick={() => onSelect(tag.id)} type="button">
-              Detay
-            </button>
-            {tag.status !== "archived" ? (
-              <button className="danger-action" onClick={() => onArchive(tag.id)} type="button">
-                Arşivle
+            <div className="row-actions tag-admin-actions">
+              <button className="secondary-action" onClick={() => setEditingTagId(tag.id)} type="button">
+                Düzenle
               </button>
-            ) : null}
+              <button className="ghost-action" onClick={() => onSelect(tag.id)} type="button">
+                Detay
+              </button>
+              {tag.status !== "archived" ? (
+                <button className="danger-action" onClick={() => onArchive(tag.id)} type="button">
+                  Arşivle
+                </button>
+              ) : null}
+            </div>
           </div>
         ))}
       </div>
