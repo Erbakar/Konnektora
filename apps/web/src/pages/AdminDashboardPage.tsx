@@ -426,7 +426,10 @@ export function AdminDashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-announcements"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-policies"] });
     },
-    onError: () => setLoginError("Email veya şifre hatalı.")
+    onError: (error) => {
+      const isConnectionError = error instanceof TypeError || (error instanceof DOMException && error.name === "AbortError");
+      setLoginError(isConnectionError ? "Sunucuya bağlanılamadı. API servisinin çalıştığını kontrol edin." : "Email veya şifre hatalı.");
+    }
   });
 
   const archiveTagMutation = useMutation({

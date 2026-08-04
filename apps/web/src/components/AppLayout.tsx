@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, CalendarDays, Home, LayoutDashboard, MapPin, Menu, MessageCircle, QrCode, Search, Tag, Ticket, UserRound, WalletCards, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bell, CalendarDays, ChevronDown, Home, LayoutDashboard, MapPin, Menu, MessageCircle, QrCode, Search, Tag, Ticket, UserRound, WalletCards, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
 import { getUserSession, listConversations } from "../lib/api";
@@ -8,6 +8,8 @@ import { useLanguage } from "../lib/i18n";
 
 export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const { language, setLanguage, t } = useLanguage();
   const location = useLocation();
   const user = getUserSession();
@@ -20,6 +22,7 @@ export function AppLayout() {
 
   useEffect(() => {
     setMenuOpen(false);
+    setMoreOpen(false);
   }, [location.pathname, location.search]);
 
   useEffect(() => {
@@ -28,6 +31,22 @@ export function AppLayout() {
       document.body.style.overflow = "";
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!moreMenuRef.current?.contains(event.target as Node)) setMoreOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [moreOpen]);
 
   return (
     <div className="app-shell">
@@ -55,15 +74,19 @@ export function AppLayout() {
             {t("messages")}
             {conversationsQuery.data?.totalUnread ? <span className="nav-unread-badge">{conversationsQuery.data.totalUnread}</span> : null}
           </NavLink>
-          <NavLink to="/notifications"><Bell size={18} /> Bildirimler</NavLink>
-          <NavLink to="/tickets"><Ticket size={18} /> Biletlerim</NavLink>
-          <NavLink to="/identity"><QrCode size={18} /> {t("memberId")}</NavLink>
-          <NavLink to="/finance"><WalletCards size={18} /> {t("finance")}</NavLink>
-          <NavLink to="/search"><Search size={18} /> {t("search")}</NavLink>
-          <NavLink to="/onboarding">
-            <UserRound size={18} />
-            {t("create")}
-          </NavLink>
+          <div className={`corp-nav-more${moreOpen ? " is-open" : ""}`} ref={moreMenuRef}>
+            <button aria-expanded={moreOpen} aria-haspopup="menu" onClick={() => setMoreOpen((open) => !open)} type="button">
+              {language === "tr" ? "Diğer" : "More"} <ChevronDown size={16} />
+            </button>
+            {moreOpen ? <div className="corp-nav-more-menu" role="menu">
+              <NavLink role="menuitem" to="/notifications"><Bell size={18} /><span>{language === "tr" ? "Bildirimler" : "Notifications"}</span></NavLink>
+              <NavLink role="menuitem" to="/tickets"><Ticket size={18} /><span>{language === "tr" ? "Biletlerim" : "My tickets"}</span></NavLink>
+              <NavLink role="menuitem" to="/identity"><QrCode size={18} /><span>{t("memberId")}</span></NavLink>
+              <NavLink role="menuitem" to="/finance"><WalletCards size={18} /><span>{t("finance")}</span></NavLink>
+              <NavLink role="menuitem" to="/search"><Search size={18} /><span>{t("search")}</span></NavLink>
+              <NavLink role="menuitem" to="/onboarding"><UserRound size={18} /><span>{t("create")}</span></NavLink>
+            </div> : null}
+          </div>
         </nav>
 
         <div className="corp-topbar-actions">
