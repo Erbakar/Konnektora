@@ -426,7 +426,10 @@ export function AdminDashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-announcements"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-policies"] });
     },
-    onError: () => setLoginError("Email veya şifre hatalı.")
+    onError: (error) => {
+      const isConnectionError = error instanceof TypeError || (error instanceof DOMException && error.name === "AbortError");
+      setLoginError(isConnectionError ? "Sunucuya bağlanılamadı. API servisinin çalıştığını kontrol edin." : "Email veya şifre hatalı.");
+    }
   });
 
   const archiveTagMutation = useMutation({
@@ -1772,7 +1775,7 @@ function CmsAdminPanel({
 
 function EmailTokenInfoPanel() {
   return (
-    <section className="admin-panel">
+    <section className="admin-panel email-token-panel">
       <div className="section-header compact">
         <h2>Email Token Akışları</h2>
         <span>3 akış · sistem yönetimli</span>
@@ -1796,7 +1799,7 @@ function EmailTokenInfoPanel() {
         </div>
       </div>
 
-      <div className="admin-list" style={{ marginTop: "18px" }}>
+      <div className="admin-list email-token-flow-list">
         <div className="admin-list-item">
           <div className="admin-list-row">
             <div>
