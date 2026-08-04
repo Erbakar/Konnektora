@@ -29,6 +29,7 @@ const SearchPage = lazy(() => import("./pages/SearchPage").then((module) => ({ d
 const PublicProfilePage = lazy(() => import("./pages/PublicProfilePage").then((module) => ({ default: module.PublicProfilePage })));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage").then((module) => ({ default: module.OnboardingPage })));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage").then((module) => ({ default: module.NotificationsPage })));
+const TicketsPage = lazy(() => import("./pages/TicketsPage").then((module) => ({ default: module.TicketsPage })));
 const TagsPage = lazy(() => import("./pages/TagsPage").then((module) => ({ default: module.TagsPage })));
 const PlacesPage = lazy(() => import("./pages/PlacesPage").then((module) => ({ default: module.PlacesPage })));
 const PlaceDetailPage = lazy(() => import("./pages/PlaceDetailPage").then((module) => ({ default: module.PlaceDetailPage })));
@@ -56,6 +57,7 @@ const router = createBrowserRouter([
       { path: "users/:username", element: <PublicProfilePage /> },
       { path: "onboarding", element: <OnboardingPage /> },
       { path: "notifications", element: <NotificationsPage /> },
+      { path: "tickets", element: <TicketsPage /> },
       { path: "tags", element: <TagsPage /> },
       { path: "tags/:slug", element: <TagsPage /> },
       { path: "account", element: <AccountPage /> },

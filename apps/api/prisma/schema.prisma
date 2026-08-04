@@ -124,6 +124,28 @@ enum PayoutStatus {
   cancelled
 }
 
+enum TicketTypeStatus {
+  active
+  inactive
+  sold_out
+}
+
+enum TicketOrderStatus {
+  pending
+  paid
+  cancelled
+  refunded
+  partially_refunded
+}
+
+enum OwnedTicketStatus {
+  active
+  transferred
+  used
+  refunded
+  cancelled
+}
+
 enum ReportStatus {
   open
   reviewing
@@ -201,99 +223,103 @@ enum ProfileVerificationStatus {
 }
 
 model User {
-  id                   String     @id @default(uuid())
-  email                String     @unique
-  name                 String
-  username             String?    @unique
-  passwordHash         String     @map("password_hash")
-  role                 UserRole   @default(user)
-  adminRoleGroupId     String?    @map("admin_role_group_id")
-  status               UserStatus @default(active)
-  accountType          String     @default("individual") @map("account_type")
-  phone                String?    @unique
-  phoneVerified        Boolean    @default(false) @map("phone_verified")
-  country              String?
-  city                 String?
-  district             String?
-  address              String?
-  gender               String?
-  birthDate            DateTime?  @map("birth_date")
-  website              String?
-  companyName          String?    @map("company_name")
-  tradeName            String?    @map("trade_name")
-  companyType          String?    @map("company_type")
-  businessCategory     String?    @map("business_category")
-  followerCount        Int        @default(0) @map("follower_count")
-  followingCount       Int        @default(0) @map("following_count")
-  lastOnlineAt         DateTime?  @map("last_online_at")
-  emailVerified        Boolean    @default(false) @map("email_verified")
-  invitedById          String?    @map("invited_by")
-  penaltyScoreLastYear Int        @default(0) @map("penalty_score_last_year")
-  penaltyScoreAllTime  Int        @default(0) @map("penalty_score_all_time")
-  onboardingCompletedAt DateTime? @map("onboarding_completed_at")
-  memberPassVersion    Int        @default(1) @map("member_pass_version")
-  createdAt            DateTime   @default(now()) @map("created_at")
-  updatedAt            DateTime   @updatedAt @map("updated_at")
+  id                    String     @id @default(uuid())
+  email                 String     @unique
+  name                  String
+  username              String?    @unique
+  passwordHash          String     @map("password_hash")
+  role                  UserRole   @default(user)
+  adminRoleGroupId      String?    @map("admin_role_group_id")
+  status                UserStatus @default(active)
+  accountType           String     @default("individual") @map("account_type")
+  phone                 String?    @unique
+  phoneVerified         Boolean    @default(false) @map("phone_verified")
+  country               String?
+  city                  String?
+  district              String?
+  address               String?
+  gender                String?
+  birthDate             DateTime?  @map("birth_date")
+  website               String?
+  companyName           String?    @map("company_name")
+  tradeName             String?    @map("trade_name")
+  companyType           String?    @map("company_type")
+  businessCategory      String?    @map("business_category")
+  followerCount         Int        @default(0) @map("follower_count")
+  followingCount        Int        @default(0) @map("following_count")
+  lastOnlineAt          DateTime?  @map("last_online_at")
+  emailVerified         Boolean    @default(false) @map("email_verified")
+  invitedById           String?    @map("invited_by")
+  penaltyScoreLastYear  Int        @default(0) @map("penalty_score_last_year")
+  penaltyScoreAllTime   Int        @default(0) @map("penalty_score_all_time")
+  onboardingCompletedAt DateTime?  @map("onboarding_completed_at")
+  memberPassVersion     Int        @default(1) @map("member_pass_version")
+  createdAt             DateTime   @default(now()) @map("created_at")
+  updatedAt             DateTime   @updatedAt @map("updated_at")
 
-  adminRoleGroup            AdminRoleGroup?      @relation(fields: [adminRoleGroupId], references: [id], onDelete: SetNull)
-  invitedBy                 User?                @relation("UserInvites", fields: [invitedById], references: [id], onDelete: SetNull)
-  invitedUsers              User[]               @relation("UserInvites")
-  createdTags               Tag[]                @relation("TagCreatedBy")
-  updatedTags               Tag[]                @relation("TagUpdatedBy")
-  createdEvents             Event[]              @relation("EventCreatedBy")
-  updatedEvents             Event[]              @relation("EventUpdatedBy")
-  eventParticipations       EventParticipant[]
-  ticketRefunds             TicketRefund[]
-  interestTags              UserInterestTag[]
-  submittedReports          ContentReport[]      @relation("ReportSubmittedBy")
-  resolvedReports           ContentReport[]      @relation("ReportResolvedBy")
-  updatedReportGroupNotes   ReportGroupNote[]
-  reportGroupComments       ReportGroupComment[]
-  moderationDecisions       ModerationDecision[] @relation("ModerationDecisionUser")
-  issuedModerationDecisions ModerationDecision[] @relation("ModerationDecisionActor")
-  notifications             Notification[]
-  notificationDeliveries    NotificationDelivery[]
-  adminActivityLogs         AdminActivityLog[]
-  pushSubscriptions         PushSubscription[]
-  emailTokens               EmailToken[]
-  phoneVerifications        PhoneVerification[]
-  privacySettings           PrivacySettings?
-  notificationPreferences  NotificationPreference[]
-  blocks                   UserBlock[]
-  following                UserFollow[] @relation("Following")
-  followers                UserFollow[] @relation("Followers")
-  userMessages              UserMessage[]        @relation("UserMessageUser")
-  readUserMessages          UserMessage[]        @relation("UserMessageReadBy")
-  createdPlaces             Place[]              @relation("PlaceCreatedBy")
-  updatedPlaces             Place[]              @relation("PlaceUpdatedBy")
-  placeMemberships          PlaceMember[]
-  followedPlaces            PlaceFollow[]
-  uploadedMedia             MediaFile[]          @relation("MediaUploadedBy")
-  authoredComments          ContentComment[]     @relation("CommentAuthor")
-  sentPrivateMessages       PrivateMessage[]     @relation("PrivateMessageSender")
-  receivedPrivateMessages   PrivateMessage[]     @relation("PrivateMessageRecipient")
-  messageReactions         MessageReaction[]
-  conversationPreferences ConversationPreference[] @relation("ConversationPreferenceOwner")
-  billingProfile          BillingProfile?
-  financialAccount        FinancialAccount?
-  paymentsMade            PaymentTransaction[] @relation("PaymentPayer")
-  paymentsReceived        PaymentTransaction[] @relation("PaymentPayee")
-  payoutRequests          Payout[]
-  corporateKycApplication CorporateKycApplication? @relation("CorporateKycApplicant")
-  corporateKycReviews     CorporateKycApplication[] @relation("CorporateKycReviewer")
-  corporateKycAuditLogs   CorporateKycAuditLog[]
-  contentReactions          ContentReaction[]
-  contentViews              ContentView[]
-  scansMade                 MemberScan[] @relation("MemberScanScanner")
-  scansReceived             MemberScan[] @relation("MemberScanMember")
-  socialAccounts           SocialAccount[]
-  contactInvites           ContactInvite[]
-  profileVerificationRequests ProfileVerification[] @relation("ProfileVerificationUser")
-  reviewedProfileVerifications ProfileVerification[] @relation("ProfileVerificationReviewer")
-  posts                    Post[]        @relation("PostAuthor")
-  postLikes                PostLike[]
-  postComments             PostComment[] @relation("PostCommentAuthor")
-  profileVerifiedAt       DateTime? @map("profile_verified_at")
+  adminRoleGroup               AdminRoleGroup?           @relation(fields: [adminRoleGroupId], references: [id], onDelete: SetNull)
+  invitedBy                    User?                     @relation("UserInvites", fields: [invitedById], references: [id], onDelete: SetNull)
+  invitedUsers                 User[]                    @relation("UserInvites")
+  createdTags                  Tag[]                     @relation("TagCreatedBy")
+  updatedTags                  Tag[]                     @relation("TagUpdatedBy")
+  createdEvents                Event[]                   @relation("EventCreatedBy")
+  updatedEvents                Event[]                   @relation("EventUpdatedBy")
+  eventParticipations          EventParticipant[]
+  ticketRefunds                TicketRefund[]
+  ticketOrders                 EventTicketOrder[]        @relation("TicketBuyer")
+  ownedTickets                 OwnedEventTicket[]        @relation("TicketOwner")
+  sentTicketTransfers          TicketTransfer[]          @relation("TicketTransferFrom")
+  receivedTicketTransfers      TicketTransfer[]          @relation("TicketTransferTo")
+  interestTags                 UserInterestTag[]
+  submittedReports             ContentReport[]           @relation("ReportSubmittedBy")
+  resolvedReports              ContentReport[]           @relation("ReportResolvedBy")
+  updatedReportGroupNotes      ReportGroupNote[]
+  reportGroupComments          ReportGroupComment[]
+  moderationDecisions          ModerationDecision[]      @relation("ModerationDecisionUser")
+  issuedModerationDecisions    ModerationDecision[]      @relation("ModerationDecisionActor")
+  notifications                Notification[]
+  notificationDeliveries       NotificationDelivery[]
+  adminActivityLogs            AdminActivityLog[]
+  pushSubscriptions            PushSubscription[]
+  emailTokens                  EmailToken[]
+  phoneVerifications           PhoneVerification[]
+  privacySettings              PrivacySettings?
+  notificationPreferences      NotificationPreference[]
+  blocks                       UserBlock[]
+  following                    UserFollow[]              @relation("Following")
+  followers                    UserFollow[]              @relation("Followers")
+  userMessages                 UserMessage[]             @relation("UserMessageUser")
+  readUserMessages             UserMessage[]             @relation("UserMessageReadBy")
+  createdPlaces                Place[]                   @relation("PlaceCreatedBy")
+  updatedPlaces                Place[]                   @relation("PlaceUpdatedBy")
+  placeMemberships             PlaceMember[]
+  followedPlaces               PlaceFollow[]
+  uploadedMedia                MediaFile[]               @relation("MediaUploadedBy")
+  authoredComments             ContentComment[]          @relation("CommentAuthor")
+  sentPrivateMessages          PrivateMessage[]          @relation("PrivateMessageSender")
+  receivedPrivateMessages      PrivateMessage[]          @relation("PrivateMessageRecipient")
+  messageReactions             MessageReaction[]
+  conversationPreferences      ConversationPreference[]  @relation("ConversationPreferenceOwner")
+  billingProfile               BillingProfile?
+  financialAccount             FinancialAccount?
+  paymentsMade                 PaymentTransaction[]      @relation("PaymentPayer")
+  paymentsReceived             PaymentTransaction[]      @relation("PaymentPayee")
+  payoutRequests               Payout[]
+  corporateKycApplication      CorporateKycApplication?  @relation("CorporateKycApplicant")
+  corporateKycReviews          CorporateKycApplication[] @relation("CorporateKycReviewer")
+  corporateKycAuditLogs        CorporateKycAuditLog[]
+  contentReactions             ContentReaction[]
+  contentViews                 ContentView[]
+  scansMade                    MemberScan[]              @relation("MemberScanScanner")
+  scansReceived                MemberScan[]              @relation("MemberScanMember")
+  socialAccounts               SocialAccount[]
+  contactInvites               ContactInvite[]
+  profileVerificationRequests  ProfileVerification[]     @relation("ProfileVerificationUser")
+  reviewedProfileVerifications ProfileVerification[]     @relation("ProfileVerificationReviewer")
+  posts                        Post[]                    @relation("PostAuthor")
+  postLikes                    PostLike[]
+  postComments                 PostComment[]             @relation("PostCommentAuthor")
+  profileVerifiedAt            DateTime?                 @map("profile_verified_at")
 
   @@index([accountType, status])
   @@index([country, city])
@@ -370,20 +396,20 @@ model PostComment {
 }
 
 model ProfileVerification {
-  id                String                    @id @default(uuid())
-  userId            String                    @map("user_id")
-  referenceMediaId  String                    @map("reference_media_id")
-  selfieUrl         String                    @map("selfie_url")
-  challenge         String
-  status            ProfileVerificationStatus @default(pending)
-  provider          String                    @default("manual")
-  faceMatchScore    Float?                    @map("face_match_score")
-  livenessScore     Float?                    @map("liveness_score")
-  decisionReason    String?                   @map("decision_reason")
-  reviewedById      String?                   @map("reviewed_by_id")
-  reviewedAt        DateTime?                 @map("reviewed_at")
-  createdAt         DateTime                  @default(now()) @map("created_at")
-  updatedAt         DateTime                  @updatedAt @map("updated_at")
+  id               String                    @id @default(uuid())
+  userId           String                    @map("user_id")
+  referenceMediaId String                    @map("reference_media_id")
+  selfieUrl        String                    @map("selfie_url")
+  challenge        String
+  status           ProfileVerificationStatus @default(pending)
+  provider         String                    @default("manual")
+  faceMatchScore   Float?                    @map("face_match_score")
+  livenessScore    Float?                    @map("liveness_score")
+  decisionReason   String?                   @map("decision_reason")
+  reviewedById     String?                   @map("reviewed_by_id")
+  reviewedAt       DateTime?                 @map("reviewed_at")
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
 
   user       User  @relation("ProfileVerificationUser", fields: [userId], references: [id], onDelete: Cascade)
   reviewedBy User? @relation("ProfileVerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
@@ -394,15 +420,15 @@ model ProfileVerification {
 }
 
 model SocialAccount {
-  id              String         @id @default(uuid())
-  userId          String         @map("user_id")
-  provider        SocialProvider
-  providerUserId  String         @map("provider_user_id")
-  email           String?
-  displayName     String?        @map("display_name")
-  avatarUrl       String?        @map("avatar_url")
-  connectedAt     DateTime       @default(now()) @map("connected_at")
-  lastUsedAt      DateTime       @default(now()) @map("last_used_at")
+  id             String         @id @default(uuid())
+  userId         String         @map("user_id")
+  provider       SocialProvider
+  providerUserId String         @map("provider_user_id")
+  email          String?
+  displayName    String?        @map("display_name")
+  avatarUrl      String?        @map("avatar_url")
+  connectedAt    DateTime       @default(now()) @map("connected_at")
+  lastUsedAt     DateTime       @default(now()) @map("last_used_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -413,11 +439,11 @@ model SocialAccount {
 }
 
 model ContactInvite {
-  id             String   @id @default(uuid())
-  userId         String   @map("user_id")
-  channel        String
-  recipientHash  String   @map("recipient_hash")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  channel       String
+  recipientHash String   @map("recipient_hash")
+  createdAt     DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -480,15 +506,15 @@ model NotificationPreference {
 }
 
 model PrivacySettings {
-  userId                 String          @id @map("user_id")
-  messageAudience        PrivacyAudience @default(everybody) @map("message_audience")
-  directoryDiscoverable  Boolean         @default(false) @map("directory_discoverable")
-  eventAudience          PrivacyAudience @default(everybody) @map("event_audience")
-  eventInviteAudience    PrivacyAudience @default(everybody) @map("event_invite_audience")
-  placeAudience          PrivacyAudience @default(everybody) @map("place_audience")
-  placeInviteAudience    PrivacyAudience @default(everybody) @map("place_invite_audience")
-  createdAt              DateTime        @default(now()) @map("created_at")
-  updatedAt              DateTime        @updatedAt @map("updated_at")
+  userId                String          @id @map("user_id")
+  messageAudience       PrivacyAudience @default(everybody) @map("message_audience")
+  directoryDiscoverable Boolean         @default(false) @map("directory_discoverable")
+  eventAudience         PrivacyAudience @default(everybody) @map("event_audience")
+  eventInviteAudience   PrivacyAudience @default(everybody) @map("event_invite_audience")
+  placeAudience         PrivacyAudience @default(everybody) @map("place_audience")
+  placeInviteAudience   PrivacyAudience @default(everybody) @map("place_invite_audience")
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -651,6 +677,10 @@ model Event {
   language                String
   organizerName           String?         @map("organizer_name")
   externalRegistrationUrl String?         @map("external_registration_url")
+  liveUrl                 String?         @map("live_url")
+  timeline                String?         @map("event_timeline")
+  lineup                  Json?           @map("lineup")
+  ticketTypes             Json?           @map("ticket_types")
   coverImageUrl           String?         @map("cover_image_url")
   capacity                Int?
   price                   Decimal         @default(0) @db.Decimal(10, 2)
@@ -660,29 +690,120 @@ model Event {
   createdAt               DateTime        @default(now()) @map("created_at")
   updatedAt               DateTime        @updatedAt @map("updated_at")
 
-  createdBy     User?              @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy     User?              @relation("EventUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  tags          EventTag[]
-  participants  EventParticipant[]
-  media         EventMedia[]
-  ticketRefunds TicketRefund[]
-  payments      PaymentTransaction[]
+  createdBy         User?                @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy         User?                @relation("EventUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  tags              EventTag[]
+  participants      EventParticipant[]
+  media             EventMedia[]
+  ticketRefunds     TicketRefund[]
+  payments          PaymentTransaction[]
+  ticketTypeRecords EventTicketType[]
+  ticketOrders      EventTicketOrder[]
+  ownedTickets      OwnedEventTicket[]
 
   @@index([status, startsAt])
   @@map("events")
 }
 
+model EventTicketType {
+  id           String             @id @default(uuid())
+  eventId      String             @map("event_id")
+  name         String
+  description  String?
+  capacity     Int
+  soldCount    Int                @default(0) @map("sold_count")
+  price        Decimal            @default(0) @db.Decimal(10, 2)
+  currency     String             @default("TRY")
+  saleStartsAt DateTime?          @map("sale_starts_at")
+  saleEndsAt   DateTime?          @map("sale_ends_at")
+  gateOpensAt  DateTime?          @map("gate_opens_at")
+  gateClosesAt DateTime?          @map("gate_closes_at")
+  status       TicketTypeStatus   @default(active)
+  sortOrder    Int                @default(0) @map("sort_order")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  event        Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orders       EventTicketOrder[]
+  tickets      OwnedEventTicket[]
+
+  @@index([eventId, status, sortOrder])
+  @@map("event_ticket_types")
+}
+
+model EventTicketOrder {
+  id           String              @id @default(uuid())
+  eventId      String              @map("event_id")
+  ticketTypeId String              @map("ticket_type_id")
+  buyerId      String              @map("buyer_id")
+  paymentId    String?             @unique @map("payment_id")
+  quantity     Int
+  unitPrice    Decimal             @map("unit_price") @db.Decimal(10, 2)
+  totalAmount  Decimal             @map("total_amount") @db.Decimal(10, 2)
+  currency     String
+  status       TicketOrderStatus   @default(pending)
+  purchasedAt  DateTime?           @map("purchased_at")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+  event        Event               @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  ticketType   EventTicketType     @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+  buyer        User                @relation("TicketBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
+  payment      PaymentTransaction? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  tickets      OwnedEventTicket[]
+
+  @@index([buyerId, createdAt])
+  @@index([eventId, status])
+  @@map("event_ticket_orders")
+}
+
+model OwnedEventTicket {
+  id            String            @id @default(uuid())
+  orderId       String            @map("order_id")
+  eventId       String            @map("event_id")
+  ticketTypeId  String            @map("ticket_type_id")
+  ownerId       String            @map("owner_id")
+  qrTokenHash   String            @unique @map("qr_token_hash")
+  qrToken       String            @unique @map("qr_token")
+  status        OwnedTicketStatus @default(active)
+  transferredAt DateTime?         @map("transferred_at")
+  usedAt        DateTime?         @map("used_at")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  order         EventTicketOrder  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  event         Event             @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  ticketType    EventTicketType   @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+  owner         User              @relation("TicketOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  transfers     TicketTransfer[]
+
+  @@index([ownerId, status, createdAt])
+  @@index([eventId, status])
+  @@map("owned_event_tickets")
+}
+
+model TicketTransfer {
+  id         String           @id @default(uuid())
+  ticketId   String           @map("ticket_id")
+  fromUserId String           @map("from_user_id")
+  toUserId   String           @map("to_user_id")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  ticket     OwnedEventTicket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  fromUser   User             @relation("TicketTransferFrom", fields: [fromUserId], references: [id], onDelete: Restrict)
+  toUser     User             @relation("TicketTransferTo", fields: [toUserId], references: [id], onDelete: Restrict)
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_transfers")
+}
+
 model EventParticipant {
-  id          String                 @id @default(uuid())
-  eventId     String                 @map("event_id")
-  userId      String                 @map("user_id")
-  status      EventParticipantStatus @default(requested)
-  role        EventParticipantRole   @default(attendee)
-  checkedInAt DateTime?              @map("checked_in_at")
-  checkInTokenHash String?           @unique @map("check_in_token_hash")
-  checkInTokenIssuedAt DateTime?     @map("check_in_token_issued_at")
-  createdAt   DateTime               @default(now()) @map("created_at")
-  updatedAt   DateTime               @updatedAt @map("updated_at")
+  id                   String                 @id @default(uuid())
+  eventId              String                 @map("event_id")
+  userId               String                 @map("user_id")
+  status               EventParticipantStatus @default(requested)
+  role                 EventParticipantRole   @default(attendee)
+  checkedInAt          DateTime?              @map("checked_in_at")
+  checkInTokenHash     String?                @unique @map("check_in_token_hash")
+  checkInTokenIssuedAt DateTime?              @map("check_in_token_issued_at")
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -704,8 +825,8 @@ model TicketRefund {
   reason    String?
   createdAt DateTime @default(now()) @map("created_at")
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event   Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   payment PaymentTransaction? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
 
   @@index([eventId, status])
@@ -727,53 +848,55 @@ model BillingProfile {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("billing_profiles")
 }
 
 model FinancialAccount {
-  userId             String    @id @map("user_id")
-  preferredCurrency  String    @default("TRY") @map("preferred_currency")
-  bankProvider       String?   @map("bank_provider")
-  bankAccountLabel   String?   @map("bank_account_label")
-  bankAccountLast4   String?   @map("bank_account_last4")
-  kycStatus          KycStatus @default(not_started) @map("kyc_status")
-  kycProvider        String?   @map("kyc_provider")
-  availableBalance   Decimal   @default(0) @map("available_balance") @db.Decimal(12, 2)
-  pendingBalance     Decimal   @default(0) @map("pending_balance") @db.Decimal(12, 2)
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
+  userId            String    @id @map("user_id")
+  preferredCurrency String    @default("TRY") @map("preferred_currency")
+  bankProvider      String?   @map("bank_provider")
+  bankAccountLabel  String?   @map("bank_account_label")
+  bankAccountLast4  String?   @map("bank_account_last4")
+  kycStatus         KycStatus @default(not_started) @map("kyc_status")
+  kycProvider       String?   @map("kyc_provider")
+  availableBalance  Decimal   @default(0) @map("available_balance") @db.Decimal(12, 2)
+  pendingBalance    Decimal   @default(0) @map("pending_balance") @db.Decimal(12, 2)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("financial_accounts")
 }
 
 model CorporateKycApplication {
-  id                       String    @id @default(uuid())
-  userId                   String    @unique @map("user_id")
-  status                   KycStatus @default(not_started)
-  version                  Int       @default(1)
-  legalName                String?   @map("legal_name")
-  registrationNumber       String?   @map("registration_number")
-  taxNumber                String?   @map("tax_number")
-  incorporationCountry     String?   @map("incorporation_country")
-  incorporationDate        DateTime? @map("incorporation_date")
-  registeredAddress        String?   @map("registered_address")
-  website                  String?
-  businessActivity         String?   @map("business_activity")
-  representativeName       String?   @map("representative_name")
-  representativeTitle      String?   @map("representative_title")
-  representativeEmail      String?   @map("representative_email")
-  representativePhone      String?   @map("representative_phone")
-  representativeBirthDate  DateTime? @map("representative_birth_date")
-  beneficialOwners         Json?     @map("beneficial_owners")
-  termsAccepted            Boolean   @default(false) @map("terms_accepted")
-  informationConfirmed     Boolean   @default(false) @map("information_confirmed")
-  submittedAt              DateTime? @map("submitted_at")
-  reviewedById             String?   @map("reviewed_by_id")
-  reviewedAt               DateTime? @map("reviewed_at")
-  decisionReason           String?   @map("decision_reason")
-  createdAt                DateTime  @default(now()) @map("created_at")
-  updatedAt                DateTime  @updatedAt @map("updated_at")
+  id                      String    @id @default(uuid())
+  userId                  String    @unique @map("user_id")
+  status                  KycStatus @default(not_started)
+  version                 Int       @default(1)
+  legalName               String?   @map("legal_name")
+  registrationNumber      String?   @map("registration_number")
+  taxNumber               String?   @map("tax_number")
+  incorporationCountry    String?   @map("incorporation_country")
+  incorporationDate       DateTime? @map("incorporation_date")
+  registeredAddress       String?   @map("registered_address")
+  website                 String?
+  businessActivity        String?   @map("business_activity")
+  representativeName      String?   @map("representative_name")
+  representativeTitle     String?   @map("representative_title")
+  representativeEmail     String?   @map("representative_email")
+  representativePhone     String?   @map("representative_phone")
+  representativeBirthDate DateTime? @map("representative_birth_date")
+  beneficialOwners        Json?     @map("beneficial_owners")
+  termsAccepted           Boolean   @default(false) @map("terms_accepted")
+  informationConfirmed    Boolean   @default(false) @map("information_confirmed")
+  submittedAt             DateTime? @map("submitted_at")
+  reviewedById            String?   @map("reviewed_by_id")
+  reviewedAt              DateTime? @map("reviewed_at")
+  decisionReason          String?   @map("decision_reason")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
 
   user       User                   @relation("CorporateKycApplicant", fields: [userId], references: [id], onDelete: Cascade)
   reviewedBy User?                  @relation("CorporateKycReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
@@ -796,6 +919,7 @@ model CorporateKycDocument {
   createdAt     DateTime @default(now()) @map("created_at")
 
   application CorporateKycApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
   @@index([applicationId, type])
   @@map("corporate_kyc_documents")
 }
@@ -811,6 +935,7 @@ model CorporateKycAuditLog {
 
   application CorporateKycApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   actor       User?                   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
   @@index([applicationId, createdAt])
   @@map("corporate_kyc_audit_logs")
 }
@@ -835,10 +960,11 @@ model PaymentTransaction {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
-  event   Event          @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  payer   User           @relation("PaymentPayer", fields: [payerId], references: [id], onDelete: Restrict)
-  payee   User           @relation("PaymentPayee", fields: [payeeId], references: [id], onDelete: Restrict)
-  refunds TicketRefund[]
+  event       Event             @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  payer       User              @relation("PaymentPayer", fields: [payerId], references: [id], onDelete: Restrict)
+  payee       User              @relation("PaymentPayee", fields: [payeeId], references: [id], onDelete: Restrict)
+  refunds     TicketRefund[]
+  ticketOrder EventTicketOrder?
 
   @@index([payerId, createdAt])
   @@index([payeeId, status, createdAt])
@@ -857,6 +983,7 @@ model Payout {
   processedAt DateTime?    @map("processed_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
   @@index([userId, status, requestedAt])
   @@map("payouts")
 }
@@ -892,8 +1019,8 @@ model Place {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  createdBy User? @relation("PlaceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy User? @relation("PlaceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdBy User?         @relation("PlaceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?         @relation("PlaceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   members   PlaceMember[]
   followers PlaceFollow[]
 
@@ -903,12 +1030,12 @@ model Place {
 }
 
 model PlaceMember {
-  placeId  String            @map("place_id")
-  userId   String            @map("user_id")
-  status   PlaceMemberStatus @default(invited)
-  role     PlaceMemberRole   @default(member)
-  createdAt DateTime         @default(now()) @map("created_at")
-  updatedAt DateTime         @updatedAt @map("updated_at")
+  placeId   String            @map("place_id")
+  userId    String            @map("user_id")
+  status    PlaceMemberStatus @default(invited)
+  role      PlaceMemberRole   @default(member)
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
 
   place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -933,17 +1060,17 @@ model PlaceFollow {
 }
 
 model MediaFile {
-  id           String           @id @default(uuid())
-  url          String
-  type         String           @default("image")
-  status       String           @default("active")
-  contentType  ReportTargetType @map("content_type")
-  contentId    String           @map("content_id")
-  uploadedById String?          @map("uploaded_by")
-  sortOrder    Int              @default(0) @map("sort_order")
-  isProfilePicture Boolean      @default(false) @map("is_profile_picture")
-  createdAt    DateTime         @default(now()) @map("created_at")
-  updatedAt    DateTime         @updatedAt @map("updated_at")
+  id               String           @id @default(uuid())
+  url              String
+  type             String           @default("image")
+  status           String           @default("active")
+  contentType      ReportTargetType @map("content_type")
+  contentId        String           @map("content_id")
+  uploadedById     String?          @map("uploaded_by")
+  sortOrder        Int              @default(0) @map("sort_order")
+  isProfilePicture Boolean          @default(false) @map("is_profile_picture")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
 
   uploadedBy User? @relation("MediaUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
 
@@ -976,26 +1103,26 @@ model ContentComment {
 }
 
 model PrivateMessage {
-  id          String   @id @default(uuid())
-  senderId    String?  @map("sender_id")
-  recipientId String?  @map("recipient_id")
-  body        String
-  replyToId   String?  @map("reply_to_id")
-  attachmentUrl  String? @map("attachment_url")
-  attachmentType String? @map("attachment_type")
-  attachmentName String? @map("attachment_name")
-  attachmentSize Int?    @map("attachment_size")
-  status      String   @default("active")
-  readAt      DateTime? @map("read_at")
-  editedAt    DateTime? @map("edited_at")
-  deletedAt   DateTime? @map("deleted_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id             String    @id @default(uuid())
+  senderId       String?   @map("sender_id")
+  recipientId    String?   @map("recipient_id")
+  body           String
+  replyToId      String?   @map("reply_to_id")
+  attachmentUrl  String?   @map("attachment_url")
+  attachmentType String?   @map("attachment_type")
+  attachmentName String?   @map("attachment_name")
+  attachmentSize Int?      @map("attachment_size")
+  status         String    @default("active")
+  readAt         DateTime? @map("read_at")
+  editedAt       DateTime? @map("edited_at")
+  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  sender    User? @relation("PrivateMessageSender", fields: [senderId], references: [id], onDelete: SetNull)
-  recipient User? @relation("PrivateMessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
-  replyTo   PrivateMessage?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies   PrivateMessage[] @relation("MessageReplies")
+  sender    User?             @relation("PrivateMessageSender", fields: [senderId], references: [id], onDelete: SetNull)
+  recipient User?             @relation("PrivateMessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+  replyTo   PrivateMessage?   @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   PrivateMessage[]  @relation("MessageReplies")
   reactions MessageReaction[]
 
   @@index([senderId, recipientId])
@@ -1154,7 +1281,7 @@ model Notification {
   readAt     DateTime? @map("read_at")
   createdAt  DateTime  @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   deliveries NotificationDelivery[]
 
   @@index([userId, readAt, createdAt])

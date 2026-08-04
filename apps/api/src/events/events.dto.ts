@@ -147,6 +147,11 @@ export class CreateEventDto {
   @IsUrl()
   externalRegistrationUrl?: string;
 
+  @IsOptional() @IsUrl() liveUrl?: string;
+  @IsOptional() @IsString() @MaxLength(3000) timeline?: string;
+  @IsOptional() @IsArray() lineup?: Array<{ title: string; startsAt: string; description?: string }>;
+  @IsOptional() @IsArray() ticketTypes?: Array<{ name: string; description?: string; price: number; currency: string; capacity?: number; saleStartsAt?: string; saleEndsAt?: string; gateOpensAt?: string; gateClosesAt?: string; status?: string }>;
+
   @IsOptional()
   @IsUrl()
   coverImageUrl?: string;

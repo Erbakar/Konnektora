@@ -36,6 +36,12 @@ export class EventsController {
     return this.eventsService.listManagedEvents(user);
   }
 
+  @Get("me/tickets")
+  @UseGuards(JwtAuthGuard)
+  listMyTickets(@CurrentUser() user: User) {
+    return this.eventsService.listMyTickets(user.id);
+  }
+
   @Patch("me/events/:id")
   @UseGuards(JwtAuthGuard)
   updateMyEvent(@Param("id") id: string, @Body() body: Partial<CreateEventDto>, @CurrentUser() user: User) {

@@ -4150,3 +4150,4 @@ select:focus-visible {
     animation-iteration-count: 1 !important;
   }
 }
+.event-stepper{display:flex;gap:.5rem;margin:1rem 0}.event-stepper button{width:2.25rem;height:2.25rem;border-radius:50%;border:1px solid var(--border-color,#d8dde6);background:#fff}.event-stepper button.active{background:#17223b;color:#fff}.event-step-actions{display:flex;justify-content:space-between;gap:.75rem;margin-top:1rem}.ticket-qr-list{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:.75rem}.ticket-qr-list>div{display:grid;gap:.25rem;text-align:center}.ticket-qr-list img{width:130px}.ticket-event-cover{width:110px;height:90px;object-fit:cover;border-radius:12px}

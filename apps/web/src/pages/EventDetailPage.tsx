@@ -4,7 +4,7 @@ import QRCode from "qrcode";
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
-import { confirmEventPayment, createBlock, createContentReport, createEventPayment, getEvent, getMyEventTicket, getUserSession, listReportRules, requestEventAttendance } from "../lib/api";
+import { confirmEventPayment, createBlock, createContentReport, createEventPayment, getEvent, getMyEventTicket, getUserSession, listEventTicketTypes, listReportRules, purchaseEventTickets, requestEventAttendance } from "../lib/api";
 
 export function EventDetailPage() {
   const { slug = "" } = useParams();
@@ -13,6 +13,8 @@ export function EventDetailPage() {
   const queryClient = useQueryClient();
   const [reportOpen, setReportOpen] = useState(false);
   const [ticketQr, setTicketQr] = useState<string | null>(null);
+  const [ticketPickerOpen, setTicketPickerOpen] = useState(false);
+  const [ticketQuantities, setTicketQuantities] = useState<Record<string, number>>({});
   const { data: event, isLoading } = useQuery({
     queryKey: ["event", slug],
     queryFn: () => getEvent(slug),
@@ -23,6 +25,8 @@ export function EventDetailPage() {
     queryFn: () => listReportRules("event"),
     enabled: Boolean(user)
   });
+  const ticketTypesQuery = useQuery({ queryKey: ["event-ticket-types", event?.id], queryFn: () => listEventTicketTypes(event!.id), enabled: Boolean(event) });
+  const ticketPurchase = useMutation({ mutationFn: ({ id, quantity }: { id: string; quantity: number }) => purchaseEventTickets(id, quantity), onSuccess: () => { setTicketPickerOpen(false); void ticketTypesQuery.refetch(); window.alert("Bilet satın alındı. Biletlerim sayfasından görüntüleyebilirsin."); } });
   const attendMutation = useMutation({
     mutationFn: requestEventAttendance
   });
@@ -84,6 +88,7 @@ export function EventDetailPage() {
         ))}
       </div>
       <div className="detail-actions">
+        {ticketTypesQuery.data?.length ? <button className="primary-action" onClick={() => setTicketPickerOpen(true)}><CreditCard size={18}/> Bilet al</button> : null}
         {user && event.price > 0 ? <button className="primary-action" disabled={paymentMutation.isPending || paymentMutation.isSuccess} onClick={() => paymentMutation.mutate()}><CreditCard size={18}/>{paymentMutation.isSuccess ? "Ödeme tamamlandı" : paymentMutation.isPending ? "Ödeniyor…" : `${new Intl.NumberFormat("tr-TR", { style: "currency", currency: event.currency }).format(event.price)} · Bilet al`}</button> : null}
         {user ? (
           <button
@@ -134,6 +139,7 @@ export function EventDetailPage() {
           </button>
         ) : null}
       </div>
+      {ticketPickerOpen ? <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Biletler"><div><button aria-label="Kapat" onClick={() => setTicketPickerOpen(false)}>×</button><h2>Biletler</h2><p>Satın aldığın biletlere Biletlerim sayfasından erişebilirsin.</p><div className="admin-list">{ticketTypesQuery.data?.map((type) => { const quantity = ticketQuantities[type.id] ?? 0; const unavailable = type.remaining <= 0 || type.status !== "active"; return <article className="admin-list-row" key={type.id}><div><strong>{type.name}</strong><span>{type.description}</span><span>{type.price ? new Intl.NumberFormat("tr-TR", { style: "currency", currency: type.currency }).format(type.price) : "Ücretsiz"} · {type.remaining} kaldı</span>{type.saleStartsAt || type.saleEndsAt ? <small>{type.saleStartsAt ? `${new Date(type.saleStartsAt).toLocaleString("tr-TR")} itibariyle` : ""}{type.saleEndsAt ? ` ${new Date(type.saleEndsAt).toLocaleString("tr-TR")} tarihine kadar` : ""}</small> : null}</div><div className="row-actions"><button disabled={quantity <= 0} onClick={() => setTicketQuantities((values) => ({ ...values, [type.id]: Math.max(0, quantity - 1) }))}>−</button><strong>{quantity}</strong><button disabled={unavailable || quantity >= Math.min(20, type.remaining)} onClick={() => setTicketQuantities((values) => ({ ...values, [type.id]: quantity + 1 }))}>+</button><button className="primary-action" disabled={unavailable || quantity < 1 || ticketPurchase.isPending} onClick={() => ticketPurchase.mutate({ id: type.id, quantity })}>{unavailable ? "Tükendi" : "Satın al"}</button></div></article>; })}</div>{ticketPurchase.isError ? <p className="form-error">Bilet satın alınamadı. Stok ve satış zamanını kontrol et.</p> : null}</div></div> : null}
       {paymentMutation.isError ? <p className="form-error">Ödeme tamamlanamadı. Lütfen ödeme bilgilerini kontrol edin.</p> : null}
       {reportOpen ? (
         <form
@@ -200,6 +206,9 @@ export function EventDetailPage() {
       {reportMutation.data ? <p className="form-success">Rapor alındı. Admin panelde incelenecek.</p> : null}
       {reportMutation.isError ? <p className="form-error">Rapor gönderilemedi. Lütfen tekrar dene.</p> : null}
       <p className="detail-copy"><RichText text={event.description}/></p>
+      {event.timeline ? <section className="admin-form"><h2>Overview</h2><p><RichText text={event.timeline} /></p>{event.liveUrl ? <a className="primary-action" href={event.liveUrl} rel="noreferrer" target="_blank">Canlı yayına katıl <ExternalLink size={18} /></a> : null}</section> : null}
+      {event.lineup?.length ? <section className="admin-form"><h2>Line up</h2><div className="admin-list">{event.lineup.map((item, index) => <article className="admin-list-row" key={`${item.startsAt}-${index}`}><div><strong>{item.title}</strong><span>{new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.startsAt))}</span>{item.description ? <span><RichText text={item.description} /></span> : null}</div></article>)}</div></section> : null}
+      {ticketTypesQuery.data?.length ? <section className="admin-form"><h2>Biletler</h2><p>{Math.min(...ticketTypesQuery.data.map((item) => item.price)) === Math.max(...ticketTypesQuery.data.map((item) => item.price)) ? `Bilet: ${new Intl.NumberFormat("tr-TR", { style: "currency", currency: ticketTypesQuery.data[0]!.currency }).format(ticketTypesQuery.data[0]!.price)}` : `Bilet: ${Math.min(...ticketTypesQuery.data.map((item) => item.price))} - ${Math.max(...ticketTypesQuery.data.map((item) => item.price))}`}</p><button className="primary-action" onClick={() => setTicketPickerOpen(true)}>Biletleri gör</button></section> : null}
       {event.externalRegistrationUrl ? (
         <a className="primary-action" href={event.externalRegistrationUrl} rel="noreferrer" target="_blank">
           Kayıt sayfası

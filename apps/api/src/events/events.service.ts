@@ -167,6 +167,11 @@ export class EventsService {
         language: input.language ?? "en",
         organizerName: input.organizerName ?? null,
         externalRegistrationUrl: input.externalRegistrationUrl ?? null,
+        liveUrl: input.liveUrl ?? null,
+        timeline: input.timeline ?? null,
+        lineup: input.lineup ?? [],
+        ticketTypes: input.ticketTypes ?? [],
+        ticketTypeRecords: input.ticketTypes?.length ? { create: input.ticketTypes.map((ticket, index) => ({ name: ticket.name, description: ticket.description, capacity: ticket.capacity ?? 1, price: ticket.price, currency: ticket.currency, saleStartsAt: ticket.saleStartsAt ? new Date(ticket.saleStartsAt) : null, saleEndsAt: ticket.saleEndsAt ? new Date(ticket.saleEndsAt) : null, gateOpensAt: ticket.gateOpensAt ? new Date(ticket.gateOpensAt) : null, gateClosesAt: ticket.gateClosesAt ? new Date(ticket.gateClosesAt) : null, status: ticket.status === "inactive" ? "inactive" : "active", sortOrder: index })) } : undefined,
         coverImageUrl: input.coverImageUrl ?? null,
         capacity: input.capacity ?? null,
         price: input.price ?? 0,
@@ -192,6 +197,11 @@ export class EventsService {
     await this.refreshTagUsageCounts(input.tagIds ?? []);
 
     return this.mapEvent(event);
+  }
+
+  async listMyTickets(userId: string) {
+    const participants = await this.prisma.eventParticipant.findMany({ where: { userId, status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] } }, include: { event: { include: { tags: { include: { tag: true } } } } }, orderBy: { event: { startsAt: "asc" } } });
+    return participants.map((item) => ({ ...this.mapEvent(item.event), participationStatus: item.status, checkedInAt: item.checkedInAt?.toISOString() ?? null }));
   }
 
   async listParticipants(eventId: string, user: User) {
@@ -418,6 +428,10 @@ export class EventsService {
       language: input.language,
       organizerName: input.organizerName,
       externalRegistrationUrl: input.externalRegistrationUrl,
+      liveUrl: input.liveUrl,
+      timeline: input.timeline,
+      lineup: input.lineup,
+      ticketTypes: input.ticketTypes,
       coverImageUrl: input.coverImageUrl,
       capacity: undefined,
       price: input.price,
