@@ -2930,18 +2930,22 @@ select:focus-visible {
 /* ── Panel & metric tweaks ── */
 
 .compact-metrics {
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
 }
 
 .compact-metrics .metric-card strong {
-  font-size: 24px;
+  font-size: clamp(22px, 2vw, 30px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .admin-panel {
   background: #ffffff;
   border: 1px solid #e1e8df;
-  border-radius: 10px !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.045) !important;
+  min-width: 0;
 }
 
 .policy-editor-grid {
@@ -2959,8 +2963,10 @@ select:focus-visible {
 
 .admin-content .metric-grid .metric-card {
   border: 1px solid #e1e8df;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  border-radius: 16px;
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.045);
+  min-width: 0;
+  padding: clamp(20px, 2vw, 28px);
 }
 
 .admin-content .metric-grid .metric-card strong {
@@ -2968,6 +2974,109 @@ select:focus-visible {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  max-width: 100%;
+}
+
+.admin-content > .admin-panel + .admin-panel,
+.admin-content > section + section {
+  margin-top: 24px;
+}
+
+.admin-content .admin-list-row,
+.admin-content .admin-list-row > div {
+  min-width: 0;
+}
+
+.admin-content .admin-list-row strong,
+.admin-content .admin-list-row span,
+.admin-content .form-help,
+.admin-content code {
+  overflow-wrap: anywhere;
+}
+
+.email-token-panel {
+  padding: clamp(24px, 3vw, 36px);
+}
+
+.email-token-panel .section-header.compact {
+  align-items: flex-start;
+  gap: 12px 24px;
+  margin-bottom: 24px;
+}
+
+.email-token-panel .section-header.compact h2 {
+  font-size: clamp(24px, 2.4vw, 34px);
+  line-height: 1.15;
+}
+
+.email-token-panel .compact-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(14px, 2vw, 24px);
+}
+
+.email-token-panel .metric-card {
+  align-content: start;
+  gap: 12px;
+  min-height: 190px;
+}
+
+.email-token-panel .metric-card > svg {
+  color: #1d6545;
+  height: 24px;
+  margin-bottom: 4px;
+  width: 24px;
+}
+
+.email-token-panel .metric-card > span {
+  color: #68776f;
+  font-size: 14px;
+}
+
+.email-token-flow-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.email-token-flow-list .admin-list-item {
+  border-radius: 14px;
+  padding: 4px;
+}
+
+.email-token-flow-list .admin-list-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 16px 18px 10px;
+}
+
+.email-token-flow-list .form-help {
+  line-height: 1.65;
+  margin: 0;
+  padding: 4px 18px 18px !important;
+}
+
+@media (max-width: 1080px) {
+  .email-token-panel .compact-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .email-token-panel {
+    padding: 20px;
+  }
+
+  .email-token-panel .compact-metrics,
+  .email-token-flow-list .admin-list-row {
+    grid-template-columns: 1fr;
+  }
+
+  .email-token-panel .metric-card {
+    min-height: 0;
+  }
+
+  .email-token-flow-list .status-pill {
+    justify-self: start;
+  }
 }
 
 /* ── UX helpers ── */

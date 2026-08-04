@@ -1775,7 +1775,7 @@ function CmsAdminPanel({
 
 function EmailTokenInfoPanel() {
   return (
-    <section className="admin-panel">
+    <section className="admin-panel email-token-panel">
       <div className="section-header compact">
         <h2>Email Token Akışları</h2>
         <span>3 akış · sistem yönetimli</span>
@@ -1799,7 +1799,7 @@ function EmailTokenInfoPanel() {
         </div>
       </div>
 
-      <div className="admin-list" style={{ marginTop: "18px" }}>
+      <div className="admin-list email-token-flow-list">
         <div className="admin-list-item">
           <div className="admin-list-row">
             <div>
