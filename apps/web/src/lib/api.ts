@@ -1145,6 +1145,12 @@ function getMockResponse<T>(path: string, schema: z.ZodType<T>, options: Request
   if (pathname === "/me/events" && method === "GET" && options.auth === "user") {
     return schema.parse(listMockUserEvents());
   }
+  if (pathname === "/me/tickets" && method === "GET" && options.auth === "user") return schema.parse(listMockUserEvents());
+  if (/^\/events\/[^/]+\/ticket-types$/.test(pathname) && method === "GET") return schema.parse([]);
+  if (pathname === "/me/owned-tickets" && method === "GET") return schema.parse([]);
+  if (/^\/ticket-types\/[^/]+\/purchase$/.test(pathname) && method === "POST") return schema.parse({ success: true });
+  if (pathname === "/me/tickets/transfer" && method === "POST") return schema.parse({ transferred: 1 });
+  if (/^\/me\/ticket-orders\/[^/]+\/refund$/.test(pathname) && method === "POST") return schema.parse({ status: "refunded" });
 
   if (pathname === "/places" && method === "GET") {
     return schema.parse(listMockPublicPlaces(new URLSearchParams(queryString)));
@@ -4161,10 +4167,14 @@ function createMockEvent(input: AdminEventInput, fallbackOrganizerName = "Konnek
     language: input.language ?? "en",
     organizerName: input.organizerName || fallbackOrganizerName,
     externalRegistrationUrl: input.externalRegistrationUrl || null,
+    liveUrl: input.liveUrl || null,
+    timeline: input.timeline || null,
+    lineup: input.lineup ?? [],
+    ticketTypes: input.ticketTypes ?? [],
     coverImageUrl: input.coverImageUrl || null,
-    capacity: null,
-    price: 0,
-    currency: "TRY",
+    capacity: input.capacity ?? null,
+    price: input.price ?? 0,
+    currency: (input.currency === "EUR" || input.currency === "USD" || input.currency === "GBP" ? input.currency : "TRY"),
     tags: getTagsByIds(input.tagIds ?? [])
   };
 
@@ -4220,6 +4230,10 @@ function updateMockEvent(id: string, input: Partial<AdminEventInput>): Event {
       organizerName: input.organizerName === undefined ? event.organizerName : input.organizerName || "Konnektora Admin",
       externalRegistrationUrl:
         input.externalRegistrationUrl === undefined ? event.externalRegistrationUrl : input.externalRegistrationUrl || null,
+      liveUrl: input.liveUrl === undefined ? event.liveUrl : input.liveUrl || null,
+      timeline: input.timeline === undefined ? event.timeline : input.timeline || null,
+      lineup: input.lineup ?? event.lineup,
+      ticketTypes: input.ticketTypes ?? event.ticketTypes,
       coverImageUrl: input.coverImageUrl === undefined ? event.coverImageUrl : input.coverImageUrl || null,
       capacity: event.capacity,
       tags: input.tagIds ? getTagsByIds(input.tagIds) : event.tags
@@ -5091,7 +5105,16 @@ export type AdminEventInput = {
   country?: string;
   language?: string;
   organizerName?: string;
+  locationName?: string;
+  locationAddress?: string;
   externalRegistrationUrl?: string;
+  liveUrl?: string;
+  timeline?: string;
+  lineup?: Array<{ title: string; startsAt: string; description?: string }>;
+  ticketTypes?: Array<{ name: string; description?: string; price: number; currency: string; capacity?: number; saleStartsAt?: string; saleEndsAt?: string; gateOpensAt?: string; gateClosesAt?: string; status?: string }>;
+  price?: number;
+  currency?: string;
+  capacity?: number;
   coverImageUrl?: string;
   status?: string;
   tagIds?: string[];
@@ -5223,6 +5246,20 @@ export function createUserEvent(input: AdminEventInput): Promise<Event> {
 export function listMyEvents(): Promise<Event[]> {
   return requestJson("/me/events", z.array(eventSchema), { auth: "user" });
 }
+
+export function listMyTickets(): Promise<Array<Event & { participationStatus?: string; checkedInAt?: string | null }>> {
+  return requestJson("/me/tickets", eventListSchema.shape.items, { auth: "user" });
+}
+
+export type TicketTypeRecord = { id: string; eventId: string; name: string; description: string | null; capacity: number; soldCount: number; remaining: number; price: number; currency: string; saleStartsAt: string | null; saleEndsAt: string | null; gateOpensAt: string | null; gateClosesAt: string | null; status: string };
+export type OwnedTicketOrder = { id: string; status: string; quantity: number; unitPrice: number; totalAmount: number; currency: string; purchasedAt: string | null; event: { id: string; title: string; slug: string; startsAt: string; endsAt: string | null; city: string | null; country: string | null; coverImageUrl: string | null }; ticketType: TicketTypeRecord; tickets: Array<{ id: string; status: string; createdAt: string; usedAt: string | null; qrPayload: string }> };
+const ticketTypeRecordsSchema = z.array(z.object({ id: z.string(), eventId: z.string(), name: z.string(), description: z.string().nullable(), capacity: z.number(), soldCount: z.number(), remaining: z.number(), price: z.number(), currency: z.string(), saleStartsAt: z.coerce.string().nullable(), saleEndsAt: z.coerce.string().nullable(), gateOpensAt: z.coerce.string().nullable(), gateClosesAt: z.coerce.string().nullable(), status: z.string() }));
+const ownedTicketOrdersSchema = z.array(z.any()).transform((value) => value as OwnedTicketOrder[]);
+export function listEventTicketTypes(eventId: string): Promise<TicketTypeRecord[]> { return requestJson(`/events/${eventId}/ticket-types`, ticketTypeRecordsSchema); }
+export function purchaseEventTickets(ticketTypeId: string, quantity: number): Promise<unknown> { return requestJson(`/ticket-types/${ticketTypeId}/purchase`, z.any(), { auth: "user", method: "POST", body: JSON.stringify({ quantity }) }); }
+export function listOwnedTickets(): Promise<OwnedTicketOrder[]> { return requestJson("/me/owned-tickets", ownedTicketOrdersSchema, { auth: "user" }); }
+export function transferOwnedTickets(input: { ticketIds: string[]; username?: string; email?: string; phone?: string; name?: string }): Promise<unknown> { return requestJson("/me/tickets/transfer", z.any(), { auth: "user", method: "POST", body: JSON.stringify(input) }); }
+export function refundTicketOrder(id: string, reason?: string): Promise<unknown> { return requestJson(`/me/ticket-orders/${id}/refund`, z.any(), { auth: "user", method: "POST", body: JSON.stringify({ reason }) }); }
 
 export function updateMyEvent(id: string, input: Partial<AdminEventInput>): Promise<Event> {
   return requestJson(`/me/events/${id}`, eventSchema, {

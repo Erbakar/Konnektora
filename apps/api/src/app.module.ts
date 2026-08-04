@@ -24,6 +24,7 @@ import { PostsModule } from "./posts/posts.module";
 import { FinanceModule } from "./finance/finance.module";
 import { CorporateKycModule } from "./corporate-kyc/corporate-kyc.module";
 import { NotificationsModule } from "./notifications/notifications.module";
+import { TicketsModule } from "./tickets/tickets.module";
 
 @Module({
   imports: [
@@ -50,7 +51,8 @@ import { NotificationsModule } from "./notifications/notifications.module";
     PlacesModule,
     ReportsModule,
     SocialModule,
-    TagsModule
+    TagsModule,
+    TicketsModule
   ],
   controllers: [HealthController]
 })

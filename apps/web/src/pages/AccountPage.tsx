@@ -21,6 +21,8 @@ export function AccountPage() {
   const [pendingPhone, setPendingPhone] = useState<string | null>(null);
   const [developmentPhoneCode, setDevelopmentPhoneCode] = useState<string | null>(null);
   const [commentTagId, setCommentTagId] = useState("");
+  const [eventFormat, setEventFormat] = useState("offline");
+  const [eventStep, setEventStep] = useState(1);
   const [notice, setNotice] = useState<{
     tone: "success" | "error";
     message: string;
@@ -160,7 +162,12 @@ export function AccountPage() {
   });
 
   const eventMutation = useMutation({
-    mutationFn: createUserEvent,
+    mutationFn: async (input: AdminEventInput & { managerEmails?: string[] }) => {
+      const { managerEmails = [], ...eventInput } = input;
+      const created = await createUserEvent(eventInput);
+      await Promise.allSettled(managerEmails.map((email) => inviteEventParticipant(created.id, { email, role: "manager" }, "user")));
+      return created;
+    },
     onSuccess: () => {
       setNotice({
         tone: "success",
@@ -368,28 +375,59 @@ export function AccountPage() {
 
   function handleEventSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const invalidControl = Array.from(event.currentTarget.elements).find(
+      (element): element is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement =>
+        element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement
+          ? !element.checkValidity()
+          : false,
+    );
+    if (invalidControl) {
+      const invalidStep = Number(invalidControl.closest<HTMLElement>("[data-event-step]")?.dataset.eventStep || 1);
+      setEventStep(invalidStep);
+      setNotice({ tone: "error", message: `Lütfen ${invalidStep}. adımdaki zorunlu alanları kontrol edin.` });
+      window.setTimeout(() => invalidControl.reportValidity(), 0);
+      return;
+    }
     const form = new FormData(event.currentTarget);
     const startsAt = String(form.get("startsAt"));
+    const endsAt = String(form.get("endsAt") || "");
+    if (!startsAt || Number.isNaN(new Date(startsAt).getTime()) || new Date(startsAt).getTime() < Date.now() || (endsAt && new Date(endsAt) <= new Date(startsAt))) {
+      setNotice({ tone: "error", message: "Başlangıç gelecekte olmalı; bitiş zamanı başlangıçtan sonra olmalıdır." });
+      return;
+    }
     const coverImageUrl = String(form.get("coverImageUrl") || "");
-    const input: AdminEventInput = {
+    const input: AdminEventInput & { managerEmails?: string[] } = {
       title: String(form.get("title")),
       description: String(form.get("description")),
       startsAt: new Date(startsAt).toISOString(),
+      endsAt: endsAt ? new Date(endsAt).toISOString() : undefined,
       format: String(form.get("format") || "online"),
       visibility: String(form.get("visibility") || "open"),
       status: "published",
       city: String(form.get("city") || ""),
       country: String(form.get("country") || ""),
+      locationName: String(form.get("locationName") || "") || undefined,
+      locationAddress: String(form.get("locationAddress") || "") || undefined,
       organizerName: user?.name ?? "Konnektora User",
       tagIds: form.getAll("tagIds").map(String),
+      liveUrl: String(form.get("liveUrl") || "") || undefined,
+      timeline: String(form.get("timeline") || "") || undefined,
+      lineup: form.getAll("lineupTitle").map((title, index) => ({ title: String(title).trim(), startsAt: String(form.getAll("lineupStartsAt")[index] || ""), description: String(form.getAll("lineupDescription")[index] || "") || undefined })).filter((item) => item.title && item.startsAt).map((item) => ({ ...item, startsAt: new Date(item.startsAt).toISOString() })),
+      ticketTypes: form.getAll("ticketName").map((name, index) => { const value = (field: string) => String(form.getAll(field)[index] || ""); return { name: String(name).trim(), description: value("ticketDescription") || undefined, price: Number(value("ticketPrice") || 0), currency: value("ticketCurrency") || "TRY", capacity: Number(value("ticketCapacity") || 0) || undefined, saleStartsAt: value("ticketSaleStartsAt") ? new Date(value("ticketSaleStartsAt")).toISOString() : undefined, saleEndsAt: value("ticketSaleEndsAt") ? new Date(value("ticketSaleEndsAt")).toISOString() : undefined, gateOpensAt: value("ticketGateOpensAt") ? new Date(value("ticketGateOpensAt")).toISOString() : undefined, gateClosesAt: value("ticketGateClosesAt") ? new Date(value("ticketGateClosesAt")).toISOString() : undefined }; }).filter((item) => item.name),
+      managerEmails: String(form.get("managerEmails") || "").split(",").map((item) => item.trim()).filter(Boolean),
     };
 
     if (coverImageUrl) {
       input.coverImageUrl = coverImageUrl;
     }
+    const primaryTicket = input.ticketTypes?.[0];
+    if (primaryTicket) {
+      input.price = primaryTicket.price;
+      input.currency = primaryTicket.currency;
+      input.capacity = primaryTicket.capacity;
+    }
 
     eventMutation.mutate(input);
-    event.currentTarget.reset();
   }
 
   function handleTagSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1081,8 +1119,11 @@ export function AccountPage() {
                 <p className="muted">Yorumları görmek için bir tag seçin.</p>
               )}
             </section>
-            <form className="admin-form" onSubmit={handleEventSubmit}>
+            <form className="admin-form" noValidate onSubmit={handleEventSubmit}>
               <h2>Etkinlik oluştur</h2>
+              <div className="event-stepper" aria-label="Etkinlik oluşturma adımları">{[1,2,3,4,5,6].map((step) => <button className={eventStep === step ? "active" : ""} key={step} onClick={() => setEventStep(step)} type="button" aria-label={`Adım ${step}`}>{step}</button>)}</div>
+              <div data-event-step="1" hidden={eventStep !== 1}>
+              <h3>Adım 1: Temel bilgiler</h3>
               <label>
                 Başlık
                 <input name="title" placeholder="Community Breakfast" required minLength={3} />
@@ -1094,11 +1135,12 @@ export function AccountPage() {
               <div className="form-grid">
                 <label>
                   Başlangıç
-                  <input name="startsAt" required type="datetime-local" />
+                  <input min={new Date().toISOString().slice(0, 16)} name="startsAt" required type="datetime-local" />
                 </label>
+                <label>Bitiş<input min={new Date().toISOString().slice(0, 16)} name="endsAt" type="datetime-local" /><span className="form-help">İsteğe bağlıdır; başlangıçtan önce olamaz.</span></label>
                 <label>
                   Format
-                  <select name="format" defaultValue="offline">
+                  <select name="format" value={eventFormat} onChange={(event) => setEventFormat(event.target.value)}>
                     <option value="online">Online</option>
                     <option value="offline">Offline</option>
                     <option value="hybrid">Hybrid</option>
@@ -1112,21 +1154,22 @@ export function AccountPage() {
                     <option value="invite_only">Invite only</option>
                   </select>
                 </label>
-                <label>
-                  Şehir
-                  <input name="city" placeholder="Istanbul" />
-                </label>
-                <label>
-                  Ülke
-                  <input name="country" placeholder="Turkey" />
-                </label>
               </div>
+              <div className="event-step-actions"><button className="primary-action" onClick={() => setEventStep(2)} type="button">Sonraki</button></div>
+              </div>
+              <div data-event-step="2" hidden={eventStep !== 2}>
+              <h3>Adım 2: Etkinlik yeri bilgileri</h3>
+              {eventFormat !== "online" ? <div className="form-grid"><label>Mekân adı<input name="locationName" /></label><label>Adres<input name="locationAddress" /></label><label>Şehir<input name="city" placeholder="Istanbul" /></label><label>Ülke<input name="country" placeholder="Turkey" /></label></div> : null}
+              {eventFormat !== "offline" ? <><label>Live URL<input name="liveUrl" required type="url" placeholder="https://..." /></label><label>Event timeline*<textarea name="timeline" required rows={4} /></label></> : null}
+              <div className="event-step-actions"><button onClick={() => setEventStep(1)} type="button">Geri</button><button className="primary-action" onClick={() => setEventStep(3)} type="button">Sonraki</button></div>
+              </div>
+              <div data-event-step="3" hidden={eventStep !== 3}>
               <label>
                 Kapak görseli URL'si
                 <input name="coverImageUrl" placeholder="https://images.unsplash.com/..." type="url" />
               </label>
               <fieldset className="tag-fieldset">
-                <legend>Tag'ler</legend>
+                <legend>Adım 3: Etkinlik etiketleri</legend>
                 {tags.map((tag) => (
                   <label key={tag.id}>
                     <input defaultChecked={interestTagIds.includes(tag.id)} name="tagIds" type="checkbox" value={tag.id} />
@@ -1134,10 +1177,27 @@ export function AccountPage() {
                   </label>
                 ))}
               </fieldset>
+              <div className="event-step-actions"><button onClick={() => setEventStep(2)} type="button">Geri</button><button className="primary-action" onClick={() => setEventStep(4)} type="button">Sonraki</button></div>
+              </div>
+              <div data-event-step="4" hidden={eventStep !== 4}>
+              <h3>Adım 4: Etkinlik yöneticileri</h3>
+              <label>Yönetici e-postaları<input name="managerEmails" placeholder="yonetici@example.com, ikinci@example.com" /><span className="form-help">Birden fazla adresi virgülle ayır.</span></label>
+              <div className="event-step-actions"><button onClick={() => setEventStep(3)} type="button">Geri</button><button className="primary-action" onClick={() => setEventStep(5)} type="button">Sonraki</button></div>
+              </div>
+              <div data-event-step="5" hidden={eventStep !== 5}>
+              <h3>Adım 5: Etkinlik programı / Line up</h3>
+              {[0, 1, 2].map((index) => <div className="form-grid" key={`lineup-${index}`}><label>Program başlığı<input name="lineupTitle" /></label><label>Başlangıç<input name="lineupStartsAt" type="datetime-local" /></label><label>Açıklama<input name="lineupDescription" /></label></div>)}
+              <div className="event-step-actions"><button onClick={() => setEventStep(4)} type="button">Geri</button><button className="primary-action" onClick={() => setEventStep(6)} type="button">Sonraki</button></div>
+              </div>
+              <div data-event-step="6" hidden={eventStep !== 6}>
+              <h3>Adım 6: Etkinlik biletleri</h3>
+              {[0, 1, 2].map((index) => <div className="form-grid" key={`ticket-${index}`}><label>Bilet adı<input name="ticketName" /></label><label>Açıklama<input name="ticketDescription" /></label><label>Fiyat<input min="0" name="ticketPrice" step="0.01" type="number" /></label><label>Para birimi<select name="ticketCurrency">{["TRY","USD","EUR","GBP","CAD","SGD","AED","HKD","INR","BRL","KRW","SAR","NZD","ZAR","CHF","JPY","ARS","AUD"].map((currency) => <option key={currency}>{currency}</option>)}</select></label><label>Kontenjan<input min="1" name="ticketCapacity" type="number" /></label><label>Satış başlangıcı<input name="ticketSaleStartsAt" type="datetime-local" /></label><label>Satış bitişi<input name="ticketSaleEndsAt" type="datetime-local" /></label><label>Gate açılışı<input name="ticketGateOpensAt" type="datetime-local" /></label><label>Gate kapanışı<input name="ticketGateClosesAt" type="datetime-local" /></label></div>)}
               <button className="secondary-action" disabled={eventMutation.isPending} type="submit">
                 <Plus size={18} />
                 Etkinlik yayınla
               </button>
+              <div className="event-step-actions"><button onClick={() => setEventStep(5)} type="button">Geri</button></div>
+              </div>
             </form>
           </div>
         </div>
@@ -1260,25 +1320,13 @@ function ProfileMediaPanel({ media, userId }: { media: ProfileMedia[]; userId: s
         <h2>Profil fotoğrafları</h2>
         <span>{media.length} / 50 medya</span>
       </div>
-      <form
-        className="guest-invite-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const input = event.currentTarget.elements.namedItem("profileMedia") as HTMLInputElement;
-          const files = Array.from(input.files ?? []).slice(0, Math.max(0, 50 - media.length));
-          files.forEach((file) => uploadMutation.mutate(file));
-          event.currentTarget.reset();
-        }}
-      >
+      <div className="guest-invite-form">
         <label>
           Yeni fotoğraf veya video
-          <input accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" multiple name="profileMedia" required type="file" />
+          <input accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" disabled={isPending || media.length >= 50} multiple name="profileMedia" type="file" onChange={(event) => { const files = Array.from(event.currentTarget.files ?? []).slice(0, Math.max(0, 50 - media.length)); files.forEach((file) => uploadMutation.mutate(file)); event.currentTarget.value = ""; }} />
         </label>
-        <button className="secondary-action" disabled={isPending || media.length >= 50} type="submit">
-          <Image size={16} />
-          {uploadMutation.isPending ? "Yükleniyor…" : "Albümüne yükle"}
-        </button>
-      </form>
+        {uploadMutation.isPending ? <span className="form-help">Yükleniyor…</span> : null}
+      </div>
       {media.length === 0 ? <p className="form-help">Profilini tamamlamak için ilk olarak bir fotoğraf yükle.</p> : null}
       {notice ? <p className={notice.tone === "success" ? "form-success" : "form-error"}>{notice.message}</p> : null}
       <div className="profile-media-grid">
