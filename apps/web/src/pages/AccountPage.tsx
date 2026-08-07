@@ -3,7 +3,6 @@ import {
   Check,
   ClipboardCheck,
   GripVertical,
-  Image,
   LogOut,
   Plus,
   Trash2,
