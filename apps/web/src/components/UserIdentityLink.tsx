@@ -1,0 +1,3 @@
+import { Link } from "react-router-dom";
+export function userProfilePath(user: { id: string; username?: string | null }) { return user.username ? `/users/${encodeURIComponent(user.username)}` : `/users/id/${encodeURIComponent(user.id)}`; }
+export function UserIdentityLink({ user, className, avatarClassName, showName = true }: { user: { id: string; name: string; username?: string | null; avatarUrl?: string | null }; className?: string; avatarClassName?: string; showName?: boolean }) { return <Link className={className} to={userProfilePath(user)}><span className={avatarClassName}>{user.avatarUrl ? <img alt="" src={user.avatarUrl}/> : user.name.slice(0, 1).toUpperCase()}</span>{showName ? <span>{user.name}</span> : null}</Link>; }

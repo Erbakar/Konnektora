@@ -19,3 +19,12 @@ export class CreatePaymentDto { @IsString() @MinLength(8) @MaxLength(120) idempo
 export class ConfirmPaymentDto { @IsString() @MinLength(8) @MaxLength(200) paymentMethodToken!: string; }
 export class RefundPaymentDto { @IsOptional() @Type(() => Number) @IsNumber() @Min(0.01) amount?: number; @IsOptional() @IsString() @MaxLength(300) reason?: string; }
 export class PayoutDto { @Type(() => Number) @IsNumber() @Min(1) amount!: number; }
+export class BusinessPlanDto {
+  @IsIn(["starter", "growth", "scale"]) plan!: "starter" | "growth" | "scale";
+  @IsOptional() @IsString() @MinLength(8) @MaxLength(200) paymentMethodToken?: string;
+}
+
+export class MemberPlanDto {
+  @IsIn(["free", "plus", "premium"]) plan!: "free" | "plus" | "premium";
+  @IsOptional() @IsString() paymentMethodToken?: string;
+}

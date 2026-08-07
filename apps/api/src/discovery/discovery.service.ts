@@ -13,13 +13,22 @@ export class DiscoveryService {
     const city = query.city?.trim() || viewer?.city || undefined;
     const country = query.country?.trim() || viewer?.country || undefined;
     const userWhere = { status: "active" as const, role: "user" as const, ...(blockedIds.length ? { id: { notIn: blockedIds } } : {}) };
-    const localWhere = city ? { city: { equals: city, mode: "insensitive" as const } } : country ? { country: { equals: country, mode: "insensitive" as const } } : {};
-    let [popularMembers, newMembers, localEvents, trendingTags, popularPlaces] = await Promise.all([
+    const localWhere = query.scope === "global" ? {} : city ? { city: { equals: city, mode: "insensitive" as const } } : country ? { country: { equals: country, mode: "insensitive" as const } } : {};
+    const trendLocationWhere = query.scope === "global" || (!city && !country) ? {} : {
+      OR: [
+        { events: { some: { event: { ...(city ? { city: { equals: city, mode: "insensitive" as const } } : { country: { equals: country, mode: "insensitive" as const } }) } } } },
+        { places: { some: { place: { ...(city ? { city: { equals: city, mode: "insensitive" as const } } : { country: { equals: country, mode: "insensitive" as const } }) } } } },
+        { interestedUsers: { some: { user: { ...(city ? { city: { equals: city, mode: "insensitive" as const } } : { country: { equals: country, mode: "insensitive" as const } }) } } } }
+      ]
+    };
+    const activeSince = new Date(Date.now() - 15 * 60_000);
+    let [popularMembers, newMembers, localEvents, trendingTags, popularPlaces, activeUserCount] = await Promise.all([
       this.prisma.user.findMany({ where: { ...userWhere, ...localWhere }, select: userSelect, orderBy: { followerCount: "desc" }, take: 8 }),
       this.prisma.user.findMany({ where: { ...userWhere, ...localWhere }, select: userSelect, orderBy: { createdAt: "desc" }, take: 8 }),
       this.prisma.event.findMany({ where: { status: "published", startsAt: { gte: new Date() }, ...localWhere }, orderBy: { startsAt: "asc" }, take: 8 }),
-      this.prisma.tag.findMany({ where: { status: "active" }, orderBy: { usageCount: "desc" }, take: 10 }),
-      this.prisma.place.findMany({ where: { status: "active", ...localWhere }, orderBy: { followerCount: "desc" }, take: 8 })
+      this.prisma.tag.findMany({ where: { status: "active", ...trendLocationWhere }, orderBy: { usageCount: "desc" }, take: 10 }),
+      this.prisma.place.findMany({ where: { status: "active", ...localWhere }, orderBy: { followerCount: "desc" }, take: 8 }),
+      this.prisma.user.count({ where: { ...userWhere, ...localWhere, lastOnlineAt: { gte: activeSince } } })
     ]);
     const [globalPopularMembers, globalNewMembers, globalEvents, globalPlaces] = await Promise.all([
       popularMembers.length ? Promise.resolve([]) : this.prisma.user.findMany({ where: userWhere, select: userSelect, orderBy: { followerCount: "desc" }, take: 8 }),
@@ -58,6 +67,9 @@ export class DiscoveryService {
       localEvents: localEvents.map((item) => this.eventItem(item)),
       trendingTags: trendingTags.map((item) => this.tagItem(item)),
       popularPlaces: popularPlaces.map((item) => this.placeItem(item)),
+      activeUserCount,
+      scope: query.scope ?? "local",
+      location: city || country || null,
       activities
     };
   }

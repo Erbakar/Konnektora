@@ -29,6 +29,24 @@ export class ContentService {
     });
   }
 
+  async createContentMedia(targetType: ReportTargetType, targetId: string, user: User, url: string, type: "image" | "video") {
+    if (targetType !== ReportTargetType.event && targetType !== ReportTargetType.place) {
+      throw new BadRequestException("Bu içerik türüne medya yüklenemez.");
+    }
+    if (targetType === ReportTargetType.event) {
+      const event = await this.prisma.event.findUnique({ where: { id: targetId }, select: { createdById: true } });
+      if (!event) throw new NotFoundException("Etkinlik bulunamadı.");
+      if (event.createdById !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu etkinliğe medya yükleme yetkiniz yok.");
+    } else {
+      const place = await this.prisma.place.findUnique({ where: { id: targetId }, select: { createdById: true } });
+      if (!place) throw new NotFoundException("Mekân bulunamadı.");
+      if (place.createdById !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu mekâna medya yükleme yetkiniz yok.");
+    }
+    const count = await this.prisma.mediaFile.count({ where: { contentType: targetType, contentId: targetId, status: "active" } });
+    if (count >= 20) throw new BadRequestException("Bir içerikte en fazla 20 medya bulunabilir.");
+    return this.prisma.mediaFile.create({ data: { url, type, contentType: targetType, contentId: targetId, uploadedById: user.id, sortOrder: count } });
+  }
+
   listProfileMedia(userId: string) {
     return this.prisma.mediaFile.findMany({
       where: { uploadedById: userId, contentType: ReportTargetType.user, contentId: userId, status: "active" },
@@ -125,11 +143,11 @@ export class ContentService {
       where: { status: "active", targetType, targetId, parentId: null },
       orderBy: [{ createdAt: "desc" }],
       include: {
-        author: { select: { id: true, email: true, name: true, role: true, status: true } },
+        author: { select: { id: true, email: true, name: true, username: true, role: true, status: true } },
         replies: {
           where: { status: "active" },
           orderBy: [{ createdAt: "asc" }],
-          include: { author: { select: { id: true, email: true, name: true, role: true, status: true } } }
+          include: { author: { select: { id: true, email: true, name: true, username: true, role: true, status: true } } }
         }
       }
     });

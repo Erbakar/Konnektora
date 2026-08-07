@@ -462,9 +462,9 @@ export function OnboardingPage() {
             <div className="onboarding-people">
               {suggestions.data?.map((member) => (
                 <article key={member.id}>
-                  <span>{member.name.slice(0, 1)}</span>
+                  {member.username ? <Link to={`/users/${member.username}`}>{member.name.slice(0, 1)}</Link> : <span>{member.name.slice(0, 1)}</span>}
                   <div>
-                    <strong>{member.username ? `@${member.username}` : member.name}</strong>
+                    <strong>{member.username ? <Link to={`/users/${member.username}`}>@{member.username}</Link> : member.name}</strong>
                     <small>
                       {member.commonTagCount} ortak ilgi · {member.followerCount} takipçi
                     </small>

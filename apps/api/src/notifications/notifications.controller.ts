@@ -4,7 +4,7 @@ import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RequirePermissions } from "../auth/permissions";
-import { RegisterPushSubscriptionDto } from "./notifications.dto";
+import { ContentNotificationDto, RegisterPushSubscriptionDto } from "./notifications.dto";
 import { NotificationsService } from "./notifications.service";
 
 @Controller("notifications")
@@ -26,6 +26,18 @@ export class NotificationsController {
   @UseGuards(JwtAuthGuard)
   remove(@CurrentUser() user: User, @Body("endpoint") endpoint: string) {
     return this.notifications.removePushSubscription(user.id, endpoint);
+  }
+
+  @Get("content/:targetType/:targetId")
+  @UseGuards(JwtAuthGuard)
+  contentStatus(@CurrentUser() user: User, @Param("targetType") targetType: string, @Param("targetId") targetId: string) {
+    return this.notifications.getContentSubscription(user.id, targetType, targetId);
+  }
+
+  @Post("content/:targetType/:targetId")
+  @UseGuards(JwtAuthGuard)
+  contentStatusUpdate(@CurrentUser() user: User, @Param("targetType") targetType: string, @Param("targetId") targetId: string, @Body() body: ContentNotificationDto) {
+    return this.notifications.setContentSubscription(user.id, targetType, targetId, body.enabled);
   }
 }
 

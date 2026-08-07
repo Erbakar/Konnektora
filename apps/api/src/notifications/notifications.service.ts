@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { DeliveryChannel, NotificationTopic } from "@prisma/client";
 import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -71,6 +71,29 @@ export class NotificationsService {
 
     await Promise.all(channels.map((item) => this.deliver(notification.id, item, user, input)));
     return notification;
+  }
+
+  async getContentSubscription(userId: string, targetType: string, targetId: string) {
+    this.assertContentTargetType(targetType);
+    const subscription = await this.prisma.contentNotificationSubscription.findUnique({ where: { userId_targetType_targetId: { userId, targetType, targetId } } });
+    return { enabled: subscription?.enabled ?? false };
+  }
+
+  async setContentSubscription(userId: string, targetType: string, targetId: string, enabled: boolean) {
+    this.assertContentTargetType(targetType);
+    const model = targetType === "tag" ? this.prisma.tag : targetType === "event" ? this.prisma.event : this.prisma.place;
+    const target = await (model as any).findUnique({ where: { id: targetId }, select: { id: true } });
+    if (!target) throw new NotFoundException("Bildirim hedefi bulunamadı.");
+    const subscription = await this.prisma.contentNotificationSubscription.upsert({
+      where: { userId_targetType_targetId: { userId, targetType, targetId } },
+      create: { userId, targetType, targetId, enabled },
+      update: { enabled }
+    });
+    return { enabled: subscription.enabled };
+  }
+
+  private assertContentTargetType(targetType: string) {
+    if (!["tag", "event", "place"].includes(targetType)) throw new BadRequestException("Bildirim hedef türü geçersiz.");
   }
 
   async registerPushSubscription(userId: string, input: RegisterPushSubscriptionDto, userAgent?: string) {

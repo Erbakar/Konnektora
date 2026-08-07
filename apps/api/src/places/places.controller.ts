@@ -1,9 +1,27 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { User } from "@prisma/client";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
-import { CreatePlaceDto, InvitePlaceMemberDto, PlaceQueryDto, RespondPlaceInviteDto, UpdatePlaceDto, UpdatePlaceMemberDto } from "./places.dto";
+import {
+  CreatePlaceDto,
+  InvitePlaceMemberDto,
+  PlaceQueryDto,
+  RespondPlaceInviteDto,
+  UpdatePlaceDto,
+  UpdatePlaceMemberDto,
+} from "./places.dto";
 import { PlacesService } from "./places.service";
 
 @Controller()
@@ -22,6 +40,16 @@ export class PlacesController {
     return this.placesService.getBySlug(slug, user?.id);
   }
 
+  @Get("place-stats/:id")
+  stats(@Param("id") id: string) {
+    return this.placesService.getInteractionStats(id);
+  }
+
+  @Get("places/:id/related-users")
+  relatedUsers(@Param("id") id: string) {
+    return this.placesService.listRelatedUsers(id);
+  }
+
   @Post("places")
   @UseGuards(JwtAuthGuard)
   create(@Body() body: CreatePlaceDto, @CurrentUser() user: User) {
@@ -36,7 +64,11 @@ export class PlacesController {
 
   @Patch("me/places/:id")
   @UseGuards(JwtAuthGuard)
-  update(@Param("id") id: string, @Body() body: UpdatePlaceDto, @CurrentUser() user: User) {
+  update(
+    @Param("id") id: string,
+    @Body() body: UpdatePlaceDto,
+    @CurrentUser() user: User,
+  ) {
     return this.placesService.update(id, body, user);
   }
 
@@ -66,19 +98,52 @@ export class PlacesController {
 
   @Post("places/:id/invite")
   @UseGuards(JwtAuthGuard)
-  invite(@Param("id") id: string, @Body() body: InvitePlaceMemberDto, @CurrentUser() user: User) {
+  invite(
+    @Param("id") id: string,
+    @Body() body: InvitePlaceMemberDto,
+    @CurrentUser() user: User,
+  ) {
     return this.placesService.invite(id, body, user);
   }
 
   @Patch("places/:id/members/:userId")
   @UseGuards(JwtAuthGuard)
-  updateMember(@Param("id") id: string, @Param("userId") userId: string, @Body() body: UpdatePlaceMemberDto, @CurrentUser() user: User) {
+  updateMember(
+    @Param("id") id: string,
+    @Param("userId") userId: string,
+    @Body() body: UpdatePlaceMemberDto,
+    @CurrentUser() user: User,
+  ) {
     return this.placesService.updateMember(id, userId, body, user);
+  }
+
+  @Post("places/:id/members/:userId/check-in")
+  @UseGuards(JwtAuthGuard)
+  checkIn(
+    @Param("id") id: string,
+    @Param("userId") userId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.placesService.checkInMember(id, userId, user);
+  }
+
+  @Post("places/:id/check-in/scan")
+  @UseGuards(JwtAuthGuard)
+  scanCheckIn(
+    @Param("id") id: string,
+    @Body() body: { payload: string },
+    @CurrentUser() user: User,
+  ) {
+    return this.placesService.checkInMemberPass(id, body.payload, user);
   }
 
   @Put("places/:id/membership")
   @UseGuards(JwtAuthGuard)
-  respond(@Param("id") id: string, @Body() body: RespondPlaceInviteDto, @CurrentUser() user: User) {
+  respond(
+    @Param("id") id: string,
+    @Body() body: RespondPlaceInviteDto,
+    @CurrentUser() user: User,
+  ) {
     return this.placesService.respondToInvite(id, body.status, user.id);
   }
 }

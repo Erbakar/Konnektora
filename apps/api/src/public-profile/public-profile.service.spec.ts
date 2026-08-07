@@ -31,6 +31,12 @@ describe("PublicProfileService", () => {
     await expect(service.getByUsername("ada", viewerId)).resolves.toMatchObject({ username: "ada", commonInterestCount: 1, interests: [{ common: true }] });
   });
 
+  it("opens a profile by user id when no username is available", async () => {
+    user.findFirst.mockResolvedValue({ ...profile, username: null });
+    await expect(service.getById(ownerId, viewerId)).resolves.toMatchObject({ id: ownerId, username: ownerId });
+    expect(user.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: ownerId }) }));
+  });
+
   it("rejects profiles blocked in either direction", async () => {
     userBlock.findFirst.mockResolvedValue({ userId: ownerId });
     await expect(service.getByUsername("ada", viewerId)).rejects.toBeInstanceOf(ForbiddenException);

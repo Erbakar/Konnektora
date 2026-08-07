@@ -1,36 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, Heart, ImagePlus, MessageCircle, MoreHorizontal, Send, Trash2, Users } from "lucide-react";
-import { FormEvent, useRef, useState } from "react";
+import { BadgeCheck, Heart, ListFilter, MessageCircle, MoreHorizontal, Send, Trash2, Users } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { RichText } from "../components/RichText";
-import type { DiscoveryFeed, PostVisibility, SocialPost } from "@konnektora/shared";
-import { archiveMyEvent, archiveMyPlace, createContentReport, createSocialPost, createSocialPostComment, deleteSocialPost, getDiscoveryFeed, getUserSession, inviteEventParticipant, listMyEvents, listSocialPostComments, listSocialPosts, toggleSocialPostLike, updateMyEvent, updateMyPlace, updateSocialPost } from "../lib/api";
+import { UserIdentityLink, userProfilePath } from "../components/UserIdentityLink";
+import type { DiscoveryFeed, SocialPost } from "@konnektora/shared";
+import { archiveMyEvent, archiveMyPlace, createContentReport, createSocialPostComment, deleteSocialPost, followUser, getDiscoveryFeed, getUserSession, inviteEventParticipant, listFollowing, listMyEvents, listSocialPostComments, listSocialPosts, toggleSocialPostLike, unfollowUser, updateMyEvent, updateMyPlace, updateSocialPost } from "../lib/api";
 
-const visibilityLabels: Record<PostVisibility, string> = { everybody: "Herkes", following: "Takip ettiklerim", network: "Ağım" };
+const visibilityLabels = { everybody: "Herkes", following: "Takip ettiklerim", network: "Ağım" } as const;
 
 export function FeedPage() {
   const client = useQueryClient();
   const user = getUserSession();
   const [tab, setTab] = useState<"popular" | "all" | "following" | "for_you">("all");
   const [time, setTime] = useState<"all" | "day" | "yesterday" | "week" | "month">("all");
-  const [contentType, setContentType] = useState<"all" | "posts" | "events" | "places" | "tags">("all");
-  const [body, setBody] = useState("");
-  const [visibility, setVisibility] = useState<PostVisibility>("everybody");
-  const [files, setFiles] = useState<File[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [contentType, setContentType] = useState<"all" | "posts" | "events" | "places" | "tags" | "photos" | "videos">("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const range = feedRange(time);
   const feed = useQuery({ queryKey: ["social-feed", tab, time], queryFn: () => listSocialPosts(tab, 1, range) });
   const discovery = useQuery({ queryKey: ["discovery-feed", user?.id, time], queryFn: () => getDiscoveryFeed(range) });
   const visiblePosts = feed.data?.items ?? [];
   const activities = (discovery.data?.activities ?? []).filter((item) => contentType === "all" || (contentType === "events" && item.kind === "event") || (contentType === "places" && item.kind === "place") || (contentType === "tags" && item.kind === "tag"));
   const timeline = [
-    ...((contentType === "all" || contentType === "posts") ? visiblePosts.map((post) => ({ type: "post" as const, at: new Date(post.createdAt).getTime(), post })) : []),
+    ...((contentType === "all" || contentType === "posts" || contentType === "photos" || contentType === "videos") ? visiblePosts.filter((post) => contentType !== "photos" && contentType !== "videos" || post.media.some((media) => media.type === contentType.slice(0, -1))).map((post) => ({ type: "post" as const, at: new Date(post.createdAt).getTime(), post })) : []),
     ...(contentType !== "posts" ? activities.map((activity) => ({ type: "activity" as const, at: new Date(activity.occurredAt).getTime(), activity })) : []),
   ].sort((a, b) => b.at - a.at);
   const refresh = () => client.invalidateQueries({ queryKey: ["social-feed"] });
-  const create = useMutation({ mutationFn: () => createSocialPost(body, visibility, files), onSuccess: () => { setBody(""); setFiles([]); refresh(); } });
-
-  function submit(event: FormEvent) { event.preventDefault(); if (body.trim()) create.mutate(); }
   return <div className="page social-feed-page">
     <header className="feed-heading"><div><span className="eyebrow">Konnektora topluluğu</span><h1>Sosyal akış</h1><p>Tag, etkinlik, mekân ve topluluk güncellemelerini tek yerde keşfet.</p></div><div className="feed-tabs" role="tablist">
       <button className={tab === "popular" ? "active" : ""} onClick={() => setTab("popular")}>Popular</button>
@@ -38,6 +33,8 @@ export function FeedPage() {
       <button className={tab === "following" ? "active" : ""} disabled={!user} onClick={() => setTab("following")}><Users size={16}/> Following</button>
       <button className={tab === "for_you" ? "active" : ""} disabled={!user} onClick={() => setTab("for_you")}>For you</button>
     </div></header>
+    <button className="secondary-action feed-filter-toggle" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)} type="button"><ListFilter size={17}/> Filtrele</button>
+    <section className={`feed-filter-panel ${filtersOpen ? "open" : ""}`}>
     <div className="feed-tabs" aria-label="Zaman filtresi">
       <button className={time === "all" ? "active" : ""} onClick={() => setTime("all")}>Tümü</button>
       <button className={time === "day" ? "active" : ""} onClick={() => setTime("day")}>24 hours</button>
@@ -46,19 +43,12 @@ export function FeedPage() {
       <button className={time === "month" ? "active" : ""} onClick={() => setTime("month")}>Last month</button>
     </div>
     <div className="feed-tabs" aria-label="İçerik türü filtresi">
-      {(["all", "posts", "events", "places", "tags"] as const).map((value) => <button className={contentType === value ? "active" : ""} key={value} onClick={() => setContentType(value)}>{value === "all" ? "Tüm içerikler" : value === "posts" ? "Post'lar" : value === "events" ? "Etkinlikler" : value === "places" ? "Mekânlar" : "Tag'ler"}</button>)}
+      {(["all", "posts", "photos", "videos", "events", "places", "tags"] as const).map((value) => <button className={contentType === value ? "active" : ""} key={value} onClick={() => setContentType(value)}>{value === "all" ? "Tüm içerikler" : value === "posts" ? "Post'lar" : value === "photos" ? "Fotoğraflar" : value === "videos" ? "Videolar" : value === "events" ? "Etkinlikler" : value === "places" ? "Mekânlar" : "Tag'ler"}</button>)}
     </div>
-    {user ? <form className="post-composer" onSubmit={submit}>
-      <div className="post-author-avatar">{user.name.slice(0, 1).toUpperCase()}</div><div className="post-composer-main"><textarea value={body} maxLength={3000} onChange={(e) => setBody(e.target.value)} placeholder="Toplulukla ne paylaşmak istersin? @kullanici ile bahset…" aria-label="Gönderi metni" />
-      {files.length ? <div className="composer-files">{files.map((file, index) => <span key={`${file.name}-${index}`}>{file.name}<button type="button" onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}>×</button></span>)}</div> : null}
-      <div className="composer-actions"><input ref={inputRef} hidden type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 4))}/><button type="button" className="icon-text-button" onClick={() => inputRef.current?.click()}><ImagePlus size={18}/> Medya</button><select value={visibility} onChange={(e) => setVisibility(e.target.value as PostVisibility)} aria-label="Gönderi görünürlüğü"><option value="everybody">Herkes</option><option value="following">Takip ettiklerim</option><option value="network">Ağım</option></select><span className="composer-count">{body.length}/3000</span><button className="feed-primary" disabled={!body.trim() || create.isPending}>{create.isPending ? "Paylaşılıyor…" : "Paylaş"}</button></div></div>
-      {create.isError ? <p className="feed-error">Gönderi paylaşılamadı.</p> : null}
-    </form> : <div className="feed-login-callout"><strong>Topluluğa katıl.</strong><span>Gönderi paylaşmak, beğenmek ve yorum yapmak için giriş yap.</span><Link to="/account">Giriş yap</Link></div>}
+    </section>
     <section className="post-list" aria-live="polite">{feed.isLoading || discovery.isLoading ? <div className="feed-state">Akış yükleniyor…</div> : feed.isError || discovery.isError ? <div className="feed-state">Akış şu anda yüklenemedi.</div> : !timeline.length ? <div className="feed-state"><strong>Bu filtrede içerik yok.</strong><span>Başka bir zaman aralığı deneyebilirsin.</span></div> : timeline.map((item) => item.type === "post" ? <PostCard key={`post-${item.post.id}`} post={item.post} userId={user?.id} onChanged={refresh}/> : <ActivityCard activity={item.activity} key={`activity-${item.activity.kind}-${item.activity.id}`} userId={user?.id} onChanged={() => { void discovery.refetch(); }}/>)}</section>
     <section className="feed-discovery-widgets">
       {contentType === "all" || contentType === "events" ? <DiscoveryWidget title="Popüler etkinlikler" items={discovery.data?.localEvents ?? []}/> : null}
-      {contentType === "all" ? <DiscoveryWidget title="Popüler kullanıcılar" items={discovery.data?.popularMembers ?? []}/> : null}
-      {contentType === "all" ? <DiscoveryWidget title="Yeni kullanıcılar" items={discovery.data?.newMembers ?? []}/> : null}
       {contentType === "all" || contentType === "places" ? <DiscoveryWidget title="Popüler mekânlar" items={discovery.data?.popularPlaces ?? []}/> : null}
       {contentType === "all" || contentType === "tags" ? <DiscoveryWidget title="Trend tag'ler" items={discovery.data?.trendingTags ?? []}/> : null}
     </section>
@@ -83,6 +73,9 @@ function ActivityCard({ activity, userId, onChanged }: { activity: DiscoveryFeed
 function PostCard({ post, userId, onChanged }: { post: SocialPost; userId?: string; onChanged: () => void }) {
   const client = useQueryClient(); const [open, setOpen] = useState(false); const [comment, setComment] = useState(""); const [guestListOpen, setGuestListOpen] = useState(false);
   const comments = useQuery({ queryKey: ["post-comments", post.id], queryFn: () => listSocialPostComments(post.id), enabled: open });
+  const following = useQuery({ queryKey: ["following", userId], queryFn: listFollowing, enabled: Boolean(userId && userId !== post.authorId) });
+  const isFollowing = following.data?.some((member) => member.id === post.authorId) ?? false;
+  const follow = useMutation({ mutationFn: () => isFollowing ? unfollowUser(post.authorId) : followUser(post.authorId), onSuccess: () => client.invalidateQueries({ queryKey: ["following"] }) });
   const like = useMutation({ mutationFn: () => toggleSocialPostLike(post.id), onSuccess: onChanged });
   const remove = useMutation({ mutationFn: () => deleteSocialPost(post.id), onSuccess: onChanged });
   const edit = useMutation({ mutationFn: (body: string) => updateSocialPost(post.id, body), onSuccess: onChanged });
@@ -90,10 +83,10 @@ function PostCard({ post, userId, onChanged }: { post: SocialPost; userId?: stri
   const guestInvite = useMutation({ mutationFn: (eventId: string) => inviteEventParticipant(eventId, { userId: post.authorId, role: "attendee" }, "user"), onSuccess: () => { setGuestListOpen(false); window.alert("Kullanıcı etkinliğin Guest List'ine eklendi."); } });
   const addComment = useMutation({ mutationFn: () => createSocialPostComment(post.id, comment), onSuccess: () => { setComment(""); client.invalidateQueries({ queryKey: ["post-comments", post.id] }); onChanged(); } });
   async function report() { const details = window.prompt("Rapor nedenini kısaca yazın:"); if (!details?.trim()) return; await createContentReport({ targetType: "post", targetId: post.id, reason: "Uygunsuz gönderi", details: details.trim() }); window.alert("Raporunuz inceleme kuyruğuna alındı."); }
-  return <article className="post-card"><header><div className="post-avatar">{post.author.avatarUrl ? <img src={post.author.avatarUrl} alt=""/> : post.author.name.slice(0, 1).toUpperCase()}</div><div className="post-author"><Link to={post.author.username ? `/users/${post.author.username}` : "/feed"}>{post.author.name}{post.author.profileVerifiedAt ? <BadgeCheck size={16} aria-label="Doğrulanmış profil"/> : null}</Link><span>{post.author.username ? `@${post.author.username} · ` : ""}{relativeTime(post.createdAt)} · {visibilityLabels[post.visibility]}</span></div><div className="post-menu">{userId === post.authorId ? <><button title="Gönderiyi düzenle" onClick={() => { const next = window.prompt("Gönderiyi düzenle", post.body); if (next?.trim() && next.trim() !== post.body) edit.mutate(next.trim()); }}>Düzenle</button><button title="Gönderiyi sil" onClick={() => window.confirm("Gönderi silinsin mi?") && remove.mutate()}><Trash2 size={18}/></button></> : userId ? <button title="Gönderiyi raporla" onClick={report}><MoreHorizontal size={19}/></button> : null}</div></header><p className="post-body"><RichText text={post.body}/></p>
+  return <article className="post-card"><header><UserIdentityLink user={{...post.author,id:post.authorId}} avatarClassName="post-avatar" showName={false}/><div className="post-author"><Link to={userProfilePath({...post.author,id:post.authorId})}>{post.author.name}{post.author.profileVerifiedAt ? <BadgeCheck size={16} aria-label="Doğrulanmış profil"/> : null}</Link><span>{post.author.username ? `@${post.author.username} · ` : ""}{relativeTime(post.createdAt)} · {visibilityLabels[post.visibility]}</span></div><div className="post-menu">{userId === post.authorId ? <><button title="Gönderiyi düzenle" onClick={() => { const next = window.prompt("Gönderiyi düzenle", post.body); if (next?.trim() && next.trim() !== post.body) edit.mutate(next.trim()); }}>Düzenle</button><button title="Gönderiyi sil" onClick={() => window.confirm("Gönderi silinsin mi?") && remove.mutate()}><Trash2 size={18}/></button></> : userId ? <button title="Gönderiyi raporla" onClick={report}><MoreHorizontal size={19}/></button> : null}</div></header><p className="post-body"><RichText text={post.body}/></p>
     {post.media.length ? <div className={`post-media-grid count-${Math.min(post.media.length, 4)}`}>{post.media.map((media) => media.type === "video" ? <video key={media.id} controls src={media.url}/> : <img key={media.id} src={media.url} alt="Gönderi medyası" loading="lazy"/>)}</div> : null}
-    <div className="post-stats"><span>{post.likeCount} beğeni</span><button onClick={() => setOpen((value) => !value)}>{post.commentCount} yorum</button></div><div className="post-actions"><button className={post.liked ? "liked" : ""} disabled={!userId || like.isPending} onClick={() => like.mutate()}><Heart size={19} fill={post.liked ? "currentColor" : "none"}/> Beğen</button><button onClick={() => setOpen((value) => !value)}><MessageCircle size={19}/> Yorum yap</button><button onClick={() => void sharePost(post)}>Paylaş</button>{userId && userId !== post.authorId ? <><Link to={`/messages?peer=${post.authorId}`}>Mesaj gönder</Link><button onClick={() => setGuestListOpen(true)}>Guest List'e ekle</button><button onClick={() => void report()}>Rapor et</button></> : null}</div>
-    {open ? <div className="post-comments">{comments.isLoading ? <span>Yorumlar yükleniyor…</span> : comments.data?.map((item) => <div className="post-comment" key={item.id}><div className="comment-avatar">{item.author.name[0]}</div><div><strong>{item.author.name}</strong><p><RichText text={item.body}/></p><small>{relativeTime(item.createdAt)}</small></div></div>)}{userId ? <form onSubmit={(e) => { e.preventDefault(); if (comment.trim()) addComment.mutate(); }}><input value={comment} maxLength={1000} onChange={(e) => setComment(e.target.value)} placeholder="Yorum yaz…"/><button aria-label="Yorumu gönder" disabled={!comment.trim()}><Send size={18}/></button></form> : null}</div> : null}
+    <div className="post-stats"><span>{post.likeCount} beğeni</span><button onClick={() => setOpen((value) => !value)}>{post.commentCount} yorum</button></div><div className="post-actions"><button className={post.liked ? "liked" : ""} disabled={!userId || like.isPending} onClick={() => like.mutate()}><Heart size={19} fill={post.liked ? "currentColor" : "none"}/> Beğen</button><button onClick={() => setOpen((value) => !value)}><MessageCircle size={19}/> Yorum yap</button><button onClick={() => void sharePost(post)}>Paylaş</button>{userId && userId !== post.authorId ? <><button disabled={follow.isPending || following.isLoading} onClick={() => follow.mutate()}>{isFollowing ? "Takibi bırak" : "Takip et"}</button><Link to={`/messages?peer=${post.authorId}`}>Mesaj gönder</Link><button onClick={() => setGuestListOpen(true)}>Guest List'e ekle</button><button onClick={() => void report()}>Rapor et</button></> : null}</div>
+    {open ? <div className="post-comments">{comments.isLoading ? <span>Yorumlar yükleniyor…</span> : comments.data?.map((item) => <div className="post-comment" key={item.id}><UserIdentityLink user={{...item.author,id:item.authorId}} avatarClassName="comment-avatar" showName={false}/><div><Link to={userProfilePath({...item.author,id:item.authorId})}><strong>{item.author.name}</strong></Link><p><RichText text={item.body}/></p><small>{relativeTime(item.createdAt)}</small></div></div>)}{userId ? <form onSubmit={(e) => { e.preventDefault(); if (comment.trim()) addComment.mutate(); }}><input value={comment} maxLength={1000} onChange={(e) => setComment(e.target.value)} placeholder="Yorum yaz…"/><button aria-label="Yorumu gönder" disabled={!comment.trim()}><Send size={18}/></button></form> : null}</div> : null}
     {guestListOpen ? <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Guest List'e ekle"><div><button aria-label="Kapat" onClick={() => setGuestListOpen(false)}>×</button><h2>Guest List'e ekle</h2><p>{post.author.name} kullanıcısını yönettiğin etkinliklerden birine ekle.</p><div className="admin-list">{managedEvents.data?.map((event) => <button className="admin-list-row" disabled={guestInvite.isPending} key={event.id} onClick={() => guestInvite.mutate(event.id)}><strong>{event.title}</strong><span>{new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date(event.startsAt))}</span></button>)}</div>{!managedEvents.isLoading && !managedEvents.data?.length ? <p className="form-help">Yönettiğin etkinlik bulunmuyor.</p> : null}{guestInvite.isError ? <p className="form-error">Kullanıcı Guest List'e eklenemedi.</p> : null}</div></div> : null}
   </article>;
 }

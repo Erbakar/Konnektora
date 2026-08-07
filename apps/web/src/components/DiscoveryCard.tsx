@@ -7,12 +7,6 @@ const icons = { user: UserRound, tag: Hash, event: CalendarDays, place: MapPin }
 
 export function DiscoveryCard({ item }: { item: DiscoveryItem }) {
   const { language } = useLanguage();
-  const turkishTagCopy: Record<string, string> = {
-    "#Startup": "Erken aşama ekipler, ürün lansmanları ve büyüme buluşmaları.",
-    "#Networking": "Seçilmiş topluluk buluşmaları ve iş bağlantıları.",
-    "#Yatırım": "Yatırımcı erişimi, fon hazırlığı ve sermaye etkinlikleri.",
-    "#Founder": "Kurucu çemberleri, eşleşme atölyeleri ve dayanışma."
-  };
   const Icon = icons[item.kind];
   const initials = item.title
     .replace(/^#/, "")
@@ -29,9 +23,7 @@ export function DiscoveryCard({ item }: { item: DiscoveryItem }) {
   const kindLabel = language === "tr"
     ? { user: "Topluluk üyesi", tag: "İlgi alanı", event: "Etkinlik", place: "Mekân" }[item.kind]
     : item.kind === "user" ? "Community member" : item.kind;
-  const subtitle = language === "tr" && item.kind === "tag"
-    ? turkishTagCopy[item.title] ?? item.subtitle
-    : item.subtitle;
+  const subtitle = item.kind === "tag" ? null : item.subtitle;
   return (
     <Link className={`discovery-card discovery-${item.kind}`} to={item.href}>
       <span className="discovery-card-visual">

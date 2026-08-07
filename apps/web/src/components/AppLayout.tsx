@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, CalendarDays, ChevronDown, Home, LayoutDashboard, MapPin, Menu, MessageCircle, QrCode, Search, Tag, Ticket, UserRound, WalletCards, X } from "lucide-react";
+import { Bell, BriefcaseBusiness, CalendarDays, ChevronDown, Home, LayoutDashboard, MapPin, Menu, MessageCircle, QrCode, Search, Store, Tag, Ticket, UserRound, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
@@ -82,8 +82,10 @@ export function AppLayout() {
               <NavLink role="menuitem" to="/notifications"><Bell size={18} /><span>{language === "tr" ? "Bildirimler" : "Notifications"}</span></NavLink>
               <NavLink role="menuitem" to="/tickets"><Ticket size={18} /><span>{language === "tr" ? "Biletlerim" : "My tickets"}</span></NavLink>
               <NavLink role="menuitem" to="/identity"><QrCode size={18} /><span>{t("memberId")}</span></NavLink>
-              <NavLink role="menuitem" to="/finance"><WalletCards size={18} /><span>{t("finance")}</span></NavLink>
+              <NavLink role="menuitem" to="/business"><BriefcaseBusiness size={18} /><span>{language === "tr" ? "İşletme" : "Business"}</span></NavLink>
+              <NavLink role="menuitem" to="/store"><Store size={18} /><span>{language === "tr" ? "Mağaza" : "Store"}</span></NavLink>
               <NavLink role="menuitem" to="/search"><Search size={18} /><span>{t("search")}</span></NavLink>
+              <NavLink role="menuitem" to="/community"><Users size={18} /><span>{language === "tr" ? "Topluluk" : "Community"}</span></NavLink>
               <NavLink role="menuitem" to="/onboarding"><UserRound size={18} /><span>{t("create")}</span></NavLink>
             </div> : null}
           </div>
@@ -151,10 +153,12 @@ export function AppLayout() {
             {t("messages")}
             {conversationsQuery.data?.totalUnread ? <span className="nav-unread-badge">{conversationsQuery.data.totalUnread}</span> : null}
           </NavLink>
+          <NavLink to="/community" onClick={() => setMenuOpen(false)}><Users size={18} /> {language === "tr" ? "Topluluk" : "Community"}</NavLink>
           <NavLink to="/notifications" onClick={() => setMenuOpen(false)}><Bell size={18} /> Bildirimler</NavLink>
           <NavLink to="/tickets" onClick={() => setMenuOpen(false)}><Ticket size={18} /> Biletlerim</NavLink>
           <NavLink to="/identity" onClick={() => setMenuOpen(false)}><QrCode size={18} /> {t("memberId")}</NavLink>
-          <NavLink to="/finance" onClick={() => setMenuOpen(false)}><WalletCards size={18} /> {t("finance")}</NavLink>
+          <NavLink to="/business" onClick={() => setMenuOpen(false)}><BriefcaseBusiness size={18} /> {language === "tr" ? "İşletme" : "Business"}</NavLink>
+          <NavLink to="/store" onClick={() => setMenuOpen(false)}><Store size={18} /> {language === "tr" ? "Mağaza" : "Store"}</NavLink>
           <NavLink to="/search" onClick={() => setMenuOpen(false)}><Search size={18} /> {t("search")}</NavLink>
           <NavLink to="/onboarding" onClick={() => setMenuOpen(false)}>
             <UserRound size={18} />
@@ -172,6 +176,15 @@ export function AppLayout() {
           </NavLink>
         </nav>
       </div>
+
+      <nav className="mobile-tab-bar" aria-label="Mobil ana navigasyon">
+        <NavLink to="/feed"><Home size={20}/><span>Feed</span></NavLink>
+        <NavLink to="/tags"><Tag size={20}/><span>Etiketler</span></NavLink>
+        <NavLink to="/events"><CalendarDays size={20}/><span>Etkinlikler</span></NavLink>
+        <NavLink to="/places"><MapPin size={20}/><span>Mekânlar</span></NavLink>
+        <NavLink to="/messages"><MessageCircle size={20}/><span>Mesajlar</span>{conversationsQuery.data?.totalUnread ? <b>{conversationsQuery.data.totalUnread}</b> : null}</NavLink>
+        <button aria-label="Menüyü aç" onClick={() => setMenuOpen(true)} type="button"><Menu size={20}/><span>Menü</span></button>
+      </nav>
 
       <main>
         <Outlet />

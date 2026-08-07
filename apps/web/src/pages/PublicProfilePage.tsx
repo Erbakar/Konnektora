@@ -18,21 +18,22 @@ import {
   createContentReport,
   followUser,
   getPublicProfile,
+  getPublicProfileById,
   getUserSession,
   listReportRules,
   unfollowUser,
 } from "../lib/api";
 
 export function PublicProfilePage() {
-  const { username = "" } = useParams();
+  const { username = "", userId = "" } = useParams();
   const user = getUserSession();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [reportOpen, setReportOpen] = useState(false);
   const profileQuery = useQuery({
-    queryKey: ["public-profile", username, user?.id],
-    queryFn: () => getPublicProfile(username),
-    enabled: Boolean(username),
+    queryKey: ["public-profile", username || userId, user?.id],
+    queryFn: () => userId ? getPublicProfileById(userId) : getPublicProfile(username),
+    enabled: Boolean(username || userId),
   });
   const rules = useQuery({
     queryKey: ["report-rules", "user"],

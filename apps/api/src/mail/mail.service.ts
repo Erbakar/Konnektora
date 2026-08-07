@@ -82,6 +82,11 @@ export class MailService {
     });
   }
 
+  async sendEventReminderEmail(input: { to: string; name: string; eventTitle: string; eventSlug: string; startsAt: Date }) {
+    const eventUrl = `${this.getAppUrl()}/events/${input.eventSlug}`;
+    return this.send({ to: input.to, subject: `${input.eventTitle} yarın başlıyor`, text: `Merhaba ${input.name}, ${input.eventTitle} etkinliği ${input.startsAt.toLocaleString("tr-TR")} tarihinde başlıyor. ${eventUrl}`, html: `<p>Merhaba ${this.escapeHtml(input.name)},</p><p><strong>${this.escapeHtml(input.eventTitle)}</strong> etkinliği yarın başlıyor.</p><p>${input.startsAt.toLocaleString("tr-TR")}</p><p><a href="${eventUrl}">Etkinliği görüntüle</a></p>` });
+  }
+
   async sendContactInviteEmail(input: { to: string; name: string; invitedByName: string }) {
     const appUrl = this.getAppUrl();
     await this.send({

@@ -1,4 +1,4 @@
-import { IsString, IsUrl, MaxLength } from "class-validator";
+import { IsBoolean, IsString, IsUrl, MaxLength } from "class-validator";
 
 export class RegisterPushSubscriptionDto {
   @IsUrl({ require_tld: false })
@@ -12,4 +12,9 @@ export class RegisterPushSubscriptionDto {
   @IsString()
   @MaxLength(500)
   auth!: string;
+}
+
+export class ContentNotificationDto {
+  @IsBoolean()
+  enabled!: boolean;
 }

@@ -1,8 +1,41 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { Prisma, TagStatus, User } from "@prisma/client";
 import { toSlug } from "../common/slug";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateTagDto } from "./tags.dto";
+
+const tagAuthorSelect = {
+  id: true,
+  name: true,
+  username: true,
+  uploadedMedia: {
+    where: { contentType: "user", status: "active", isProfilePicture: true },
+    take: 1,
+    select: { url: true },
+  },
+} as const;
+
+function tagAuthor(
+  author: {
+    id: string;
+    name: string;
+    username: string | null;
+    uploadedMedia?: Array<{ url: string }>;
+  } | null,
+) {
+  if (!author) return null;
+  return {
+    id: author.id,
+    name: author.name,
+    username: author.username,
+    avatarUrl: author.uploadedMedia?.[0]?.url ?? null,
+  };
+}
 
 @Injectable()
 export class TagsService {
@@ -10,18 +43,29 @@ export class TagsService {
 
   async listPublicTags(userId?: string) {
     const blocks = userId
-      ? await this.prisma.userBlock.findMany({ where: { userId, targetType: "tag" }, select: { targetId: true } })
+      ? await this.prisma.userBlock.findMany({
+          where: { userId, targetType: "tag" },
+          select: { targetId: true },
+        })
       : [];
     return this.prisma.tag.findMany({
-      where: { status: "active", id: { notIn: blocks.map((block) => block.targetId) } },
-      orderBy: [{ usageCount: "desc" }, { name: "asc" }]
+      where: {
+        status: "active",
+        id: { notIn: blocks.map((block) => block.targetId) },
+      },
+      orderBy: [{ usageCount: "desc" }, { name: "asc" }],
     });
   }
 
   async listTagComments(tagId: string, userId?: string) {
     await this.ensureTagVisible(tagId, userId);
     const blockedUserIds = userId
-      ? (await this.prisma.userBlock.findMany({ where: { userId, targetType: "user" }, select: { targetId: true } })).map((block) => block.targetId)
+      ? (
+          await this.prisma.userBlock.findMany({
+            where: { userId, targetType: "user" },
+            select: { targetId: true },
+          })
+        ).map((block) => block.targetId)
       : [];
     const comments = await this.prisma.contentComment.findMany({
       where: {
@@ -29,12 +73,37 @@ export class TagsService {
         targetId: tagId,
         parentId: null,
         status: "active",
-        authorId: { notIn: blockedUserIds }
+        authorId: { notIn: blockedUserIds },
       },
       orderBy: { createdAt: "desc" },
       take: 100,
-      include: { author: { select: { id: true, name: true, username: true } } }
+      include: { author: { select: tagAuthorSelect } },
     });
+    const ids = comments.map((comment) => comment.id);
+    const [media, liked] = await Promise.all([
+      ids.length
+        ? this.prisma.mediaFile.findMany({
+            where: {
+              contentType: "tag_comment",
+              contentId: { in: ids },
+              status: "active",
+            },
+            orderBy: { sortOrder: "asc" },
+          })
+        : [],
+      userId && ids.length
+        ? this.prisma.contentReaction.findMany({
+            where: {
+              targetType: "tag_comment",
+              targetId: { in: ids },
+              userId,
+              reaction: "like",
+            },
+            select: { targetId: true },
+          })
+        : [],
+    ]);
+    const likedIds = new Set(liked.map((item) => item.targetId));
     return comments.map((comment) => ({
       id: comment.id,
       tagId,
@@ -43,15 +112,189 @@ export class TagsService {
       createdAt: comment.createdAt,
       updatedAt: comment.updatedAt,
       canDelete: comment.authorId === userId,
-      author: comment.author
+      author: tagAuthor(comment.author),
+      liked: likedIds.has(comment.id),
+      media: media
+        .filter((item) => item.contentId === comment.id)
+        .map((item) => ({ id: item.id, url: item.url, type: item.type })),
     }));
+  }
+
+  async listRelatedUsers(tagId: string, viewerId?: string) {
+    await this.ensureTagVisible(tagId, viewerId);
+    const userSelect = {
+      id: true,
+      name: true,
+      username: true,
+      city: true,
+      country: true,
+      profileVerifiedAt: true,
+    } as const;
+    const [interests, posts] = await Promise.all([
+      this.prisma.userInterestTag.findMany({
+        where: { tagId, user: { status: "active" } },
+        take: 100,
+        include: { user: { select: userSelect } },
+      }),
+      this.prisma.contentComment.findMany({
+        where: {
+          targetType: "tag",
+          targetId: tagId,
+          status: "active",
+          author: { status: "active" },
+        },
+        distinct: ["authorId"],
+        take: 100,
+        include: { author: { select: userSelect } },
+      }),
+    ]);
+    const users = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        username: string | null;
+        city: string | null;
+        country: string | null;
+        profileVerifiedAt: Date | null;
+        relation: string;
+        checkedIn: boolean;
+      }
+    >();
+    for (const interest of interests)
+      users.set(interest.user.id, {
+        ...interest.user,
+        relation: "ilgileniyor",
+        checkedIn: false,
+      });
+    for (const post of posts) {
+      if (!post.author) continue;
+      users.set(post.author.id, {
+        ...post.author,
+        relation: users.has(post.author.id)
+          ? "ilgileniyor · paylaşım yaptı"
+          : "paylaşım yaptı",
+        checkedIn: false,
+      });
+    }
+    return [...users.values()];
+  }
+
+  async getPublicStats(tagId: string, userId?: string) {
+    await this.ensureTagVisible(tagId, userId);
+    const [events, places, followers, posts, views] = await Promise.all([
+      this.prisma.eventTag.count({
+        where: { tagId, event: { status: "published" } },
+      }),
+      this.prisma.placeTag.count({
+        where: { tagId, place: { status: "active" } },
+      }),
+      this.prisma.userInterestTag.count({
+        where: { tagId, sentiment: { in: ["like", "ok"] } },
+      }),
+      this.prisma.contentComment.count({
+        where: { targetType: "tag", targetId: tagId, status: "active" },
+      }),
+      this.prisma.contentView.count({
+        where: { targetType: "tag", targetId: tagId },
+      }),
+    ]);
+    return { events, places, followers, posts, views };
+  }
+
+  async toggleCommentLike(commentId: string, userId: string) {
+    const comment = await this.prisma.contentComment.findFirst({
+      where: { id: commentId, targetType: "tag", status: "active" },
+      select: { id: true },
+    });
+    if (!comment) throw new NotFoundException("Gönderi bulunamadı.");
+    const key = {
+      targetType_targetId_userId_reaction: {
+        targetType: "tag_comment" as const,
+        targetId: commentId,
+        userId,
+        reaction: "like",
+      },
+    };
+    const existing = await this.prisma.contentReaction.findUnique({
+      where: key,
+    });
+    await this.prisma.$transaction(
+      existing
+        ? [
+            this.prisma.contentReaction.delete({ where: key }),
+            this.prisma.contentComment.update({
+              where: { id: commentId },
+              data: { likeCount: { decrement: 1 } },
+            }),
+          ]
+        : [
+            this.prisma.contentReaction.create({
+              data: {
+                targetType: "tag_comment",
+                targetId: commentId,
+                userId,
+                reaction: "like",
+              },
+            }),
+            this.prisma.contentComment.update({
+              where: { id: commentId },
+              data: { likeCount: { increment: 1 } },
+            }),
+          ],
+    );
+    return { liked: !existing };
+  }
+
+  async addCommentMedia(
+    commentId: string,
+    user: User,
+    url: string,
+    type: "image" | "video",
+  ) {
+    const comment = await this.prisma.contentComment.findFirst({
+      where: { id: commentId, targetType: "tag", status: "active" },
+      select: { authorId: true },
+    });
+    if (!comment) throw new NotFoundException("Gönderi bulunamadı.");
+    if (
+      comment.authorId !== user.id &&
+      !["admin", "super_admin"].includes(user.role)
+    )
+      throw new ForbiddenException("Bu gönderiye medya ekleyemezsiniz.");
+    const count = await this.prisma.mediaFile.count({
+      where: {
+        contentType: "tag_comment",
+        contentId: commentId,
+        status: "active",
+      },
+    });
+    if (count >= 4)
+      throw new ConflictException(
+        "Bir gönderiye en fazla 4 medya eklenebilir.",
+      );
+    return this.prisma.mediaFile.create({
+      data: {
+        contentType: "tag_comment",
+        contentId: commentId,
+        uploadedById: user.id,
+        url,
+        type,
+        sortOrder: count,
+      },
+    });
   }
 
   async createTagComment(tagId: string, body: string, userId: string) {
     await this.ensureTagVisible(tagId, userId);
     const comment = await this.prisma.contentComment.create({
-      data: { targetType: "tag", targetId: tagId, authorId: userId, body: body.trim() },
-      include: { author: { select: { id: true, name: true, username: true } } }
+      data: {
+        targetType: "tag",
+        targetId: tagId,
+        authorId: userId,
+        body: body.trim(),
+      },
+      include: { author: { select: tagAuthorSelect } },
     });
     return {
       id: comment.id,
@@ -61,27 +304,66 @@ export class TagsService {
       createdAt: comment.createdAt,
       updatedAt: comment.updatedAt,
       canDelete: true,
-      author: comment.author
+      author: tagAuthor(comment.author),
+    };
+  }
+
+  async updateTagComment(commentId: string, body: string, user: User) {
+    const comment = await this.prisma.contentComment.findFirst({
+      where: { id: commentId, targetType: "tag", status: "active" },
+      select: { id: true, authorId: true, targetId: true },
+    });
+    if (!comment) throw new NotFoundException("Gönderi bulunamadı.");
+    if (
+      comment.authorId !== user.id &&
+      !["admin", "super_admin"].includes(user.role)
+    )
+      throw new ForbiddenException("Bu gönderi düzenlenemez.");
+    const updated = await this.prisma.contentComment.update({
+      where: { id: comment.id },
+      data: { body: body.trim() },
+      include: { author: { select: tagAuthorSelect } },
+    });
+    return {
+      id: updated.id,
+      tagId: comment.targetId,
+      body: updated.body,
+      likeCount: updated.likeCount,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+      canDelete: true,
+      author: tagAuthor(updated.author),
     };
   }
 
   async deleteTagComment(tagId: string, commentId: string, user: User) {
     const comment = await this.prisma.contentComment.findFirst({
-      where: { id: commentId, targetType: "tag", targetId: tagId, status: "active" },
-      select: { id: true, authorId: true }
+      where: {
+        id: commentId,
+        targetType: "tag",
+        targetId: tagId,
+        status: "active",
+      },
+      select: { id: true, authorId: true },
     });
     if (!comment) throw new NotFoundException("Yorum bulunamadı.");
-    if (comment.authorId !== user.id && !["admin", "super_admin"].includes(user.role)) {
+    if (
+      comment.authorId !== user.id &&
+      !["admin", "super_admin"].includes(user.role)
+    ) {
       throw new ForbiddenException("Bu yorum kaldırılamaz.");
     }
-    await this.prisma.contentComment.update({ where: { id: comment.id }, data: { status: "deleted" } });
+    await this.prisma.contentComment.update({
+      where: { id: comment.id },
+      data: { status: "deleted" },
+    });
     return { ok: true as const };
   }
 
   listAdminTags() {
     return this.prisma.tag.findMany({
       orderBy: [{ status: "asc" }, { name: "asc" }],
-      include: { category: true }
+      include: { category: true },
     });
   }
 
@@ -90,36 +372,91 @@ export class TagsService {
       where: { id },
       include: {
         category: true,
-        createdBy: { select: { id: true, email: true, name: true, role: true, status: true } },
-        updatedBy: { select: { id: true, email: true, name: true, role: true, status: true } },
+        createdBy: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            status: true,
+          },
+        },
+        updatedBy: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            status: true,
+          },
+        },
         _count: {
           select: {
             events: true,
-            interestedUsers: true
-          }
-        }
-      }
+            interestedUsers: true,
+          },
+        },
+      },
     });
 
     if (!tag) {
       throw new NotFoundException("Tag bulunamadı.");
     }
 
-    const [reportCount, likeCount, okCount, dislikeCount, commentCount, viewCount, viewerCount, firstComment] = await Promise.all([
-      this.prisma.contentReport.count({ where: { targetType: "tag", targetId: id } }),
-      this.prisma.contentReaction.count({ where: { targetType: "tag", targetId: id, reaction: "like" } }),
-      this.prisma.contentReaction.count({ where: { targetType: "tag", targetId: id, reaction: "ok" } }),
-      this.prisma.contentReaction.count({ where: { targetType: "tag", targetId: id, reaction: "dislike" } }),
-      this.prisma.contentComment.count({ where: { targetType: "tag" as any, targetId: id } }),
-      this.prisma.contentView.count({ where: { targetType: "tag" as any, targetId: id } }),
+    const [
+      reportCount,
+      likeCount,
+      okCount,
+      dislikeCount,
+      commentCount,
+      viewCount,
+      viewerCount,
+      firstComment,
+    ] = await Promise.all([
+      this.prisma.contentReport.count({
+        where: { targetType: "tag", targetId: id },
+      }),
+      this.prisma.contentReaction.count({
+        where: { targetType: "tag", targetId: id, reaction: "like" },
+      }),
+      this.prisma.contentReaction.count({
+        where: { targetType: "tag", targetId: id, reaction: "ok" },
+      }),
+      this.prisma.contentReaction.count({
+        where: { targetType: "tag", targetId: id, reaction: "dislike" },
+      }),
+      this.prisma.contentComment.count({
+        where: { targetType: "tag" as any, targetId: id },
+      }),
+      this.prisma.contentView.count({
+        where: { targetType: "tag" as any, targetId: id },
+      }),
       this.prisma.contentView
-        .findMany({ where: { targetType: "tag" as any, targetId: id, userId: { not: null } }, distinct: ["userId"], select: { userId: true } })
+        .findMany({
+          where: {
+            targetType: "tag" as any,
+            targetId: id,
+            userId: { not: null },
+          },
+          distinct: ["userId"],
+          select: { userId: true },
+        })
         .then((items) => items.length),
       this.prisma.contentComment.findFirst({
         where: { targetType: "tag" as any, targetId: id },
         orderBy: { createdAt: "asc" },
-        include: { author: { select: { id: true, email: true, name: true, role: true, status: true } } }
-      })
+        include: {
+          author: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              role: true,
+              status: true,
+            },
+          },
+        },
+      }),
     ]);
 
     return {
@@ -132,13 +469,13 @@ export class TagsService {
       viewCount,
       viewerCount,
       firstCommenter: firstComment?.author ?? null,
-      firstProfileUser: tag.createdBy
+      firstProfileUser: tag.createdBy,
     };
   }
 
   listTagCategories() {
     return this.prisma.tagCategory.findMany({
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
   }
 
@@ -151,10 +488,12 @@ export class TagsService {
         name: input.name,
         slug,
         description: input.description ?? null,
-        category: input.categoryId ? { connect: { id: input.categoryId } } : undefined,
+        category: input.categoryId
+          ? { connect: { id: input.categoryId } }
+          : undefined,
         createdBy: userId ? { connect: { id: userId } } : undefined,
-        updatedBy: userId ? { connect: { id: userId } } : undefined
-      }
+        updatedBy: userId ? { connect: { id: userId } } : undefined,
+      },
     });
   }
 
@@ -171,21 +510,32 @@ export class TagsService {
         name: input.name.trim(),
         slug,
         description: input.description?.trim() || null,
-        category: input.categoryId ? { connect: { id: input.categoryId } } : undefined,
+        category: input.categoryId
+          ? { connect: { id: input.categoryId } }
+          : undefined,
         status: TagStatus.active,
         createdBy: { connect: { id: userId } },
-        updatedBy: { connect: { id: userId } }
-      }
+        updatedBy: { connect: { id: userId } },
+      },
     });
   }
 
   private async ensureTagVisible(tagId: string, userId?: string) {
-    const tag = await this.prisma.tag.findFirst({ where: { id: tagId, status: "active" }, select: { id: true } });
+    const tag = await this.prisma.tag.findFirst({
+      where: { id: tagId, status: "active" },
+      select: { id: true },
+    });
     if (!tag) throw new NotFoundException("Tag bulunamadı.");
     if (userId) {
       const block = await this.prisma.userBlock.findUnique({
-        where: { userId_targetType_targetId: { userId, targetType: "tag", targetId: tagId } },
-        select: { userId: true }
+        where: {
+          userId_targetType_targetId: {
+            userId,
+            targetType: "tag",
+            targetId: tagId,
+          },
+        },
+        select: { userId: true },
       });
       if (block) throw new NotFoundException("Tag bulunamadı.");
     }
@@ -200,7 +550,7 @@ export class TagsService {
 
     const data: Prisma.TagUpdateInput = {
       description: input.description,
-      updatedBy: userId ? { connect: { id: userId } } : undefined
+      updatedBy: userId ? { connect: { id: userId } } : undefined,
     };
 
     if (input.name && input.name !== existing.name) {
@@ -211,7 +561,9 @@ export class TagsService {
     }
 
     if (input.categoryId !== undefined) {
-      data.category = input.categoryId ? { connect: { id: input.categoryId } } : { disconnect: true };
+      data.category = input.categoryId
+        ? { connect: { id: input.categoryId } }
+        : { disconnect: true };
     }
 
     return this.prisma.tag.update({ where: { id }, data });
@@ -222,8 +574,8 @@ export class TagsService {
       where: { id },
       data: {
         status: TagStatus.archived,
-        updatedBy: userId ? { connect: { id: userId } } : undefined
-      }
+        updatedBy: userId ? { connect: { id: userId } } : undefined,
+      },
     });
   }
 
@@ -232,8 +584,8 @@ export class TagsService {
       where: { id },
       data: {
         status: TagStatus.hidden,
-        updatedBy: userId ? { connect: { id: userId } } : undefined
-      }
+        updatedBy: userId ? { connect: { id: userId } } : undefined,
+      },
     });
   }
 
@@ -244,7 +596,7 @@ export class TagsService {
 
     const [sourceTag, targetTag] = await Promise.all([
       this.prisma.tag.findUnique({ where: { id: sourceTagId } }),
-      this.prisma.tag.findUnique({ where: { id: targetTagId } })
+      this.prisma.tag.findUnique({ where: { id: targetTagId } }),
     ]);
 
     if (!sourceTag || !targetTag) {
@@ -252,22 +604,30 @@ export class TagsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const sourceEventTags = await tx.eventTag.findMany({ where: { tagId: sourceTagId } });
-      const sourceInterestTags = await tx.userInterestTag.findMany({ where: { tagId: sourceTagId } });
+      const sourceEventTags = await tx.eventTag.findMany({
+        where: { tagId: sourceTagId },
+      });
+      const sourceInterestTags = await tx.userInterestTag.findMany({
+        where: { tagId: sourceTagId },
+      });
 
       for (const eventTag of sourceEventTags) {
         await tx.eventTag.upsert({
-          where: { eventId_tagId: { eventId: eventTag.eventId, tagId: targetTagId } },
+          where: {
+            eventId_tagId: { eventId: eventTag.eventId, tagId: targetTagId },
+          },
           create: { eventId: eventTag.eventId, tagId: targetTagId },
-          update: {}
+          update: {},
         });
       }
 
       for (const interestTag of sourceInterestTags) {
         await tx.userInterestTag.upsert({
-          where: { userId_tagId: { userId: interestTag.userId, tagId: targetTagId } },
+          where: {
+            userId_tagId: { userId: interestTag.userId, tagId: targetTagId },
+          },
           create: { userId: interestTag.userId, tagId: targetTagId },
-          update: {}
+          update: {},
         });
       }
 
@@ -275,7 +635,7 @@ export class TagsService {
       await tx.userInterestTag.deleteMany({ where: { tagId: sourceTagId } });
       await tx.contentReport.updateMany({
         where: { targetType: "tag", targetId: sourceTagId },
-        data: { targetId: targetTagId }
+        data: { targetId: targetTagId },
       });
 
       if ((tx as any).notification) {
@@ -286,9 +646,9 @@ export class TagsService {
             title: "İlgi alanı taşındı",
             body: `${sourceTag.name} ilgi alanı ${targetTag.name} altında birleştirildi.`,
             targetType: "tag",
-            targetId: targetTagId
+            targetId: targetTagId,
           })),
-          skipDuplicates: true
+          skipDuplicates: true,
         });
       }
 
@@ -305,20 +665,22 @@ export class TagsService {
               targetTagId,
               movedEvents: sourceEventTags.length,
               movedInterests: sourceInterestTags.length,
-              notificationMode: "simulated"
-            }
-          }
+              notificationMode: "simulated",
+            },
+          },
         });
       }
 
-      const usageCount = await tx.eventTag.count({ where: { tagId: targetTagId } });
+      const usageCount = await tx.eventTag.count({
+        where: { tagId: targetTagId },
+      });
 
       await tx.tag.update({
         where: { id: targetTagId },
         data: {
           usageCount,
-          updatedBy: userId ? { connect: { id: userId } } : undefined
-        }
+          updatedBy: userId ? { connect: { id: userId } } : undefined,
+        },
       });
 
       return tx.tag.update({
@@ -326,8 +688,8 @@ export class TagsService {
         data: {
           status: TagStatus.archived,
           usageCount: 0,
-          updatedBy: userId ? { connect: { id: userId } } : undefined
-        }
+          updatedBy: userId ? { connect: { id: userId } } : undefined,
+        },
       });
     });
   }

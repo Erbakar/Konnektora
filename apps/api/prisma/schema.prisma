@@ -9,6 +9,7 @@ datasource db {
 
 enum UserRole {
   user
+  curator
   admin
   super_admin
 }
@@ -236,6 +237,7 @@ model User {
   phoneVerified         Boolean    @default(false) @map("phone_verified")
   country               String?
   city                  String?
+  curatorCity           String?    @map("curator_city")
   district              String?
   address               String?
   gender                String?
@@ -245,6 +247,10 @@ model User {
   tradeName             String?    @map("trade_name")
   companyType           String?    @map("company_type")
   businessCategory      String?    @map("business_category")
+  businessPlan          String     @default("starter") @map("business_plan")
+  businessPlanStartedAt DateTime?  @map("business_plan_started_at")
+  memberPlan            String     @default("free") @map("member_plan")
+  memberPlanStartedAt   DateTime?  @map("member_plan_started_at")
   followerCount         Int        @default(0) @map("follower_count")
   followingCount        Int        @default(0) @map("following_count")
   lastOnlineAt          DateTime?  @map("last_online_at")
@@ -285,6 +291,7 @@ model User {
   phoneVerifications           PhoneVerification[]
   privacySettings              PrivacySettings?
   notificationPreferences      NotificationPreference[]
+  contentNotificationSubscriptions ContentNotificationSubscription[]
   blocks                       UserBlock[]
   following                    UserFollow[]              @relation("Following")
   followers                    UserFollow[]              @relation("Followers")
@@ -320,11 +327,48 @@ model User {
   postLikes                    PostLike[]
   postComments                 PostComment[]             @relation("PostCommentAuthor")
   profileVerifiedAt            DateTime?                 @map("profile_verified_at")
+  curatorApplications          CuratorApplication[]
 
   @@index([accountType, status])
   @@index([country, city])
   @@index([lastOnlineAt])
   @@map("users")
+}
+
+model CuratorApplication {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")
+  name       String
+  email      String
+  city       String
+  country    String?
+  motivation String
+  cvUrl      String?  @map("cv_url")
+  status     String   @default("pending")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([city])
+  @@map("curator_applications")
+}
+
+model AutomatedMessageDelivery {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  targetType String   @map("target_type")
+  targetId   String   @map("target_id")
+  messageType String  @map("message_type")
+  channel    String
+  status     String   @default("sent")
+  providerId String?  @map("provider_id")
+  sentAt     DateTime @default(now()) @map("sent_at")
+
+  @@unique([userId, targetType, targetId, messageType, channel])
+  @@index([status, sentAt])
+  @@map("automated_message_deliveries")
 }
 
 model Post {
@@ -505,6 +549,21 @@ model NotificationPreference {
   @@map("notification_preferences")
 }
 
+model ContentNotificationSubscription {
+  userId     String   @map("user_id")
+  targetType String   @map("target_type")
+  targetId   String   @map("target_id")
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, targetType, targetId])
+  @@index([targetType, targetId, enabled])
+  @@map("content_notification_subscriptions")
+}
+
 model PrivacySettings {
   userId                String          @id @map("user_id")
   messageAudience       PrivacyAudience @default(everybody) @map("message_audience")
@@ -650,6 +709,7 @@ model Tag {
   createdBy       User?             @relation("TagCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy       User?             @relation("TagUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   events          EventTag[]
+  places          PlaceTag[]
   interestedUsers UserInterestTag[]
 
   @@index([status])
@@ -1007,11 +1067,14 @@ model Place {
   name          String
   slug          String   @unique
   description   String?
+  placeType     String   @default("community") @map("place_type")
   status        String   @default("active")
   coverImageUrl String?  @map("cover_image_url")
   country       String?
   city          String?
   address       String?
+  latitude      Decimal? @db.Decimal(10, 7)
+  longitude     Decimal? @db.Decimal(10, 7)
   followerCount Int      @default(0) @map("follower_count")
   inviteCount   Int      @default(0) @map("invite_count")
   createdById   String?  @map("created_by")
@@ -1023,10 +1086,23 @@ model Place {
   updatedBy User?         @relation("PlaceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   members   PlaceMember[]
   followers PlaceFollow[]
+  tags      PlaceTag[]
 
   @@index([status, createdAt])
   @@index([country, city])
   @@map("places")
+}
+
+model PlaceTag {
+  placeId String @map("place_id")
+  tagId   String @map("tag_id")
+
+  place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([placeId, tagId])
+  @@index([tagId])
+  @@map("place_tags")
 }
 
 model PlaceMember {
@@ -1034,6 +1110,7 @@ model PlaceMember {
   userId    String            @map("user_id")
   status    PlaceMemberStatus @default(invited)
   role      PlaceMemberRole   @default(member)
+  checkedInAt DateTime?       @map("checked_in_at")
   createdAt DateTime          @default(now()) @map("created_at")
   updatedAt DateTime          @updatedAt @map("updated_at")
 
@@ -1151,6 +1228,7 @@ model ConversationPreference {
   pinned    Boolean  @default(false)
   muted     Boolean  @default(false)
   archived  Boolean  @default(false)
+  hiddenBefore DateTime? @map("hidden_before")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   user User @relation("ConversationPreferenceOwner", fields: [userId], references: [id], onDelete: Cascade)

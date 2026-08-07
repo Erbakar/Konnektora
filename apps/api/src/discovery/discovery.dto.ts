@@ -1,6 +1,7 @@
-import { IsDateString, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { IsDateString, IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 export class DiscoveryFeedQueryDto {
+  @IsOptional() @IsIn(["local", "global"]) scope?: "local" | "global";
   @IsOptional() @IsString() @MaxLength(120) city?: string;
   @IsOptional() @IsString() @MaxLength(120) country?: string;
   @IsOptional() @IsDateString() from?: string;

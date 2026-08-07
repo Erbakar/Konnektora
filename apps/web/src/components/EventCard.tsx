@@ -1,6 +1,7 @@
 import type { Event } from "@konnektora/shared";
 import { Calendar, MapPin, Users } from "lucide-react";
 import { Link } from "react-router-dom";
+import { DistanceLabel } from "./DistanceLabel";
 
 const formatter = new Intl.DateTimeFormat("tr-TR", {
   dateStyle: "medium",
@@ -35,8 +36,9 @@ export function EventCard({ event }: { event: Event }) {
         </span>
         <span>
           <Users size={16} />
-          {event.organizerName || "Konnektora community"}
+          {event.attendeeCount ?? 0} katılımcı
         </span>
+        <DistanceLabel latitude={event.latitude} longitude={event.longitude}/>
       </div>
       <div className="tag-row">
         {event.tags.map((tag) => (
