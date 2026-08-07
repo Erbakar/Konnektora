@@ -1,12 +1,83 @@
 import { z } from "zod";
 
-export const eventStatusSchema = z.enum(["draft", "published", "cancelled", "archived"]);
+export type RichTextToken = {
+  type: "text" | "tag" | "url" | "email" | "mention";
+  text: string;
+  href?: string;
+};
+const richTextPattern =
+  /(“”[^“”]+“”|“[^”]+”|"[^"]+"|[^\s|]+\|(?:https?:\/\/)?[^\s]+|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|@[\p{L}\p{N}_.]{2,30})/gu;
+export function parseRichText(value: string): RichTextToken[] {
+  return value
+    .split(richTextPattern)
+    .filter(Boolean)
+    .map((text): RichTextToken => {
+      if (text.startsWith("@"))
+        return {
+          type: "mention",
+          text,
+          href: `/users/${encodeURIComponent(text.slice(1))}`,
+        };
+      if (/^[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}$/.test(text))
+        return { type: "email", text, href: `mailto:${text}` };
+      if (text.includes("|")) {
+        const separator = text.indexOf("|");
+        const label = text.slice(0, separator);
+        const raw = text.slice(separator + 1);
+        const href = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+        return { type: "url", text: label, href };
+      }
+      if (/^(?:“”.+“”|“.+”|".+")$/u.test(text)) {
+        const label = text.startsWith("“”")
+          ? text.slice(2, -2)
+          : text.slice(1, -1);
+        const slug = label
+          .trim()
+          .toLocaleLowerCase("tr-TR")
+          .replace(/ğ/g, "g")
+          .replace(/ü/g, "u")
+          .replace(/ş/g, "s")
+          .replace(/ö/g, "o")
+          .replace(/ç/g, "c")
+          .replace(/ı/g, "i")
+          .normalize("NFKD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+        return { type: "tag", text, href: `/tags/${encodeURIComponent(slug)}` };
+      }
+      return { type: "text", text };
+    });
+}
+
+export const eventStatusSchema = z.enum([
+  "draft",
+  "published",
+  "cancelled",
+  "archived",
+]);
 export const eventFormatSchema = z.enum(["online", "offline", "hybrid"]);
-export const eventVisibilitySchema = z.enum(["open", "approval_required", "invite_only"]);
+export const eventVisibilitySchema = z.enum([
+  "open",
+  "approval_required",
+  "invite_only",
+]);
 export const tagStatusSchema = z.enum(["active", "hidden", "archived"]);
-export const userRoleSchema = z.enum(["user", "admin", "super_admin"]);
+export const userRoleSchema = z.enum([
+  "user",
+  "curator",
+  "admin",
+  "super_admin",
+]);
 export const accountTypeSchema = z.enum(["individual", "corporate"]);
-export const companyTypeSchema = z.enum(["sole_proprietorship", "limited_or_corporation", "association", "foundation", "public_body", "other"]);
+export const companyTypeSchema = z.enum([
+  "sole_proprietorship",
+  "limited_or_corporation",
+  "association",
+  "foundation",
+  "public_body",
+  "other",
+]);
 export const businessCategorySchema = z.enum([
   "event_organizer",
   "restaurant_bar_cafe",
@@ -16,7 +87,7 @@ export const businessCategorySchema = z.enum([
   "brand",
   "tourism_company",
   "sports_club",
-  "other"
+  "other",
 ]);
 export const passwordSchema = z
   .string()
@@ -29,11 +100,19 @@ export const phoneSchema = z.string().regex(/^\+[1-9]\d{7,14}$/);
 export const phoneVerificationResponseSchema = z.object({
   ok: z.literal(true),
   expiresInSeconds: z.number().int().positive(),
-  developmentCode: z.string().length(6).optional()
+  developmentCode: z.string().length(6).optional(),
 });
-export const availabilitySchema = z.object({ emailAvailable: z.boolean().nullable(), phoneAvailable: z.boolean().nullable(), usernameAvailable: z.boolean().nullable() });
+export const availabilitySchema = z.object({
+  emailAvailable: z.boolean().nullable(),
+  phoneAvailable: z.boolean().nullable(),
+  usernameAvailable: z.boolean().nullable(),
+});
 export type Availability = z.infer<typeof availabilitySchema>;
-export const privacyAudienceSchema = z.enum(["everybody", "following", "network"]);
+export const privacyAudienceSchema = z.enum([
+  "everybody",
+  "following",
+  "network",
+]);
 export const privacySettingsSchema = z.object({
   userId: z.string().uuid(),
   messageAudience: privacyAudienceSchema,
@@ -43,7 +122,7 @@ export const privacySettingsSchema = z.object({
   placeAudience: privacyAudienceSchema,
   placeInviteAudience: privacyAudienceSchema,
   createdAt: z.string().datetime().or(z.date()).optional(),
-  updatedAt: z.string().datetime().or(z.date()).optional()
+  updatedAt: z.string().datetime().or(z.date()).optional(),
 });
 export const notificationTopicSchema = z.enum([
   "tag_request",
@@ -58,21 +137,28 @@ export const notificationTopicSchema = z.enum([
   "event_invite",
   "event_manager",
   "place_invite",
-  "place_manager"
+  "place_manager",
 ]);
 export const deliveryChannelSchema = z.enum(["none", "both", "email", "push"]);
 export const notificationPreferenceSchema = z.object({
   topic: notificationTopicSchema,
-  channel: deliveryChannelSchema
+  channel: deliveryChannelSchema,
 });
-export const notificationPreferencesSchema = z.array(notificationPreferenceSchema);
-export const blockedTargetTypeSchema = z.enum(["user", "tag", "event", "place"]);
+export const notificationPreferencesSchema = z.array(
+  notificationPreferenceSchema,
+);
+export const blockedTargetTypeSchema = z.enum([
+  "user",
+  "tag",
+  "event",
+  "place",
+]);
 export const userBlockSchema = z.object({
   targetType: blockedTargetTypeSchema,
   targetId: z.string().uuid(),
   label: z.string(),
   subtitle: z.string().nullable().optional(),
-  createdAt: z.string().datetime().or(z.date())
+  createdAt: z.string().datetime().or(z.date()),
 });
 export const userBlocksSchema = z.array(userBlockSchema);
 export const memberCardSchema = z.object({
@@ -84,7 +170,7 @@ export const memberCardSchema = z.object({
   country: z.string().nullable(),
   followerCount: z.number().int().nonnegative(),
   commonTagCount: z.number().int().nonnegative(),
-  following: z.boolean()
+  following: z.boolean(),
 });
 export const memberCardsSchema = z.array(memberCardSchema);
 export const socialProviderSchema = z.enum(["google", "facebook"]);
@@ -94,15 +180,21 @@ export const socialAccountSchema = z.object({
   displayName: z.string().nullable(),
   avatarUrl: z.string().nullable(),
   connectedAt: z.string().datetime().or(z.date()),
-  lastUsedAt: z.string().datetime().or(z.date())
+  lastUsedAt: z.string().datetime().or(z.date()),
 });
 export const socialAccountsSchema = z.array(socialAccountSchema);
-export const contactSchema = z.object({ name: z.string(), email: z.string().email().optional(), phone: z.string().optional() });
+export const contactSchema = z.object({
+  name: z.string(),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+});
 export const contactImportResultSchema = z.object({
   source: z.enum(["phone", "google"]),
   importedCount: z.number().int().nonnegative(),
-  matches: z.array(z.object({ contactName: z.string(), member: memberCardSchema })),
-  invitees: z.array(contactSchema)
+  matches: z.array(
+    z.object({ contactName: z.string(), member: memberCardSchema }),
+  ),
+  invitees: z.array(contactSchema),
 });
 export type SocialProvider = z.infer<typeof socialProviderSchema>;
 export type SocialAccount = z.infer<typeof socialAccountSchema>;
@@ -112,27 +204,41 @@ export const onboardingStepSchema = z.object({
   key: z.enum(["phone", "personal_info", "photo", "interests", "people"]),
   title: z.string(),
   completed: z.boolean(),
-  path: z.string()
+  path: z.string(),
 });
 export const onboardingStatusSchema = z.object({
   completed: z.boolean(),
   completedAt: z.string().datetime().or(z.date()).nullable(),
   progress: z.number().int().min(0).max(100),
   currentStep: onboardingStepSchema.nullable(),
-  steps: z.array(onboardingStepSchema)
+  steps: z.array(onboardingStepSchema),
 });
 export const memberPassSchema = z.object({
-  member: memberCardSchema.pick({ id: true, name: true, username: true, city: true, country: true, followerCount: true }),
+  member: memberCardSchema.pick({
+    id: true,
+    name: true,
+    username: true,
+    city: true,
+    country: true,
+    followerCount: true,
+  }),
   qrPayload: z.string(),
   nfcPayload: z.string(),
-  version: z.number().int().positive()
+  version: z.number().int().positive(),
 });
 export const memberScanSchema = z.object({
   id: z.string().uuid(),
   method: z.enum(["qr", "nfc"]),
   createdAt: z.string().datetime().or(z.date()),
-  member: memberCardSchema.pick({ id: true, name: true, username: true, city: true, country: true, followerCount: true }),
-  following: z.boolean()
+  member: memberCardSchema.pick({
+    id: true,
+    name: true,
+    username: true,
+    city: true,
+    country: true,
+    followerCount: true,
+  }),
+  following: z.boolean(),
 });
 export const memberScansSchema = z.array(memberScanSchema);
 export const discoveryItemSchema = z.object({
@@ -142,12 +248,12 @@ export const discoveryItemSchema = z.object({
   subtitle: z.string().nullable(),
   href: z.string(),
   imageUrl: z.string().nullable(),
-  meta: z.string().nullable()
+  meta: z.string().nullable(),
 });
 export const discoveryActivitySchema = discoveryItemSchema.extend({
   action: z.string(),
   occurredAt: z.string().datetime().or(z.date()),
-  ownerId: z.string().uuid().nullable()
+  ownerId: z.string().uuid().nullable(),
 });
 export const discoveryFeedSchema = z.object({
   popularMembers: z.array(discoveryItemSchema),
@@ -155,29 +261,45 @@ export const discoveryFeedSchema = z.object({
   localEvents: z.array(discoveryItemSchema),
   trendingTags: z.array(discoveryItemSchema),
   popularPlaces: z.array(discoveryItemSchema),
-  activities: z.array(discoveryActivitySchema)
+  activeUserCount: z.number().int().nonnegative(),
+  scope: z.enum(["local", "global"]),
+  location: z.string().nullable(),
+  activities: z.array(discoveryActivitySchema),
 });
 export const discoverySearchSchema = z.object({
   query: z.string(),
   total: z.number().int().nonnegative(),
-  items: z.array(discoveryItemSchema)
+  items: z.array(discoveryItemSchema),
 });
-export const userStatusSchema = z.enum(["invited", "pending", "active", "disabled", "frozen", "deleted", "suspended", "banned"]);
+export const userStatusSchema = z.enum([
+  "invited",
+  "pending",
+  "active",
+  "disabled",
+  "frozen",
+  "deleted",
+  "suspended",
+  "banned",
+]);
 export const eventParticipantStatusSchema = z.enum([
   "invited",
   "requested",
   "accepted",
   "declined",
   "banned",
-  "attended"
+  "attended",
 ]);
-export const eventParticipantRoleSchema = z.enum(["attendee", "organizer", "manager"]);
+export const eventParticipantRoleSchema = z.enum([
+  "attendee",
+  "organizer",
+  "manager",
+]);
 export const eventTicketSchema = z.object({
   eventId: z.string().uuid(),
   eventTitle: z.string(),
   token: z.string().min(32),
   qrPayload: z.string(),
-  issuedAt: z.string().datetime()
+  issuedAt: z.string().datetime(),
 });
 export const reportTargetTypeSchema = z.enum([
   "event",
@@ -193,17 +315,72 @@ export const reportTargetTypeSchema = z.enum([
   "comment_reply",
   "private_message",
   "post",
-  "post_comment"
+  "post_comment",
 ]);
 
-export const postVisibilitySchema = z.enum(["everybody", "following", "network"]);
-export const postAuthorSchema = z.object({ id: z.string().uuid(), name: z.string(), username: z.string().nullable().optional(), profileVerifiedAt: z.string().datetime().or(z.date()).nullable().optional(), avatarUrl: z.string().nullable().optional() });
-export const postMediaSchema = z.object({ id: z.string().uuid(), postId: z.string().uuid(), url: z.string(), type: z.string(), sortOrder: z.number().int(), createdAt: z.string().datetime().or(z.date()) });
-export const socialPostSchema = z.object({ id: z.string().uuid(), authorId: z.string().uuid(), body: z.string(), visibility: postVisibilitySchema, status: z.string(), likeCount: z.number().int().nonnegative(), commentCount: z.number().int().nonnegative(), createdAt: z.string().datetime().or(z.date()), updatedAt: z.string().datetime().or(z.date()), liked: z.boolean(), author: postAuthorSchema, media: z.array(postMediaSchema) });
-export const socialPostFeedSchema = z.object({ items: z.array(socialPostSchema), page: z.number().int(), pageSize: z.number().int(), total: z.number().int().nonnegative(), hasMore: z.boolean() });
-export const socialPostCommentSchema = z.object({ id: z.string().uuid(), postId: z.string().uuid(), authorId: z.string().uuid(), parentId: z.string().uuid().nullable().optional(), body: z.string(), status: z.string(), createdAt: z.string().datetime().or(z.date()), updatedAt: z.string().datetime().or(z.date()), author: postAuthorSchema });
-export const reportStatusSchema = z.enum(["open", "reviewing", "resolved", "dismissed"]);
-export const userMessageTypeSchema = z.enum(["faq", "account_freeze", "write_to_us"]);
+export const postVisibilitySchema = z.enum([
+  "everybody",
+  "following",
+  "network",
+]);
+export const postAuthorSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  username: z.string().nullable().optional(),
+  profileVerifiedAt: z.string().datetime().or(z.date()).nullable().optional(),
+  avatarUrl: z.string().nullable().optional(),
+});
+export const postMediaSchema = z.object({
+  id: z.string().uuid(),
+  postId: z.string().uuid(),
+  url: z.string(),
+  type: z.string(),
+  sortOrder: z.number().int(),
+  createdAt: z.string().datetime().or(z.date()),
+});
+export const socialPostSchema = z.object({
+  id: z.string().uuid(),
+  authorId: z.string().uuid(),
+  body: z.string(),
+  visibility: postVisibilitySchema,
+  status: z.string(),
+  likeCount: z.number().int().nonnegative(),
+  commentCount: z.number().int().nonnegative(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+  liked: z.boolean(),
+  author: postAuthorSchema,
+  media: z.array(postMediaSchema),
+});
+export const socialPostFeedSchema = z.object({
+  items: z.array(socialPostSchema),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+  total: z.number().int().nonnegative(),
+  hasMore: z.boolean(),
+});
+export const socialPostCommentSchema = z.object({
+  id: z.string().uuid(),
+  postId: z.string().uuid(),
+  authorId: z.string().uuid(),
+  parentId: z.string().uuid().nullable().optional(),
+  body: z.string(),
+  status: z.string(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+  author: postAuthorSchema,
+});
+export const reportStatusSchema = z.enum([
+  "open",
+  "reviewing",
+  "resolved",
+  "dismissed",
+]);
+export const userMessageTypeSchema = z.enum([
+  "faq",
+  "account_freeze",
+  "write_to_us",
+]);
 export const userMessageStatusSchema = z.enum(["unread", "read"]);
 export const cmsCategoryTypeSchema = z.enum(["faq", "write_to_us"]);
 export const adminPermissionSchema = z.enum([
@@ -223,7 +400,7 @@ export const adminPermissionSchema = z.enum([
   "messages.write_to_us.manage",
   "places.manage",
   "comments.manage",
-  "media.manage"
+  "media.manage",
 ]);
 
 export const slugSchema = z
@@ -240,7 +417,7 @@ export const adminRoleGroupSchema = z.object({
   status: z.string(),
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional(),
-  _count: z.object({ users: z.number().int().nonnegative() }).optional()
+  _count: z.object({ users: z.number().int().nonnegative() }).optional(),
 });
 
 export const cmsCategorySchema = z.object({
@@ -252,7 +429,7 @@ export const cmsCategorySchema = z.object({
   status: z.enum(["active", "passive"]),
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional(),
-  _count: z.object({ faqs: z.number().int().nonnegative() }).optional()
+  _count: z.object({ faqs: z.number().int().nonnegative() }).optional(),
 });
 
 export const faqSchema = z.object({
@@ -263,7 +440,7 @@ export const faqSchema = z.object({
   status: z.enum(["active", "passive"]),
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional(),
-  category: cmsCategorySchema.optional()
+  category: cmsCategorySchema.optional(),
 });
 
 export const announcementSchema = z.object({
@@ -281,12 +458,17 @@ export const announcementSchema = z.object({
   publishAt: z.string().datetime().or(z.date()),
   expiresAt: z.string().datetime().or(z.date()).nullable(),
   createdAt: z.string().datetime().or(z.date()).optional(),
-  updatedAt: z.string().datetime().or(z.date()).optional()
+  updatedAt: z.string().datetime().or(z.date()).optional(),
 });
 
 export const announcementListSchema = z.array(announcementSchema);
 
-export const policyTypeSchema = z.enum(["privacy", "terms", "cookies", "about"]);
+export const policyTypeSchema = z.enum([
+  "privacy",
+  "terms",
+  "cookies",
+  "about",
+]);
 
 export const cmsPolicySchema = z.object({
   id: z.string().uuid(),
@@ -296,7 +478,7 @@ export const cmsPolicySchema = z.object({
   status: z.enum(["active", "passive"]),
   publishedAt: z.string().datetime().or(z.date()).nullable(),
   createdAt: z.string().datetime().or(z.date()).optional(),
-  updatedAt: z.string().datetime().or(z.date()).optional()
+  updatedAt: z.string().datetime().or(z.date()).optional(),
 });
 
 export const tagSchema = z.object({
@@ -306,38 +488,93 @@ export const tagSchema = z.object({
   description: z.string().max(500).nullable(),
   categoryId: z.string().uuid().nullable(),
   status: tagStatusSchema,
-  usageCount: z.number().int().nonnegative()
+  usageCount: z.number().int().nonnegative(),
 });
-export const publicProfileInterestSchema = z.object({ tag: tagSchema, sentiment: z.enum(["like", "ok", "dislike"]), common: z.boolean() });
+export const publicProfileInterestSchema = z.object({
+  tag: tagSchema,
+  sentiment: z.enum(["like", "ok", "dislike"]),
+  common: z.boolean(),
+});
 export const publicProfileSchema = z.object({
-  id: z.string().uuid(), name: z.string(), username: z.string(), accountType: accountTypeSchema,
-  website: z.string().nullable(), city: z.string().nullable(), country: z.string().nullable(),
-  followerCount: z.number().int().nonnegative(), followingCount: z.number().int().nonnegative(), verified: z.boolean(),
+  id: z.string().uuid(),
+  name: z.string(),
+  username: z.string(),
+  accountType: accountTypeSchema,
+  website: z.string().nullable(),
+  city: z.string().nullable(),
+  country: z.string().nullable(),
+  followerCount: z.number().int().nonnegative(),
+  followingCount: z.number().int().nonnegative(),
+  verified: z.boolean(),
   memberSince: z.string().datetime().or(z.date()),
-  media: z.array(z.object({ id: z.string().uuid(), url: z.string(), type: z.string(), sortOrder: z.number().int(), isProfilePicture: z.boolean() })),
-  interests: z.array(publicProfileInterestSchema), commonInterestCount: z.number().int().nonnegative(),
-  relationship: z.object({ isSelf: z.boolean(), following: z.boolean(), canMessage: z.boolean() }),
-  events: z.array(discoveryItemSchema), places: z.array(discoveryItemSchema)
+  media: z.array(
+    z.object({
+      id: z.string().uuid(),
+      url: z.string(),
+      type: z.string(),
+      sortOrder: z.number().int(),
+      isProfilePicture: z.boolean(),
+    }),
+  ),
+  interests: z.array(publicProfileInterestSchema),
+  commonInterestCount: z.number().int().nonnegative(),
+  relationship: z.object({
+    isSelf: z.boolean(),
+    following: z.boolean(),
+    canMessage: z.boolean(),
+  }),
+  events: z.array(discoveryItemSchema),
+  places: z.array(discoveryItemSchema),
 });
 
 export const profileVerificationRequestSchema = z.object({
-  id: z.string().uuid(), userId: z.string().uuid(), referenceMediaId: z.string().uuid(), selfieUrl: z.string(),
-  challenge: z.enum(["blink", "smile", "turn_left", "turn_right"]), status: z.enum(["pending", "approved", "rejected"]), provider: z.string(),
-  faceMatchScore: z.number().nullable(), livenessScore: z.number().nullable(), decisionReason: z.string().nullable(), reviewedById: z.string().uuid().nullable(),
-  reviewedAt: z.string().datetime().or(z.date()).nullable(), createdAt: z.string().datetime().or(z.date()), updatedAt: z.string().datetime().or(z.date()),
-  user: z.object({ id: z.string().uuid(), name: z.string(), username: z.string().nullable(), email: z.string().email(), accountType: z.string() }).optional()
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  referenceMediaId: z.string().uuid(),
+  selfieUrl: z.string(),
+  challenge: z.enum(["blink", "smile", "turn_left", "turn_right"]),
+  status: z.enum(["pending", "approved", "rejected"]),
+  provider: z.string(),
+  faceMatchScore: z.number().nullable(),
+  livenessScore: z.number().nullable(),
+  decisionReason: z.string().nullable(),
+  reviewedById: z.string().uuid().nullable(),
+  reviewedAt: z.string().datetime().or(z.date()).nullable(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+  user: z
+    .object({
+      id: z.string().uuid(),
+      name: z.string(),
+      username: z.string().nullable(),
+      avatarUrl: z.string().nullable().optional(),
+      email: z.string().email(),
+      accountType: z.string(),
+    })
+    .optional(),
 });
-export const profileVerificationStatusSchema = z.object({ eligible: z.boolean(), verified: z.boolean(), verifiedAt: z.string().datetime().or(z.date()).nullable(), request: profileVerificationRequestSchema.nullable() });
-export const profileVerificationRequestsSchema = z.array(profileVerificationRequestSchema);
-export type ProfileVerificationRequest = z.infer<typeof profileVerificationRequestSchema>;
-export type ProfileVerificationStatus = z.infer<typeof profileVerificationStatusSchema>;
+export const profileVerificationStatusSchema = z.object({
+  eligible: z.boolean(),
+  verified: z.boolean(),
+  verifiedAt: z.string().datetime().or(z.date()).nullable(),
+  request: profileVerificationRequestSchema.nullable(),
+});
+export const profileVerificationRequestsSchema = z.array(
+  profileVerificationRequestSchema,
+);
+export type ProfileVerificationRequest = z.infer<
+  typeof profileVerificationRequestSchema
+>;
+export type ProfileVerificationStatus = z.infer<
+  typeof profileVerificationStatusSchema
+>;
 
 export const tagSentimentSchema = z.enum(["like", "ok", "dislike"]);
 export const tagAffinitySchema = z.object({
   tag: tagSchema,
   sentiment: tagSentimentSchema,
   createdAt: z.string().datetime().or(z.date()).optional(),
-  updatedAt: z.string().datetime().or(z.date()).optional()
+  updatedAt: z.string().datetime().or(z.date()).optional(),
 });
 export const tagAffinitiesSchema = z.array(tagAffinitySchema);
 export const tagCommentSchema = z.object({
@@ -345,19 +582,29 @@ export const tagCommentSchema = z.object({
   tagId: z.string().uuid(),
   body: z.string().min(1).max(1000),
   likeCount: z.number().int().nonnegative(),
+  liked: z.boolean().optional(),
+  media: z
+    .array(
+      z.object({ id: z.string().uuid(), url: z.string(), type: z.string() }),
+    )
+    .optional(),
   createdAt: z.string().datetime().or(z.date()),
   updatedAt: z.string().datetime().or(z.date()),
   canDelete: z.boolean(),
-  author: z.object({
-    id: z.string().uuid(),
-    name: z.string(),
-    username: z.string().nullable()
-  }).nullable()
+  author: z
+    .object({
+      id: z.string().uuid(),
+      name: z.string(),
+      username: z.string().nullable(),
+      avatarUrl: z.string().nullable().optional(),
+    })
+    .nullable(),
 });
 export const tagCommentsSchema = z.array(tagCommentSchema);
 
 export const eventSchema = z.object({
   id: z.string().uuid(),
+  createdById: z.string().uuid().nullable().optional(),
   title: z.string().min(3).max(160),
   slug: slugSchema,
   summary: z.string().min(10).max(300),
@@ -370,18 +617,47 @@ export const eventSchema = z.object({
   visibility: eventVisibilitySchema,
   city: z.string().max(120).nullable(),
   country: z.string().max(120).nullable(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  attendeeCount: z.number().int().nonnegative().optional(),
   language: z.string().min(2).max(16),
   organizerName: z.string().max(160).nullable(),
   externalRegistrationUrl: z.string().url().nullable(),
   liveUrl: z.string().url().nullable().optional(),
   timeline: z.string().nullable().optional(),
-  lineup: z.array(z.object({ title: z.string(), startsAt: z.string(), description: z.string().optional() })).nullable().optional(),
-  ticketTypes: z.array(z.object({ name: z.string(), description: z.string().optional(), price: z.number().nonnegative(), currency: z.string(), capacity: z.number().int().positive().optional(), saleStartsAt: z.string().optional(), saleEndsAt: z.string().optional(), gateOpensAt: z.string().optional(), gateClosesAt: z.string().optional(), status: z.string().optional() })).nullable().optional(),
+  lineup: z
+    .array(
+      z.object({
+        type: z.enum(["heading", "subheading", "session", "break"]).optional(),
+        title: z.string(),
+        startsAt: z.string().optional(),
+        description: z.string().optional(),
+      }),
+    )
+    .nullable()
+    .optional(),
+  ticketTypes: z
+    .array(
+      z.object({
+        name: z.string(),
+        description: z.string().optional(),
+        price: z.number().nonnegative(),
+        currency: z.string(),
+        capacity: z.number().int().positive().optional(),
+        saleStartsAt: z.string().optional(),
+        saleEndsAt: z.string().optional(),
+        gateOpensAt: z.string().optional(),
+        gateClosesAt: z.string().optional(),
+        status: z.string().optional(),
+      }),
+    )
+    .nullable()
+    .optional(),
   coverImageUrl: z.string().url().nullable(),
   capacity: z.number().int().positive().nullable(),
   price: z.number().nonnegative(),
   currency: z.enum(["TRY", "EUR", "USD", "GBP"]),
-  tags: z.array(tagSchema)
+  tags: z.array(tagSchema),
 });
 
 export const eventListSchema = z.object({
@@ -389,24 +665,162 @@ export const eventListSchema = z.object({
   total: z.number().int().nonnegative(),
   page: z.number().int().positive(),
   pageSize: z.number().int().positive(),
-  hasNextPage: z.boolean()
+  hasNextPage: z.boolean(),
 });
 
-export const paymentStatusSchema = z.enum(["pending", "succeeded", "failed", "refunded", "partially_refunded", "cancelled"]);
-export const financeAccountSchema = z.object({ userId: z.string().uuid(), preferredCurrency: z.string(), bankProvider: z.string().nullable(), bankAccountLabel: z.string().nullable(), bankAccountLast4: z.string().nullable(), kycStatus: z.enum(["not_started", "pending", "approved", "rejected"]), kycProvider: z.string().nullable(), availableBalance: z.coerce.number(), pendingBalance: z.coerce.number(), createdAt: z.string().datetime().or(z.date()), updatedAt: z.string().datetime().or(z.date()) });
-export const billingProfileSchema = z.object({ userId: z.string().uuid(), legalName: z.string().nullable(), taxNumber: z.string().nullable(), taxOffice: z.string().nullable(), billingEmail: z.string().nullable(), country: z.string().nullable(), city: z.string().nullable(), postalCode: z.string().nullable(), addressLine: z.string().nullable(), createdAt: z.string().datetime().or(z.date()), updatedAt: z.string().datetime().or(z.date()) });
-export const paymentTransactionSchema = z.object({ id: z.string().uuid(), eventId: z.string().uuid(), payerId: z.string().uuid(), payeeId: z.string().uuid(), grossAmount: z.coerce.number(), platformFee: z.coerce.number(), netAmount: z.coerce.number(), refundedAmount: z.coerce.number(), currency: z.string(), status: paymentStatusSchema, provider: z.string(), providerRef: z.string().nullable(), idempotencyKey: z.string(), failureReason: z.string().nullable(), paidAt: z.string().datetime().or(z.date()).nullable(), createdAt: z.string().datetime().or(z.date()), updatedAt: z.string().datetime().or(z.date()), event: z.object({ id: z.string().uuid(), title: z.string(), slug: z.string() }).optional(), payer: z.object({ id: z.string().uuid(), name: z.string() }).optional(), payee: z.object({ id: z.string().uuid(), name: z.string() }).optional() });
-export const payoutSchema = z.object({ id: z.string().uuid(), userId: z.string().uuid(), amount: z.coerce.number(), currency: z.string(), status: z.string(), providerRef: z.string().nullable(), requestedAt: z.string().datetime().or(z.date()), processedAt: z.string().datetime().or(z.date()).nullable() });
-export const financeDashboardSchema = z.object({ account: financeAccountSchema, billing: billingProfileSchema.nullable(), transactions: z.array(paymentTransactionSchema), payouts: z.array(payoutSchema), summary: z.object({ availableBalance: z.number(), pendingBalance: z.number(), lifetimeNetRevenue: z.number(), currency: z.string() }) });
-export const beneficialOwnerSchema = z.object({ name: z.string(), nationality: z.string(), ownershipPercent: z.coerce.number(), identityNumberLast4: z.string().optional() });
-export const corporateKycDocumentSchema = z.object({ id: z.string().uuid(), type: z.string(), originalName: z.string(), mimeType: z.string(), size: z.number().int(), status: z.string(), createdAt: z.string().datetime().or(z.date()) });
-export const corporateKycApplicationSchema = z.object({ id: z.string().uuid(), userId: z.string().uuid(), status: z.enum(["not_started", "pending", "approved", "rejected"]), version: z.number().int(), legalName: z.string().nullable(), registrationNumber: z.string().nullable(), taxNumber: z.string().nullable(), incorporationCountry: z.string().nullable(), incorporationDate: z.string().datetime().or(z.date()).nullable(), registeredAddress: z.string().nullable(), website: z.string().nullable(), businessActivity: z.string().nullable(), representativeName: z.string().nullable(), representativeTitle: z.string().nullable(), representativeEmail: z.string().nullable(), representativePhone: z.string().nullable(), representativeBirthDate: z.string().datetime().or(z.date()).nullable(), beneficialOwners: z.array(beneficialOwnerSchema), termsAccepted: z.boolean(), informationConfirmed: z.boolean(), submittedAt: z.string().datetime().or(z.date()).nullable(), reviewedAt: z.string().datetime().or(z.date()).nullable(), decisionReason: z.string().nullable(), createdAt: z.string().datetime().or(z.date()), updatedAt: z.string().datetime().or(z.date()), documents: z.array(corporateKycDocumentSchema), requiredDocumentTypes: z.array(z.string()), completion: z.number().min(0).max(100), auditLogs: z.array(z.object({ id: z.string().uuid(), action: z.string(), note: z.string().nullable().optional(), createdAt: z.string().datetime().or(z.date()) })).optional() });
+export const paymentStatusSchema = z.enum([
+  "pending",
+  "succeeded",
+  "failed",
+  "refunded",
+  "partially_refunded",
+  "cancelled",
+]);
+export const financeAccountSchema = z.object({
+  userId: z.string().uuid(),
+  preferredCurrency: z.string(),
+  bankProvider: z.string().nullable(),
+  bankAccountLabel: z.string().nullable(),
+  bankAccountLast4: z.string().nullable(),
+  kycStatus: z.enum(["not_started", "pending", "approved", "rejected"]),
+  kycProvider: z.string().nullable(),
+  availableBalance: z.coerce.number(),
+  pendingBalance: z.coerce.number(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+});
+export const billingProfileSchema = z.object({
+  userId: z.string().uuid(),
+  legalName: z.string().nullable(),
+  taxNumber: z.string().nullable(),
+  taxOffice: z.string().nullable(),
+  billingEmail: z.string().nullable(),
+  country: z.string().nullable(),
+  city: z.string().nullable(),
+  postalCode: z.string().nullable(),
+  addressLine: z.string().nullable(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+});
+export const paymentTransactionSchema = z.object({
+  id: z.string().uuid(),
+  eventId: z.string().uuid(),
+  payerId: z.string().uuid(),
+  payeeId: z.string().uuid(),
+  grossAmount: z.coerce.number(),
+  platformFee: z.coerce.number(),
+  netAmount: z.coerce.number(),
+  refundedAmount: z.coerce.number(),
+  currency: z.string(),
+  status: paymentStatusSchema,
+  provider: z.string(),
+  providerRef: z.string().nullable(),
+  idempotencyKey: z.string(),
+  failureReason: z.string().nullable(),
+  paidAt: z.string().datetime().or(z.date()).nullable(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+  event: z
+    .object({ id: z.string().uuid(), title: z.string(), slug: z.string() })
+    .optional(),
+  payer: z.object({ id: z.string().uuid(), name: z.string() }).optional(),
+  payee: z.object({ id: z.string().uuid(), name: z.string() }).optional(),
+});
+export const payoutSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  amount: z.coerce.number(),
+  currency: z.string(),
+  status: z.string(),
+  providerRef: z.string().nullable(),
+  requestedAt: z.string().datetime().or(z.date()),
+  processedAt: z.string().datetime().or(z.date()).nullable(),
+});
+export const financeDashboardSchema = z.object({
+  account: financeAccountSchema,
+  billing: billingProfileSchema.nullable(),
+  transactions: z.array(paymentTransactionSchema),
+  payouts: z.array(payoutSchema),
+  member: z.object({
+    plan: z.enum(["free", "plus", "premium"]),
+    planStartedAt: z.string().datetime().or(z.date()).nullable(),
+  }),
+  business: z.object({
+    plan: z.enum(["starter", "growth", "scale"]),
+    planStartedAt: z.string().datetime().or(z.date()).nullable(),
+    companyName: z.string().nullable(),
+    category: z.string().nullable(),
+    managedEventCount: z.number().int().nonnegative(),
+    managedPlaceCount: z.number().int().nonnegative(),
+  }),
+  summary: z.object({
+    availableBalance: z.number(),
+    pendingBalance: z.number(),
+    lifetimeNetRevenue: z.number(),
+    currency: z.string(),
+  }),
+});
+export const beneficialOwnerSchema = z.object({
+  name: z.string(),
+  nationality: z.string(),
+  ownershipPercent: z.coerce.number(),
+  identityNumberLast4: z.string().optional(),
+});
+export const corporateKycDocumentSchema = z.object({
+  id: z.string().uuid(),
+  type: z.string(),
+  originalName: z.string(),
+  mimeType: z.string(),
+  size: z.number().int(),
+  status: z.string(),
+  createdAt: z.string().datetime().or(z.date()),
+});
+export const corporateKycApplicationSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  status: z.enum(["not_started", "pending", "approved", "rejected"]),
+  version: z.number().int(),
+  legalName: z.string().nullable(),
+  registrationNumber: z.string().nullable(),
+  taxNumber: z.string().nullable(),
+  incorporationCountry: z.string().nullable(),
+  incorporationDate: z.string().datetime().or(z.date()).nullable(),
+  registeredAddress: z.string().nullable(),
+  website: z.string().nullable(),
+  businessActivity: z.string().nullable(),
+  representativeName: z.string().nullable(),
+  representativeTitle: z.string().nullable(),
+  representativeEmail: z.string().nullable(),
+  representativePhone: z.string().nullable(),
+  representativeBirthDate: z.string().datetime().or(z.date()).nullable(),
+  beneficialOwners: z.array(beneficialOwnerSchema),
+  termsAccepted: z.boolean(),
+  informationConfirmed: z.boolean(),
+  submittedAt: z.string().datetime().or(z.date()).nullable(),
+  reviewedAt: z.string().datetime().or(z.date()).nullable(),
+  decisionReason: z.string().nullable(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+  documents: z.array(corporateKycDocumentSchema),
+  requiredDocumentTypes: z.array(z.string()),
+  completion: z.number().min(0).max(100),
+  auditLogs: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        action: z.string(),
+        note: z.string().nullable().optional(),
+        createdAt: z.string().datetime().or(z.date()),
+      }),
+    )
+    .optional(),
+});
 
 export const adminDashboardSchema = z.object({
   publishedEvents: z.number().int().nonnegative(),
   draftEvents: z.number().int().nonnegative(),
   activeTags: z.number().int().nonnegative(),
-  upcomingEvents: z.number().int().nonnegative()
+  upcomingEvents: z.number().int().nonnegative(),
 });
 
 export const adminUserSchema = z.object({
@@ -416,7 +830,7 @@ export const adminUserSchema = z.object({
   role: userRoleSchema,
   accountType: accountTypeSchema.optional(),
   emailVerified: z.boolean().optional(),
-  status: userStatusSchema.optional()
+  status: userStatusSchema.optional(),
 });
 
 export const profileSchema = z.object({
@@ -440,7 +854,7 @@ export const profileSchema = z.object({
   businessCategory: z.string().max(120).nullable(),
   emailVerified: z.boolean(),
   createdAt: z.string().datetime().or(z.date()),
-  updatedAt: z.string().datetime().or(z.date())
+  updatedAt: z.string().datetime().or(z.date()),
 });
 
 export const adminTagDetailSchema = tagSchema.extend({
@@ -450,7 +864,7 @@ export const adminTagDetailSchema = tagSchema.extend({
       name: z.string(),
       slug: slugSchema,
       description: z.string().nullable().optional(),
-      sortOrder: z.number().int().optional()
+      sortOrder: z.number().int().optional(),
     })
     .nullable()
     .optional(),
@@ -468,9 +882,9 @@ export const adminTagDetailSchema = tagSchema.extend({
   _count: z
     .object({
       events: z.number().int().nonnegative(),
-      interestedUsers: z.number().int().nonnegative()
+      interestedUsers: z.number().int().nonnegative(),
     })
-    .optional()
+    .optional(),
 });
 
 export const adminManagedUserSchema = adminUserSchema.extend({
@@ -504,9 +918,9 @@ export const adminManagedUserSchema = adminUserSchema.extend({
     .object({
       createdEvents: z.number().int().nonnegative(),
       eventParticipations: z.number().int().nonnegative(),
-      submittedReports: z.number().int().nonnegative()
+      submittedReports: z.number().int().nonnegative(),
     })
-    .optional()
+    .optional(),
 });
 
 export const adminManagedUserListSchema = z.object({
@@ -514,7 +928,7 @@ export const adminManagedUserListSchema = z.object({
   total: z.number().int().nonnegative(),
   page: z.number().int().positive(),
   pageSize: z.number().int().positive(),
-  hasNextPage: z.boolean()
+  hasNextPage: z.boolean(),
 });
 
 export const adminManagedUserDetailSchema = adminManagedUserSchema.extend({
@@ -524,9 +938,9 @@ export const adminManagedUserDetailSchema = adminManagedUserSchema.extend({
     createdEvents: z.number().int().nonnegative(),
     eventParticipations: z.number().int().nonnegative(),
     submittedReports: z.number().int().nonnegative(),
-    resolvedReports: z.number().int().nonnegative()
+    resolvedReports: z.number().int().nonnegative(),
   }),
-  interestTags: z.array(tagSchema)
+  interestTags: z.array(tagSchema),
 });
 
 export const eventParticipantSchema = z.object({
@@ -538,12 +952,12 @@ export const eventParticipantSchema = z.object({
   checkedInAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional(),
-  user: adminUserSchema.optional()
+  user: adminUserSchema.optional(),
 });
 
 export const loginResponseSchema = z.object({
   accessToken: z.string(),
-  user: adminUserSchema
+  user: adminUserSchema,
 });
 
 export const contentReportSchema = z.object({
@@ -569,12 +983,12 @@ export const contentReportSchema = z.object({
       violationScore: z.number().int().min(1).max(100),
       status: z.enum(["active", "passive"]),
       createdAt: z.string().datetime().or(z.date()).optional(),
-      updatedAt: z.string().datetime().or(z.date()).optional()
+      updatedAt: z.string().datetime().or(z.date()).optional(),
     })
     .optional()
     .nullable(),
   reporter: adminUserSchema.optional(),
-  resolvedBy: adminUserSchema.optional().nullable()
+  resolvedBy: adminUserSchema.optional().nullable(),
 });
 
 export const reportRuleSchema = z.object({
@@ -585,7 +999,7 @@ export const reportRuleSchema = z.object({
   violationScore: z.number().int().min(1).max(100),
   status: z.enum(["active", "passive"]),
   createdAt: z.string().datetime().or(z.date()).optional(),
-  updatedAt: z.string().datetime().or(z.date()).optional()
+  updatedAt: z.string().datetime().or(z.date()).optional(),
 });
 
 export const reportGroupNoteSchema = z.object({
@@ -596,7 +1010,7 @@ export const reportGroupNoteSchema = z.object({
   updatedById: z.string().uuid().nullable().optional(),
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional(),
-  updatedBy: adminUserSchema.optional().nullable()
+  updatedBy: adminUserSchema.optional().nullable(),
 });
 
 export const reportGroupCommentSchema = z.object({
@@ -607,7 +1021,7 @@ export const reportGroupCommentSchema = z.object({
   createdById: z.string().uuid().nullable().optional(),
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional(),
-  createdBy: adminUserSchema.optional().nullable()
+  createdBy: adminUserSchema.optional().nullable(),
 });
 
 export const adminActivityLogSchema = z.object({
@@ -619,7 +1033,7 @@ export const adminActivityLogSchema = z.object({
   note: z.string().nullable().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.string().datetime().or(z.date()).optional(),
-  actor: adminUserSchema.optional().nullable()
+  actor: adminUserSchema.optional().nullable(),
 });
 
 export const moderationDecisionSchema = z.object({
@@ -639,7 +1053,7 @@ export const moderationDecisionSchema = z.object({
     "remove_comment",
     "reset_username",
     "remove_website",
-    "remove_private_messages"
+    "remove_private_messages",
   ]),
   penaltyScore: z.number().int().nonnegative(),
   note: z.string().max(2000).nullable(),
@@ -648,7 +1062,7 @@ export const moderationDecisionSchema = z.object({
   suspensionEndsAt: z.string().datetime().or(z.date()).nullable(),
   createdAt: z.string().datetime().or(z.date()).optional(),
   user: adminUserSchema.optional().nullable(),
-  issuedBy: adminUserSchema.optional().nullable()
+  issuedBy: adminUserSchema.optional().nullable(),
 });
 
 export const adminPlaceSchema = z.object({
@@ -656,11 +1070,14 @@ export const adminPlaceSchema = z.object({
   name: z.string(),
   slug: slugSchema,
   description: z.string().nullable(),
+  placeType: z.string().optional(),
   status: z.string(),
   coverImageUrl: z.string().nullable(),
   country: z.string().nullable(),
   city: z.string().nullable(),
   address: z.string().nullable(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
   followerCount: z.number().int().nonnegative(),
   inviteCount: z.number().int().nonnegative(),
   createdById: z.string().uuid().nullable(),
@@ -669,40 +1086,54 @@ export const adminPlaceSchema = z.object({
   updatedAt: z.string().datetime().or(z.date()),
   createdBy: adminUserSchema.optional().nullable(),
   updatedBy: adminUserSchema.optional().nullable(),
-  reportCount: z.number().int().nonnegative().optional()
+  reportCount: z.number().int().nonnegative().optional(),
+  tags: z.array(tagSchema).optional(),
 });
 
-export const placeMemberStatusSchema = z.enum(["invited", "accepted", "declined", "banned"]);
+export const placeMemberStatusSchema = z.enum([
+  "invited",
+  "accepted",
+  "declined",
+  "banned",
+]);
 export const placeMemberRoleSchema = z.enum(["member", "manager", "organizer"]);
-export const placeSchema = adminPlaceSchema.pick({
-  id: true,
-  name: true,
-  slug: true,
-  description: true,
-  status: true,
-  coverImageUrl: true,
-  country: true,
-  city: true,
-  address: true,
-  followerCount: true,
-  inviteCount: true,
-  createdById: true,
-  createdAt: true,
-  updatedAt: true
-}).extend({
-  isFollowing: z.boolean(),
-  viewerMembership: z.object({
-    status: placeMemberStatusSchema,
-    role: placeMemberRoleSchema
-  }).nullable()
-});
+export const placeSchema = adminPlaceSchema
+  .pick({
+    id: true,
+    name: true,
+    slug: true,
+    description: true,
+    placeType: true,
+    status: true,
+    coverImageUrl: true,
+    country: true,
+    city: true,
+    address: true,
+    latitude: true,
+    longitude: true,
+    followerCount: true,
+    inviteCount: true,
+    createdById: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    tags: z.array(tagSchema).optional(),
+    isFollowing: z.boolean(),
+    viewerMembership: z
+      .object({
+        status: placeMemberStatusSchema,
+        role: placeMemberRoleSchema,
+      })
+      .nullable(),
+  });
 
 export const placeListSchema = z.object({
   items: z.array(placeSchema),
   total: z.number().int().nonnegative(),
   page: z.number().int().positive(),
   pageSize: z.number().int().positive(),
-  hasNextPage: z.boolean()
+  hasNextPage: z.boolean(),
 });
 
 export const placeMemberSchema = z.object({
@@ -710,9 +1141,10 @@ export const placeMemberSchema = z.object({
   userId: z.string().uuid(),
   status: placeMemberStatusSchema,
   role: placeMemberRoleSchema,
+  checkedInAt: z.string().datetime().or(z.date()).nullable().optional(),
   createdAt: z.string().datetime().or(z.date()),
   updatedAt: z.string().datetime().or(z.date()),
-  user: adminUserSchema.optional()
+  user: adminUserSchema.optional(),
 });
 
 export const adminMediaSchema = z.object({
@@ -728,7 +1160,7 @@ export const adminMediaSchema = z.object({
   createdAt: z.string().datetime().or(z.date()),
   updatedAt: z.string().datetime().or(z.date()),
   uploadedBy: adminUserSchema.optional().nullable(),
-  reportCount: z.number().int().nonnegative().optional()
+  reportCount: z.number().int().nonnegative().optional(),
 });
 
 export const profileMediaSchema = adminMediaSchema.pick({
@@ -742,7 +1174,7 @@ export const profileMediaSchema = adminMediaSchema.pick({
   sortOrder: true,
   isProfilePicture: true,
   createdAt: true,
-  updatedAt: true
+  updatedAt: true,
 });
 export const profileMediaListSchema = z.array(profileMediaSchema);
 
@@ -758,9 +1190,16 @@ export const adminCommentSchema = z.object({
   createdAt: z.string().datetime().or(z.date()),
   updatedAt: z.string().datetime().or(z.date()),
   author: adminUserSchema.optional().nullable(),
-  parent: z.object({ id: z.string().uuid(), body: z.string(), author: adminUserSchema.optional().nullable() }).optional().nullable(),
+  parent: z
+    .object({
+      id: z.string().uuid(),
+      body: z.string(),
+      author: adminUserSchema.optional().nullable(),
+    })
+    .optional()
+    .nullable(),
   _count: z.object({ replies: z.number().int().nonnegative() }).optional(),
-  reportCount: z.number().int().nonnegative().optional()
+  reportCount: z.number().int().nonnegative().optional(),
 });
 
 export const adminPrivateMessageSchema = z.object({
@@ -773,7 +1212,7 @@ export const adminPrivateMessageSchema = z.object({
   updatedAt: z.string().datetime().or(z.date()),
   sender: adminUserSchema.optional().nullable(),
   recipient: adminUserSchema.optional().nullable(),
-  reportCount: z.number().int().nonnegative().optional()
+  reportCount: z.number().int().nonnegative().optional(),
 });
 
 export const privateChatMessageSchema = z.object({
@@ -792,8 +1231,18 @@ export const privateChatMessageSchema = z.object({
   deletedAt: z.string().datetime().or(z.date()).nullable().optional(),
   createdAt: z.string().datetime().or(z.date()),
   updatedAt: z.string().datetime().or(z.date()),
-  replyTo: z.object({ id: z.string().uuid(), body: z.string(), senderId: z.string().uuid().nullable(), status: z.string() }).nullable().optional(),
-  reactions: z.array(z.object({ emoji: z.string(), userId: z.string().uuid() })).optional()
+  replyTo: z
+    .object({
+      id: z.string().uuid(),
+      body: z.string(),
+      senderId: z.string().uuid().nullable(),
+      status: z.string(),
+    })
+    .nullable()
+    .optional(),
+  reactions: z
+    .array(z.object({ emoji: z.string(), userId: z.string().uuid() }))
+    .optional(),
 });
 
 export const conversationSchema = z.object({
@@ -801,20 +1250,29 @@ export const conversationSchema = z.object({
     id: z.string().uuid(),
     name: z.string(),
     username: z.string().nullable(),
-    status: userStatusSchema
+    status: userStatusSchema,
   }),
   lastMessage: privateChatMessageSchema,
   unreadCount: z.number().int().nonnegative(),
-  preference: z.object({ pinned: z.boolean(), muted: z.boolean(), archived: z.boolean() }).optional()
+  preference: z
+    .object({ pinned: z.boolean(), muted: z.boolean(), archived: z.boolean() })
+    .optional(),
 });
 
 export const messageSearchResultSchema = privateChatMessageSchema.extend({
-  peer: z.object({ id: z.string().uuid(), name: z.string(), username: z.string().nullable(), status: userStatusSchema }).nullable()
+  peer: z
+    .object({
+      id: z.string().uuid(),
+      name: z.string(),
+      username: z.string().nullable(),
+      status: userStatusSchema,
+    })
+    .nullable(),
 });
 
 export const conversationListSchema = z.object({
   items: z.array(conversationSchema),
-  totalUnread: z.number().int().nonnegative()
+  totalUnread: z.number().int().nonnegative(),
 });
 
 export const conversationMessagesSchema = z.object({
@@ -822,7 +1280,7 @@ export const conversationMessagesSchema = z.object({
   total: z.number().int().nonnegative(),
   page: z.number().int().positive(),
   pageSize: z.number().int().positive(),
-  hasNextPage: z.boolean()
+  hasNextPage: z.boolean(),
 });
 
 export const userMessageSchema = z.object({
@@ -842,7 +1300,7 @@ export const userMessageSchema = z.object({
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional(),
   user: adminUserSchema.optional().nullable(),
-  readBy: adminUserSchema.optional().nullable()
+  readBy: adminUserSchema.optional().nullable(),
 });
 
 export const userMessageListSchema = z.object({
@@ -850,7 +1308,7 @@ export const userMessageListSchema = z.object({
   total: z.number().int().nonnegative(),
   page: z.number().int().positive(),
   pageSize: z.number().int().positive(),
-  hasNextPage: z.boolean()
+  hasNextPage: z.boolean(),
 });
 
 export const notificationSchema = z.object({
@@ -862,7 +1320,7 @@ export const notificationSchema = z.object({
   targetType: z.string().nullable().optional(),
   targetId: z.string().nullable().optional(),
   readAt: z.string().datetime().or(z.date()).nullable(),
-  createdAt: z.string().datetime().or(z.date()).optional()
+  createdAt: z.string().datetime().or(z.date()).optional(),
 });
 
 const reportTargetOwnerSchema = adminUserSchema
@@ -883,7 +1341,7 @@ const reportTargetOwnerSchema = adminUserSchema
     emailVerified: z.boolean().optional(),
     penaltyScoreLastYear: z.number().int().nonnegative().optional(),
     penaltyScoreAllTime: z.number().int().nonnegative().optional(),
-    createdAt: z.string().datetime().or(z.date()).optional()
+    createdAt: z.string().datetime().or(z.date()).optional(),
   })
   .passthrough();
 
@@ -897,7 +1355,7 @@ export const reportGroupSchema = z.object({
       status: z.string().nullable().optional(),
       owner: reportTargetOwnerSchema.nullable().optional(),
       metrics: z.record(z.string(), z.number().int().nonnegative()).optional(),
-      payload: z.record(z.string(), z.unknown()).optional()
+      payload: z.record(z.string(), z.unknown()).optional(),
     })
     .nullable()
     .optional(),
@@ -911,11 +1369,11 @@ export const reportGroupSchema = z.object({
   note: reportGroupNoteSchema.nullable().optional(),
   comments: z.array(reportGroupCommentSchema).optional(),
   activityLogs: z.array(adminActivityLogSchema).optional(),
-  decisions: z.array(moderationDecisionSchema).optional()
+  decisions: z.array(moderationDecisionSchema).optional(),
 });
 
 export const reportGroupDetailSchema = reportGroupSchema.extend({
-  reports: z.array(contentReportSchema)
+  reports: z.array(contentReportSchema),
 });
 
 export type EventStatus = z.infer<typeof eventStatusSchema>;
@@ -929,7 +1387,9 @@ export type PrivacyAudience = z.infer<typeof privacyAudienceSchema>;
 export type PrivacySettings = z.infer<typeof privacySettingsSchema>;
 export type NotificationTopic = z.infer<typeof notificationTopicSchema>;
 export type DeliveryChannel = z.infer<typeof deliveryChannelSchema>;
-export type NotificationPreference = z.infer<typeof notificationPreferenceSchema>;
+export type NotificationPreference = z.infer<
+  typeof notificationPreferenceSchema
+>;
 export type BlockedTargetType = z.infer<typeof blockedTargetTypeSchema>;
 export type UserBlock = z.infer<typeof userBlockSchema>;
 export type MemberCard = z.infer<typeof memberCardSchema>;
@@ -944,7 +1404,9 @@ export type TagSentiment = z.infer<typeof tagSentimentSchema>;
 export type TagAffinity = z.infer<typeof tagAffinitySchema>;
 export type TagComment = z.infer<typeof tagCommentSchema>;
 export type UserStatus = z.infer<typeof userStatusSchema>;
-export type EventParticipantStatus = z.infer<typeof eventParticipantStatusSchema>;
+export type EventParticipantStatus = z.infer<
+  typeof eventParticipantStatusSchema
+>;
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;
 export type EventTicket = z.infer<typeof eventTicketSchema>;
 export type ReportTargetType = z.infer<typeof reportTargetTypeSchema>;
@@ -967,7 +1429,9 @@ export type AdminTagDetail = z.infer<typeof adminTagDetailSchema>;
 export type Event = z.infer<typeof eventSchema>;
 export type FinanceDashboard = z.infer<typeof financeDashboardSchema>;
 export type PaymentTransaction = z.infer<typeof paymentTransactionSchema>;
-export type CorporateKycApplication = z.infer<typeof corporateKycApplicationSchema>;
+export type CorporateKycApplication = z.infer<
+  typeof corporateKycApplicationSchema
+>;
 export type CorporateKycDocument = z.infer<typeof corporateKycDocumentSchema>;
 export type BeneficialOwner = z.infer<typeof beneficialOwnerSchema>;
 export type EventList = z.infer<typeof eventListSchema>;
@@ -1002,5 +1466,7 @@ export type ReportGroup = z.infer<typeof reportGroupSchema>;
 export type ReportGroupDetail = z.infer<typeof reportGroupDetailSchema>;
 export type AdminManagedUser = z.infer<typeof adminManagedUserSchema>;
 export type AdminManagedUserList = z.infer<typeof adminManagedUserListSchema>;
-export type AdminManagedUserDetail = z.infer<typeof adminManagedUserDetailSchema>;
+export type AdminManagedUserDetail = z.infer<
+  typeof adminManagedUserDetailSchema
+>;
 export type Profile = z.infer<typeof profileSchema>;

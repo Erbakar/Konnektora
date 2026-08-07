@@ -1,7 +1,7 @@
 import { DiscoveryService } from "./discovery.service";
 
 describe("DiscoveryService", () => {
-  const user = { findUnique: jest.fn(), findMany: jest.fn() };
+  const user = { findUnique: jest.fn(), findMany: jest.fn(), count: jest.fn() };
   const userBlock = { findMany: jest.fn() };
   const event = { findMany: jest.fn() };
   const tag = { findMany: jest.fn() };
@@ -15,6 +15,7 @@ describe("DiscoveryService", () => {
     jest.clearAllMocks();
     user.findUnique.mockResolvedValue({ city: "Istanbul", country: "Türkiye" });
     user.findMany.mockResolvedValue([member]);
+    user.count.mockResolvedValue(3);
     userBlock.findMany.mockResolvedValue([]);
     event.findMany.mockResolvedValue([]);
     tag.findMany.mockResolvedValue([]);
@@ -27,6 +28,13 @@ describe("DiscoveryService", () => {
     const result = await service.feed("viewer-id");
     expect(result.popularMembers[0]).toMatchObject({ kind: "user", title: "Ada" });
     expect(event.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ city: { equals: "Istanbul", mode: "insensitive" } }) }));
+    expect(result.activeUserCount).toBe(3);
+  });
+
+  it("removes location constraints for the global trend scope", async () => {
+    await service.feed("viewer-id", { scope: "global" });
+    expect(tag.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { status: "active" } }));
+    expect(event.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.not.objectContaining({ city: expect.anything() }) }));
   });
 
   it("excludes users blocked in either direction", async () => {

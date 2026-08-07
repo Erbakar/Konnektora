@@ -1,0 +1,11 @@
+import { UnauthorizedException } from "@nestjs/common";
+import { AutomationsService } from "./automations.service";
+describe("AutomationsService", () => {
+  const eventParticipant = { findMany: jest.fn() }; const automatedMessageDelivery = { create: jest.fn(), update: jest.fn() };
+  const mail = { sendEventReminderEmail: jest.fn() }; const sms = { sendEventReminder: jest.fn() }; const config = { get: jest.fn((key:string) => key === "CRON_SECRET" ? "secret" : undefined) };
+  const service = new AutomationsService({ eventParticipant, automatedMessageDelivery } as never, mail as never, sms as never, config as never);
+  beforeEach(() => { jest.clearAllMocks(); automatedMessageDelivery.create.mockImplementation(({data}) => ({ id: `${data.channel}-1`, ...data })); automatedMessageDelivery.update.mockResolvedValue({}); mail.sendEventReminderEmail.mockResolvedValue({ provider: "resend", providerId: "mail-1" }); sms.sendEventReminder.mockResolvedValue({ provider: "webhook" }); });
+  it("protects the cron endpoint with a secret", () => { expect(() => service.assertSecret("wrong")).toThrow(UnauthorizedException); expect(() => service.assertSecret("secret")).not.toThrow(); });
+  it("sends email and sms once to eligible participants", async () => { eventParticipant.findMany.mockResolvedValue([{ event: { id: "event-1", title: "Buluşma", slug: "bulusma", startsAt: new Date("2026-08-08T12:00:00Z") }, user: { id: "user-1", name: "Ada", email: "ada@example.com", phone: "+905551112233", phoneVerified: true, notificationPreferences: [] } }]); const result = await service.sendEventReminders(new Date("2026-08-07T12:00:00Z")); expect(result.sent).toBe(2); expect(mail.sendEventReminderEmail).toHaveBeenCalled(); expect(sms.sendEventReminder).toHaveBeenCalled(); });
+  it("skips duplicate deliveries", async () => { eventParticipant.findMany.mockResolvedValue([{ event: { id: "event-1", title: "Buluşma", slug: "bulusma", startsAt: new Date() }, user: { id: "user-1", name: "Ada", email: "ada@example.com", phone: null, phoneVerified: false, notificationPreferences: [{ channel: "email" }] } }]); automatedMessageDelivery.create.mockRejectedValue({ code: "P2002" }); const result = await service.sendEventReminders(); expect(result.skipped).toBe(1); expect(mail.sendEventReminderEmail).not.toHaveBeenCalled(); });
+});

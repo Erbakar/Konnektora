@@ -26,16 +26,18 @@ export class ChatService {
       this.prisma.conversationPreference.findMany({ where: { userId } })
     ]);
     const blockedIds = new Set(blocks.map((block) => block.userId === userId ? block.targetId : block.userId));
+    const preferenceMap = new Map(preferences.map((item) => [item.peerId, item]));
     const conversations = new Map<string, { peer: NonNullable<(typeof messages)[number]["sender"]>; lastMessage: PrivateMessage; unreadCount: number }>();
     for (const message of messages) {
       const peer = message.senderId === userId ? message.recipient : message.sender;
       if (!peer || blockedIds.has(peer.id) || peer.status !== UserStatus.active) continue;
+      const hiddenBefore = preferenceMap.get(peer.id)?.hiddenBefore;
+      if (hiddenBefore && message.createdAt <= hiddenBefore) continue;
       const current = conversations.get(peer.id);
       const unread = message.recipientId === userId && !message.readAt ? 1 : 0;
       if (current) current.unreadCount += unread;
       else conversations.set(peer.id, { peer, lastMessage: this.stripRelations(message), unreadCount: unread });
     }
-    const preferenceMap = new Map(preferences.map((item) => [item.peerId, item]));
     const items = [...conversations.values()].map((item) => ({ ...item, preference: preferenceMap.get(item.peer.id) ?? { pinned: false, muted: false, archived: false } }))
       .sort((left, right) => Number(right.preference.pinned) - Number(left.preference.pinned) || new Date(right.lastMessage.createdAt).getTime() - new Date(left.lastMessage.createdAt).getTime());
     return { items, totalUnread: items.reduce((sum, item) => sum + item.unreadCount, 0) };
@@ -43,6 +45,7 @@ export class ChatService {
 
   async listMessages(userId: string, peerId: string, query: ConversationMessagesQueryDto) {
     await this.ensureConversationVisible(userId, peerId);
+    const preference = await this.prisma.conversationPreference.findUnique({ where: { userId_peerId: { userId, peerId } }, select: { hiddenBefore: true } });
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 50;
     const where = {
@@ -50,7 +53,8 @@ export class ChatService {
       OR: [
         { senderId: userId, recipientId: peerId },
         { senderId: peerId, recipientId: userId }
-      ]
+      ],
+      ...(preference?.hiddenBefore ? { createdAt: { gt: preference.hiddenBefore } } : {})
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.privateMessage.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize, include: { replyTo: { select: { id: true, body: true, senderId: true, status: true } }, reactions: { select: { emoji: true, userId: true } } } }),
@@ -121,6 +125,16 @@ export class ChatService {
   setTyping(userId: string, peerId: string) { this.typing.set(`${userId}:${peerId}`, Date.now() + 6000); return { ok: true }; }
   getTyping(userId: string, peerId: string) { return { typing: (this.typing.get(`${peerId}:${userId}`) ?? 0) > Date.now() }; }
   async setPreference(userId: string, peerId: string, input: ConversationPreferenceDto) { await this.ensureConversationVisible(userId, peerId); return this.prisma.conversationPreference.upsert({ where: { userId_peerId: { userId, peerId } }, create: { userId, peerId, ...input }, update: input }); }
+
+  async removeConversation(userId: string, peerId: string) {
+    await this.ensureConversationVisible(userId, peerId);
+    await this.prisma.conversationPreference.upsert({
+      where: { userId_peerId: { userId, peerId } },
+      create: { userId, peerId, hiddenBefore: new Date() },
+      update: { hiddenBefore: new Date(), pinned: false }
+    });
+    return { ok: true };
+  }
 
   async markRead(userId: string, peerId: string) {
     await this.ensureConversationVisible(userId, peerId);

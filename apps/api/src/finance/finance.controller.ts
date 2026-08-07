@@ -5,7 +5,7 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { AdminGuard } from "../auth/admin.guard";
 import { RequirePermissions } from "../auth/permissions";
 import { KycStatus, PayoutStatus } from "@prisma/client";
-import { ConfirmPaymentDto, CreatePaymentDto, FinanceSettingsDto, PayoutDto, RefundPaymentDto } from "./finance.dto";
+import { BusinessPlanDto, ConfirmPaymentDto, CreatePaymentDto, FinanceSettingsDto, MemberPlanDto, PayoutDto, RefundPaymentDto } from "./finance.dto";
 import { FinanceService } from "./finance.service";
 
 @Controller() @UseGuards(JwtAuthGuard)
@@ -18,6 +18,8 @@ export class FinanceController {
   @Post("me/payments/:id/confirm") confirm(@Param("id") id: string, @Body() body: ConfirmPaymentDto, @CurrentUser() user: User) { return this.finance.confirm(id, user, body); }
   @Post("me/payments/:id/refund") refund(@Param("id") id: string, @Body() body: RefundPaymentDto, @CurrentUser() user: User) { return this.finance.refund(id, user, body); }
   @Post("me/finance/payouts") payout(@Body() body: PayoutDto, @CurrentUser() user: User) { return this.finance.payout(user, body); }
+  @Post("me/finance/plan") plan(@Body() body: BusinessPlanDto, @CurrentUser() user: User) { return this.finance.changeBusinessPlan(user, body); }
+  @Post("me/finance/member-plan") memberPlan(@Body() body: MemberPlanDto, @CurrentUser() user: User) { return this.finance.changeMemberPlan(user, body); }
 }
 
 @Controller("admin/finance") @UseGuards(AdminGuard) @RequirePermissions("users.manage")

@@ -25,18 +25,22 @@ import { FinanceModule } from "./finance/finance.module";
 import { CorporateKycModule } from "./corporate-kyc/corporate-kyc.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { TicketsModule } from "./tickets/tickets.module";
+import { CuratorsModule } from "./curators/curators.module";
+import { AutomationsModule } from "./automations/automations.module";
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     AuthModule,
+    AutomationsModule,
     CmsModule,
     ChatModule,
     ContentAdminModule,
     ContentModule,
     ContactsModule,
     CorporateKycModule,
+    CuratorsModule,
     DiscoveryModule,
     AdminModule,
     EventsModule,

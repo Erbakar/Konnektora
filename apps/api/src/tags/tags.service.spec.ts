@@ -9,9 +9,24 @@ describe("TagsService comments", () => {
       contentComment: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
+        count: jest.fn(),
         create: jest.fn(),
-        update: jest.fn()
-      }
+        update: jest.fn(),
+      },
+      contentReaction: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        delete: jest.fn(),
+      },
+      mediaFile: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
+      eventTag: { count: jest.fn() },
+      placeTag: { count: jest.fn() },
+      userInterestTag: { count: jest.fn(), findMany: jest.fn() },
+      contentView: { count: jest.fn() },
+      $transaction: jest.fn(async (operations: Promise<unknown>[]) =>
+        Promise.all(operations),
+      ),
     };
     return { service: new TagsService(prisma as never), prisma };
   };
@@ -22,10 +37,47 @@ describe("TagsService comments", () => {
     prisma.userBlock.findUnique.mockResolvedValue(null);
     prisma.userBlock.findMany.mockResolvedValue([{ targetId: "blocked-user" }]);
     prisma.contentComment.findMany.mockResolvedValue([]);
+    prisma.mediaFile.findMany.mockResolvedValue([]);
+    prisma.contentReaction.findMany.mockResolvedValue([]);
 
     await service.listTagComments("tag-1", "viewer-1");
     expect(prisma.contentComment.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ authorId: { notIn: ["blocked-user"] } }) })
+      expect.objectContaining({
+        where: expect.objectContaining({
+          authorId: { notIn: ["blocked-user"] },
+        }),
+      }),
+    );
+  });
+
+  it("returns public usage statistics for a tag", async () => {
+    const { service, prisma } = createService();
+    prisma.tag.findFirst.mockResolvedValue({ id: "tag-1" });
+    prisma.eventTag.count.mockResolvedValue(4);
+    prisma.placeTag.count.mockResolvedValue(2);
+    prisma.userInterestTag.count.mockResolvedValue(8);
+    prisma.contentComment.count.mockResolvedValue(5);
+    prisma.contentView.count.mockResolvedValue(20);
+    await expect(service.getPublicStats("tag-1")).resolves.toEqual({
+      events: 4,
+      places: 2,
+      followers: 8,
+      posts: 5,
+      views: 20,
+    });
+  });
+
+  it("toggles a post like and keeps the stored counter in sync", async () => {
+    const { service, prisma } = createService();
+    prisma.contentComment.findFirst.mockResolvedValue({ id: "comment-1" });
+    prisma.contentReaction.findUnique.mockResolvedValue(null);
+    prisma.contentReaction.create.mockResolvedValue({});
+    prisma.contentComment.update.mockResolvedValue({});
+    await expect(
+      service.toggleCommentLike("comment-1", "user-1"),
+    ).resolves.toEqual({ liked: true });
+    expect(prisma.contentComment.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { likeCount: { increment: 1 } } }),
     );
   });
 
@@ -34,7 +86,9 @@ describe("TagsService comments", () => {
     prisma.tag.findFirst.mockResolvedValue({ id: "tag-1" });
     prisma.userBlock.findUnique.mockResolvedValue({ userId: "viewer-1" });
 
-    await expect(service.listTagComments("tag-1", "viewer-1")).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.listTagComments("tag-1", "viewer-1"),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it("creates a trimmed comment owned by the current user", async () => {
@@ -48,21 +102,124 @@ describe("TagsService comments", () => {
       likeCount: 0,
       createdAt: now,
       updatedAt: now,
-      author: { id: "user-1", name: "User", username: "user" }
+      author: { id: "user-1", name: "User", username: "user" },
     });
 
-    const comment = await service.createTagComment("tag-1", "  Great topic  ", "user-1");
+    const comment = await service.createTagComment(
+      "tag-1",
+      "  Great topic  ",
+      "user-1",
+    );
     expect(comment.canDelete).toBe(true);
     expect(prisma.contentComment.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ authorId: "user-1", body: "Great topic" }) })
+      expect.objectContaining({
+        data: expect.objectContaining({
+          authorId: "user-1",
+          body: "Great topic",
+        }),
+      }),
     );
   });
 
   it("prevents another member from deleting a comment", async () => {
     const { service, prisma } = createService();
-    prisma.contentComment.findFirst.mockResolvedValue({ id: "comment-1", authorId: "author-1" });
+    prisma.contentComment.findFirst.mockResolvedValue({
+      id: "comment-1",
+      authorId: "author-1",
+    });
     await expect(
-      service.deleteTagComment("tag-1", "comment-1", { id: "user-1", role: "user" } as never)
+      service.deleteTagComment("tag-1", "comment-1", {
+        id: "user-1",
+        role: "user",
+      } as never),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("lets the author edit and trims a tag post", async () => {
+    const { service, prisma } = createService();
+    const now = new Date();
+    prisma.contentComment.findFirst.mockResolvedValue({
+      id: "comment-1",
+      authorId: "user-1",
+      targetId: "tag-1",
+    });
+    prisma.contentComment.update.mockResolvedValue({
+      id: "comment-1",
+      body: "Updated post",
+      likeCount: 2,
+      createdAt: now,
+      updatedAt: now,
+      author: { id: "user-1", name: "User", username: "user" },
+    });
+
+    await expect(
+      service.updateTagComment("comment-1", "  Updated post  ", {
+        id: "user-1",
+        role: "user",
+      } as never),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: "comment-1",
+        body: "Updated post",
+        tagId: "tag-1",
+      }),
+    );
+    expect(prisma.contentComment.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { body: "Updated post" } }),
+    );
+  });
+
+  it("prevents another member from editing a tag post", async () => {
+    const { service, prisma } = createService();
+    prisma.contentComment.findFirst.mockResolvedValue({
+      id: "comment-1",
+      authorId: "author-1",
+      targetId: "tag-1",
+    });
+
+    await expect(
+      service.updateTagComment("comment-1", "Changed", {
+        id: "user-1",
+        role: "user",
+      } as never),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.contentComment.update).not.toHaveBeenCalled();
+  });
+
+  it("combines interested members and post authors on the tag users page", async () => {
+    const { service, prisma } = createService();
+    prisma.tag.findFirst.mockResolvedValue({ id: "tag-1" });
+    prisma.userBlock.findUnique.mockResolvedValue(null);
+    prisma.userInterestTag.findMany.mockResolvedValue([
+      {
+        user: {
+          id: "user-1",
+          name: "Member",
+          username: "member",
+          city: null,
+          country: null,
+          profileVerifiedAt: null,
+        },
+      },
+    ]);
+    prisma.contentComment.findMany.mockResolvedValue([
+      {
+        author: {
+          id: "user-1",
+          name: "Member",
+          username: "member",
+          city: null,
+          country: null,
+          profileVerifiedAt: null,
+        },
+      },
+    ]);
+
+    await expect(service.listRelatedUsers("tag-1")).resolves.toEqual([
+      expect.objectContaining({
+        id: "user-1",
+        relation: "ilgileniyor · paylaşım yaptı",
+      }),
+    ]);
   });
 });

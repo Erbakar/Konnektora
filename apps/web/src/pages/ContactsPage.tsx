@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { BookUser, MailPlus, Smartphone, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { UserIdentityLink, userProfilePath } from "../components/UserIdentityLink";
 import {
   followUser,
   getUserSession,
@@ -100,11 +101,9 @@ export function ContactsPage() {
               <div className="onboarding-people">
                 {result.matches.map(({ contactName, member }) => (
                   <article key={member.id}>
-                    <span>{member.name[0]}</span>
+                    <UserIdentityLink user={member} avatarClassName="conversation-avatar" showName={false}/>
                     <div>
-                      <strong>
-                        {member.username ? `@${member.username}` : member.name}
-                      </strong>
+                      <strong><Link to={userProfilePath(member)}>{member.username ? `@${member.username}` : member.name}</Link></strong>
                       <small>
                         {contactName} · {member.followerCount} takipçi
                       </small>

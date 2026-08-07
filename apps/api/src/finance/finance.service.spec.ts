@@ -9,8 +9,10 @@ describe("FinanceService", () => {
   const ticketRefund = { create: jest.fn() };
   const payout = { create: jest.fn(), findMany: jest.fn() };
   const billingProfile = { findUnique: jest.fn(), upsert: jest.fn() };
+  const user = { findUnique: jest.fn(), update: jest.fn() };
+  const place = { count: jest.fn() };
   const tx = { paymentTransaction, financialAccount, eventParticipant, ticketRefund, payout, billingProfile };
-  const prisma = { ...tx, event, $transaction: jest.fn(async (operation: any) => typeof operation === "function" ? operation(tx) : Promise.all(operation)) };
+  const prisma = { ...tx, event, user, place, $transaction: jest.fn(async (operation: any) => typeof operation === "function" ? operation(tx) : Promise.all(operation)) };
   const service = new FinanceService(prisma as never);
   const payer = { id: "11111111-1111-4111-8111-111111111111", role: "user", accountType: "individual" } as any;
 
@@ -41,5 +43,26 @@ describe("FinanceService", () => {
   it("never accepts raw or invalid payment credentials", async () => {
     paymentTransaction.findUnique.mockResolvedValue({ id: "payment-1", payerId: payer.id, status: "pending" });
     await expect(service.confirm("payment-1", payer, { paymentMethodToken: "4111111111111111" })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("requires a corporate account and token for paid business plans", async () => {
+    await expect(service.changeBusinessPlan(payer, { plan: "growth", paymentMethodToken: "pm_valid_123" })).rejects.toBeInstanceOf(ForbiddenException);
+    const corporate = { ...payer, accountType: "corporate" };
+    await expect(service.changeBusinessPlan(corporate, { plan: "growth", paymentMethodToken: "card-number" })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("activates the selected business plan", async () => {
+    const startedAt = new Date();
+    user.update.mockResolvedValue({ businessPlan: "scale", businessPlanStartedAt: startedAt });
+    await expect(service.changeBusinessPlan({ ...payer, accountType: "corporate" }, { plan: "scale", paymentMethodToken: "pm_valid_123" })).resolves.toEqual({ plan: "scale", planStartedAt: startedAt });
+    expect(user.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ businessPlan: "scale" }) }));
+  });
+
+  it("validates payment and persists an individual member plan", async () => {
+    await expect(service.changeMemberPlan(payer, { plan: "plus", paymentMethodToken: "card-number" })).rejects.toBeInstanceOf(BadRequestException);
+    const startedAt = new Date();
+    user.update.mockResolvedValue({ memberPlan: "premium", memberPlanStartedAt: startedAt });
+    await expect(service.changeMemberPlan(payer, { plan: "premium", paymentMethodToken: "pm_valid_123" })).resolves.toEqual({ plan: "premium", planStartedAt: startedAt });
+    expect(user.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ memberPlan: "premium" }) }));
   });
 });

@@ -1,4 +1,10 @@
-import { EventFormat, EventParticipantRole, EventParticipantStatus, EventStatus, EventVisibility } from "@prisma/client";
+import {
+  EventFormat,
+  EventParticipantRole,
+  EventParticipantStatus,
+  EventStatus,
+  EventVisibility,
+} from "@prisma/client";
 import {
   IsArray,
   IsDateString,
@@ -15,11 +21,15 @@ import {
   Matches,
   Min,
   Max,
-  MinLength
+  MinLength,
 } from "class-validator";
 import { Type } from "class-transformer";
 
 export class EventQueryDto {
+  @IsOptional()
+  @IsIn(["popular", "following", "for_you", "mine"])
+  scope?: "popular" | "following" | "for_you" | "mine";
+
   @IsOptional()
   @IsString()
   @MaxLength(120)
@@ -50,6 +60,19 @@ export class EventQueryDto {
   @IsString()
   @MaxLength(120)
   country?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
 
   @IsOptional()
   @Type(() => Number)
@@ -133,6 +156,19 @@ export class CreateEventDto {
   country?: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
+
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(16)
@@ -149,8 +185,24 @@ export class CreateEventDto {
 
   @IsOptional() @IsUrl() liveUrl?: string;
   @IsOptional() @IsString() @MaxLength(3000) timeline?: string;
-  @IsOptional() @IsArray() lineup?: Array<{ title: string; startsAt: string; description?: string }>;
-  @IsOptional() @IsArray() ticketTypes?: Array<{ name: string; description?: string; price: number; currency: string; capacity?: number; saleStartsAt?: string; saleEndsAt?: string; gateOpensAt?: string; gateClosesAt?: string; status?: string }>;
+  @IsOptional() @IsArray() lineup?: Array<{
+    type?: "heading" | "subheading" | "session" | "break";
+    title: string;
+    startsAt?: string;
+    description?: string;
+  }>;
+  @IsOptional() @IsArray() ticketTypes?: Array<{
+    name: string;
+    description?: string;
+    price: number;
+    currency: string;
+    capacity?: number;
+    saleStartsAt?: string;
+    saleEndsAt?: string;
+    gateOpensAt?: string;
+    gateClosesAt?: string;
+    status?: string;
+  }>;
 
   @IsOptional()
   @IsUrl()
@@ -174,6 +226,12 @@ export class InviteParticipantDto {
   @IsOptional()
   @IsUUID()
   userId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(80)
+  username?: string;
 
   @IsOptional()
   @IsEmail()

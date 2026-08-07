@@ -44,4 +44,13 @@ export class SmsService {
     const response = await fetch(webhookUrl, { method: "POST", headers: { "Content-Type": "application/json", ...(this.config.get<string>("SMS_API_KEY") ? { Authorization: `Bearer ${this.config.get<string>("SMS_API_KEY")}` } : {}) }, body: JSON.stringify({ to: phone, message: `${invitedByName} seni Konnektora'ya davet etti. Topluluğu keşfet: ${this.config.get<string>("PUBLIC_APP_URL") ?? "https://konnektora.com"}` }) });
     if (!response.ok) throw new ServiceUnavailableException("SMS gönderilemedi.");
   }
+
+  async sendEventReminder(phone: string, eventTitle: string, startsAt: Date, eventSlug: string) {
+    const message = `${eventTitle} yarın ${startsAt.toLocaleString("tr-TR")} tarihinde başlıyor. ${this.config.get<string>("PUBLIC_APP_URL") ?? "https://konnektora.com"}/events/${eventSlug}`;
+    const webhookUrl = this.config.get<string>("SMS_WEBHOOK_URL");
+    if (!webhookUrl) { if (this.config.get<string>("NODE_ENV") === "production") throw new ServiceUnavailableException("SMS servisi yapılandırılmamış."); this.logger.log(`[sms:dev] Event reminder -> ${phone}`); return { provider: "development" }; }
+    const response = await fetch(webhookUrl, { method: "POST", headers: { "Content-Type": "application/json", ...(this.config.get<string>("SMS_API_KEY") ? { Authorization: `Bearer ${this.config.get<string>("SMS_API_KEY")}` } : {}) }, body: JSON.stringify({ to: phone, message }) });
+    if (!response.ok) throw new ServiceUnavailableException("SMS gönderilemedi.");
+    return { provider: "webhook" };
+  }
 }

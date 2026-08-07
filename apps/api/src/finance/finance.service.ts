@@ -2,21 +2,39 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { KycStatus, PaymentStatus, PayoutStatus, User } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
-import { ConfirmPaymentDto, CreatePaymentDto, FinanceSettingsDto, PayoutDto, RefundPaymentDto } from "./finance.dto";
+import { BusinessPlanDto, ConfirmPaymentDto, CreatePaymentDto, FinanceSettingsDto, MemberPlanDto, PayoutDto, RefundPaymentDto } from "./finance.dto";
 
 @Injectable()
 export class FinanceService {
   constructor(private readonly prisma: PrismaService) {}
 
   async dashboard(user: User) {
-    const [account, billing, transactions, payouts] = await Promise.all([
+    const [account, billing, transactions, payouts, business, managedEventCount, managedPlaceCount] = await Promise.all([
       this.prisma.financialAccount.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} }),
       this.prisma.billingProfile.findUnique({ where: { userId: user.id } }),
       this.prisma.paymentTransaction.findMany({ where: { OR: [{ payerId: user.id }, { payeeId: user.id }] }, orderBy: { createdAt: "desc" }, take: 100, include: { event: { select: { id: true, title: true, slug: true } }, payer: { select: { id: true, name: true } }, payee: { select: { id: true, name: true } } } }),
-      this.prisma.payout.findMany({ where: { userId: user.id }, orderBy: { requestedAt: "desc" }, take: 50 })
+      this.prisma.payout.findMany({ where: { userId: user.id }, orderBy: { requestedAt: "desc" }, take: 50 }),
+      this.prisma.user.findUnique({ where: { id: user.id }, select: { businessPlan: true, businessPlanStartedAt: true, memberPlan: true, memberPlanStartedAt: true, companyName: true, tradeName: true, businessCategory: true } }),
+      this.prisma.event.count({ where: { OR: [{ createdById: user.id }, { participants: { some: { userId: user.id, status: "accepted", role: { in: ["organizer", "manager"] } } } }] } }),
+      this.prisma.place.count({ where: { OR: [{ createdById: user.id }, { members: { some: { userId: user.id, status: "accepted", role: { in: ["organizer", "manager"] } } } }] } })
     ]);
     const received = transactions.filter((item) => item.payeeId === user.id && (item.status === PaymentStatus.succeeded || item.status === PaymentStatus.partially_refunded)).reduce((sum, item) => sum + Number(item.netAmount) - Number(item.refundedAmount), 0);
-    return { account, billing, transactions, payouts, summary: { availableBalance: Number(account.availableBalance), pendingBalance: Number(account.pendingBalance), lifetimeNetRevenue: Math.max(0, received), currency: account.preferredCurrency } };
+    return { account, billing, transactions, payouts, member: { plan: business?.memberPlan ?? "free", planStartedAt: business?.memberPlanStartedAt ?? null }, business: { plan: business?.businessPlan ?? "starter", planStartedAt: business?.businessPlanStartedAt ?? null, companyName: business?.companyName ?? business?.tradeName ?? null, category: business?.businessCategory ?? null, managedEventCount, managedPlaceCount }, summary: { availableBalance: Number(account.availableBalance), pendingBalance: Number(account.pendingBalance), lifetimeNetRevenue: Math.max(0, received), currency: account.preferredCurrency } };
+  }
+
+  async changeBusinessPlan(user: User, input: BusinessPlanDto) {
+    if (input.plan !== "starter") {
+      if (user.accountType !== "corporate") throw new ForbiddenException("Ücretli işletme paketleri yalnız kurumsal hesaplarda kullanılabilir.");
+      if (!input.paymentMethodToken?.startsWith("pm_")) throw new BadRequestException("Ücretli paket için geçerli ödeme yöntemi gereklidir.");
+    }
+    const updated = await this.prisma.user.update({ where: { id: user.id }, data: { businessPlan: input.plan, businessPlanStartedAt: new Date() }, select: { businessPlan: true, businessPlanStartedAt: true } });
+    return { plan: updated.businessPlan, planStartedAt: updated.businessPlanStartedAt };
+  }
+
+  async changeMemberPlan(user: User, input: MemberPlanDto) {
+    if (input.plan !== "free" && !input.paymentMethodToken?.startsWith("pm_")) throw new BadRequestException("Ücretli paket için geçerli ödeme yöntemi gereklidir.");
+    const updated = await this.prisma.user.update({ where: { id: user.id }, data: { memberPlan: input.plan, memberPlanStartedAt: new Date() }, select: { memberPlan: true, memberPlanStartedAt: true } });
+    return { plan: updated.memberPlan, planStartedAt: updated.memberPlanStartedAt };
   }
 
   async updateSettings(user: User, input: FinanceSettingsDto) {

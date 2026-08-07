@@ -1,28 +1,165 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ClipboardCheck, Image, LogOut, Plus, Trash2, UserRound, Users, X } from "lucide-react";
+import {
+  Check,
+  ClipboardCheck,
+  GripVertical,
+  LogOut,
+  Plus,
+  Trash2,
+  UserRound,
+  Users,
+  X,
+} from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { Link } from "react-router-dom";
-import type { AccountType, Event, EventParticipant, MemberCard, NotificationPreference, PrivacyAudience, ProfileMedia, Tag, TagAffinity, TagSentiment, SocialProvider } from "@konnektora/shared";
-import { EmailInput, PhoneInput, VerificationCodeInput } from "../components/FormInputs";
+import { Link, useNavigate } from "react-router-dom";
+import type {
+  AccountType,
+  Event,
+  EventParticipant,
+  MemberCard,
+  NotificationPreference,
+  PrivacyAudience,
+  ProfileMedia,
+  Tag,
+  TagAffinity,
+  TagSentiment,
+  SocialProvider,
+} from "@konnektora/shared";
+import {
+  EmailInput,
+  PhoneInput,
+  VerificationCodeInput,
+} from "../components/FormInputs";
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
 import { ProfileVerificationPanel } from "../components/ProfileVerificationPanel";
 import { PushNotificationControl } from "../components/PushNotificationControl";
 import { RichText } from "../components/RichText";
+import { userProfilePath } from "../components/UserIdentityLink";
 import { getSocialCredential } from "../lib/socialProviders";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
-import { type AdminEventInput, type RegistrationInput, archiveMyEvent, checkAvailability, checkInEventParticipant, changePassword, connectSocialAccount, confirmPhoneVerification, clearUserSession, createUserEvent, createUserTag, createTagComment, deactivateAccount, deleteProfileMedia, deleteTagComment, getProfileAffinities, getMyProfile, getNotificationPreferences, getPrivacySettings, getUserSession, getUserToken, followUser, inviteEventParticipant, isMockApiMode, listMyNotifications, listBlocks, listFollowing, listMemberSuggestions, listEventParticipants, listMyEvents, listProfileMedia, listSocialAccounts, listTags, listTagComments, markMyNotificationRead, makeProfilePicture, registerUser, reactivateAccount, removeBlock, removeSocialAccount, requestEmailVerification, requestPhoneVerification, requestPasswordReset, reorderProfileMedia, resolveMediaUrl, scanEventTicket, setUserSession, updateEventParticipantStatus, updateMyEvent, updateProfileAffinities, unfollowUser, updateMyProfile, updateNotificationPreferences, updatePrivacySettings, uploadProfileMedia, userLogin, socialLogin } from "../lib/api";
+import {
+  type AdminEventInput,
+  type RegistrationInput,
+  archiveMyEvent,
+  checkAvailability,
+  checkInEventParticipant,
+  changePassword,
+  connectSocialAccount,
+  confirmPhoneVerification,
+  clearUserSession,
+  createUserEvent,
+  createUserTag,
+  createTagComment,
+  deactivateAccount,
+  deleteProfileMedia,
+  deleteTagComment,
+  getProfileAffinities,
+  getMyProfile,
+  getNotificationPreferences,
+  getPrivacySettings,
+  getUserSession,
+  getUserToken,
+  followUser,
+  inviteEventParticipant,
+  isMockApiMode,
+  listMyNotifications,
+  listBlocks,
+  listFollowing,
+  listMemberSuggestions,
+  listEventParticipants,
+  listMyEvents,
+  listProfileMedia,
+  listSocialAccounts,
+  listTags,
+  listTagComments,
+  markMyNotificationRead,
+  makeProfilePicture,
+  registerUser,
+  reactivateAccount,
+  removeBlock,
+  removeSocialAccount,
+  requestEmailVerification,
+  requestPhoneVerification,
+  requestPasswordReset,
+  reorderProfileMedia,
+  resolveMediaUrl,
+  scanEventTicket,
+  setUserSession,
+  updateEventParticipantStatus,
+  updateMyEvent,
+  updateProfileAffinities,
+  unfollowUser,
+  updateMyProfile,
+  updateNotificationPreferences,
+  updatePrivacySettings,
+  uploadContentMedia,
+  uploadProfileMedia,
+  userLogin,
+  socialLogin,
+} from "../lib/api";
+
+const timezoneOptions = [
+  { value: "Pacific/Honolulu", label: "GMT-10 Honolulu" },
+  { value: "America/Los_Angeles", label: "GMT-08 Los Angeles" },
+  { value: "America/Denver", label: "GMT-07 Denver" },
+  { value: "America/Chicago", label: "GMT-06 Chicago" },
+  { value: "America/New_York", label: "GMT-05 New York" },
+  { value: "America/Sao_Paulo", label: "GMT-03 São Paulo" },
+  { value: "Europe/London", label: "GMT+00 Londra" },
+  { value: "Europe/Paris", label: "GMT+01 Paris / Berlin" },
+  { value: "Europe/Athens", label: "GMT+02 Atina" },
+  { value: "Europe/Istanbul", label: "GMT+03 İstanbul" },
+  { value: "Asia/Dubai", label: "GMT+04 Dubai" },
+  { value: "Asia/Karachi", label: "GMT+05 Karaçi" },
+  { value: "Asia/Kolkata", label: "GMT+05:30 Yeni Delhi" },
+  { value: "Asia/Dhaka", label: "GMT+06 Dakka" },
+  { value: "Asia/Bangkok", label: "GMT+07 Bangkok" },
+  { value: "Asia/Singapore", label: "GMT+08 Singapur" },
+  { value: "Asia/Tokyo", label: "GMT+09 Tokyo" },
+  { value: "Australia/Sydney", label: "GMT+10 Sidney" },
+  { value: "Pacific/Auckland", label: "GMT+12 Auckland" },
+  { value: "UTC", label: "GMT+00 UTC" },
+] as const;
+function profileTimezone(city?: string | null, country?: string | null) {
+  const location = `${city ?? ""} ${country ?? ""}`.toLocaleLowerCase("tr-TR");
+  if (/istanbul|ankara|izmir|antalya|türkiye|turkey/.test(location))
+    return "Europe/Istanbul";
+  if (/london|united kingdom|ingiltere/.test(location)) return "Europe/London";
+  if (/berlin|germany|almanya|paris|france|fransa/.test(location))
+    return "Europe/Paris";
+  if (/new york|boston|washington/.test(location)) return "America/New_York";
+  if (/los angeles|san francisco/.test(location)) return "America/Los_Angeles";
+  if (/dubai|united arab emirates|bae/.test(location)) return "Asia/Dubai";
+  if (/singapore|singapur/.test(location)) return "Asia/Singapore";
+  if (/tokyo|japan|japonya/.test(location)) return "Asia/Tokyo";
+  if (/sydney|australia|avustralya/.test(location)) return "Australia/Sydney";
+  const local = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return timezoneOptions.some((item) => item.value === local) ? local : "UTC";
+}
 
 export function AccountPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [user, setUser] = useState(() => getUserSession());
   const [mode, setMode] = useState<"login" | "register">("register");
-  const [registrationAccountType, setRegistrationAccountType] = useState<AccountType>("individual");
-  const [showFrozenConfirmation, setShowFrozenConfirmation] = useState(() => window.sessionStorage.getItem("konnektora_account_frozen") === "1");
+  const [registrationAccountType, setRegistrationAccountType] =
+    useState<AccountType>("individual");
+  const [showFrozenConfirmation, setShowFrozenConfirmation] = useState(
+    () => window.sessionStorage.getItem("konnektora_account_frozen") === "1",
+  );
   const [pendingPhone, setPendingPhone] = useState<string | null>(null);
-  const [developmentPhoneCode, setDevelopmentPhoneCode] = useState<string | null>(null);
+  const [developmentPhoneCode, setDevelopmentPhoneCode] = useState<
+    string | null
+  >(null);
   const [commentTagId, setCommentTagId] = useState("");
   const [eventFormat, setEventFormat] = useState("offline");
+  const [eventStartsAt, setEventStartsAt] = useState("");
   const [eventStep, setEventStep] = useState(1);
+  const [eventTicketCount, setEventTicketCount] = useState(1);
+  const [lineupRows, setLineupRows] = useState<
+    Array<{ id: string; type: "heading" | "subheading" | "session" }>
+  >(() => [{ id: crypto.randomUUID(), type: "session" }]);
+  const [draggedLineupId, setDraggedLineupId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{
     tone: "success" | "error";
     message: string;
@@ -91,12 +228,21 @@ export function AccountPage() {
     queryFn: () => listTagComments(commentTagId),
     enabled: Boolean(user && commentTagId),
   });
-  const interestTagIds = interestsQuery.data?.map((affinity) => affinity.tag.id) ?? [];
-  const interestSentiments = new Map(interestsQuery.data?.map((affinity) => [affinity.tag.id, affinity.sentiment]) ?? []);
+  const interestTagIds =
+    interestsQuery.data?.map((affinity) => affinity.tag.id) ?? [];
+  const interestSentiments = new Map(
+    interestsQuery.data?.map((affinity) => [
+      affinity.tag.id,
+      affinity.sentiment,
+    ]) ?? [],
+  );
   const interestTags = tags.filter((tag) => interestTagIds.includes(tag.id));
 
   const authMutation = useMutation({
-    mutationFn: (input: RegistrationInput) => (mode === "register" ? registerUser(input) : userLogin(input.email, input.password)),
+    mutationFn: (input: RegistrationInput) =>
+      mode === "register"
+        ? registerUser(input)
+        : userLogin(input.email, input.password),
     onSuccess: (response) => {
       setUserSession(response);
       setUser(response.user);
@@ -105,7 +251,10 @@ export function AccountPage() {
       });
       setNotice({
         tone: "success",
-        message: response.user.status === "pending" ? "Hesap oluşturuldu. Email doğrulama linkini kontrol et." : "Giriş yapıldı. Artık etkinlik oluşturabilirsin.",
+        message:
+          response.user.status === "pending"
+            ? "Hesap oluşturuldu. Email doğrulama linkini kontrol et."
+            : "Giriş yapıldı. Artık etkinlik oluşturabilirsin.",
       });
     },
     onError: () =>
@@ -115,12 +264,22 @@ export function AccountPage() {
       }),
   });
   const socialAccountMutation = useMutation({
-    mutationFn: async ({ provider, remove = false }: { provider: SocialProvider; remove?: boolean }) => (remove ? removeSocialAccount(provider) : connectSocialAccount(provider, await getSocialCredential(provider))),
+    mutationFn: async ({
+      provider,
+      remove = false,
+    }: {
+      provider: SocialProvider;
+      remove?: boolean;
+    }) =>
+      remove
+        ? removeSocialAccount(provider)
+        : connectSocialAccount(provider, await getSocialCredential(provider)),
     onSuccess: (accounts) => {
       queryClient.setQueryData(["social-accounts", user?.id], accounts);
       setNotice({ tone: "success", message: "Bağlı hesaplar güncellendi." });
     },
-    onError: (error: Error) => setNotice({ tone: "error", message: error.message }),
+    onError: (error: Error) =>
+      setNotice({ tone: "error", message: error.message }),
   });
   const forgotPasswordMutation = useMutation({
     mutationFn: requestPasswordReset,
@@ -136,7 +295,8 @@ export function AccountPage() {
       }),
   });
   const reactivateMutation = useMutation({
-    mutationFn: (input: { email: string; password: string }) => reactivateAccount(input.email, input.password),
+    mutationFn: (input: { email: string; password: string }) =>
+      reactivateAccount(input.email, input.password),
     onSuccess: (response) => {
       setUserSession(response);
       setUser(response.user);
@@ -158,23 +318,41 @@ export function AccountPage() {
         tone: "success",
         message: "Doğrulama emaili tekrar gönderildi.",
       }),
-    onError: () => setNotice({ tone: "error", message: "Doğrulama emaili gönderilemedi." }),
+    onError: () =>
+      setNotice({ tone: "error", message: "Doğrulama emaili gönderilemedi." }),
   });
 
   const eventMutation = useMutation({
-    mutationFn: async (input: AdminEventInput & { managerEmails?: string[] }) => {
-      const { managerEmails = [], ...eventInput } = input;
+    mutationFn: async (
+      input: AdminEventInput & {
+        managerUsernames?: string[];
+        mediaFiles?: File[];
+      },
+    ) => {
+      const { managerUsernames = [], mediaFiles = [], ...eventInput } = input;
       const created = await createUserEvent(eventInput);
-      await Promise.allSettled(managerEmails.map((email) => inviteEventParticipant(created.id, { email, role: "manager" }, "user")));
+      await Promise.allSettled([
+        ...managerUsernames.map((username) =>
+          inviteEventParticipant(
+            created.id,
+            { username, role: "manager" },
+            "user",
+          ),
+        ),
+        ...mediaFiles.map((file) =>
+          uploadContentMedia("event", created.id, file),
+        ),
+      ]);
       return created;
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
       setNotice({
         tone: "success",
         message: "Etkinlik yayınlandı ve public listede görünür.",
       });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
       void queryClient.invalidateQueries({ queryKey: ["my-events", user?.id] });
+      navigate(`/events/${created.slug}`);
     },
     onError: () =>
       setNotice({
@@ -198,7 +376,10 @@ export function AccountPage() {
   const interestsMutation = useMutation({
     mutationFn: updateProfileAffinities,
     onSuccess: (affinities) => {
-      queryClient.setQueryData<TagAffinity[]>(["profile-interests", user?.id], affinities);
+      queryClient.setQueryData<TagAffinity[]>(
+        ["profile-interests", user?.id],
+        affinities,
+      );
       void queryClient.invalidateQueries({
         queryKey: ["member-suggestions", user?.id],
       });
@@ -218,10 +399,12 @@ export function AccountPage() {
       });
       setNotice({ tone: "success", message: "Tag yorumunuz eklendi." });
     },
-    onError: () => setNotice({ tone: "error", message: "Tag yorumu eklenemedi." }),
+    onError: () =>
+      setNotice({ tone: "error", message: "Tag yorumu eklenemedi." }),
   });
   const deleteTagCommentMutation = useMutation({
-    mutationFn: (commentId: string) => deleteTagComment(commentTagId, commentId),
+    mutationFn: (commentId: string) =>
+      deleteTagComment(commentTagId, commentId),
     onSuccess: () =>
       void queryClient.invalidateQueries({
         queryKey: ["tag-comments", commentTagId],
@@ -249,12 +432,14 @@ export function AccountPage() {
     onError: () =>
       setNotice({
         tone: "error",
-        message: "Profil kaydedilemedi. Kullanıcı adı ve zorunlu alanları kontrol et.",
+        message:
+          "Profil kaydedilemedi. Kullanıcı adı ve zorunlu alanları kontrol et.",
       }),
   });
   const changePasswordMutation = useMutation({
     mutationFn: changePassword,
-    onSuccess: () => setNotice({ tone: "success", message: "Şifreniz değiştirildi." }),
+    onSuccess: () =>
+      setNotice({ tone: "success", message: "Şifreniz değiştirildi." }),
     onError: () =>
       setNotice({
         tone: "error",
@@ -287,11 +472,13 @@ export function AccountPage() {
     onError: () =>
       setNotice({
         tone: "error",
-        message: "Kod gönderilemedi. Numarayı +905551112233 biçiminde kontrol edin.",
+        message:
+          "Kod gönderilemedi. Numarayı +905551112233 biçiminde kontrol edin.",
       }),
   });
   const confirmPhoneMutation = useMutation({
-    mutationFn: (input: { phone: string; code: string }) => confirmPhoneVerification(input.phone, input.code),
+    mutationFn: (input: { phone: string; code: string }) =>
+      confirmPhoneVerification(input.phone, input.code),
     onSuccess: () => {
       setPendingPhone(null);
       setDevelopmentPhoneCode(null);
@@ -300,7 +487,8 @@ export function AccountPage() {
       });
       setNotice({ tone: "success", message: "Telefon numaranız doğrulandı." });
     },
-    onError: () => setNotice({ tone: "error", message: "Kod hatalı veya süresi dolmuş." }),
+    onError: () =>
+      setNotice({ tone: "error", message: "Kod hatalı veya süresi dolmuş." }),
   });
   const privacyMutation = useMutation({
     mutationFn: updatePrivacySettings,
@@ -308,12 +496,16 @@ export function AccountPage() {
       queryClient.setQueryData(["privacy-settings", user?.id], settings);
       setNotice({ tone: "success", message: "Gizlilik ayarları kaydedildi." });
     },
-    onError: () => setNotice({ tone: "error", message: "Gizlilik ayarları kaydedilemedi." }),
+    onError: () =>
+      setNotice({ tone: "error", message: "Gizlilik ayarları kaydedilemedi." }),
   });
   const notificationPreferencesMutation = useMutation({
     mutationFn: updateNotificationPreferences,
     onSuccess: (preferences) => {
-      queryClient.setQueryData(["notification-preferences", user?.id], preferences);
+      queryClient.setQueryData(
+        ["notification-preferences", user?.id],
+        preferences,
+      );
       setNotice({
         tone: "success",
         message: "Bildirim tercihleri kaydedildi.",
@@ -326,7 +518,10 @@ export function AccountPage() {
       }),
   });
   const removeBlockMutation = useMutation({
-    mutationFn: (input: { targetType: "user" | "tag" | "event" | "place"; targetId: string }) => removeBlock(input.targetType, input.targetId),
+    mutationFn: (input: {
+      targetType: "user" | "tag" | "event" | "place";
+      targetId: string;
+    }) => removeBlock(input.targetType, input.targetId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["blocks", user?.id] });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
@@ -335,7 +530,8 @@ export function AccountPage() {
     },
   });
   const followMutation = useMutation({
-    mutationFn: (input: { userId: string; following: boolean }) => (input.following ? unfollowUser(input.userId) : followUser(input.userId)),
+    mutationFn: (input: { userId: string; following: boolean }) =>
+      input.following ? unfollowUser(input.userId) : followUser(input.userId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["following", user?.id] });
       void queryClient.invalidateQueries({
@@ -365,7 +561,9 @@ export function AccountPage() {
       email: normalizeEmail(String(form.get("email"))),
       phone: normalizePhone(String(form.get("phone") || "")),
       password: String(form.get("password")),
-      accountType: String(form.get("accountType") || "individual") as AccountType,
+      accountType: String(
+        form.get("accountType") || "individual",
+      ) as AccountType,
       companyName: String(form.get("companyName") || "") || undefined,
       tradeName: String(form.get("tradeName") || "") || undefined,
       companyType: String(form.get("companyType") || "") || undefined,
@@ -376,45 +574,122 @@ export function AccountPage() {
   function handleEventSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const invalidControl = Array.from(event.currentTarget.elements).find(
-      (element): element is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement =>
-        element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement
+      (
+        element,
+      ): element is
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement =>
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement ||
+        element instanceof HTMLSelectElement
           ? !element.checkValidity()
           : false,
     );
     if (invalidControl) {
-      const invalidStep = Number(invalidControl.closest<HTMLElement>("[data-event-step]")?.dataset.eventStep || 1);
+      const invalidStep = Number(
+        invalidControl.closest<HTMLElement>("[data-event-step]")?.dataset
+          .eventStep || 1,
+      );
       setEventStep(invalidStep);
-      setNotice({ tone: "error", message: `Lütfen ${invalidStep}. adımdaki zorunlu alanları kontrol edin.` });
+      setNotice({
+        tone: "error",
+        message: `Lütfen ${invalidStep}. adımdaki zorunlu alanları kontrol edin.`,
+      });
       window.setTimeout(() => invalidControl.reportValidity(), 0);
       return;
     }
     const form = new FormData(event.currentTarget);
     const startsAt = String(form.get("startsAt"));
     const endsAt = String(form.get("endsAt") || "");
-    if (!startsAt || Number.isNaN(new Date(startsAt).getTime()) || new Date(startsAt).getTime() < Date.now() || (endsAt && new Date(endsAt) <= new Date(startsAt))) {
-      setNotice({ tone: "error", message: "Başlangıç gelecekte olmalı; bitiş zamanı başlangıçtan sonra olmalıdır." });
+    if (
+      !startsAt ||
+      Number.isNaN(new Date(startsAt).getTime()) ||
+      new Date(startsAt).getTime() < Date.now() ||
+      (endsAt && new Date(endsAt) <= new Date(startsAt))
+    ) {
+      setNotice({
+        tone: "error",
+        message:
+          "Başlangıç gelecekte olmalı; bitiş zamanı başlangıçtan sonra olmalıdır.",
+      });
       return;
     }
     const coverImageUrl = String(form.get("coverImageUrl") || "");
-    const input: AdminEventInput & { managerEmails?: string[] } = {
+    const input: AdminEventInput & {
+      managerUsernames?: string[];
+      mediaFiles?: File[];
+    } = {
       title: String(form.get("title")),
       description: String(form.get("description")),
       startsAt: new Date(startsAt).toISOString(),
+      timezone: String(form.get("timezone") || "Europe/Istanbul"),
       endsAt: endsAt ? new Date(endsAt).toISOString() : undefined,
       format: String(form.get("format") || "online"),
       visibility: String(form.get("visibility") || "open"),
       status: "published",
       city: String(form.get("city") || ""),
       country: String(form.get("country") || ""),
+      latitude: form.get("latitude") ? Number(form.get("latitude")) : undefined,
+      longitude: form.get("longitude")
+        ? Number(form.get("longitude"))
+        : undefined,
       locationName: String(form.get("locationName") || "") || undefined,
       locationAddress: String(form.get("locationAddress") || "") || undefined,
       organizerName: user?.name ?? "Konnektora User",
       tagIds: form.getAll("tagIds").map(String),
       liveUrl: String(form.get("liveUrl") || "") || undefined,
       timeline: String(form.get("timeline") || "") || undefined,
-      lineup: form.getAll("lineupTitle").map((title, index) => ({ title: String(title).trim(), startsAt: String(form.getAll("lineupStartsAt")[index] || ""), description: String(form.getAll("lineupDescription")[index] || "") || undefined })).filter((item) => item.title && item.startsAt).map((item) => ({ ...item, startsAt: new Date(item.startsAt).toISOString() })),
-      ticketTypes: form.getAll("ticketName").map((name, index) => { const value = (field: string) => String(form.getAll(field)[index] || ""); return { name: String(name).trim(), description: value("ticketDescription") || undefined, price: Number(value("ticketPrice") || 0), currency: value("ticketCurrency") || "TRY", capacity: Number(value("ticketCapacity") || 0) || undefined, saleStartsAt: value("ticketSaleStartsAt") ? new Date(value("ticketSaleStartsAt")).toISOString() : undefined, saleEndsAt: value("ticketSaleEndsAt") ? new Date(value("ticketSaleEndsAt")).toISOString() : undefined, gateOpensAt: value("ticketGateOpensAt") ? new Date(value("ticketGateOpensAt")).toISOString() : undefined, gateClosesAt: value("ticketGateClosesAt") ? new Date(value("ticketGateClosesAt")).toISOString() : undefined }; }).filter((item) => item.name),
-      managerEmails: String(form.get("managerEmails") || "").split(",").map((item) => item.trim()).filter(Boolean),
+      lineup: form
+        .getAll("lineupTitle")
+        .map((title, index) => {
+          const type = String(form.getAll("lineupType")[index] || "session") as
+            "heading" | "subheading" | "session";
+          const startsAt = String(form.getAll("lineupStartsAt")[index] || "");
+          return {
+            type,
+            title: String(title).trim(),
+            startsAt: startsAt ? new Date(startsAt).toISOString() : undefined,
+            description:
+              String(form.getAll("lineupDescription")[index] || "") ||
+              undefined,
+          };
+        })
+        .filter(
+          (item) => item.title && (item.type !== "session" || item.startsAt),
+        ),
+      ticketTypes: form
+        .getAll("ticketName")
+        .map((name, index) => {
+          const value = (field: string) =>
+            String(form.getAll(field)[index] || "");
+          return {
+            name: String(name).trim(),
+            description: value("ticketDescription") || undefined,
+            price: Number(value("ticketPrice") || 0),
+            currency: value("ticketCurrency") || "TRY",
+            capacity: Number(value("ticketCapacity") || 0) || undefined,
+            saleStartsAt: value("ticketSaleStartsAt")
+              ? new Date(value("ticketSaleStartsAt")).toISOString()
+              : undefined,
+            saleEndsAt: value("ticketSaleEndsAt")
+              ? new Date(value("ticketSaleEndsAt")).toISOString()
+              : undefined,
+            gateOpensAt: value("ticketGateOpensAt")
+              ? new Date(value("ticketGateOpensAt")).toISOString()
+              : undefined,
+            gateClosesAt: value("ticketGateClosesAt")
+              ? new Date(value("ticketGateClosesAt")).toISOString()
+              : undefined,
+          };
+        })
+        .filter((item) => item.name),
+      managerUsernames: String(form.get("managerUsernames") || "")
+        .split(",")
+        .map((item) => item.trim().replace(/^@/, ""))
+        .filter(Boolean),
+      mediaFiles: form
+        .getAll("eventMedia")
+        .filter((item): item is File => item instanceof File && item.size > 0)
+        .slice(0, 20),
     };
 
     if (coverImageUrl) {
@@ -454,7 +729,9 @@ export function AccountPage() {
     interestsMutation.mutate(
       selectedTagIds.map((tagId) => ({
         tagId,
-        sentiment: String(form.get(`sentiment:${tagId}`) || "like") as TagSentiment,
+        sentiment: String(
+          form.get(`sentiment:${tagId}`) || "like",
+        ) as TagSentiment,
       })),
     );
   }
@@ -469,7 +746,8 @@ export function AccountPage() {
   function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const value = (name: string) => String(form.get(name) || "").trim() || undefined;
+    const value = (name: string) =>
+      String(form.get(name) || "").trim() || undefined;
     const birthDate = value("birthDate");
     profileMutation.mutate({
       name: String(form.get("name") || "").trim(),
@@ -480,7 +758,9 @@ export function AccountPage() {
       district: value("district"),
       address: value("address"),
       gender: value("gender") as "male" | "female" | undefined,
-      birthDate: birthDate ? new Date(`${birthDate}T00:00:00.000Z`).toISOString() : undefined,
+      birthDate: birthDate
+        ? new Date(`${birthDate}T00:00:00.000Z`).toISOString()
+        : undefined,
       website: normalizeWebsite(value("website")),
       companyName: value("companyName"),
       tradeName: value("tradeName"),
@@ -516,7 +796,11 @@ export function AccountPage() {
 
   function handlePhoneRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    requestPhoneMutation.mutate(normalizePhone(String(new FormData(event.currentTarget).get("phone") || "")));
+    requestPhoneMutation.mutate(
+      normalizePhone(
+        String(new FormData(event.currentTarget).get("phone") || ""),
+      ),
+    );
   }
 
   function handlePhoneConfirmation(event: FormEvent<HTMLFormElement>) {
@@ -531,7 +815,8 @@ export function AccountPage() {
   function handlePrivacySubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const audience = (name: string) => String(form.get(name)) as PrivacyAudience;
+    const audience = (name: string) =>
+      String(form.get(name)) as PrivacyAudience;
     privacyMutation.mutate({
       messageAudience: audience("messageAudience"),
       directoryDiscoverable: form.get("directoryDiscoverable") === "true",
@@ -542,13 +827,19 @@ export function AccountPage() {
     });
   }
 
-  function handleNotificationPreferencesSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleNotificationPreferencesSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const preferences = (notificationPreferencesQuery.data ?? []).map((preference) => ({
-      topic: preference.topic,
-      channel: String(form.get(preference.topic)) as NotificationPreference["channel"],
-    }));
+    const preferences = (notificationPreferencesQuery.data ?? []).map(
+      (preference) => ({
+        topic: preference.topic,
+        channel: String(
+          form.get(preference.topic),
+        ) as NotificationPreference["channel"],
+      }),
+    );
     notificationPreferencesMutation.mutate(preferences);
   }
 
@@ -560,28 +851,57 @@ export function AccountPage() {
           <h1>Üye alanı</h1>
         </div>
         {user ? (
-          <button className="secondary-action" onClick={handleLogout} type="button">
+          <button
+            className="secondary-action"
+            onClick={handleLogout}
+            type="button"
+          >
             <LogOut size={18} />
             Çıkış
           </button>
         ) : null}
       </div>
 
-      {notice ? <p className={notice.tone === "success" ? "form-success" : "form-error"}>{notice.message}</p> : null}
+      {notice ? (
+        <p
+          className={notice.tone === "success" ? "form-success" : "form-error"}
+        >
+          {notice.message}
+        </p>
+      ) : null}
       {showFrozenConfirmation ? (
-        <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Hesap donduruldu">
+        <div
+          className="emotion-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Hesap donduruldu"
+        >
           <div>
-            <button aria-label="Kapat" onClick={() => {
-              window.sessionStorage.removeItem("konnektora_account_frozen");
-              setShowFrozenConfirmation(false);
-            }} type="button">×</button>
+            <button
+              aria-label="Kapat"
+              onClick={() => {
+                window.sessionStorage.removeItem("konnektora_account_frozen");
+                setShowFrozenConfirmation(false);
+              }}
+              type="button"
+            >
+              ×
+            </button>
             <h2>Hesap donduruldu</h2>
-            <p>Oturumun güvenli biçimde kapatıldı. Dilediğin zaman giriş bilgilerinle hesabını yeniden aktifleştirebilirsin.</p>
+            <p>
+              Oturumun güvenli biçimde kapatıldı. Dilediğin zaman giriş
+              bilgilerinle hesabını yeniden aktifleştirebilirsin.
+            </p>
           </div>
         </div>
       ) : null}
       {user?.status === "pending" ? (
-        <button className="secondary-action" disabled={resendVerificationMutation.isPending} onClick={() => resendVerificationMutation.mutate(user.email)} type="button">
+        <button
+          className="secondary-action"
+          disabled={resendVerificationMutation.isPending}
+          onClick={() => resendVerificationMutation.mutate(user.email)}
+          type="button"
+        >
           Doğrulama emailini tekrar gönder
         </button>
       ) : null}
@@ -589,15 +909,30 @@ export function AccountPage() {
       {!user ? (
         <div className="account-grid">
           <div>
-            <p className="lead">Üye hesabı oluştur, giriş yap ve Konnektora community içinde kendi etkinliğini yayınla.</p>
-            {isMockApiMode ? <p className="form-help">Demo modunda üyelik ve etkinlikler bu tarayıcıya kaydedilir.</p> : null}
+            <p className="lead">
+              Üye hesabı oluştur, giriş yap ve Konnektora community içinde kendi
+              etkinliğini yayınla.
+            </p>
+            {isMockApiMode ? (
+              <p className="form-help">
+                Demo modunda üyelik ve etkinlikler bu tarayıcıya kaydedilir.
+              </p>
+            ) : null}
           </div>
           <form className="admin-form compact-form" onSubmit={handleAuthSubmit}>
             <div className="segmented-control" aria-label="Hesap modu">
-              <button className={mode === "register" ? "active" : ""} onClick={() => setMode("register")} type="button">
+              <button
+                className={mode === "register" ? "active" : ""}
+                onClick={() => setMode("register")}
+                type="button"
+              >
                 Üye ol
               </button>
-              <button className={mode === "login" ? "active" : ""} onClick={() => setMode("login")} type="button">
+              <button
+                className={mode === "login" ? "active" : ""}
+                onClick={() => setMode("login")}
+                type="button"
+              >
                 Giriş yap
               </button>
             </div>
@@ -605,24 +940,52 @@ export function AccountPage() {
               <>
                 <label>
                   Hesap türü
-                  <select name="accountType" onChange={(event) => setRegistrationAccountType(event.target.value as AccountType)} value={registrationAccountType}>
+                  <select
+                    name="accountType"
+                    onChange={(event) =>
+                      setRegistrationAccountType(
+                        event.target.value as AccountType,
+                      )
+                    }
+                    value={registrationAccountType}
+                  >
                     <option value="individual">Bireysel</option>
                     <option value="corporate">Kurumsal</option>
                   </select>
                 </label>
                 <label>
-                  {registrationAccountType === "corporate" ? "Yetkili kişi adı soyadı" : "Ad Soyad"}
-                  <input autoComplete="name" name="name" placeholder="Kadir Erbakar" required minLength={2} />
+                  {registrationAccountType === "corporate"
+                    ? "Yetkili kişi adı soyadı"
+                    : "Ad Soyad"}
+                  <input
+                    autoComplete="name"
+                    name="name"
+                    placeholder="Kadir Erbakar"
+                    required
+                    minLength={2}
+                  />
                 </label>
                 {registrationAccountType === "corporate" ? (
                   <>
                     <label>
                       İşletme adı
-                      <input name="companyName" placeholder="Konnektora" required minLength={2} maxLength={160} />
+                      <input
+                        name="companyName"
+                        placeholder="Konnektora"
+                        required
+                        minLength={2}
+                        maxLength={160}
+                      />
                     </label>
                     <label>
                       Ticari unvan
-                      <input name="tradeName" placeholder="Konnektora Teknoloji Ltd." required minLength={2} maxLength={160} />
+                      <input
+                        name="tradeName"
+                        placeholder="Konnektora Teknoloji Ltd."
+                        required
+                        minLength={2}
+                        maxLength={160}
+                      />
                     </label>
                     <label>
                       Şirket türü
@@ -630,8 +993,12 @@ export function AccountPage() {
                         <option disabled value="">
                           Seçiniz
                         </option>
-                        <option value="sole_proprietorship">Şahıs firması</option>
-                        <option value="limited_or_corporation">Limited / Anonim</option>
+                        <option value="sole_proprietorship">
+                          Şahıs firması
+                        </option>
+                        <option value="limited_or_corporation">
+                          Limited / Anonim
+                        </option>
                         <option value="association">Dernek</option>
                         <option value="foundation">Vakıf</option>
                         <option value="public_body">Kamu kurumu</option>
@@ -644,10 +1011,16 @@ export function AccountPage() {
                         <option disabled value="">
                           Seçiniz
                         </option>
-                        <option value="event_organizer">Etkinlik organizatörü</option>
-                        <option value="restaurant_bar_cafe">Restoran / Bar / Kafe</option>
+                        <option value="event_organizer">
+                          Etkinlik organizatörü
+                        </option>
+                        <option value="restaurant_bar_cafe">
+                          Restoran / Bar / Kafe
+                        </option>
                         <option value="night_club">Gece kulübü</option>
-                        <option value="university_club">Üniversite kulübü</option>
+                        <option value="university_club">
+                          Üniversite kulübü
+                        </option>
                         <option value="ngo">STK</option>
                         <option value="brand">Marka</option>
                         <option value="tourism_company">Turizm şirketi</option>
@@ -668,21 +1041,55 @@ export function AccountPage() {
               <label>
                 GSM numarası
                 <PhoneInput name="phone" required />
-                <span className="form-help">Hesabın açıldıktan sonra bu numarayı doğrulaman gerekir.</span>
+                <span className="form-help">
+                  Hesabın açıldıktan sonra bu numarayı doğrulaman gerekir.
+                </span>
               </label>
             ) : null}
             <label>
               Şifre
-              <input autoComplete={mode === "login" ? "current-password" : "new-password"} maxLength={128} minLength={8} name="password" pattern={mode === "register" ? "(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,128}" : undefined} required title={mode === "register" ? "En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam kullanın." : undefined} type="password" />
-              {mode === "register" ? <span className="form-help">En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam içermeli.</span> : null}
+              <input
+                autoComplete={
+                  mode === "login" ? "current-password" : "new-password"
+                }
+                maxLength={128}
+                minLength={8}
+                name="password"
+                pattern={
+                  mode === "register"
+                    ? "(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,128}"
+                    : undefined
+                }
+                required
+                title={
+                  mode === "register"
+                    ? "En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam kullanın."
+                    : undefined
+                }
+                type="password"
+              />
+              {mode === "register" ? (
+                <span className="form-help">
+                  En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam
+                  içermeli.
+                </span>
+              ) : null}
             </label>
             {mode === "register" ? (
               <label className="check-row">
                 <input required type="checkbox" />
-                <span><Link to="/terms">Kullanım Koşullarını</Link> ve <Link to="/privacy">Gizlilik Politikasını</Link> kabul ediyorum.</span>
+                <span>
+                  <Link to="/terms">Kullanım Koşullarını</Link> ve{" "}
+                  <Link to="/privacy">Gizlilik Politikasını</Link> kabul
+                  ediyorum.
+                </span>
               </label>
             ) : null}
-            <button className="primary-action" disabled={authMutation.isPending} type="submit">
+            <button
+              className="primary-action"
+              disabled={authMutation.isPending}
+              type="submit"
+            >
               <UserRound size={18} />
               {mode === "register" ? "Üye ol" : "Giriş yap"}
             </button>
@@ -692,8 +1099,11 @@ export function AccountPage() {
                   className="ghost-action"
                   disabled={forgotPasswordMutation.isPending}
                   onClick={() => {
-                    const emailInput = document.querySelector<HTMLInputElement>('input[name="email"]');
-                    if (emailInput?.value) forgotPasswordMutation.mutate(emailInput.value);
+                    const emailInput = document.querySelector<HTMLInputElement>(
+                      'input[name="email"]',
+                    );
+                    if (emailInput?.value)
+                      forgotPasswordMutation.mutate(emailInput.value);
                   }}
                   type="button"
                 >
@@ -703,9 +1113,14 @@ export function AccountPage() {
                   className="ghost-action"
                   disabled={reactivateMutation.isPending}
                   onClick={() => {
-                    const email = document.querySelector<HTMLInputElement>('input[name="email"]')?.value;
-                    const password = document.querySelector<HTMLInputElement>('input[name="password"]')?.value;
-                    if (email && password) reactivateMutation.mutate({ email, password });
+                    const email = document.querySelector<HTMLInputElement>(
+                      'input[name="email"]',
+                    )?.value;
+                    const password = document.querySelector<HTMLInputElement>(
+                      'input[name="password"]',
+                    )?.value;
+                    if (email && password)
+                      reactivateMutation.mutate({ email, password });
                   }}
                   type="button"
                 >
@@ -729,11 +1144,26 @@ export function AccountPage() {
       ) : (
         <div className="account-grid">
           <aside className="account-summary">
-            {profileMediaQuery.data?.find((media) => media.isProfilePicture) ? <img alt={`${user.name} profil resmi`} className="profile-avatar-image" src={resolveMediaUrl(profileMediaQuery.data.find((media) => media.isProfilePicture)!.url)} /> : <UserRound size={28} />}
+            {profileMediaQuery.data?.find((media) => media.isProfilePicture) ? (
+              <img
+                alt={`${user.name} profil resmi`}
+                className="profile-avatar-image"
+                src={resolveMediaUrl(
+                  profileMediaQuery.data.find(
+                    (media) => media.isProfilePicture,
+                  )!.url,
+                )}
+              />
+            ) : (
+              <UserRound size={28} />
+            )}
             <strong>{user.name}</strong>
             <span>{user.email}</span>
             <span>Rol: {user.role}</span>
-            <span>Hesap: {user.accountType === "corporate" ? "Kurumsal" : "Bireysel"}</span>
+            <span>
+              Hesap:{" "}
+              {user.accountType === "corporate" ? "Kurumsal" : "Bireysel"}
+            </span>
             {interestTags.length > 0 ? (
               <div className="profile-tag-row">
                 {interestTags.map((tag) => (
@@ -748,86 +1178,180 @@ export function AccountPage() {
             <ProfileVerificationPanel userId={user.id} />
             <section className="admin-form">
               <h2>Bağlı hesaplar</h2>
-              <p className="form-help">Google veya Facebook hesabını bağlayarak tek dokunuşla giriş yapabilirsin.</p>
+              <p className="form-help">
+                Google veya Facebook hesabını bağlayarak tek dokunuşla giriş
+                yapabilirsin.
+              </p>
               <div className="connected-account-list">
-                {(["google", "facebook"] as SocialProvider[]).map((provider) => {
-                  const account = socialAccountsQuery.data?.find((item) => item.provider === provider);
-                  return (
-                    <div key={provider}>
-                      <span className="provider-letter">{provider === "google" ? "G" : "f"}</span>
-                      <div>
-                        <strong>{provider === "google" ? "Google" : "Facebook"}</strong>
-                        <small>{account ? (account.email ?? account.displayName ?? "Bağlı") : "Bağlı değil"}</small>
+                {(["google", "facebook"] as SocialProvider[]).map(
+                  (provider) => {
+                    const account = socialAccountsQuery.data?.find(
+                      (item) => item.provider === provider,
+                    );
+                    return (
+                      <div key={provider}>
+                        <span className="provider-letter">
+                          {provider === "google" ? "G" : "f"}
+                        </span>
+                        <div>
+                          <strong>
+                            {provider === "google" ? "Google" : "Facebook"}
+                          </strong>
+                          <small>
+                            {account
+                              ? (account.email ??
+                                account.displayName ??
+                                "Bağlı")
+                              : "Bağlı değil"}
+                          </small>
+                        </div>
+                        <button
+                          className="secondary-action"
+                          disabled={socialAccountMutation.isPending}
+                          onClick={() =>
+                            socialAccountMutation.mutate({
+                              provider,
+                              remove: Boolean(account),
+                            })
+                          }
+                          type="button"
+                        >
+                          {account ? "Bağlantıyı kaldır" : "Hesabı bağla"}
+                        </button>
                       </div>
-                      <button
-                        className="secondary-action"
-                        disabled={socialAccountMutation.isPending}
-                        onClick={() =>
-                          socialAccountMutation.mutate({
-                            provider,
-                            remove: Boolean(account),
-                          })
-                        }
-                        type="button"
-                      >
-                        {account ? "Bağlantıyı kaldır" : "Hesabı bağla"}
-                      </button>
-                    </div>
-                  );
-                })}
+                    );
+                  },
+                )}
               </div>
               <Link className="ghost-action" to="/contacts">
                 Rehberden arkadaş bul ve davet et
               </Link>
             </section>
-            <ProfileMediaPanel media={profileMediaQuery.data ?? []} userId={user.id} />
-            <MemberList members={followingQuery.data ?? []} title="Takip ettiklerim" onToggle={(member) => followMutation.mutate({ userId: member.id, following: true })} />
-            <MemberList members={suggestionsQuery.data ?? []} title="Sana benzer üyeler" onToggle={(member) => followMutation.mutate({ userId: member.id, following: false })} />
+            <ProfileMediaPanel
+              media={profileMediaQuery.data ?? []}
+              userId={user.id}
+            />
+            <MemberList
+              members={followingQuery.data ?? []}
+              title="Takip ettiklerim"
+              onToggle={(member) =>
+                followMutation.mutate({ userId: member.id, following: true })
+              }
+            />
+            <MemberList
+              members={suggestionsQuery.data ?? []}
+              title="Sana benzer üyeler"
+              onToggle={(member) =>
+                followMutation.mutate({ userId: member.id, following: false })
+              }
+            />
             {profileQuery.data ? (
-              <form className="admin-form" key={String(profileQuery.data.updatedAt)} onSubmit={handleProfileSubmit}>
+              <form
+                className="admin-form"
+                key={String(profileQuery.data.updatedAt)}
+                onSubmit={handleProfileSubmit}
+              >
                 <h2>Profili düzenle</h2>
                 <div className="form-grid">
                   <label>
-                    {profileQuery.data.accountType === "corporate" ? "Yetkili kişi / görünen ad" : "Ad Soyad"}
-                    <input defaultValue={profileQuery.data.name} name="name" required minLength={2} maxLength={160} />
+                    {profileQuery.data.accountType === "corporate"
+                      ? "Yetkili kişi / görünen ad"
+                      : "Ad Soyad"}
+                    <input
+                      defaultValue={profileQuery.data.name}
+                      name="name"
+                      required
+                      minLength={2}
+                      maxLength={160}
+                    />
                   </label>
                   <label>
                     Kullanıcı adı
-                    <input defaultValue={profileQuery.data.username ?? ""} name="username" minLength={2} maxLength={80} pattern="[A-Za-zÀ-ž0-9 .-]+" onChange={(event) => {
-                      const value = event.target.value.trim();
-                      if (value.length < 2) return;
-                      void checkAvailability({ username: value }).then((result) => setNotice({
-                        tone: result.usernameAvailable || value === profileQuery.data?.username ? "success" : "error",
-                        message: result.usernameAvailable || value === profileQuery.data?.username ? "Kullanıcı adı uygun." : "Kullanıcı adı kullanımda.",
-                      }));
-                    }} />
+                    <input
+                      defaultValue={profileQuery.data.username ?? ""}
+                      name="username"
+                      minLength={2}
+                      maxLength={80}
+                      pattern="[A-Za-zÀ-ž0-9 .-]+"
+                      onChange={(event) => {
+                        const value = event.target.value.trim();
+                        if (value.length < 2) return;
+                        void checkAvailability({ username: value }).then(
+                          (result) =>
+                            setNotice({
+                              tone:
+                                result.usernameAvailable ||
+                                value === profileQuery.data?.username
+                                  ? "success"
+                                  : "error",
+                              message:
+                                result.usernameAvailable ||
+                                value === profileQuery.data?.username
+                                  ? "Kullanıcı adı uygun."
+                                  : "Kullanıcı adı kullanımda.",
+                            }),
+                        );
+                      }}
+                    />
                   </label>
                   <label>
                     Telefon
-                    <input defaultValue={profileQuery.data.phone ?? ""} name="phone" readOnly type="tel" />
-                    <span className="form-help">{profileQuery.data.phoneVerified ? "Doğrulandı" : "Doğrulanmadı"}</span>
+                    <input
+                      defaultValue={profileQuery.data.phone ?? ""}
+                      name="phone"
+                      readOnly
+                      type="tel"
+                    />
+                    <span className="form-help">
+                      {profileQuery.data.phoneVerified
+                        ? "Doğrulandı"
+                        : "Doğrulanmadı"}
+                    </span>
                   </label>
                   <label>
                     Web sitesi
-                    <input defaultValue={profileQuery.data.website ?? ""} name="website" placeholder="ornek.com (isteğe bağlı)" />
+                    <input
+                      defaultValue={profileQuery.data.website ?? ""}
+                      name="website"
+                      placeholder="ornek.com (isteğe bağlı)"
+                    />
                   </label>
                   <label>
                     Ülke
-                    <input defaultValue={profileQuery.data.country ?? ""} name="country" />
+                    <input
+                      defaultValue={profileQuery.data.country ?? ""}
+                      name="country"
+                    />
                   </label>
                   <label>
                     Şehir
-                    <input defaultValue={profileQuery.data.city ?? ""} name="city" />
+                    <input
+                      defaultValue={profileQuery.data.city ?? ""}
+                      name="city"
+                    />
                   </label>
                   {profileQuery.data.accountType === "individual" ? (
                     <>
                       <label>
                         Doğum tarihi
-                        <input defaultValue={profileQuery.data.birthDate ? new Date(profileQuery.data.birthDate).toISOString().slice(0, 10) : ""} name="birthDate" type="date" />
+                        <input
+                          defaultValue={
+                            profileQuery.data.birthDate
+                              ? new Date(profileQuery.data.birthDate)
+                                  .toISOString()
+                                  .slice(0, 10)
+                              : ""
+                          }
+                          name="birthDate"
+                          type="date"
+                        />
                       </label>
                       <label>
                         Cinsiyet
-                        <select defaultValue={profileQuery.data.gender ?? ""} name="gender">
+                        <select
+                          defaultValue={profileQuery.data.gender ?? ""}
+                          name="gender"
+                        >
                           <option value="">Belirtmek istemiyorum</option>
                           <option value="female">Kadın</option>
                           <option value="male">Erkek</option>
@@ -838,55 +1362,109 @@ export function AccountPage() {
                     <>
                       <label>
                         İşletme adı
-                        <input defaultValue={profileQuery.data.companyName ?? ""} name="companyName" required />
+                        <input
+                          defaultValue={profileQuery.data.companyName ?? ""}
+                          name="companyName"
+                          required
+                        />
                       </label>
                       <label>
                         Ticari unvan
-                        <input defaultValue={profileQuery.data.tradeName ?? ""} name="tradeName" required />
+                        <input
+                          defaultValue={profileQuery.data.tradeName ?? ""}
+                          name="tradeName"
+                          required
+                        />
                       </label>
                       <label>
                         Şirket türü
-                        <input defaultValue={profileQuery.data.companyType ?? ""} name="companyType" />
+                        <input
+                          defaultValue={profileQuery.data.companyType ?? ""}
+                          name="companyType"
+                        />
                       </label>
                       <label>
                         İşletme kategorisi
-                        <input defaultValue={profileQuery.data.businessCategory ?? ""} name="businessCategory" />
+                        <input
+                          defaultValue={
+                            profileQuery.data.businessCategory ?? ""
+                          }
+                          name="businessCategory"
+                        />
                       </label>
                       <label>
                         İlçe
-                        <input defaultValue={profileQuery.data.district ?? ""} name="district" />
+                        <input
+                          defaultValue={profileQuery.data.district ?? ""}
+                          name="district"
+                        />
                       </label>
                       <label>
                         Adres
-                        <input defaultValue={profileQuery.data.address ?? ""} name="address" />
+                        <input
+                          defaultValue={profileQuery.data.address ?? ""}
+                          name="address"
+                        />
                       </label>
                     </>
                   )}
                 </div>
-                <button className="secondary-action" disabled={profileMutation.isPending} type="submit">
-                  {profileMutation.isPending ? "Kaydediliyor" : "Profili kaydet"}
+                <button
+                  className="secondary-action"
+                  disabled={profileMutation.isPending}
+                  type="submit"
+                >
+                  {profileMutation.isPending
+                    ? "Kaydediliyor"
+                    : "Profili kaydet"}
                 </button>
               </form>
             ) : null}
-            <form className="admin-form" onSubmit={pendingPhone ? handlePhoneConfirmation : handlePhoneRequest}>
+            <form
+              className="admin-form"
+              onSubmit={
+                pendingPhone ? handlePhoneConfirmation : handlePhoneRequest
+              }
+            >
               <h2>Telefon doğrulama</h2>
               {!pendingPhone ? (
                 <label>
                   Yeni telefon numarası
-                  <PhoneInput name="phone" pattern="\+?[0-9 ]{10,19}" required />
+                  <PhoneInput
+                    name="phone"
+                    pattern="\+?[0-9 ]{10,19}"
+                    required
+                  />
                   <span className="form-help">Örnek: +90 555 111 22 33</span>
                 </label>
               ) : (
                 <>
-                  <p className="form-help">{pendingPhone} numarasına gönderilen 6 haneli kodu girin.</p>
-                  {developmentPhoneCode ? <p className="form-help">Geliştirme kodu: {developmentPhoneCode}</p> : null}
+                  <p className="form-help">
+                    {pendingPhone} numarasına gönderilen 6 haneli kodu girin.
+                  </p>
+                  {developmentPhoneCode ? (
+                    <p className="form-help">
+                      Geliştirme kodu: {developmentPhoneCode}
+                    </p>
+                  ) : null}
                   <label>
                     Doğrulama kodu
-                    <VerificationCodeInput defaultValue={developmentPhoneCode ?? ""} name="code" required />
+                    <VerificationCodeInput
+                      defaultValue={developmentPhoneCode ?? ""}
+                      name="code"
+                      required
+                    />
                   </label>
                 </>
               )}
-              <button className="secondary-action" disabled={requestPhoneMutation.isPending || confirmPhoneMutation.isPending} type="submit">
+              <button
+                className="secondary-action"
+                disabled={
+                  requestPhoneMutation.isPending ||
+                  confirmPhoneMutation.isPending
+                }
+                type="submit"
+              >
                 {pendingPhone ? "Numarayı doğrula" : "Kod gönder"}
               </button>
               {pendingPhone ? (
@@ -903,23 +1481,60 @@ export function AccountPage() {
               ) : null}
             </form>
             {privacyQuery.data ? (
-              <form className="admin-form" key={String(privacyQuery.data.updatedAt ?? "privacy-defaults")} onSubmit={handlePrivacySubmit}>
+              <form
+                className="admin-form"
+                key={String(privacyQuery.data.updatedAt ?? "privacy-defaults")}
+                onSubmit={handlePrivacySubmit}
+              >
                 <h2>Gizlilik ayarları</h2>
-                <p className="form-help">Network: takip ettikleriniz ve onların takip ettiği kişiler.</p>
-                <PrivacyAudienceField defaultValue={privacyQuery.data.messageAudience} label="Kimler özel mesaj gönderebilir?" name="messageAudience" />
+                <p className="form-help">
+                  Network: takip ettikleriniz ve onların takip ettiği kişiler.
+                </p>
+                <PrivacyAudienceField
+                  defaultValue={privacyQuery.data.messageAudience}
+                  label="Kimler özel mesaj gönderebilir?"
+                  name="messageAudience"
+                />
                 <label>
                   Rehberinde kayıtlı olduğum üyeler beni bulabilsin
-                  <select defaultValue={String(privacyQuery.data.directoryDiscoverable)} name="directoryDiscoverable">
+                  <select
+                    defaultValue={String(
+                      privacyQuery.data.directoryDiscoverable,
+                    )}
+                    name="directoryDiscoverable"
+                  >
                     <option value="true">Evet</option>
                     <option value="false">Hayır</option>
                   </select>
                 </label>
-                <PrivacyAudienceField defaultValue={privacyQuery.data.eventAudience} label="Etkinliklerimi kimler görebilir?" name="eventAudience" />
-                <PrivacyAudienceField defaultValue={privacyQuery.data.eventInviteAudience} label="Kimler etkinliğe davet edebilir?" name="eventInviteAudience" />
-                <PrivacyAudienceField defaultValue={privacyQuery.data.placeAudience} label="Mekânlarımı kimler görebilir?" name="placeAudience" />
-                <PrivacyAudienceField defaultValue={privacyQuery.data.placeInviteAudience} label="Kimler mekâna davet edebilir?" name="placeInviteAudience" />
-                <button className="secondary-action" disabled={privacyMutation.isPending} type="submit">
-                  {privacyMutation.isPending ? "Kaydediliyor" : "Gizlilik ayarlarını kaydet"}
+                <PrivacyAudienceField
+                  defaultValue={privacyQuery.data.eventAudience}
+                  label="Etkinliklerimi kimler görebilir?"
+                  name="eventAudience"
+                />
+                <PrivacyAudienceField
+                  defaultValue={privacyQuery.data.eventInviteAudience}
+                  label="Kimler etkinliğe davet edebilir?"
+                  name="eventInviteAudience"
+                />
+                <PrivacyAudienceField
+                  defaultValue={privacyQuery.data.placeAudience}
+                  label="Mekânlarımı kimler görebilir?"
+                  name="placeAudience"
+                />
+                <PrivacyAudienceField
+                  defaultValue={privacyQuery.data.placeInviteAudience}
+                  label="Kimler mekâna davet edebilir?"
+                  name="placeInviteAudience"
+                />
+                <button
+                  className="secondary-action"
+                  disabled={privacyMutation.isPending}
+                  type="submit"
+                >
+                  {privacyMutation.isPending
+                    ? "Kaydediliyor"
+                    : "Gizlilik ayarlarını kaydet"}
                 </button>
               </form>
             ) : null}
@@ -928,7 +1543,10 @@ export function AccountPage() {
               {blocksQuery.data?.length ? (
                 <div className="admin-list">
                   {blocksQuery.data.map((block) => (
-                    <div className="admin-list-row" key={`${block.targetType}:${block.targetId}`}>
+                    <div
+                      className="admin-list-row"
+                      key={`${block.targetType}:${block.targetId}`}
+                    >
                       <div>
                         <strong>{block.label}</strong>
                         <span>
@@ -936,7 +1554,12 @@ export function AccountPage() {
                           {block.subtitle ? ` · ${block.subtitle}` : ""}
                         </span>
                       </div>
-                      <button className="ghost-action" disabled={removeBlockMutation.isPending} onClick={() => removeBlockMutation.mutate(block)} type="button">
+                      <button
+                        className="ghost-action"
+                        disabled={removeBlockMutation.isPending}
+                        onClick={() => removeBlockMutation.mutate(block)}
+                        type="button"
+                      >
                         Engeli kaldır
                       </button>
                     </div>
@@ -947,14 +1570,20 @@ export function AccountPage() {
               )}
             </section>
             {notificationPreferencesQuery.data ? (
-              <form className="admin-form" onSubmit={handleNotificationPreferencesSubmit}>
+              <form
+                className="admin-form"
+                onSubmit={handleNotificationPreferencesSubmit}
+              >
                 <h2>Bildirim tercihleri</h2>
                 <PushNotificationControl />
                 <div className="form-grid">
                   {notificationPreferencesQuery.data.map((preference) => (
                     <label key={preference.topic}>
                       {notificationTopicLabels[preference.topic]}
-                      <select defaultValue={preference.channel} name={preference.topic}>
+                      <select
+                        defaultValue={preference.channel}
+                        name={preference.topic}
+                      >
                         <option value="none">Kapalı</option>
                         <option value="both">E-posta ve push</option>
                         <option value="email">Yalnız e-posta</option>
@@ -963,8 +1592,14 @@ export function AccountPage() {
                     </label>
                   ))}
                 </div>
-                <button className="secondary-action" disabled={notificationPreferencesMutation.isPending} type="submit">
-                  {notificationPreferencesMutation.isPending ? "Kaydediliyor" : "Bildirim tercihlerini kaydet"}
+                <button
+                  className="secondary-action"
+                  disabled={notificationPreferencesMutation.isPending}
+                  type="submit"
+                >
+                  {notificationPreferencesMutation.isPending
+                    ? "Kaydediliyor"
+                    : "Bildirim tercihlerini kaydet"}
                 </button>
               </form>
             ) : null}
@@ -972,43 +1607,99 @@ export function AccountPage() {
               <h2>Şifre değiştir</h2>
               <label>
                 Mevcut şifre
-                <input autoComplete="current-password" minLength={8} name="currentPassword" required type="password" />
+                <input
+                  autoComplete="current-password"
+                  minLength={8}
+                  name="currentPassword"
+                  required
+                  type="password"
+                />
               </label>
               <div className="form-grid">
                 <label>
                   Yeni şifre
-                  <input autoComplete="new-password" maxLength={128} minLength={8} name="newPassword" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required type="password" />
-                  <span className="form-help">En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam içermeli.</span>
+                  <input
+                    autoComplete="new-password"
+                    maxLength={128}
+                    minLength={8}
+                    name="newPassword"
+                    pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}"
+                    required
+                    type="password"
+                  />
+                  <span className="form-help">
+                    En az 8 karakter; bir büyük harf, bir küçük harf ve bir
+                    rakam içermeli.
+                  </span>
                 </label>
                 <label>
                   Yeni şifre tekrar
-                  <input autoComplete="new-password" maxLength={128} minLength={8} name="newPasswordAgain" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required type="password" />
-                  <span className="form-help">Yukarıdaki güçlü şifreyle aynı olmalı.</span>
+                  <input
+                    autoComplete="new-password"
+                    maxLength={128}
+                    minLength={8}
+                    name="newPasswordAgain"
+                    pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}"
+                    required
+                    type="password"
+                  />
+                  <span className="form-help">
+                    Yukarıdaki güçlü şifreyle aynı olmalı.
+                  </span>
                 </label>
               </div>
-              <button className="secondary-action" disabled={changePasswordMutation.isPending} type="submit">
-                {changePasswordMutation.isPending ? "Değiştiriliyor" : "Şifreyi değiştir"}
+              <button
+                className="secondary-action"
+                disabled={changePasswordMutation.isPending}
+                type="submit"
+              >
+                {changePasswordMutation.isPending
+                  ? "Değiştiriliyor"
+                  : "Şifreyi değiştir"}
               </button>
             </form>
             <form className="admin-form" onSubmit={handleDeactivate}>
               <h2>Hesabı dondur</h2>
-              <p className="form-help">Profiliniz ve tek yöneticisi olduğunuz içerikler yayından kaldırılır. Giriş bilgilerinizle hesabı yeniden açabilirsiniz.</p>
+              <p className="form-help">
+                Profiliniz ve tek yöneticisi olduğunuz içerikler yayından
+                kaldırılır. Giriş bilgilerinizle hesabı yeniden açabilirsiniz.
+              </p>
               <label>
                 Mevcut şifre
-                <input autoComplete="current-password" minLength={8} name="currentPassword" required type="password" />
+                <input
+                  autoComplete="current-password"
+                  minLength={8}
+                  name="currentPassword"
+                  required
+                  type="password"
+                />
               </label>
               <label>
                 Ayrılma nedeni
-                <textarea maxLength={1000} minLength={3} name="reason" required rows={3} />
+                <textarea
+                  maxLength={1000}
+                  minLength={3}
+                  name="reason"
+                  required
+                  rows={3}
+                />
               </label>
-              <button className="secondary-action" disabled={deactivateMutation.isPending} type="submit">
+              <button
+                className="secondary-action"
+                disabled={deactivateMutation.isPending}
+                type="submit"
+              >
                 Hesabı dondur
               </button>
             </form>
             <section className="admin-form">
               <div className="section-header compact">
                 <h2>Bildirimler</h2>
-                <span>{notificationsQuery.data?.filter((item) => !item.readAt).length ?? 0} okunmamış</span>
+                <span>
+                  {notificationsQuery.data?.filter((item) => !item.readAt)
+                    .length ?? 0}{" "}
+                  okunmamış
+                </span>
               </div>
               {notificationsQuery.data?.length ? (
                 <div className="admin-list">
@@ -1016,7 +1707,9 @@ export function AccountPage() {
                     <div className="admin-list-row" key={notification.id}>
                       <div>
                         <strong>{notification.title}</strong>
-                        <span><RichText text={notification.body} /></span>
+                        <span>
+                          <RichText text={notification.body} />
+                        </span>
                         <span>
                           {notification.createdAt
                             ? new Intl.DateTimeFormat("tr-TR", {
@@ -1026,9 +1719,20 @@ export function AccountPage() {
                             : ""}
                         </span>
                       </div>
-                      <span className={`status-pill status-${notification.readAt ? "resolved" : "open"}`}>{notification.readAt ? "Okundu" : "Yeni"}</span>
+                      <span
+                        className={`status-pill status-${notification.readAt ? "resolved" : "open"}`}
+                      >
+                        {notification.readAt ? "Okundu" : "Yeni"}
+                      </span>
                       {!notification.readAt ? (
-                        <button className="secondary-action" disabled={readNotificationMutation.isPending} onClick={() => readNotificationMutation.mutate(notification.id)} type="button">
+                        <button
+                          className="secondary-action"
+                          disabled={readNotificationMutation.isPending}
+                          onClick={() =>
+                            readNotificationMutation.mutate(notification.id)
+                          }
+                          type="button"
+                        >
                           Okundu yap
                         </button>
                       ) : null}
@@ -1041,29 +1745,58 @@ export function AccountPage() {
             </section>
             <form className="admin-form" onSubmit={handleTagSubmit}>
               <h2>Tag oluştur</h2>
-              <p className="form-help">Var olan tag'leri önce arayıp öneriyoruz; yeni ihtiyaç varsa kullanıcılar direkt aktif tag oluşturabilir.</p>
+              <p className="form-help">
+                Var olan tag'leri önce arayıp öneriyoruz; yeni ihtiyaç varsa
+                kullanıcılar direkt aktif tag oluşturabilir.
+              </p>
               <div className="form-grid">
                 <label>
                   Tag adı
-                  <input name="name" placeholder="AI Builders" required minLength={2} maxLength={80} />
+                  <input
+                    name="name"
+                    placeholder="AI Builders"
+                    required
+                    minLength={2}
+                    maxLength={80}
+                  />
                 </label>
               </div>
-              <button className="secondary-action" disabled={tagMutation.isPending} type="submit">
+              <button
+                className="secondary-action"
+                disabled={tagMutation.isPending}
+                type="submit"
+              >
                 <Plus size={18} />
                 {tagMutation.isPending ? "Oluşturuluyor" : "Tag oluştur"}
               </button>
             </form>
-            <MyEventsPanel events={myEventsQuery.data ?? []} isLoading={myEventsQuery.isLoading} tags={tags} userId={user.id} />
+            <MyEventsPanel
+              events={myEventsQuery.data ?? []}
+              isLoading={myEventsQuery.isLoading}
+              tags={tags}
+              userId={user.id}
+            />
             <form className="admin-form" onSubmit={handleInterestSubmit}>
               <h2>İlgi alanları</h2>
-              <p className="form-help">Seçtiğin tag'ler profilinde görünür ve etkinlik oluştururken varsayılan seçili gelir.</p>
+              <p className="form-help">
+                Seçtiğin tag'ler profilinde görünür ve etkinlik oluştururken
+                varsayılan seçili gelir.
+              </p>
               <fieldset className="tag-fieldset">
                 <legend>Tag'ler</legend>
                 {tags.map((tag) => (
                   <label key={tag.id}>
-                    <input defaultChecked={interestTagIds.includes(tag.id)} name="interestTagIds" type="checkbox" value={tag.id} />
+                    <input
+                      defaultChecked={interestTagIds.includes(tag.id)}
+                      name="interestTagIds"
+                      type="checkbox"
+                      value={tag.id}
+                    />
                     {tag.name}
-                    <select defaultValue={interestSentiments.get(tag.id) ?? "like"} name={`sentiment:${tag.id}`}>
+                    <select
+                      defaultValue={interestSentiments.get(tag.id) ?? "like"}
+                      name={`sentiment:${tag.id}`}
+                    >
                       <option value="like">Like</option>
                       <option value="ok">OK, no problem</option>
                       <option value="dislike">Dislike</option>
@@ -1072,14 +1805,19 @@ export function AccountPage() {
                 ))}
               </fieldset>
               <button className="secondary-action" type="submit">
-                {interestsMutation.isPending ? "Kaydediliyor" : "İlgi alanlarını kaydet"}
+                {interestsMutation.isPending
+                  ? "Kaydediliyor"
+                  : "İlgi alanlarını kaydet"}
               </button>
             </form>
             <section className="admin-form">
               <h2>Tag yorumları</h2>
               <label>
                 İlgi alanı
-                <select onChange={(event) => setCommentTagId(event.target.value)} value={commentTagId}>
+                <select
+                  onChange={(event) => setCommentTagId(event.target.value)}
+                  value={commentTagId}
+                >
                   <option value="">Tag seçin</option>
                   {interestTags.map((tag) => (
                     <option key={tag.id} value={tag.id}>
@@ -1090,12 +1828,25 @@ export function AccountPage() {
               </label>
               {commentTagId ? (
                 <>
-                  <form className="compact-form" onSubmit={handleTagCommentSubmit}>
+                  <form
+                    className="compact-form"
+                    onSubmit={handleTagCommentSubmit}
+                  >
                     <label>
                       Yorumunuz
-                      <textarea maxLength={1000} minLength={1} name="body" required rows={3} />
+                      <textarea
+                        maxLength={1000}
+                        minLength={1}
+                        name="body"
+                        required
+                        rows={3}
+                      />
                     </label>
-                    <button className="secondary-action" disabled={createTagCommentMutation.isPending} type="submit">
+                    <button
+                      className="secondary-action"
+                      disabled={createTagCommentMutation.isPending}
+                      type="submit"
+                    >
                       Yorum ekle
                     </button>
                   </form>
@@ -1103,11 +1854,23 @@ export function AccountPage() {
                     {tagCommentsQuery.data?.map((comment) => (
                       <div className="admin-list-row" key={comment.id}>
                         <div>
-                          <strong>{comment.author?.username ? `@${comment.author.username}` : (comment.author?.name ?? "Silinmiş kullanıcı")}</strong>
-                          <span><RichText text={comment.body} /></span>
+                          <strong>
+                            {comment.author?.username
+                              ? `@${comment.author.username}`
+                              : (comment.author?.name ?? "Silinmiş kullanıcı")}
+                          </strong>
+                          <span>
+                            <RichText text={comment.body} />
+                          </span>
                         </div>
                         {comment.canDelete ? (
-                          <button className="ghost-action" onClick={() => deleteTagCommentMutation.mutate(comment.id)} type="button">
+                          <button
+                            className="ghost-action"
+                            onClick={() =>
+                              deleteTagCommentMutation.mutate(comment.id)
+                            }
+                            type="button"
+                          >
                             Sil
                           </button>
                         ) : null}
@@ -1119,84 +1882,547 @@ export function AccountPage() {
                 <p className="muted">Yorumları görmek için bir tag seçin.</p>
               )}
             </section>
-            <form className="admin-form" noValidate onSubmit={handleEventSubmit}>
+            <form
+              className="admin-form"
+              noValidate
+              onSubmit={handleEventSubmit}
+            >
               <h2>Etkinlik oluştur</h2>
-              <div className="event-stepper" aria-label="Etkinlik oluşturma adımları">{[1,2,3,4,5,6].map((step) => <button className={eventStep === step ? "active" : ""} key={step} onClick={() => setEventStep(step)} type="button" aria-label={`Adım ${step}`}>{step}</button>)}</div>
-              <div data-event-step="1" hidden={eventStep !== 1}>
-              <h3>Adım 1: Temel bilgiler</h3>
-              <label>
-                Başlık
-                <input name="title" placeholder="Community Breakfast" required minLength={3} />
-              </label>
-              <label>
-                Açıklama
-                <textarea name="description" required minLength={10} rows={4} />
-              </label>
-              <div className="form-grid">
-                <label>
-                  Başlangıç
-                  <input min={new Date().toISOString().slice(0, 16)} name="startsAt" required type="datetime-local" />
-                </label>
-                <label>Bitiş<input min={new Date().toISOString().slice(0, 16)} name="endsAt" type="datetime-local" /><span className="form-help">İsteğe bağlıdır; başlangıçtan önce olamaz.</span></label>
-                <label>
-                  Format
-                  <select name="format" value={eventFormat} onChange={(event) => setEventFormat(event.target.value)}>
-                    <option value="online">Online</option>
-                    <option value="offline">Offline</option>
-                    <option value="hybrid">Hybrid</option>
-                  </select>
-                </label>
-                <label>
-                  Katılım tipi
-                  <select name="visibility" defaultValue="open">
-                    <option value="open">Open</option>
-                    <option value="approval_required">Approval required</option>
-                    <option value="invite_only">Invite only</option>
-                  </select>
-                </label>
+              <div
+                className="event-stepper"
+                aria-label="Etkinlik oluşturma adımları"
+              >
+                {[1, 2, 3, 4, 5, 6].map((step) => (
+                  <button
+                    className={eventStep === step ? "active" : ""}
+                    key={step}
+                    onClick={() => setEventStep(step)}
+                    type="button"
+                    aria-label={`Adım ${step}`}
+                  >
+                    {step}
+                  </button>
+                ))}
               </div>
-              <div className="event-step-actions"><button className="primary-action" onClick={() => setEventStep(2)} type="button">Sonraki</button></div>
+              <div data-event-step="1" hidden={eventStep !== 1}>
+                <h3>Adım 1: Temel bilgiler</h3>
+                <label>
+                  Başlık
+                  <input
+                    name="title"
+                    placeholder="Community Breakfast"
+                    required
+                    minLength={3}
+                  />
+                </label>
+                <label>
+                  Açıklama
+                  <textarea
+                    name="description"
+                    required
+                    minLength={10}
+                    rows={4}
+                  />
+                </label>
+                <div className="form-grid">
+                  <label>
+                    Başlangıç
+                    <input
+                      min={new Date().toISOString().slice(0, 16)}
+                      name="startsAt"
+                      required
+                      type="datetime-local"
+                      value={eventStartsAt}
+                      onChange={(event) => {
+                        setEventStartsAt(event.currentTarget.value);
+                        const form = event.currentTarget.form;
+                        form
+                          ?.querySelectorAll<HTMLInputElement>(
+                            'input[name="ticketGateOpensAt"]',
+                          )
+                          .forEach((input) => {
+                            if (
+                              !input.value ||
+                              input.dataset.synced === "true"
+                            ) {
+                              input.value = event.currentTarget.value;
+                              input.dataset.synced = "true";
+                            }
+                          });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Saat dilimi
+                    <select
+                      key={`${profileQuery.data?.city}-${profileQuery.data?.country}`}
+                      name="timezone"
+                      defaultValue={profileTimezone(
+                        profileQuery.data?.city,
+                        profileQuery.data?.country,
+                      )}
+                    >
+                      {timezoneOptions.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="form-help">
+                      Profilindeki şehir varsayılan olarak seçildi.
+                    </span>
+                  </label>
+                  <label>
+                    Bitiş
+                    <input
+                      min={new Date().toISOString().slice(0, 16)}
+                      name="endsAt"
+                      type="datetime-local"
+                    />
+                    <span className="form-help">
+                      İsteğe bağlıdır; başlangıçtan önce olamaz.
+                    </span>
+                  </label>
+                  <label>
+                    Format
+                    <select
+                      name="format"
+                      value={eventFormat}
+                      onChange={(event) => setEventFormat(event.target.value)}
+                    >
+                      <option value="online">Online</option>
+                      <option value="offline">Offline</option>
+                      <option value="hybrid">Hybrid</option>
+                    </select>
+                  </label>
+                  <label>
+                    Katılım tipi
+                    <select name="visibility" defaultValue="open">
+                      <option value="open">Open</option>
+                      <option value="approval_required">
+                        Approval required
+                      </option>
+                      <option value="invite_only">Invite only</option>
+                    </select>
+                  </label>
+                </div>
+                <fieldset className="tag-fieldset">
+                  <legend>Etkinlik etiketleri</legend>
+                  {tags.map((tag) => (
+                    <label key={tag.id}>
+                      <input
+                        defaultChecked={interestTagIds.includes(tag.id)}
+                        name="tagIds"
+                        type="checkbox"
+                        value={tag.id}
+                      />
+                      {tag.name}
+                    </label>
+                  ))}
+                </fieldset>
+                <div className="event-step-actions">
+                  <button
+                    className="primary-action"
+                    onClick={() => setEventStep(2)}
+                    type="button"
+                  >
+                    Sonraki
+                  </button>
+                </div>
               </div>
               <div data-event-step="2" hidden={eventStep !== 2}>
-              <h3>Adım 2: Etkinlik yeri bilgileri</h3>
-              {eventFormat !== "online" ? <div className="form-grid"><label>Mekân adı<input name="locationName" /></label><label>Adres<input name="locationAddress" /></label><label>Şehir<input name="city" placeholder="Istanbul" /></label><label>Ülke<input name="country" placeholder="Turkey" /></label></div> : null}
-              {eventFormat !== "offline" ? <><label>Live URL<input name="liveUrl" required type="url" placeholder="https://..." /></label><label>Event timeline*<textarea name="timeline" required rows={4} /></label></> : null}
-              <div className="event-step-actions"><button onClick={() => setEventStep(1)} type="button">Geri</button><button className="primary-action" onClick={() => setEventStep(3)} type="button">Sonraki</button></div>
+                <h3>Adım 2: Etkinlik yeri bilgileri</h3>
+                {eventFormat !== "online" ? (
+                  <div className="form-grid">
+                    <label>
+                      Mekân adı
+                      <input name="locationName" />
+                    </label>
+                    <label>
+                      Adres
+                      <input name="locationAddress" />
+                    </label>
+                    <label>
+                      Şehir
+                      <input
+                        defaultValue={profileQuery.data?.city ?? ""}
+                        name="city"
+                        placeholder="Istanbul"
+                      />
+                    </label>
+                    <label>
+                      Ülke
+                      <input
+                        defaultValue={profileQuery.data?.country ?? ""}
+                        name="country"
+                        placeholder="Turkey"
+                      />
+                    </label>
+                    <label>
+                      Enlem
+                      <input
+                        name="latitude"
+                        min="-90"
+                        max="90"
+                        step="any"
+                        type="number"
+                      />
+                    </label>
+                    <label>
+                      Boylam
+                      <input
+                        name="longitude"
+                        min="-180"
+                        max="180"
+                        step="any"
+                        type="number"
+                      />
+                    </label>
+                  </div>
+                ) : null}
+                {eventFormat !== "offline" ? (
+                  <label>
+                    Canlı yayın URL'si
+                    <input
+                      name="liveUrl"
+                      required
+                      type="url"
+                      placeholder="https://..."
+                    />
+                    <span className="form-help">
+                      Katılımcılar etkinlik saatinde bu bağlantıyı kullanır.
+                    </span>
+                  </label>
+                ) : null}
+                <div className="event-step-actions">
+                  <button onClick={() => setEventStep(1)} type="button">
+                    Geri
+                  </button>
+                  <button
+                    className="primary-action"
+                    onClick={() => setEventStep(3)}
+                    type="button"
+                  >
+                    Sonraki
+                  </button>
+                </div>
               </div>
               <div data-event-step="3" hidden={eventStep !== 3}>
-              <label>
-                Kapak görseli URL'si
-                <input name="coverImageUrl" placeholder="https://images.unsplash.com/..." type="url" />
-              </label>
-              <fieldset className="tag-fieldset">
-                <legend>Adım 3: Etkinlik etiketleri</legend>
-                {tags.map((tag) => (
-                  <label key={tag.id}>
-                    <input defaultChecked={interestTagIds.includes(tag.id)} name="tagIds" type="checkbox" value={tag.id} />
-                    {tag.name}
-                  </label>
-                ))}
-              </fieldset>
-              <div className="event-step-actions"><button onClick={() => setEventStep(2)} type="button">Geri</button><button className="primary-action" onClick={() => setEventStep(4)} type="button">Sonraki</button></div>
+                <label>
+                  Kapak görseli URL'si
+                  <input
+                    name="coverImageUrl"
+                    placeholder="https://images.unsplash.com/..."
+                    type="url"
+                  />
+                </label>
+                <label>
+                  Etkinlik fotoğraf ve videoları
+                  <input
+                    accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+                    multiple
+                    name="eventMedia"
+                    type="file"
+                  />
+                  <span className="form-help">
+                    En fazla 20 dosya seçebilirsin.
+                  </span>
+                </label>
+                <h3>Adım 3: Etkinlik medyası</h3>
+                <div className="event-step-actions">
+                  <button onClick={() => setEventStep(2)} type="button">
+                    Geri
+                  </button>
+                  <button
+                    className="primary-action"
+                    onClick={() => setEventStep(4)}
+                    type="button"
+                  >
+                    Sonraki
+                  </button>
+                </div>
               </div>
               <div data-event-step="4" hidden={eventStep !== 4}>
-              <h3>Adım 4: Etkinlik yöneticileri</h3>
-              <label>Yönetici e-postaları<input name="managerEmails" placeholder="yonetici@example.com, ikinci@example.com" /><span className="form-help">Birden fazla adresi virgülle ayır.</span></label>
-              <div className="event-step-actions"><button onClick={() => setEventStep(3)} type="button">Geri</button><button className="primary-action" onClick={() => setEventStep(5)} type="button">Sonraki</button></div>
+                <h3>Adım 4: Etkinlik yöneticileri</h3>
+                <label>
+                  Yönetici kullanıcı adları
+                  <input name="managerUsernames" placeholder="@ayse, @mehmet" />
+                  <span className="form-help">
+                    Birden fazla kullanıcı adını virgülle ayır.
+                  </span>
+                </label>
+                <div className="event-step-actions">
+                  <button onClick={() => setEventStep(3)} type="button">
+                    Geri
+                  </button>
+                  <button
+                    className="primary-action"
+                    onClick={() => setEventStep(5)}
+                    type="button"
+                  >
+                    Sonraki
+                  </button>
+                </div>
               </div>
               <div data-event-step="5" hidden={eventStep !== 5}>
-              <h3>Adım 5: Etkinlik programı / Line up</h3>
-              {[0, 1, 2].map((index) => <div className="form-grid" key={`lineup-${index}`}><label>Program başlığı<input name="lineupTitle" /></label><label>Başlangıç<input name="lineupStartsAt" type="datetime-local" /></label><label>Açıklama<input name="lineupDescription" /></label></div>)}
-              <div className="event-step-actions"><button onClick={() => setEventStep(4)} type="button">Geri</button><button className="primary-action" onClick={() => setEventStep(6)} type="button">Sonraki</button></div>
+                <h3>Adım 5: Etkinlik programı / Line up</h3>
+                <label>
+                  Program özeti
+                  <textarea
+                    name="timeline"
+                    rows={4}
+                    placeholder="Etkinliğin genel akışını kısaca anlat."
+                  />
+                </label>
+                <div className="lineup-editor">
+                  {lineupRows.map((row, index) => (
+                    <fieldset
+                      className={`lineup-row lineup-${row.type}`}
+                      draggable
+                      key={row.id}
+                      onDragStart={() => setDraggedLineupId(row.id)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={() => {
+                        if (!draggedLineupId || draggedLineupId === row.id)
+                          return;
+                        setLineupRows((rows) => {
+                          const next = rows.filter(
+                            (item) => item.id !== draggedLineupId,
+                          );
+                          const target = next.findIndex(
+                            (item) => item.id === row.id,
+                          );
+                          const dragged = rows.find(
+                            (item) => item.id === draggedLineupId,
+                          );
+                          if (dragged) next.splice(target, 0, dragged);
+                          return next;
+                        });
+                        setDraggedLineupId(null);
+                      }}
+                    >
+                      <legend>
+                        <GripVertical size={17} /> {index + 1}.{" "}
+                        {row.type === "heading"
+                          ? "ana başlık"
+                          : row.type === "subheading"
+                            ? "alt başlık"
+                            : "program maddesi"}
+                      </legend>
+                      <input name="lineupType" type="hidden" value={row.type} />
+                      <div className="form-grid">
+                        <label>
+                          Başlık
+                          <input
+                            name="lineupTitle"
+                            placeholder={
+                              row.type === "heading"
+                                ? "Örn: 1. Gün"
+                                : row.type === "subheading"
+                                  ? "Örn: Ana Sahne"
+                                  : "Sanatçı / performans adı"
+                            }
+                          />
+                        </label>
+                        {row.type === "session" ? (
+                          <label>
+                            Başlangıç
+                            <input
+                              name="lineupStartsAt"
+                              required
+                              type="datetime-local"
+                            />
+                          </label>
+                        ) : (
+                          <input name="lineupStartsAt" type="hidden" value="" />
+                        )}
+                        <label>
+                          Açıklama
+                          <input name="lineupDescription" />
+                        </label>
+                      </div>
+                      <button
+                        className="ghost-action lineup-remove"
+                        disabled={lineupRows.length === 1}
+                        onClick={() =>
+                          setLineupRows((rows) =>
+                            rows.filter((item) => item.id !== row.id),
+                          )
+                        }
+                        type="button"
+                      >
+                        <Trash2 size={16} />
+                        Satırı kaldır
+                      </button>
+                    </fieldset>
+                  ))}
+                </div>
+                <div className="lineup-add-actions">
+                  <button
+                    className="create-inline-link"
+                    onClick={() =>
+                      setLineupRows((rows) => [
+                        ...rows,
+                        { id: crypto.randomUUID(), type: "heading" },
+                      ])
+                    }
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    Ana Başlık Ekle (Örn: Gün bilgisi)
+                  </button>
+                  <button
+                    className="create-inline-link"
+                    onClick={() =>
+                      setLineupRows((rows) => [
+                        ...rows,
+                        { id: crypto.randomUUID(), type: "subheading" },
+                      ])
+                    }
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    Alt Başlık Ekle (Örn: Sahne bilgisi)
+                  </button>
+                  <button
+                    className="create-inline-link"
+                    onClick={() =>
+                      setLineupRows((rows) => [
+                        ...rows,
+                        { id: crypto.randomUUID(), type: "session" },
+                      ])
+                    }
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    Madde ekle (Sanatçı &amp; Performans adı)
+                  </button>
+                </div>
+                <div className="event-step-actions">
+                  <button onClick={() => setEventStep(4)} type="button">
+                    Geri
+                  </button>
+                  <button
+                    className="primary-action"
+                    onClick={() => setEventStep(6)}
+                    type="button"
+                  >
+                    Sonraki
+                  </button>
+                </div>
               </div>
               <div data-event-step="6" hidden={eventStep !== 6}>
-              <h3>Adım 6: Etkinlik biletleri</h3>
-              {[0, 1, 2].map((index) => <div className="form-grid" key={`ticket-${index}`}><label>Bilet adı<input name="ticketName" /></label><label>Açıklama<input name="ticketDescription" /></label><label>Fiyat<input min="0" name="ticketPrice" step="0.01" type="number" /></label><label>Para birimi<select name="ticketCurrency">{["TRY","USD","EUR","GBP","CAD","SGD","AED","HKD","INR","BRL","KRW","SAR","NZD","ZAR","CHF","JPY","ARS","AUD"].map((currency) => <option key={currency}>{currency}</option>)}</select></label><label>Kontenjan<input min="1" name="ticketCapacity" type="number" /></label><label>Satış başlangıcı<input name="ticketSaleStartsAt" type="datetime-local" /></label><label>Satış bitişi<input name="ticketSaleEndsAt" type="datetime-local" /></label><label>Gate açılışı<input name="ticketGateOpensAt" type="datetime-local" /></label><label>Gate kapanışı<input name="ticketGateClosesAt" type="datetime-local" /></label></div>)}
-              <button className="secondary-action" disabled={eventMutation.isPending} type="submit">
-                <Plus size={18} />
-                Etkinlik yayınla
-              </button>
-              <div className="event-step-actions"><button onClick={() => setEventStep(5)} type="button">Geri</button></div>
+                <h3>Adım 6: Etkinlik biletleri</h3>
+                {Array.from({ length: eventTicketCount }, (_, index) => (
+                  <fieldset
+                    className="ticket-definition"
+                    key={`ticket-${index}`}
+                  >
+                    <legend>Bilet {index + 1}</legend>
+                    <div className="form-grid">
+                      <label>
+                        Bilet adı
+                        <input name="ticketName" />
+                      </label>
+                      <label>
+                        Açıklama
+                        <input name="ticketDescription" />
+                      </label>
+                      <label>
+                        Fiyat
+                        <input
+                          min="0"
+                          name="ticketPrice"
+                          step="0.01"
+                          type="number"
+                        />
+                      </label>
+                      <label>
+                        Para birimi
+                        <select name="ticketCurrency">
+                          {[
+                            "TRY",
+                            "USD",
+                            "EUR",
+                            "GBP",
+                            "CAD",
+                            "SGD",
+                            "AED",
+                            "HKD",
+                            "INR",
+                            "BRL",
+                            "KRW",
+                            "SAR",
+                            "NZD",
+                            "ZAR",
+                            "CHF",
+                            "JPY",
+                            "ARS",
+                            "AUD",
+                          ].map((currency) => (
+                            <option key={currency}>{currency}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Kontenjan
+                        <input min="1" name="ticketCapacity" type="number" />
+                      </label>
+                      <label>
+                        Satış başlangıcı
+                        <input
+                          name="ticketSaleStartsAt"
+                          type="datetime-local"
+                        />
+                      </label>
+                      <label>
+                        Satış bitişi
+                        <input name="ticketSaleEndsAt" type="datetime-local" />
+                      </label>
+                      <label>
+                        Gate açılışı
+                        <input name="ticketGateOpensAt" type="datetime-local" />
+                      </label>
+                      <label>
+                        Gate kapanışı
+                        <input
+                          name="ticketGateClosesAt"
+                          type="datetime-local"
+                        />
+                      </label>
+                    </div>
+                  </fieldset>
+                ))}
+                <button
+                  className="create-inline-link"
+                  onClick={(event) => {
+                    const form = event.currentTarget.form;
+                    setEventTicketCount((count) => count + 1);
+                    window.setTimeout(() => {
+                      const inputs = form?.querySelectorAll<HTMLInputElement>(
+                        'input[name="ticketGateOpensAt"]',
+                      );
+                      const input = inputs?.[inputs.length - 1];
+                      if (input && !input.value) input.value = eventStartsAt;
+                    });
+                  }}
+                  type="button"
+                >
+                  <Plus size={16} /> Yeni bir bilet tanımla
+                </button>
+                <button
+                  className="secondary-action"
+                  disabled={eventMutation.isPending}
+                  type="submit"
+                >
+                  <Plus size={18} />
+                  Etkinlik yayınla
+                </button>
+                <div className="event-step-actions">
+                  <button onClick={() => setEventStep(5)} type="button">
+                    Geri
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -1206,23 +2432,32 @@ export function AccountPage() {
   );
 }
 
-const notificationTopicLabels: Record<NotificationPreference["topic"], string> = {
-  tag_request: "Profilime tag ekleme talebi",
-  private_message: "Yeni özel mesaj",
-  mention: "Gönderi veya yorumda bahsedilme",
-  comment: "İçeriğime yeni yorum",
-  password_changed: "Şifre değişikliği",
-  email_changed: "E-posta değişikliği",
-  phone_changed: "Telefon değişikliği",
-  login: "Yeni giriş",
-  admin_message: "Konnektora yönetim mesajı",
-  event_invite: "Etkinlik daveti",
-  event_manager: "Etkinlik yöneticisi atanma",
-  place_invite: "Mekân daveti",
-  place_manager: "Mekân yöneticisi atanma",
-};
+const notificationTopicLabels: Record<NotificationPreference["topic"], string> =
+  {
+    tag_request: "Profilime tag ekleme talebi",
+    private_message: "Yeni özel mesaj",
+    mention: "Gönderi veya yorumda bahsedilme",
+    comment: "İçeriğime yeni yorum",
+    password_changed: "Şifre değişikliği",
+    email_changed: "E-posta değişikliği",
+    phone_changed: "Telefon değişikliği",
+    login: "Yeni giriş",
+    admin_message: "Konnektora yönetim mesajı",
+    event_invite: "Etkinlik daveti",
+    event_manager: "Etkinlik yöneticisi atanma",
+    place_invite: "Mekân daveti",
+    place_manager: "Mekân yöneticisi atanma",
+  };
 
-function MemberList({ members, onToggle, title }: { members: MemberCard[]; onToggle: (member: MemberCard) => void; title: string }) {
+function MemberList({
+  members,
+  onToggle,
+  title,
+}: {
+  members: MemberCard[];
+  onToggle: (member: MemberCard) => void;
+  title: string;
+}) {
   return (
     <section className="admin-form">
       <div className="section-header compact">
@@ -1234,13 +2469,24 @@ function MemberList({ members, onToggle, title }: { members: MemberCard[]; onTog
           {members.map((member) => (
             <div className="admin-list-row" key={member.id}>
               <div>
-                <strong>{member.username ? `@${member.username}` : member.name}</strong>
+                <strong>
+                  <Link to={userProfilePath(member)}>
+                    {member.username ? `@${member.username}` : member.name}
+                  </Link>
+                </strong>
                 <span>
-                  {member.commonTagCount} ortak ilgi alanı · {member.followerCount} takipçi
+                  {member.commonTagCount} ortak ilgi alanı ·{" "}
+                  {member.followerCount} takipçi
                 </span>
-                <span>{[member.city, member.country].filter(Boolean).join(", ")}</span>
+                <span>
+                  {[member.city, member.country].filter(Boolean).join(", ")}
+                </span>
               </div>
-              <button className="secondary-action" onClick={() => onToggle(member)} type="button">
+              <button
+                className="secondary-action"
+                onClick={() => onToggle(member)}
+                type="button"
+              >
                 {member.following ? "Takibi bırak" : "Takip et"}
               </button>
             </div>
@@ -1253,7 +2499,15 @@ function MemberList({ members, onToggle, title }: { members: MemberCard[]; onTog
   );
 }
 
-function PrivacyAudienceField({ defaultValue, label, name }: { defaultValue: PrivacyAudience; label: string; name: string }) {
+function PrivacyAudienceField({
+  defaultValue,
+  label,
+  name,
+}: {
+  defaultValue: PrivacyAudience;
+  label: string;
+  name: string;
+}) {
   return (
     <label>
       {label}
@@ -1266,13 +2520,20 @@ function PrivacyAudienceField({ defaultValue, label, name }: { defaultValue: Pri
   );
 }
 
-function ProfileMediaPanel({ media, userId }: { media: ProfileMedia[]; userId: string }) {
+function ProfileMediaPanel({
+  media,
+  userId,
+}: {
+  media: ProfileMedia[];
+  userId: string;
+}) {
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{
     tone: "success" | "error";
     message: string;
   } | null>(null);
-  const refresh = () => void queryClient.invalidateQueries({ queryKey: ["profile-media", userId] });
+  const refresh = () =>
+    void queryClient.invalidateQueries({ queryKey: ["profile-media", userId] });
   const uploadMutation = useMutation({
     mutationFn: uploadProfileMedia,
     onSuccess: () => {
@@ -1297,14 +2558,20 @@ function ProfileMediaPanel({ media, userId }: { media: ProfileMedia[]; userId: s
   const deleteMutation = useMutation({
     mutationFn: deleteProfileMedia,
     onSuccess: refresh,
-    onError: () => setNotice({ tone: "error", message: "Son profil fotoğrafı silinemez." }),
+    onError: () =>
+      setNotice({ tone: "error", message: "Son profil fotoğrafı silinemez." }),
   });
   const reorderMutation = useMutation({
     mutationFn: reorderProfileMedia,
     onSuccess: refresh,
-    onError: () => setNotice({ tone: "error", message: "Albüm sırası değiştirilemedi." }),
+    onError: () =>
+      setNotice({ tone: "error", message: "Albüm sırası değiştirilemedi." }),
   });
-  const isPending = uploadMutation.isPending || profilePictureMutation.isPending || deleteMutation.isPending || reorderMutation.isPending;
+  const isPending =
+    uploadMutation.isPending ||
+    profilePictureMutation.isPending ||
+    deleteMutation.isPending ||
+    reorderMutation.isPending;
 
   function moveMedia(index: number, direction: -1 | 1) {
     const targetIndex = index + direction;
@@ -1323,34 +2590,93 @@ function ProfileMediaPanel({ media, userId }: { media: ProfileMedia[]; userId: s
       <div className="guest-invite-form">
         <label>
           Yeni fotoğraf veya video
-          <input accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" disabled={isPending || media.length >= 50} multiple name="profileMedia" type="file" onChange={(event) => { const files = Array.from(event.currentTarget.files ?? []).slice(0, Math.max(0, 50 - media.length)); files.forEach((file) => uploadMutation.mutate(file)); event.currentTarget.value = ""; }} />
+          <input
+            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+            disabled={isPending || media.length >= 50}
+            multiple
+            name="profileMedia"
+            type="file"
+            onChange={(event) => {
+              const files = Array.from(event.currentTarget.files ?? []).slice(
+                0,
+                Math.max(0, 50 - media.length),
+              );
+              files.forEach((file) => uploadMutation.mutate(file));
+              event.currentTarget.value = "";
+            }}
+          />
         </label>
-        {uploadMutation.isPending ? <span className="form-help">Yükleniyor…</span> : null}
+        {uploadMutation.isPending ? (
+          <span className="form-help">Yükleniyor…</span>
+        ) : null}
       </div>
-      {media.length === 0 ? <p className="form-help">Profilini tamamlamak için ilk olarak bir fotoğraf yükle.</p> : null}
-      {notice ? <p className={notice.tone === "success" ? "form-success" : "form-error"}>{notice.message}</p> : null}
+      {media.length === 0 ? (
+        <p className="form-help">
+          Profilini tamamlamak için ilk olarak bir fotoğraf yükle.
+        </p>
+      ) : null}
+      {notice ? (
+        <p
+          className={notice.tone === "success" ? "form-success" : "form-error"}
+        >
+          {notice.message}
+        </p>
+      ) : null}
       <div className="profile-media-grid">
         {media.map((item, index) => (
           <article className="profile-media-item" key={item.id}>
-            {item.type === "image" ? <img alt={`Profil albümü ${index + 1}`} src={resolveMediaUrl(item.url)} /> : <video controls preload="metadata" src={resolveMediaUrl(item.url)} />}
-            <strong>{item.isProfilePicture ? "Profil resmi" : `${index + 1}. medya`}</strong>
+            {item.type === "image" ? (
+              <img
+                alt={`Profil albümü ${index + 1}`}
+                src={resolveMediaUrl(item.url)}
+              />
+            ) : (
+              <video
+                controls
+                preload="metadata"
+                src={resolveMediaUrl(item.url)}
+              />
+            )}
+            <strong>
+              {item.isProfilePicture ? "Profil resmi" : `${index + 1}. medya`}
+            </strong>
             <div className="row-actions">
               {!item.isProfilePicture && item.type === "image" ? (
-                <button className="secondary-action" disabled={isPending} onClick={() => profilePictureMutation.mutate(item.id)} type="button">
+                <button
+                  className="secondary-action"
+                  disabled={isPending}
+                  onClick={() => profilePictureMutation.mutate(item.id)}
+                  type="button"
+                >
                   Profil resmi yap
                 </button>
               ) : null}
               {!item.isProfilePicture ? (
                 <>
-                  <button className="ghost-action" disabled={isPending || index <= 1} onClick={() => moveMedia(index, -1)} type="button">
+                  <button
+                    className="ghost-action"
+                    disabled={isPending || index <= 1}
+                    onClick={() => moveMedia(index, -1)}
+                    type="button"
+                  >
                     ←
                   </button>
-                  <button className="ghost-action" disabled={isPending || index >= media.length - 1} onClick={() => moveMedia(index, 1)} type="button">
+                  <button
+                    className="ghost-action"
+                    disabled={isPending || index >= media.length - 1}
+                    onClick={() => moveMedia(index, 1)}
+                    type="button"
+                  >
                     →
                   </button>
                 </>
               ) : null}
-              <button className="danger-action" disabled={isPending} onClick={() => deleteMutation.mutate(item.id)} type="button">
+              <button
+                className="danger-action"
+                disabled={isPending}
+                onClick={() => deleteMutation.mutate(item.id)}
+                type="button"
+              >
                 <Trash2 size={16} /> Sil
               </button>
             </div>
@@ -1366,11 +2692,22 @@ function normalizeWebsite(value?: string) {
   return /^https?:\/\//i.test(value) ? value : `https://${value}`;
 }
 
-function MyEventsPanel({ events, isLoading, tags, userId }: { events: Event[]; isLoading: boolean; tags: Tag[]; userId: string }) {
+function MyEventsPanel({
+  events,
+  isLoading,
+  tags,
+  userId,
+}: {
+  events: Event[];
+  isLoading: boolean;
+  tags: Tag[];
+  userId: string;
+}) {
   const queryClient = useQueryClient();
   const [guestListEventId, setGuestListEventId] = useState<string | null>(null);
   const updateMutation = useMutation({
-    mutationFn: (input: { id: string; data: Partial<AdminEventInput> }) => updateMyEvent(input.id, input.data),
+    mutationFn: (input: { id: string; data: Partial<AdminEventInput> }) =>
+      updateMyEvent(input.id, input.data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["my-events", userId] });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
@@ -1390,7 +2727,9 @@ function MyEventsPanel({ events, isLoading, tags, userId }: { events: Event[]; i
         <h2>Etkinliklerim</h2>
         <span>{isLoading ? "Yükleniyor" : `${events.length} etkinlik`}</span>
       </div>
-      {events.length === 0 && !isLoading ? <p className="muted">Henüz etkinlik oluşturmadın.</p> : null}
+      {events.length === 0 && !isLoading ? (
+        <p className="muted">Henüz etkinlik oluşturmadın.</p>
+      ) : null}
       <div className="admin-list">
         {events.map((event) => (
           <div className="admin-list-item" key={event.id}>
@@ -1404,7 +2743,9 @@ function MyEventsPanel({ events, isLoading, tags, userId }: { events: Event[]; i
                   }).format(new Date(event.startsAt))}
                 </span>
               </div>
-              <span className="muted">{event.tags.map((tag) => tag.name).join(", ") || "Tag yok"}</span>
+              <span className="muted">
+                {event.tags.map((tag) => tag.name).join(", ") || "Tag yok"}
+              </span>
               <div className="row-actions">
                 {event.status !== "published" && event.status !== "archived" ? (
                   <button
@@ -1436,22 +2777,41 @@ function MyEventsPanel({ events, isLoading, tags, userId }: { events: Event[]; i
                     Taslak
                   </button>
                 ) : null}
-                <button className="secondary-action" onClick={() => setGuestListEventId((currentId) => (currentId === event.id ? null : event.id))} type="button">
+                <button
+                  className="secondary-action"
+                  onClick={() =>
+                    setGuestListEventId((currentId) =>
+                      currentId === event.id ? null : event.id,
+                    )
+                  }
+                  type="button"
+                >
                   <Users size={16} />
                   Guest list
                 </button>
                 {event.status !== "archived" ? (
-                  <button className="danger-action" disabled={archiveMutation.isPending} onClick={() => archiveMutation.mutate(event.id)} type="button">
+                  <button
+                    className="danger-action"
+                    disabled={archiveMutation.isPending}
+                    onClick={() => archiveMutation.mutate(event.id)}
+                    type="button"
+                  >
                     Arşivle
                   </button>
                 ) : null}
               </div>
             </div>
-            {guestListEventId === event.id ? <OrganizerGuestList eventId={event.id} /> : null}
+            {guestListEventId === event.id ? (
+              <OrganizerGuestList eventId={event.id} />
+            ) : null}
           </div>
         ))}
       </div>
-      {tags.length === 0 ? <p className="form-help">Etkinlik oluşturmak için önce bir tag ekleyebilirsin.</p> : null}
+      {tags.length === 0 ? (
+        <p className="form-help">
+          Etkinlik oluşturmak için önce bir tag ekleyebilirsin.
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -1467,7 +2827,8 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
     queryFn: () => listEventParticipants(eventId, "user"),
   });
   const inviteMutation = useMutation({
-    mutationFn: (input: { email: string; name?: string; role?: string }) => inviteEventParticipant(eventId, input, "user"),
+    mutationFn: (input: { email: string; name?: string; role?: string }) =>
+      inviteEventParticipant(eventId, input, "user"),
     onSuccess: () => {
       setNotice({ tone: "success", message: "Davet guest list'e eklendi." });
       void queryClient.invalidateQueries({
@@ -1481,7 +2842,8 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
       }),
   });
   const statusMutation = useMutation({
-    mutationFn: (input: { userId: string; status: string }) => updateEventParticipantStatus(eventId, input.userId, input.status, "user"),
+    mutationFn: (input: { userId: string; status: string }) =>
+      updateEventParticipantStatus(eventId, input.userId, input.status, "user"),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["event-participants", eventId, "organizer"],
@@ -1489,7 +2851,8 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
     },
   });
   const checkInMutation = useMutation({
-    mutationFn: (userId: string) => checkInEventParticipant(eventId, userId, "user"),
+    mutationFn: (userId: string) =>
+      checkInEventParticipant(eventId, userId, "user"),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["event-participants", eventId, "organizer"],
@@ -1529,7 +2892,9 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
   function handleTicketScan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
-    const rawValue = String(new FormData(formElement).get("ticket") || "").trim();
+    const rawValue = String(
+      new FormData(formElement).get("ticket") || "",
+    ).trim();
     let token = rawValue;
     try {
       token = new URL(rawValue).searchParams.get("token") ?? rawValue;
@@ -1543,12 +2908,21 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
     <div className="guest-list-panel">
       <div className="guest-list-header">
         <strong>Guest list</strong>
-        <span>{participantsQuery.isLoading ? "Yükleniyor" : `${participants.length} kişi`}</span>
+        <span>
+          {participantsQuery.isLoading
+            ? "Yükleniyor"
+            : `${participants.length} kişi`}
+        </span>
       </div>
       <form className="guest-invite-form" onSubmit={handleInviteSubmit}>
         <label>
           Email
-          <input name="email" placeholder="member@example.com" required type="email" />
+          <input
+            name="email"
+            placeholder="member@example.com"
+            required
+            type="email"
+          />
         </label>
         <label>
           Ad
@@ -1561,7 +2935,11 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
             <option value="manager">Manager</option>
           </select>
         </label>
-        <button className="secondary-action" disabled={inviteMutation.isPending} type="submit">
+        <button
+          className="secondary-action"
+          disabled={inviteMutation.isPending}
+          type="submit"
+        >
           <Plus size={16} />
           Davet et
         </button>
@@ -1569,53 +2947,110 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
       <form className="guest-invite-form" onSubmit={handleTicketScan}>
         <label>
           QR bilet verisi
-          <input name="ticket" placeholder="QR kodunu tara veya içeriğini yapıştır" required />
+          <input
+            name="ticket"
+            placeholder="QR kodunu tara veya içeriğini yapıştır"
+            required
+          />
         </label>
-        <button className="secondary-action" disabled={ticketScanMutation.isPending} type="submit">
+        <button
+          className="secondary-action"
+          disabled={ticketScanMutation.isPending}
+          type="submit"
+        >
           <ClipboardCheck size={16} />
           {ticketScanMutation.isPending ? "Doğrulanıyor" : "QR ile giriş"}
         </button>
       </form>
-      {notice ? <p className={notice.tone === "success" ? "form-success" : "form-error"}>{notice.message}</p> : null}
+      {notice ? (
+        <p
+          className={notice.tone === "success" ? "form-success" : "form-error"}
+        >
+          {notice.message}
+        </p>
+      ) : null}
       <div className="guest-list">
         {participants.map((participant) => (
-          <OrganizerGuestListRow isPending={statusMutation.isPending || checkInMutation.isPending} key={participant.id} onCheckIn={() => checkInMutation.mutate(participant.userId)} onStatusChange={(status) => statusMutation.mutate({ userId: participant.userId, status })} participant={participant} />
+          <OrganizerGuestListRow
+            isPending={statusMutation.isPending || checkInMutation.isPending}
+            key={participant.id}
+            onCheckIn={() => checkInMutation.mutate(participant.userId)}
+            onStatusChange={(status) =>
+              statusMutation.mutate({ userId: participant.userId, status })
+            }
+            participant={participant}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function OrganizerGuestListRow({ isPending, onCheckIn, onStatusChange, participant }: { isPending: boolean; onCheckIn: () => void; onStatusChange: (status: string) => void; participant: EventParticipant }) {
+function OrganizerGuestListRow({
+  isPending,
+  onCheckIn,
+  onStatusChange,
+  participant,
+}: {
+  isPending: boolean;
+  onCheckIn: () => void;
+  onStatusChange: (status: string) => void;
+  participant: EventParticipant;
+}) {
   return (
     <div className="guest-list-row">
       <div>
         <strong>{participant.user?.name ?? "Community member"}</strong>
         <span>{participant.user?.email ?? participant.userId}</span>
       </div>
-      <span className={`status-pill status-${participant.status}`}>{participant.status}</span>
+      <span className={`status-pill status-${participant.status}`}>
+        {participant.status}
+      </span>
       <span className="muted">{participant.role}</span>
       <div className="row-actions">
         {participant.status === "requested" ? (
           <>
-            <button className="secondary-action" disabled={isPending} onClick={() => onStatusChange("accepted")} type="button">
+            <button
+              className="secondary-action"
+              disabled={isPending}
+              onClick={() => onStatusChange("accepted")}
+              type="button"
+            >
               <Check size={16} />
               Kabul
             </button>
-            <button className="danger-action" disabled={isPending} onClick={() => onStatusChange("declined")} type="button">
+            <button
+              className="danger-action"
+              disabled={isPending}
+              onClick={() => onStatusChange("declined")}
+              type="button"
+            >
               <X size={16} />
               Ret
             </button>
           </>
         ) : null}
-        {(participant.status === "accepted" || participant.status === "invited") && !participant.checkedInAt ? (
-          <button className="secondary-action" disabled={isPending} onClick={onCheckIn} type="button">
+        {(participant.status === "accepted" ||
+          participant.status === "invited") &&
+        !participant.checkedInAt ? (
+          <button
+            className="secondary-action"
+            disabled={isPending}
+            onClick={onCheckIn}
+            type="button"
+          >
             <ClipboardCheck size={16} />
             Check-in
           </button>
         ) : null}
-        {participant.status !== "banned" && participant.status !== "attended" ? (
-          <button className="ghost-action" disabled={isPending} onClick={() => onStatusChange("banned")} type="button">
+        {participant.status !== "banned" &&
+        participant.status !== "attended" ? (
+          <button
+            className="ghost-action"
+            disabled={isPending}
+            onClick={() => onStatusChange("banned")}
+            type="button"
+          >
             Ban
           </button>
         ) : null}

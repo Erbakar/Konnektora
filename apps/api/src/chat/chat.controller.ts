@@ -48,4 +48,5 @@ export class ChatController {
   @Post("conversations/:peerId/typing") typing(@Param("peerId") peerId: string, @CurrentUser() user: User) { return this.chatService.setTyping(user.id, peerId); }
   @Get("conversations/:peerId/typing") typingStatus(@Param("peerId") peerId: string, @CurrentUser() user: User) { return this.chatService.getTyping(user.id, peerId); }
   @Patch("conversations/:peerId/preferences") preference(@Param("peerId") peerId: string, @Body() body: ConversationPreferenceDto, @CurrentUser() user: User) { return this.chatService.setPreference(user.id, peerId, body); }
+  @Delete("conversations/:peerId") removeConversation(@Param("peerId") peerId: string, @CurrentUser() user: User) { return this.chatService.removeConversation(user.id, peerId); }
 }

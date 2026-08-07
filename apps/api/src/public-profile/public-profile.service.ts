@@ -8,8 +8,16 @@ export class PublicProfileService {
 
   async getByUsername(rawUsername: string, viewerId?: string) {
     const username = rawUsername.trim();
+    return this.getProfile({ username: { equals: username, mode: "insensitive" } }, viewerId);
+  }
+
+  async getById(id: string, viewerId?: string) {
+    return this.getProfile({ id }, viewerId);
+  }
+
+  private async getProfile(identifier: { id: string } | { username: { equals: string; mode: "insensitive" } }, viewerId?: string) {
     const profile = await this.prisma.user.findFirst({
-      where: { username: { equals: username, mode: "insensitive" }, status: "active", role: "user" },
+      where: { ...identifier, status: "active", role: { in: ["user", "curator"] } },
       select: {
         id: true, name: true, username: true, accountType: true, website: true, city: true, country: true,
         followerCount: true, followingCount: true, createdAt: true, profileVerifiedAt: true,
@@ -17,7 +25,7 @@ export class PublicProfileService {
         interestTags: { where: { tag: { status: "active" } }, include: { tag: true }, orderBy: { createdAt: "desc" } }
       }
     });
-    if (!profile?.username) throw new NotFoundException("Kullanıcı profili bulunamadı.");
+    if (!profile) throw new NotFoundException("Kullanıcı profili bulunamadı.");
     if (viewerId && viewerId !== profile.id) {
       const blocked = await this.prisma.userBlock.findFirst({ where: { targetType: "user", OR: [{ userId: viewerId, targetId: profile.id }, { userId: profile.id, targetId: viewerId }] }, select: { userId: true } });
       if (blocked) throw new ForbiddenException("Bu kullanıcı profili görüntülenemiyor.");
@@ -33,7 +41,7 @@ export class PublicProfileService {
     const ownTagIds = new Set(ownInterests.map((item) => item.tagId));
     const interests = profile.interestTags.map((item) => ({ tag: item.tag, sentiment: item.sentiment, common: ownTagIds.has(item.tagId) }));
     return {
-      id: profile.id, name: profile.name, username: profile.username,
+      id: profile.id, name: profile.name, username: profile.username ?? profile.id,
       accountType: profile.accountType === "corporate" ? "corporate" as const : "individual" as const,
       website: profile.website, city: profile.city, country: profile.country,
       followerCount: profile.followerCount, followingCount: profile.followingCount, memberSince: profile.createdAt, verified: Boolean(profile.profileVerifiedAt),

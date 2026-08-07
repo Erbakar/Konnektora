@@ -10,7 +10,7 @@ describe("ChatService", () => {
   const userFollow = { findMany: jest.fn(), findFirst: jest.fn() };
   const notificationPreference = { findUnique: jest.fn() };
   const notification = { create: jest.fn() };
-  const conversationPreference = { findMany: jest.fn(), upsert: jest.fn() };
+  const conversationPreference = { findMany: jest.fn(), findUnique: jest.fn(), upsert: jest.fn() };
   const notifications = { dispatch: jest.fn() };
   const messageReaction = { findUnique: jest.fn(), create: jest.fn(), delete: jest.fn() };
   const tx = { privateMessage, notification };
@@ -33,6 +33,7 @@ describe("ChatService", () => {
     userFollow.findFirst.mockResolvedValue(null);
     notificationPreference.findUnique.mockResolvedValue(null);
     conversationPreference.findMany.mockResolvedValue([]);
+    conversationPreference.findUnique.mockResolvedValue(null);
   });
 
   it("groups messages by peer and counts unread messages", async () => {
@@ -78,5 +79,17 @@ describe("ChatService", () => {
     await expect(service.send(sender, { recipientId: peer.id, body: " hello " })).resolves.toEqual(message);
     expect(privateMessage.create).toHaveBeenCalledWith({ data: expect.objectContaining({ senderId: sender.id, recipientId: peer.id, body: "hello" }) });
     expect(notifications.dispatch).toHaveBeenCalledWith(expect.objectContaining({ userId: peer.id, topic: "private_message" }));
+  });
+
+  it("hides a deleted conversation only for the current user", async () => {
+    user.findUnique.mockResolvedValue(peer);
+    conversationPreference.upsert.mockResolvedValue({});
+
+    await expect(service.removeConversation(sender.id, peer.id)).resolves.toEqual({ ok: true });
+    expect(conversationPreference.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId_peerId: { userId: sender.id, peerId: peer.id } },
+      update: expect.objectContaining({ hiddenBefore: expect.any(Date) })
+    }));
+    expect(privateMessage.updateMany).not.toHaveBeenCalled();
   });
 });

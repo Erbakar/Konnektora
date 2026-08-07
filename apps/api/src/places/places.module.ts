@@ -4,10 +4,11 @@ import { PrismaModule } from "../prisma/prisma.module";
 import { PlacesController } from "./places.controller";
 import { PlacesService } from "./places.service";
 import { NotificationsModule } from "../notifications/notifications.module";
+import { IdentityModule } from "../identity/identity.module";
 
 @Module({
-  imports: [AuthModule, PrismaModule, NotificationsModule],
+  imports: [AuthModule, PrismaModule, NotificationsModule, IdentityModule],
   controllers: [PlacesController],
-  providers: [PlacesService]
+  providers: [PlacesService],
 })
 export class PlacesModule {}

@@ -1,11 +1,27 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { User } from "@prisma/client";
 import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 import { RequirePermissions } from "../auth/permissions";
-import { CreateEventDto, EventQueryDto, InviteParticipantDto, ScanCheckInTicketDto, UpdateParticipantDto } from "./events.dto";
+import {
+  CreateEventDto,
+  EventQueryDto,
+  InviteParticipantDto,
+  ScanCheckInTicketDto,
+  UpdateParticipantDto,
+} from "./events.dto";
 import { EventsService } from "./events.service";
 
 @Controller()
@@ -22,6 +38,16 @@ export class EventsController {
   @UseGuards(OptionalJwtAuthGuard)
   getPublicEvent(@Param("slug") slug: string, @CurrentUser() user?: User) {
     return this.eventsService.getPublicEvent(slug, user?.id);
+  }
+
+  @Get("event-stats/:id")
+  getStats(@Param("id") id: string) {
+    return this.eventsService.getInteractionStats(id);
+  }
+
+  @Get("events/:id/related-users")
+  relatedUsers(@Param("id") id: string) {
+    return this.eventsService.listRelatedUsers(id);
   }
 
   @Post("events")
@@ -44,7 +70,11 @@ export class EventsController {
 
   @Patch("me/events/:id")
   @UseGuards(JwtAuthGuard)
-  updateMyEvent(@Param("id") id: string, @Body() body: Partial<CreateEventDto>, @CurrentUser() user: User) {
+  updateMyEvent(
+    @Param("id") id: string,
+    @Body() body: Partial<CreateEventDto>,
+    @CurrentUser() user: User,
+  ) {
     return this.eventsService.updateManagedEvent(id, body, user);
   }
 
@@ -74,13 +104,21 @@ export class EventsController {
 
   @Post("events/:id/check-in/scan")
   @UseGuards(JwtAuthGuard)
-  scanTicket(@Param("id") id: string, @Body() body: ScanCheckInTicketDto, @CurrentUser() user: User) {
+  scanTicket(
+    @Param("id") id: string,
+    @Body() body: ScanCheckInTicketDto,
+    @CurrentUser() user: User,
+  ) {
     return this.eventsService.checkInWithTicket(id, body.token, user);
   }
 
   @Post("events/:id/invite")
   @UseGuards(JwtAuthGuard)
-  inviteParticipant(@Param("id") id: string, @Body() body: InviteParticipantDto, @CurrentUser() user: User) {
+  inviteParticipant(
+    @Param("id") id: string,
+    @Body() body: InviteParticipantDto,
+    @CurrentUser() user: User,
+  ) {
     return this.eventsService.inviteParticipant(id, body, user);
   }
 
@@ -90,14 +128,23 @@ export class EventsController {
     @Param("id") id: string,
     @Param("userId") participantUserId: string,
     @Body() body: UpdateParticipantDto,
-    @CurrentUser() user: User
+    @CurrentUser() user: User,
   ) {
-    return this.eventsService.updateParticipantStatus(id, participantUserId, body.status, user);
+    return this.eventsService.updateParticipantStatus(
+      id,
+      participantUserId,
+      body.status,
+      user,
+    );
   }
 
   @Post("events/:id/participants/:userId/check-in")
   @UseGuards(JwtAuthGuard)
-  checkInParticipant(@Param("id") id: string, @Param("userId") participantUserId: string, @CurrentUser() user: User) {
+  checkInParticipant(
+    @Param("id") id: string,
+    @Param("userId") participantUserId: string,
+    @CurrentUser() user: User,
+  ) {
     return this.eventsService.checkInParticipant(id, participantUserId, user);
   }
 
@@ -118,7 +165,11 @@ export class EventsController {
   @Patch("admin/events/:id")
   @UseGuards(AdminGuard)
   @RequirePermissions("events.manage")
-  updateEvent(@Param("id") id: string, @Body() body: Partial<CreateEventDto>, @CurrentUser() user: User) {
+  updateEvent(
+    @Param("id") id: string,
+    @Body() body: Partial<CreateEventDto>,
+    @CurrentUser() user: User,
+  ) {
     return this.eventsService.updateEvent(id, body, user.id);
   }
 
