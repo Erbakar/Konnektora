@@ -9,7 +9,8 @@ describe("PublicProfileService", () => {
   const mediaFile = { findMany: jest.fn() };
   const event = { findMany: jest.fn() };
   const place = { findMany: jest.fn() };
-  const service = new PublicProfileService({ user, userBlock, userFollow, userInterestTag, mediaFile, event, place } as never);
+  const contentComment = { groupBy: jest.fn() };
+  const service = new PublicProfileService({ user, userBlock, userFollow, userInterestTag, mediaFile, event, place, contentComment } as never);
   const ownerId = "11111111-1111-4111-8111-111111111111";
   const viewerId = "22222222-2222-4222-8222-222222222222";
   const tag = { id: "33333333-3333-4333-8333-333333333333", name: "AI", slug: "ai", description: null, categoryId: null, status: "active", usageCount: 2 };
@@ -25,6 +26,7 @@ describe("PublicProfileService", () => {
     mediaFile.findMany.mockResolvedValue([]);
     event.findMany.mockResolvedValue([]);
     place.findMany.mockResolvedValue([]);
+    contentComment.groupBy.mockResolvedValue([]);
   });
 
   it("returns public identity and common interests", async () => {

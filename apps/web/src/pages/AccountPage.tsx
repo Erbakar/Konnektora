@@ -34,6 +34,8 @@ import { SocialAuthButtons } from "../components/SocialAuthButtons";
 import { ProfileVerificationPanel } from "../components/ProfileVerificationPanel";
 import { PushNotificationControl } from "../components/PushNotificationControl";
 import { RichText } from "../components/RichText";
+import { LocationPicker } from "../components/LocationPicker";
+import { TagPicker } from "../components/TagPicker";
 import { userProfilePath } from "../components/UserIdentityLink";
 import { getSocialCredential } from "../lib/socialProviders";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
@@ -68,6 +70,7 @@ import {
   listMemberSuggestions,
   listEventParticipants,
   listMyEvents,
+  listMyPlaces,
   listProfileMedia,
   listSocialAccounts,
   listTags,
@@ -173,6 +176,7 @@ export function AccountPage() {
     queryFn: listMyEvents,
     enabled: Boolean(user),
   });
+  const myPlacesQuery = useQuery({ queryKey: ["my-places", user?.id], queryFn: listMyPlaces, enabled: Boolean(user) });
   const interestsQuery = useQuery({
     queryKey: ["profile-interests", user?.id],
     queryFn: getProfileAffinities,
@@ -600,6 +604,11 @@ export function AccountPage() {
     const form = new FormData(event.currentTarget);
     const startsAt = String(form.get("startsAt"));
     const endsAt = String(form.get("endsAt") || "");
+    const eventTagIds = form.getAll("tagIds").map(String);
+    if (eventTagIds.length > 10) {
+      setNotice({ tone: "error", message: "Bir etkinliğe en fazla 10 etiket ekleyebilirsiniz." });
+      return;
+    }
     if (
       !startsAt ||
       Number.isNaN(new Date(startsAt).getTime()) ||
@@ -613,7 +622,10 @@ export function AccountPage() {
       });
       return;
     }
-    const coverImageUrl = String(form.get("coverImageUrl") || "");
+    const address = String(form.get("locationAddress") || "").trim();
+    const coordinateMatch = address.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,;]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
+    const parsedLatitude = coordinateMatch ? Number(coordinateMatch[1]) : undefined;
+    const parsedLongitude = coordinateMatch ? Number(coordinateMatch[2]) : undefined;
     const input: AdminEventInput & {
       managerUsernames?: string[];
       mediaFiles?: File[];
@@ -625,19 +637,19 @@ export function AccountPage() {
       endsAt: endsAt ? new Date(endsAt).toISOString() : undefined,
       format: String(form.get("format") || "online"),
       visibility: String(form.get("visibility") || "open"),
+      placeId: String(form.get("placeId") || "") || undefined,
       status: "published",
       city: String(form.get("city") || ""),
       country: String(form.get("country") || ""),
-      latitude: form.get("latitude") ? Number(form.get("latitude")) : undefined,
+      latitude: form.get("latitude") ? Number(form.get("latitude")) : parsedLatitude,
       longitude: form.get("longitude")
         ? Number(form.get("longitude"))
-        : undefined,
+        : parsedLongitude,
       locationName: String(form.get("locationName") || "") || undefined,
-      locationAddress: String(form.get("locationAddress") || "") || undefined,
+      locationAddress: address || undefined,
       organizerName: user?.name ?? "Konnektora User",
-      tagIds: form.getAll("tagIds").map(String),
+      tagIds: eventTagIds,
       liveUrl: String(form.get("liveUrl") || "") || undefined,
-      timeline: String(form.get("timeline") || "") || undefined,
       lineup: form
         .getAll("lineupTitle")
         .map((title, index) => {
@@ -648,14 +660,9 @@ export function AccountPage() {
             type,
             title: String(title).trim(),
             startsAt: startsAt ? new Date(startsAt).toISOString() : undefined,
-            description:
-              String(form.getAll("lineupDescription")[index] || "") ||
-              undefined,
           };
         })
-        .filter(
-          (item) => item.title && (item.type !== "session" || item.startsAt),
-        ),
+        .filter((item) => item.title),
       ticketTypes: form
         .getAll("ticketName")
         .map((name, index) => {
@@ -692,9 +699,6 @@ export function AccountPage() {
         .slice(0, 20),
     };
 
-    if (coverImageUrl) {
-      input.coverImageUrl = coverImageUrl;
-    }
     const primaryTicket = input.ticketTypes?.[0];
     if (primaryTicket) {
       input.price = primaryTicket.price;
@@ -824,6 +828,11 @@ export function AccountPage() {
       eventInviteAudience: audience("eventInviteAudience"),
       placeAudience: audience("placeAudience"),
       placeInviteAudience: audience("placeInviteAudience"),
+      profileNameAudience: audience("profileNameAudience"),
+      demographicsAudience: audience("demographicsAudience"),
+      locationAudience: audience("locationAudience"),
+      websiteAudience: audience("websiteAudience"),
+      businessAudience: audience("businessAudience"),
     });
   }
 
@@ -1248,6 +1257,7 @@ export function AccountPage() {
             {profileQuery.data ? (
               <form
                 className="admin-form"
+                id="profile"
                 key={String(profileQuery.data.updatedAt)}
                 onSubmit={handleProfileSubmit}
               >
@@ -1422,6 +1432,7 @@ export function AccountPage() {
             ) : null}
             <form
               className="admin-form"
+              id="account-settings"
               onSubmit={
                 pendingPhone ? handlePhoneConfirmation : handlePhoneRequest
               }
@@ -1483,6 +1494,7 @@ export function AccountPage() {
             {privacyQuery.data ? (
               <form
                 className="admin-form"
+                id="privacy"
                 key={String(privacyQuery.data.updatedAt ?? "privacy-defaults")}
                 onSubmit={handlePrivacySubmit}
               >
@@ -1527,6 +1539,12 @@ export function AccountPage() {
                   label="Kimler mekâna davet edebilir?"
                   name="placeInviteAudience"
                 />
+                <h3>Profil bilgileri</h3>
+                <PrivacyAudienceField defaultValue={privacyQuery.data.profileNameAudience} label="Adımı kimler görebilir?" name="profileNameAudience" />
+                <PrivacyAudienceField defaultValue={privacyQuery.data.demographicsAudience} label="Yaş ve cinsiyetimi kimler görebilir?" name="demographicsAudience" />
+                <PrivacyAudienceField defaultValue={privacyQuery.data.locationAudience} label="Konumumu kimler görebilir?" name="locationAudience" />
+                <PrivacyAudienceField defaultValue={privacyQuery.data.websiteAudience} label="Web adresimi kimler görebilir?" name="websiteAudience" />
+                <PrivacyAudienceField defaultValue={privacyQuery.data.businessAudience} label="Kurumsal bilgilerimi kimler görebilir?" name="businessAudience" />
                 <button
                   className="secondary-action"
                   disabled={privacyMutation.isPending}
@@ -1572,6 +1590,7 @@ export function AccountPage() {
             {notificationPreferencesQuery.data ? (
               <form
                 className="admin-form"
+                id="notifications"
                 onSubmit={handleNotificationPreferencesSubmit}
               >
                 <h2>Bildirim tercihleri</h2>
@@ -1776,7 +1795,7 @@ export function AccountPage() {
               tags={tags}
               userId={user.id}
             />
-            <form className="admin-form" onSubmit={handleInterestSubmit}>
+            <form className="admin-form" id="interests" onSubmit={handleInterestSubmit}>
               <h2>İlgi alanları</h2>
               <p className="form-help">
                 Seçtiğin tag'ler profilinde görünür ve etkinlik oluştururken
@@ -1925,7 +1944,27 @@ export function AccountPage() {
                   />
                 </label>
                 <div className="form-grid">
-                  <label>
+                  <label className="event-timezone-field">
+                    Saat dilimi
+                    <select
+                      key={`${profileQuery.data?.city}-${profileQuery.data?.country}`}
+                      name="timezone"
+                      defaultValue={profileTimezone(
+                        profileQuery.data?.city,
+                        profileQuery.data?.country,
+                      )}
+                    >
+                      {timezoneOptions.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="form-help">
+                      Profilindeki şehir varsayılan olarak seçildi.
+                    </span>
+                  </label>
+                  <label className="event-start-field">
                     Başlangıç
                     <input
                       min={new Date().toISOString().slice(0, 16)}
@@ -1953,30 +1992,11 @@ export function AccountPage() {
                     />
                   </label>
                   <label>
-                    Saat dilimi
-                    <select
-                      key={`${profileQuery.data?.city}-${profileQuery.data?.country}`}
-                      name="timezone"
-                      defaultValue={profileTimezone(
-                        profileQuery.data?.city,
-                        profileQuery.data?.country,
-                      )}
-                    >
-                      {timezoneOptions.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="form-help">
-                      Profilindeki şehir varsayılan olarak seçildi.
-                    </span>
-                  </label>
-                  <label>
                     Bitiş
                     <input
-                      min={new Date().toISOString().slice(0, 16)}
+                      min={eventStartsAt || new Date().toISOString().slice(0, 16)}
                       name="endsAt"
+                      onFocus={(event) => { if (!event.currentTarget.value && eventStartsAt) event.currentTarget.value = eventStartsAt; }}
                       type="datetime-local"
                     />
                     <span className="form-help">
@@ -2006,20 +2026,7 @@ export function AccountPage() {
                     </select>
                   </label>
                 </div>
-                <fieldset className="tag-fieldset">
-                  <legend>Etkinlik etiketleri</legend>
-                  {tags.map((tag) => (
-                    <label key={tag.id}>
-                      <input
-                        defaultChecked={interestTagIds.includes(tag.id)}
-                        name="tagIds"
-                        type="checkbox"
-                        value={tag.id}
-                      />
-                      {tag.name}
-                    </label>
-                  ))}
-                </fieldset>
+                <TagPicker initialIds={interestTagIds} label="Etkinlik etiketleri" tags={tags}/>
                 <div className="event-step-actions">
                   <button
                     className="primary-action"
@@ -2038,10 +2045,8 @@ export function AccountPage() {
                       Mekân adı
                       <input name="locationName" />
                     </label>
-                    <label>
-                      Adres
-                      <input name="locationAddress" />
-                    </label>
+                    <label>Var olan mekânlarımdan seç<select name="placeId" defaultValue=""><option value="">Mekân seçilmedi</option>{myPlacesQuery.data?.map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}</select></label>
+                    <LocationPicker addressName="locationAddress" />
                     <label>
                       Şehir
                       <input
@@ -2056,26 +2061,6 @@ export function AccountPage() {
                         defaultValue={profileQuery.data?.country ?? ""}
                         name="country"
                         placeholder="Turkey"
-                      />
-                    </label>
-                    <label>
-                      Enlem
-                      <input
-                        name="latitude"
-                        min="-90"
-                        max="90"
-                        step="any"
-                        type="number"
-                      />
-                    </label>
-                    <label>
-                      Boylam
-                      <input
-                        name="longitude"
-                        min="-180"
-                        max="180"
-                        step="any"
-                        type="number"
                       />
                     </label>
                   </div>
@@ -2109,14 +2094,6 @@ export function AccountPage() {
               </div>
               <div data-event-step="3" hidden={eventStep !== 3}>
                 <label>
-                  Kapak görseli URL'si
-                  <input
-                    name="coverImageUrl"
-                    placeholder="https://images.unsplash.com/..."
-                    type="url"
-                  />
-                </label>
-                <label>
                   Etkinlik fotoğraf ve videoları
                   <input
                     accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
@@ -2146,7 +2123,8 @@ export function AccountPage() {
                 <h3>Adım 4: Etkinlik yöneticileri</h3>
                 <label>
                   Yönetici kullanıcı adları
-                  <input name="managerUsernames" placeholder="@ayse, @mehmet" />
+                  <input list="event-manager-suggestions" name="managerUsernames" placeholder="@ayse, @mehmet" />
+                  <datalist id="event-manager-suggestions">{(suggestionsQuery.data ?? []).map((member) => <option key={member.id} value={member.username ? `@${member.username}` : member.name}/>)}</datalist>
                   <span className="form-help">
                     Birden fazla kullanıcı adını virgülle ayır.
                   </span>
@@ -2166,14 +2144,6 @@ export function AccountPage() {
               </div>
               <div data-event-step="5" hidden={eventStep !== 5}>
                 <h3>Adım 5: Etkinlik programı / Line up</h3>
-                <label>
-                  Program özeti
-                  <textarea
-                    name="timeline"
-                    rows={4}
-                    placeholder="Etkinliğin genel akışını kısaca anlat."
-                  />
-                </label>
                 <div className="lineup-editor">
                   {lineupRows.map((row, index) => (
                     <fieldset
@@ -2229,17 +2199,14 @@ export function AccountPage() {
                             Başlangıç
                             <input
                               name="lineupStartsAt"
-                              required
+                              defaultValue={eventStartsAt}
+                              onFocus={(event) => { if (!event.currentTarget.value && eventStartsAt) event.currentTarget.value = eventStartsAt; }}
                               type="datetime-local"
                             />
                           </label>
                         ) : (
                           <input name="lineupStartsAt" type="hidden" value="" />
                         )}
-                        <label>
-                          Açıklama
-                          <input name="lineupDescription" />
-                        </label>
                       </div>
                       <button
                         className="ghost-action lineup-remove"
@@ -2459,7 +2426,7 @@ function MemberList({
   title: string;
 }) {
   return (
-    <section className="admin-form">
+    <section className="admin-form" id="profile-pictures">
       <div className="section-header compact">
         <h2>{title}</h2>
         <span>{members.length}</span>

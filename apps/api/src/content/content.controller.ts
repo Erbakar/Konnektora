@@ -8,7 +8,7 @@ import { diskStorage } from "multer";
 import { resolve } from "path";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { CreateCommentDto, CreateMediaDto, CreateReactionDto, ReorderProfileMediaDto } from "./content.dto";
+import { CreateCommentDto, CreateMediaDto, CreateReactionDto, ReorderProfileMediaDto, UpdateCommentDto } from "./content.dto";
 import { ContentService } from "./content.service";
 
 mkdirSync(resolve(process.cwd(), "uploads"), { recursive: true });
@@ -105,6 +105,24 @@ export class ContentController {
   @UseGuards(JwtAuthGuard)
   createComment(@Body() body: CreateCommentDto, @CurrentUser() user: User) {
     return this.contentService.createComment(body, user);
+  }
+
+  @Patch("comments/:id")
+  @UseGuards(JwtAuthGuard)
+  updateComment(@Param("id") id: string, @Body() body: UpdateCommentDto, @CurrentUser() user: User) {
+    return this.contentService.updateComment(id, body.body, user);
+  }
+
+  @Delete("comments/:id")
+  @UseGuards(JwtAuthGuard)
+  deleteComment(@Param("id") id: string, @CurrentUser() user: User) {
+    return this.contentService.deleteComment(id, user);
+  }
+
+  @Post("comments/:id/like")
+  @UseGuards(JwtAuthGuard)
+  toggleCommentLike(@Param("id") id: string, @CurrentUser() user: User) {
+    return this.contentService.toggleCommentLike(id, user);
   }
 
   @Post("reactions")

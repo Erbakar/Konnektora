@@ -41,13 +41,15 @@ export class PlacesController {
   }
 
   @Get("place-stats/:id")
-  stats(@Param("id") id: string) {
-    return this.placesService.getInteractionStats(id);
+  @UseGuards(JwtAuthGuard)
+  stats(@Param("id") id: string, @CurrentUser() user: User) {
+    return this.placesService.getInteractionStats(id, user);
   }
 
   @Get("places/:id/related-users")
-  relatedUsers(@Param("id") id: string) {
-    return this.placesService.listRelatedUsers(id);
+  @UseGuards(OptionalJwtAuthGuard)
+  relatedUsers(@Param("id") id: string, @CurrentUser() user?: User) {
+    return this.placesService.listRelatedUsers(id, user);
   }
 
   @Post("places")

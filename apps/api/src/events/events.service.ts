@@ -9,7 +9,10 @@ import {
   EventParticipantRole,
   EventParticipantStatus,
   EventStatus,
+  OwnedTicketStatus,
+  PaymentStatus,
   Prisma,
+  TicketOrderStatus,
   User,
 } from "@prisma/client";
 import { hash } from "bcryptjs";
@@ -37,11 +40,11 @@ export class EventsService {
     const pageSize = query.pageSize ?? 24;
     const where: Prisma.EventWhereInput = {
       status: "published",
-      startsAt: {
-        gte: query.dateFrom
-          ? new Date(query.dateFrom)
-          : new Date(Date.now() - 1000 * 60 * 60 * 24),
-      },
+      startsAt: query.dateFrom
+        ? { gte: new Date(query.dateFrom) }
+        : query.dateTo
+          ? undefined
+          : { gte: new Date(Date.now() - 1000 * 60 * 60 * 24) },
     };
     if (userId) {
       const blocks = await this.prisma.userBlock.findMany({
@@ -169,6 +172,7 @@ export class EventsService {
       },
       include: {
         tags: { include: { tag: true } },
+        participants: userId ? { where: { userId }, select: { role: true, status: true }, take: 1 } : false,
         _count: {
           select: {
             participants: {
@@ -223,13 +227,14 @@ export class EventsService {
     return events.map(this.mapEvent);
   }
 
-  async getInteractionStats(eventId: string) {
+  async getInteractionStats(eventId: string, actor?: User) {
+    if (actor) await this.ensureCanManageParticipants(eventId, actor, true);
     const exists = await this.prisma.event.findUnique({
       where: { id: eventId },
       select: { id: true },
     });
     if (!exists) throw new NotFoundException("Etkinlik bulunamadı.");
-    const [participants, comments, reactions, views] = await Promise.all([
+    const [participants, comments, reactions, views, ticketOrders, refunds] = await Promise.all([
       this.prisma.eventParticipant.groupBy({
         by: ["status"],
         where: { eventId },
@@ -244,17 +249,34 @@ export class EventsService {
       this.prisma.contentView.count({
         where: { targetType: "event", targetId: eventId },
       }),
+      this.prisma.eventTicketOrder.aggregate({
+        where: { eventId, status: "paid" },
+        _sum: { quantity: true, totalAmount: true },
+        _count: { _all: true },
+      }),
+      this.prisma.ticketRefund.count({ where: { eventId } }),
     ]);
     const count = (status: string) =>
       participants.find((item) => item.status === status)?._count._all ?? 0;
+    const accepted = count("accepted");
+    const attended = count("attended");
+    const requested = count("requested");
+    const invited = count("invited");
     return {
-      accepted: count("accepted"),
-      attended: count("attended"),
-      requested: count("requested"),
-      invited: count("invited"),
+      accepted,
+      attended,
+      requested,
+      invited,
       comments,
       reactions,
       views,
+      ticketsSold: ticketOrders._sum.quantity ?? 0,
+      ticketOrders: ticketOrders._count._all,
+      ticketRevenue: Number(ticketOrders._sum.totalAmount ?? 0),
+      refunds,
+      rsvpRate: invited + requested > 0 ? Math.round((accepted + attended) / (invited + requested + accepted + attended) * 100) : 0,
+      attendanceRate: accepted + attended > 0 ? Math.round(attended / (accepted + attended) * 100) : 0,
+      engagementRate: views > 0 ? Math.round((comments + reactions) / views * 100) : 0,
     };
   }
 
@@ -275,6 +297,7 @@ export class EventsService {
           input.timezone ?? this.resolveTimezone(input.city, input.country),
         format: input.format,
         visibility: input.visibility ?? "open",
+        place: input.placeId ? { connect: { id: input.placeId } } : undefined,
         locationName: input.locationName ?? null,
         locationAddress: input.locationAddress ?? null,
         city: input.city ?? null,
@@ -381,21 +404,22 @@ export class EventsService {
     });
   }
 
-  async listRelatedUsers(eventId: string) {
+  async listRelatedUsers(eventId: string, actor?: User) {
     const event = await this.prisma.event.findFirst({
       where: { id: eventId, status: "published" },
-      select: { id: true },
+      select: {
+        id: true,
+        createdById: true,
+        participants: actor ? { where: { userId: actor.id }, select: { role: true, status: true }, take: 1 } : false,
+      },
     });
     if (!event) throw new NotFoundException("Etkinlik bulunamadı.");
-    const participants = await this.prisma.eventParticipant.findMany({
+    const viewerParticipant = event.participants?.[0];
+    const canSeeInvites = Boolean(actor && (["admin", "super_admin", "curator"].includes(actor.role) || event.createdById === actor.id || viewerParticipant?.status === "accepted" && ["organizer", "manager"].includes(viewerParticipant.role)));
+    const [participants, viewerInterests] = await Promise.all([this.prisma.eventParticipant.findMany({
       where: {
         eventId,
-        status: {
-          in: [
-            EventParticipantStatus.accepted,
-            EventParticipantStatus.attended,
-          ],
-        },
+        status: { in: canSeeInvites ? [EventParticipantStatus.accepted, EventParticipantStatus.attended, EventParticipantStatus.invited, EventParticipantStatus.requested] : [EventParticipantStatus.accepted, EventParticipantStatus.attended] },
       },
       orderBy: [{ role: "desc" }, { createdAt: "asc" }],
       take: 100,
@@ -407,14 +431,28 @@ export class EventsService {
             username: true,
             city: true,
             country: true,
+            gender: true,
+            birthDate: true,
             profileVerifiedAt: true,
+            privacySettings: { select: { demographicsAudience: true, locationAudience: true } },
+            interestTags: { select: { tagId: true } },
           },
         },
       },
-    });
+    }), actor ? this.prisma.userInterestTag.findMany({ where: { userId: actor.id }, select: { tagId: true } }) : []]);
+    const viewerTagIds = new Set(viewerInterests.map((item) => item.tagId));
     return participants.map((participant) => ({
-      ...participant.user,
+      id: participant.user.id,
+      name: participant.user.name,
+      username: participant.user.username,
+      city: actor?.id === participant.user.id || participant.user.privacySettings?.locationAudience === "everybody" ? participant.user.city : null,
+      country: actor?.id === participant.user.id || participant.user.privacySettings?.locationAudience === "everybody" ? participant.user.country : null,
+      gender: actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.gender : null,
+      birthDate: actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.birthDate : null,
+      profileVerifiedAt: participant.user.profileVerifiedAt,
+      commonTagCount: (participant.user.interestTags ?? []).filter((item) => viewerTagIds.has(item.tagId)).length,
       relation: participant.role,
+      status: participant.status,
       checkedIn: Boolean(participant.checkedInAt),
     }));
   }
@@ -696,6 +734,7 @@ export class EventsService {
           : undefined),
       format: input.format,
       visibility: input.visibility,
+      place: input.placeId === undefined ? undefined : input.placeId ? { connect: { id: input.placeId } } : { disconnect: true },
       locationName: input.locationName,
       locationAddress: input.locationAddress,
       city: input.city,
@@ -754,13 +793,25 @@ export class EventsService {
 
   async archiveEvent(id: string, userId?: string) {
     const tagIds = await this.getEventTagIds(id);
-    const event = await this.prisma.event.update({
-      where: { id },
-      data: {
-        status: EventStatus.archived,
-        updatedBy: userId ? { connect: { id: userId } } : undefined,
-      },
-      include: { tags: { include: { tag: true } } },
+    const orders = await this.prisma.eventTicketOrder.findMany({ where: { eventId: id, status: TicketOrderStatus.paid }, include: { payment: true } });
+    const reversals = new Map<string, number>();
+    for (const order of orders) if (order.payment) reversals.set(order.payment.payeeId, (reversals.get(order.payment.payeeId) ?? 0) + Number(order.payment.netAmount));
+    for (const [payeeId, amount] of reversals) {
+      const account = await this.prisma.financialAccount.findUnique({ where: { userId: payeeId }, select: { availableBalance: true } });
+      if (!account || Number(account.availableBalance) < amount) throw new BadRequestException("Etkinlik iptali ve otomatik bilet iadeleri için organizatör bakiyesi yetersiz.");
+    }
+    const event = await this.prisma.$transaction(async (tx) => {
+      for (const [payeeId, amount] of reversals) await tx.financialAccount.update({ where: { userId: payeeId }, data: { availableBalance: { decrement: amount } } });
+      for (const order of orders) {
+        if (order.payment) {
+          await tx.paymentTransaction.update({ where: { id: order.payment.id }, data: { status: PaymentStatus.refunded, refundedAmount: order.payment.grossAmount } });
+          await tx.ticketRefund.create({ data: { eventId: id, userId: order.buyerId, paymentId: order.payment.id, amount: order.payment.grossAmount, currency: order.currency, provider: order.payment.provider, status: "refunded", reason: "Etkinlik organizatör tarafından iptal edildi." } });
+        }
+        await tx.ownedEventTicket.updateMany({ where: { orderId: order.id }, data: { status: OwnedTicketStatus.refunded } });
+        await tx.eventTicketType.updateMany({ where: { id: order.ticketTypeId, soldCount: { gte: order.quantity } }, data: { soldCount: { decrement: order.quantity } } });
+        await tx.eventTicketOrder.update({ where: { id: order.id }, data: { status: TicketOrderStatus.refunded } });
+      }
+      return tx.event.update({ where: { id }, data: { status: EventStatus.archived, updatedBy: userId ? { connect: { id: userId } } : undefined }, include: { tags: { include: { tag: true } } } });
     });
 
     await this.refreshTagUsageCounts(tagIds);
@@ -782,6 +833,7 @@ export class EventsService {
       latitude: event.latitude == null ? null : Number(event.latitude),
       longitude: event.longitude == null ? null : Number(event.longitude),
       attendeeCount: event._count?.participants ?? 0,
+      viewerParticipation: event.participants?.[0] ?? null,
       tags: event.tags.map((eventTag: { tag: unknown }) => eventTag.tag),
     };
   }
@@ -879,9 +931,19 @@ export class EventsService {
       return user;
     }
 
+    if (input.phone) {
+      const phone = input.phone.replace(/[\s()-]/g, "");
+      const user = await this.prisma.user.findUnique({ where: { phone } });
+      if (!user)
+        throw new NotFoundException(
+          "Bu telefon numarasıyla bulunabilir bir Konnektora üyesi yok. Üyelik daveti için rehber davetini kullanın.",
+        );
+      return user;
+    }
+
     if (!input.email) {
       throw new BadRequestException(
-        "Davet için kullanıcı adı, userId veya email gerekli.",
+        "Davet için kullanıcı adı, userId, telefon veya email gerekli.",
       );
     }
 
@@ -903,8 +965,8 @@ export class EventsService {
     });
   }
 
-  private async ensureCanManageParticipants(eventId: string, user: User) {
-    if (["admin", "super_admin"].includes(user.role)) {
+  private async ensureCanManageParticipants(eventId: string, user: User, allowCurator = false) {
+    if (["admin", "super_admin"].includes(user.role) || allowCurator && user.role === "curator") {
       return;
     }
 

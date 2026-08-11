@@ -9,6 +9,8 @@ const formatter = new Intl.DateTimeFormat("tr-TR", {
 });
 
 export function EventCard({ event }: { event: Event }) {
+  const place = [event.city, event.country].filter(Boolean).join(", ");
+  const location = event.format === "online" ? "Online" : event.format === "hybrid" ? `Online & ${place || "Mekân açıklanacak"}` : place || "Mekân açıklanacak";
   return (
     <article className="event-card">
       {event.coverImageUrl ? (
@@ -18,7 +20,6 @@ export function EventCard({ event }: { event: Event }) {
       ) : null}
       <div>
         <div className="event-meta">
-          <span>{event.format}</span>
           <span>{event.visibility.replace("_", " ")}</span>
         </div>
         <h3>
@@ -32,18 +33,13 @@ export function EventCard({ event }: { event: Event }) {
         </span>
         <span>
           <MapPin size={16} />
-          {[event.city, event.country].filter(Boolean).join(", ") || "Online"}
+          {location}
         </span>
         <span>
           <Users size={16} />
           {event.attendeeCount ?? 0} katılımcı
         </span>
         <DistanceLabel latitude={event.latitude} longitude={event.longitude}/>
-      </div>
-      <div className="tag-row">
-        {event.tags.map((tag) => (
-          <span key={tag.id}>{tag.name}</span>
-        ))}
       </div>
     </article>
   );

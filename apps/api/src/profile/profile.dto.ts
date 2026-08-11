@@ -91,6 +91,17 @@ export class UpdatePrivacySettingsDto {
 
   @IsIn(["everybody", "following", "network"])
   placeInviteAudience!: "everybody" | "following" | "network";
+
+  @IsOptional() @IsIn(["everybody", "following", "network"])
+  profileNameAudience?: "everybody" | "following" | "network";
+  @IsOptional() @IsIn(["everybody", "following", "network"])
+  demographicsAudience?: "everybody" | "following" | "network";
+  @IsOptional() @IsIn(["everybody", "following", "network"])
+  locationAudience?: "everybody" | "following" | "network";
+  @IsOptional() @IsIn(["everybody", "following", "network"])
+  websiteAudience?: "everybody" | "following" | "network";
+  @IsOptional() @IsIn(["everybody", "following", "network"])
+  businessAudience?: "everybody" | "following" | "network";
 }
 
 export class NotificationPreferenceDto {

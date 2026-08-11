@@ -572,6 +572,11 @@ model PrivacySettings {
   eventInviteAudience   PrivacyAudience @default(everybody) @map("event_invite_audience")
   placeAudience         PrivacyAudience @default(everybody) @map("place_audience")
   placeInviteAudience   PrivacyAudience @default(everybody) @map("place_invite_audience")
+  profileNameAudience   PrivacyAudience @default(everybody) @map("profile_name_audience")
+  demographicsAudience  PrivacyAudience @default(everybody) @map("demographics_audience")
+  locationAudience      PrivacyAudience @default(everybody) @map("location_audience")
+  websiteAudience       PrivacyAudience @default(everybody) @map("website_audience")
+  businessAudience      PrivacyAudience @default(everybody) @map("business_audience")
   createdAt             DateTime        @default(now()) @map("created_at")
   updatedAt             DateTime        @updatedAt @map("updated_at")
 
@@ -728,6 +733,7 @@ model Event {
   timezone                String
   format                  EventFormat
   visibility              EventVisibility @default(open)
+  placeId                 String?         @map("place_id")
   locationName            String?         @map("location_name")
   locationAddress         String?         @map("location_address")
   city                    String?
@@ -752,6 +758,7 @@ model Event {
 
   createdBy         User?                @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy         User?                @relation("EventUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  place             Place?               @relation(fields: [placeId], references: [id], onDelete: SetNull)
   tags              EventTag[]
   participants      EventParticipant[]
   media             EventMedia[]
@@ -762,6 +769,7 @@ model Event {
   ownedTickets      OwnedEventTicket[]
 
   @@index([status, startsAt])
+  @@index([placeId, startsAt])
   @@map("events")
 }
 
@@ -1068,6 +1076,7 @@ model Place {
   slug          String   @unique
   description   String?
   placeType     String   @default("community") @map("place_type")
+  visibility    EventVisibility @default(open)
   status        String   @default("active")
   coverImageUrl String?  @map("cover_image_url")
   country       String?
@@ -1087,6 +1096,7 @@ model Place {
   members   PlaceMember[]
   followers PlaceFollow[]
   tags      PlaceTag[]
+  events    Event[]
 
   @@index([status, createdAt])
   @@index([country, city])

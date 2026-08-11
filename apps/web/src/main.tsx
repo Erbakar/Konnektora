@@ -1,10 +1,68 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import React, { lazy, Suspense } from "react";
+import React, { lazy as reactLazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import {
+  createBrowserRouter,
+  isRouteErrorResponse,
+  RouterProvider,
+  useRouteError,
+} from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { LanguageProvider } from "./lib/i18n";
 import "./styles.css";
+
+const chunkReloadKey = "konnektora:chunk-reload";
+const chunkLoadErrorPattern =
+  /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i;
+
+const lazy: typeof reactLazy = (loader) =>
+  reactLazy(async () => {
+    try {
+      const module = await loader();
+      sessionStorage.removeItem(chunkReloadKey);
+      return module;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const reloadMarker = `${window.location.pathname}${window.location.search}`;
+
+      if (
+        chunkLoadErrorPattern.test(message) &&
+        sessionStorage.getItem(chunkReloadKey) !== reloadMarker
+      ) {
+        sessionStorage.setItem(chunkReloadKey, reloadMarker);
+        window.location.reload();
+        return await new Promise<never>(() => undefined);
+      }
+
+      throw error;
+    }
+  });
+
+function RouteErrorPage() {
+  const error = useRouteError();
+  const message = isRouteErrorResponse(error)
+    ? error.statusText
+    : error instanceof Error
+      ? error.message
+      : "Sayfa yüklenirken beklenmeyen bir sorun oluştu.";
+
+  return (
+    <main className="route-error-page" role="alert">
+      <div className="loading-mark" aria-hidden="true" />
+      <span className="eyebrow">Bağlantı yenilenemedi</span>
+      <h1>Sayfayı yeniden yükleyelim.</h1>
+      <p>{message}</p>
+      <div className="row-actions">
+        <button className="primary-action" onClick={() => window.location.reload()}>
+          Tekrar dene
+        </button>
+        <a className="secondary-action" href="/">
+          Ana sayfaya dön
+        </a>
+      </div>
+    </main>
+  );
+}
 
 const AccountPage = lazy(() =>
   import("./pages/AccountPage").then((module) => ({
@@ -173,14 +231,25 @@ const PolicyPage = lazy(() =>
     default: module.PolicyPage,
   })),
 );
+const SettingsCenterPage = lazy(() =>
+  import("./pages/SettingsCenterPage").then((module) => ({ default: module.SettingsCenterPage })),
+);
+const SettingsSectionPage = lazy(() =>
+  import("./pages/SettingsCenterPage").then((module) => ({ default: module.SettingsSectionPage })),
+);
 
 const queryClient = new QueryClient();
 
 const router = createBrowserRouter([
-  { path: "/mobile", element: <MobileAppPage /> },
+  {
+    path: "/mobile",
+    element: <MobileAppPage />,
+    errorElement: <RouteErrorPage />,
+  },
   {
     path: "/",
     element: <AppLayout />,
+    errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: <HomePage /> },
       { path: "feed", element: <FeedPage /> },
@@ -216,6 +285,13 @@ const router = createBrowserRouter([
       { path: "tags/:slug", element: <TagsPage /> },
       { path: "tags/:slug/users", element: <RelatedUsersPage kind="tag" /> },
       { path: "account", element: <AccountPage /> },
+      { path: "settings", element: <SettingsCenterPage /> },
+      { path: "settings/profile-pictures", element: <SettingsSectionPage section="profile-pictures" /> },
+      { path: "settings/profile", element: <SettingsSectionPage section="profile" /> },
+      { path: "settings/account", element: <SettingsSectionPage section="account" /> },
+      { path: "settings/notifications", element: <SettingsSectionPage section="notifications" /> },
+      { path: "settings/privacy", element: <SettingsSectionPage section="privacy" /> },
+      { path: "settings/business", element: <SettingsSectionPage section="business" /> },
       { path: "contact", element: <ContactPage /> },
       { path: "help", element: <HelpCenterPage /> },
       { path: "help/faqs", element: <HelpCenterPage /> },
@@ -243,9 +319,7 @@ createRoot(document.getElementById("root")!).render(
       <QueryClientProvider client={queryClient}>
         <Suspense
           fallback={
-            <div className="page route-loading" role="status">
-              Sayfa yükleniyor…
-            </div>
+            <div className="page route-loading app-loading-screen" role="status"><div className="loading-mark" aria-hidden="true"/><strong>Sayfa yükleniyor…</strong><span>İçerik hazırlanıyor</span></div>
           }
         >
           <RouterProvider router={router} />

@@ -18,6 +18,13 @@ describe("ContactsService", () => {
 
   beforeEach(() => jest.clearAllMocks());
 
+  it("searches only discoverable members without exposing email or phone", async () => {
+    prisma.user.findMany.mockResolvedValue([{ id: "member-1", name: "Ada", username: "ada", accountType: "individual", city: "Istanbul", country: "TR", followerCount: 4, followers: [], interestTags: [{ tagId: "tag-1" }] }]);
+    prisma.userInterestTag.findMany.mockResolvedValue([{ tagId: "tag-1" }]);
+    await expect(service.search("me", { query: "ada", type: "name" })).resolves.toEqual([expect.objectContaining({ id: "member-1", commonTagCount: 1 })]);
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ privacySettings: { directoryDiscoverable: true } }) }));
+  });
+
   it("returns only discoverable database matches and keeps other contacts as invitees", async () => {
     prisma.user.findMany.mockResolvedValue([
       {

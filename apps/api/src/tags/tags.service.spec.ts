@@ -10,6 +10,7 @@ describe("TagsService comments", () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
         count: jest.fn(),
+        aggregate: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
       },
@@ -22,7 +23,7 @@ describe("TagsService comments", () => {
       mediaFile: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
       eventTag: { count: jest.fn() },
       placeTag: { count: jest.fn() },
-      userInterestTag: { count: jest.fn(), findMany: jest.fn() },
+      userInterestTag: { count: jest.fn(), groupBy: jest.fn(), findMany: jest.fn() },
       contentView: { count: jest.fn() },
       $transaction: jest.fn(async (operations: Promise<unknown>[]) =>
         Promise.all(operations),
@@ -50,20 +51,30 @@ describe("TagsService comments", () => {
     );
   });
 
-  it("returns public usage statistics for a tag", async () => {
+  it("returns usage statistics to authorized roles", async () => {
     const { service, prisma } = createService();
     prisma.tag.findFirst.mockResolvedValue({ id: "tag-1" });
     prisma.eventTag.count.mockResolvedValue(4);
     prisma.placeTag.count.mockResolvedValue(2);
-    prisma.userInterestTag.count.mockResolvedValue(8);
+    prisma.userInterestTag.groupBy.mockResolvedValue([
+      { sentiment: "like", _count: { _all: 5 } },
+      { sentiment: "ok", _count: { _all: 3 } },
+      { sentiment: "dislike", _count: { _all: 2 } },
+    ]);
     prisma.contentComment.count.mockResolvedValue(5);
+    prisma.contentComment.aggregate.mockResolvedValue({ _sum: { likeCount: 6 } });
     prisma.contentView.count.mockResolvedValue(20);
-    await expect(service.getPublicStats("tag-1")).resolves.toEqual({
+    await expect(service.getPublicStats("tag-1", { id: "curator-1", role: "curator" } as never)).resolves.toEqual({
       events: 4,
       places: 2,
       followers: 8,
+      likes: 5,
+      ok: 3,
+      dislikes: 2,
       posts: 5,
       views: 20,
+      reactions: 6,
+      engagementRate: 55,
     });
   });
 

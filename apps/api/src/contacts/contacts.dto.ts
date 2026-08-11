@@ -33,3 +33,14 @@ export class InviteContactsDto {
   @Type(() => ContactDto)
   contacts!: ContactDto[];
 }
+
+export class SearchContactsDto {
+  @IsString()
+  @MinLength(2)
+  @MaxLength(160)
+  query!: string;
+
+  @IsOptional()
+  @IsIn(["name", "email", "phone"])
+  type?: "name" | "email" | "phone";
+}

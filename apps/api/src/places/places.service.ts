@@ -5,6 +5,8 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import {
+  EventParticipantStatus,
+  EventStatus,
   PlaceMemberRole,
   PlaceMemberStatus,
   Prisma,
@@ -47,8 +49,20 @@ export class PlacesService {
           select: { targetId: true },
         })
       : [];
+    let popularCity: string | undefined;
+    let popularCountry: string | undefined;
+    const personalTagIds = query.scope === "for_you" && viewerId ? (await this.prisma.userInterestTag.findMany({ where: { userId: viewerId, sentiment: { in: ["like", "ok"] } }, select: { tagId: true }, take: 100 })).map((item) => item.tagId) : [];
+    if (query.scope === "popular" && viewerId && !query.city && !query.country) {
+      const viewer = await this.prisma.user.findUnique({ where: { id: viewerId }, select: { city: true, country: true } });
+      if (viewer?.city && await this.prisma.place.count({ where: { status: "active", city: { equals: viewer.city, mode: "insensitive" } } })) popularCity = viewer.city;
+      else if (viewer?.country && await this.prisma.place.count({ where: { status: "active", country: { equals: viewer.country, mode: "insensitive" } } })) popularCountry = viewer.country;
+    }
     const where: Prisma.PlaceWhereInput = {
       status: "active",
+      AND: [{ OR: [
+          { visibility: { not: "invite_only" } },
+          ...(viewerId ? [{ members: { some: { userId: viewerId, status: { in: [PlaceMemberStatus.invited, PlaceMemberStatus.accepted] } } } } as Prisma.PlaceWhereInput] : []),
+        ] }, ...(query.scope === "for_you" && personalTagIds.length ? [{ tags: { some: { tagId: { in: personalTagIds } } } } as Prisma.PlaceWhereInput] : [])],
       id: { notIn: blocked.map((item) => item.targetId) },
       ...(query.q
         ? {
@@ -57,11 +71,14 @@ export class PlacesService {
             })),
           }
         : {}),
-      ...(query.city
-        ? { city: { equals: query.city, mode: "insensitive" } }
+      ...(query.city || popularCity
+        ? { city: { equals: query.city ?? popularCity, mode: "insensitive" } }
         : {}),
-      ...(query.country
-        ? { country: { equals: query.country, mode: "insensitive" } }
+      ...(query.country || popularCountry
+        ? { country: { equals: query.country ?? popularCountry, mode: "insensitive" } }
+        : {}),
+      ...(query.tag
+        ? { tags: { some: { tag: { slug: query.tag, status: "active" } } } }
         : {}),
       ...(query.scope === "following"
         ? { followers: { some: { userId: viewerId ?? "" } } }
@@ -70,19 +87,22 @@ export class PlacesService {
         ? { members: { some: { userId: viewerId ?? "", status: "accepted" } } }
         : {}),
     };
-    const [items, total] = await this.prisma.$transaction([
+    const [foundItems, total] = await this.prisma.$transaction([
       this.prisma.place.findMany({
         where,
         orderBy:
-          query.scope === "popular"
+          query.scope === "popular" || query.scope === "for_you"
             ? [{ followerCount: "desc" }, { createdAt: "desc" }]
             : [{ createdAt: "desc" }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        skip: query.scope === "near" ? 0 : (page - 1) * pageSize,
+        take: query.scope === "near" ? 200 : pageSize,
         include: this.viewerInclude(viewerId),
       }),
       this.prisma.place.count({ where }),
     ]);
+    const items = query.scope === "near" && query.latitude != null && query.longitude != null
+      ? [...foundItems].sort((a, b) => placeDistance(a, query.latitude!, query.longitude!) - placeDistance(b, query.latitude!, query.longitude!)).slice((page - 1) * pageSize, page * pageSize)
+      : foundItems;
     return {
       items: items.map((place) => this.toPublicPlace(place)),
       total,
@@ -111,21 +131,28 @@ export class PlacesService {
         : null;
     if (blocked) throw new NotFoundException("Mekân bulunamadı.");
     const place = await this.prisma.place.findFirst({
-      where: { slug, status: "active" },
-      include: this.viewerInclude(viewerId),
+      where: { slug, status: "active", OR: [{ visibility: { not: "invite_only" } }, ...(viewerId ? [{ members: { some: { userId: viewerId, status: { in: [PlaceMemberStatus.invited, PlaceMemberStatus.accepted] } } } } as Prisma.PlaceWhereInput] : [])] },
+      include: this.viewerInclude(viewerId, true),
     });
     if (!place) throw new NotFoundException("Mekân bulunamadı.");
-    return this.toPublicPlace(place);
+    const managers = await this.prisma.placeMember.findMany({
+      where: { placeId: place.id, status: "accepted", role: { in: ["organizer", "manager"] } },
+      orderBy: [{ role: "desc" }, { createdAt: "asc" }],
+      select: { role: true, user: { select: { id: true, name: true, username: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } },
+    });
+    return { ...this.toPublicPlace(place), managers: (managers ?? []).map((item) => ({ id: item.user.id, name: item.user.name, username: item.user.username, role: item.role, avatarUrl: item.user.uploadedMedia?.[0]?.url ?? null })) };
   }
 
-  async getInteractionStats(placeId: string) {
+  async getInteractionStats(placeId: string, actor?: User) {
+    if (actor && !["admin", "super_admin", "curator"].includes(actor.role)) await this.ensureCanManage(placeId, actor);
     const place = await this.prisma.place.findUnique({
       where: { id: placeId },
       select: { id: true, followerCount: true, inviteCount: true },
     });
     if (!place) throw new NotFoundException("Mekân bulunamadı.");
-    const [members, comments, reactions, views] = await Promise.all([
+    const [members, checkedIn, comments, reactions, views, events] = await Promise.all([
       this.prisma.placeMember.count({ where: { placeId, status: "accepted" } }),
+      this.prisma.placeMember.count({ where: { placeId, checkedInAt: { not: null } } }),
       this.prisma.contentComment.count({
         where: { targetType: "place", targetId: placeId, status: "active" },
       }),
@@ -135,14 +162,19 @@ export class PlacesService {
       this.prisma.contentView.count({
         where: { targetType: "place", targetId: placeId },
       }),
+      this.prisma.event.count({ where: { placeId, status: "published" } }),
     ]);
     return {
       followers: place.followerCount,
       invites: place.inviteCount,
       members,
+      checkedIn,
       comments,
       reactions,
       views,
+      events,
+      checkInRate: members > 0 ? Math.round(checkedIn / members * 100) : 0,
+      engagementRate: views > 0 ? Math.round((comments + reactions) / views * 100) : 0,
     };
   }
 
@@ -155,6 +187,7 @@ export class PlacesService {
           slug,
           description: input.description?.trim() || null,
           placeType: input.placeType ?? "community",
+          visibility: (input.visibility as any) ?? "open",
           country: input.country?.trim() || null,
           city: input.city?.trim() || null,
           address: input.address?.trim() || null,
@@ -219,6 +252,7 @@ export class PlacesService {
         slug,
         description: this.optionalText(input.description),
         placeType: input.placeType,
+        visibility: input.visibility as any,
         country: this.optionalText(input.country),
         city: this.optionalText(input.city),
         address: this.optionalText(input.address),
@@ -297,13 +331,13 @@ export class PlacesService {
     });
   }
 
-  async listRelatedUsers(placeId: string) {
+  async listRelatedUsers(placeId: string, actor?: User) {
     const place = await this.prisma.place.findFirst({
       where: { id: placeId, status: "active" },
       select: { id: true },
     });
     if (!place) throw new NotFoundException("Mekân bulunamadı.");
-    const members = await this.prisma.placeMember.findMany({
+    const [members, viewerInterests] = await Promise.all([this.prisma.placeMember.findMany({
       where: { placeId, status: PlaceMemberStatus.accepted },
       orderBy: [{ role: "desc" }, { createdAt: "asc" }],
       take: 100,
@@ -315,13 +349,26 @@ export class PlacesService {
             username: true,
             city: true,
             country: true,
+            gender: true,
+            birthDate: true,
             profileVerifiedAt: true,
+            privacySettings: { select: { demographicsAudience: true, locationAudience: true } },
+            interestTags: { select: { tagId: true } },
           },
         },
       },
-    });
+    }), actor ? this.prisma.userInterestTag.findMany({ where: { userId: actor.id }, select: { tagId: true } }) : []]);
+    const viewerTagIds = new Set(viewerInterests.map((item) => item.tagId));
     return members.map((member) => ({
-      ...member.user,
+      id: member.user.id,
+      name: member.user.name,
+      username: member.user.username,
+      city: actor?.id === member.user.id || member.user.privacySettings?.locationAudience === "everybody" ? member.user.city : null,
+      country: actor?.id === member.user.id || member.user.privacySettings?.locationAudience === "everybody" ? member.user.country : null,
+      gender: actor?.id === member.user.id || member.user.privacySettings?.demographicsAudience === "everybody" ? member.user.gender : null,
+      birthDate: actor?.id === member.user.id || member.user.privacySettings?.demographicsAudience === "everybody" ? member.user.birthDate : null,
+      profileVerifiedAt: member.user.profileVerifiedAt,
+      commonTagCount: (member.user.interestTags ?? []).filter((item) => viewerTagIds.has(item.tagId)).length,
       relation: member.role,
       checkedIn: Boolean(member.checkedInAt),
     }));
@@ -329,16 +376,18 @@ export class PlacesService {
 
   async invite(placeId: string, input: InvitePlaceMemberDto, actor: User) {
     const place = await this.ensureCanManage(placeId, actor);
-    if (!input.userId && !input.email && !input.username)
+    if (!input.userId && !input.email && !input.username && !input.phone)
       throw new BadRequestException(
-        "Kullanıcı adı veya e-posta belirtilmelidir.",
+        "Kullanıcı adı, telefon veya e-posta belirtilmelidir.",
       );
     const user = await this.prisma.user.findFirst({
       where: input.userId
         ? { id: input.userId }
         : input.username
           ? { username: input.username.replace(/^@/, "").toLowerCase().trim() }
-          : { email: input.email!.toLowerCase().trim() },
+          : input.phone
+            ? { phone: input.phone.replace(/[\s()-]/g, "") }
+            : { email: input.email!.toLowerCase().trim() },
     });
     if (!user)
       throw new NotFoundException("Davet edilecek kullanıcı bulunamadı.");
@@ -552,7 +601,7 @@ export class PlacesService {
     );
   }
 
-  private viewerInclude(viewerId?: string) {
+  private viewerInclude(viewerId?: string, includeEvents = false) {
     return {
       followers: {
         where: { userId: viewerId ?? "" },
@@ -563,18 +612,28 @@ export class PlacesService {
         select: { status: true, role: true },
       },
       tags: { include: { tag: true } },
+      _count: {
+        select: {
+          followers: viewerId
+            ? { where: { user: { followers: { some: { followerId: viewerId } } } } }
+            : true,
+        },
+      },
+      ...(includeEvents ? { events: { where: { status: EventStatus.published, startsAt: { gte: new Date() } }, orderBy: { startsAt: "asc" as const }, take: 6, include: { tags: { include: { tag: true } }, participants: { where: { status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] } }, select: { id: true } } } } } : {}),
     } as const;
   }
 
   private toPublicPlace(place: any) {
-    const { followers, members, tags, ...data } = place;
+    const { followers, members, tags, events, _count, ...data } = place;
     delete data.updatedById;
     return {
       ...data,
       tags: (tags ?? []).map((item: any) => item.tag),
+      events: events?.map((event: any) => ({ ...event, tags: (event.tags ?? []).map((item: any) => item.tag), attendeeCount: event.participants?.length ?? 0, participants: undefined, latitude: event.latitude == null ? null : Number(event.latitude), longitude: event.longitude == null ? null : Number(event.longitude), price: Number(event.price) })),
       latitude: data.latitude == null ? null : Number(data.latitude),
       longitude: data.longitude == null ? null : Number(data.longitude),
       isFollowing: followers.length > 0,
+      followingMemberCount: viewerIdSafeCount(_count?.followers),
       viewerMembership: members[0] ?? null,
     };
   }
@@ -607,4 +666,16 @@ export class PlacesService {
       status: user.status,
     };
   }
+}
+
+function viewerIdSafeCount(value: unknown) {
+  return typeof value === "number" ? value : 0;
+}
+
+function placeDistance(place: { latitude: unknown; longitude: unknown }, latitude: number, longitude: number) {
+  if (place.latitude == null || place.longitude == null) return Number.POSITIVE_INFINITY;
+  const toRadians = (value: number) => value * Math.PI / 180;
+  const lat = Number(place.latitude); const lon = Number(place.longitude);
+  const a = Math.sin(toRadians(lat - latitude) / 2) ** 2 + Math.cos(toRadians(latitude)) * Math.cos(toRadians(lat)) * Math.sin(toRadians(lon - longitude) / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }

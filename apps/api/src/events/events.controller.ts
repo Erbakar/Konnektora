@@ -41,13 +41,15 @@ export class EventsController {
   }
 
   @Get("event-stats/:id")
-  getStats(@Param("id") id: string) {
-    return this.eventsService.getInteractionStats(id);
+  @UseGuards(JwtAuthGuard)
+  getStats(@Param("id") id: string, @CurrentUser() user: User) {
+    return this.eventsService.getInteractionStats(id, user);
   }
 
   @Get("events/:id/related-users")
-  relatedUsers(@Param("id") id: string) {
-    return this.eventsService.listRelatedUsers(id);
+  @UseGuards(OptionalJwtAuthGuard)
+  relatedUsers(@Param("id") id: string, @CurrentUser() user?: User) {
+    return this.eventsService.listRelatedUsers(id, user);
   }
 
   @Post("events")

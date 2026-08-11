@@ -46,9 +46,9 @@ export class TagsController {
   }
 
   @Get("tags/:tagId/stats")
-  @UseGuards(OptionalJwtAuthGuard)
-  stats(@Param("tagId") tagId: string, @CurrentUser() user?: User) {
-    return this.tagsService.getPublicStats(tagId, user?.id);
+  @UseGuards(JwtAuthGuard)
+  stats(@Param("tagId") tagId: string, @CurrentUser() user: User) {
+    return this.tagsService.getPublicStats(tagId, user);
   }
 
   @Get("tags/:tagId/related-users")

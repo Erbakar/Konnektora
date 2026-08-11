@@ -53,4 +53,11 @@ describe("NotificationsService", () => {
     await expect(service.setContentSubscription("user-1", "tag", "tag-1", true)).resolves.toEqual({ enabled: true });
     expect(contentNotificationSubscription.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ targetType: "tag", enabled: true }) }));
   });
+
+  it("supports notifications about another user profile", async () => {
+    user.findUnique.mockResolvedValue({ id: "profile-2" });
+    contentNotificationSubscription.upsert.mockResolvedValue({ enabled: true });
+    await expect(service.setContentSubscription("user-1", "user", "profile-2", true)).resolves.toEqual({ enabled: true });
+    expect(contentNotificationSubscription.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ targetType: "user", targetId: "profile-2" }) }));
+  });
 });
