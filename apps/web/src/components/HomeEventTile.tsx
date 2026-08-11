@@ -1,6 +1,7 @@
 import type { Event } from "@konnektora/shared";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, MapPin, Users } from "lucide-react";
 import { Link } from "react-router-dom";
+import { DistanceLabel } from "./DistanceLabel";
 import { useLanguage } from "../lib/i18n";
 
 const turkishEventTitles: Record<string, string> = {
@@ -30,7 +31,12 @@ export function HomeEventTile({ event }: { event: Event }) {
   const visibilityLabel: Record<Event["visibility"], string> = language === "tr"
     ? { open: "Açık", approval_required: "Onay gerekli", invite_only: "Sadece davetli" }
     : { open: "Open", approval_required: "Approval", invite_only: "Invite only" };
-  const location = [event.city, event.country].filter(Boolean).join(", ") || "Online";
+  const place = [event.city, event.country].filter(Boolean).join(", ");
+  const location = event.format === "online"
+    ? "Online"
+    : event.format === "hybrid"
+      ? `Online & ${place || (language === "tr" ? "Mekân açıklanacak" : "Venue TBA")}`
+      : place || (language === "tr" ? "Mekân açıklanacak" : "Venue TBA");
   const title = language === "tr" ? turkishEventTitles[event.slug] ?? event.title : event.title;
 
   return (
@@ -45,8 +51,9 @@ export function HomeEventTile({ event }: { event: Event }) {
           <CalendarDays size={15} />
           {formatter.format(new Date(event.startsAt))}
         </p>
-        <p className="home-event-tile-organizer">{language === "tr" ? "Düzenleyen" : "by"} {event.organizerName || "Konnektora"}</p>
-        <p className="home-event-tile-location">{location}</p>
+        <p className="home-event-tile-location"><MapPin size={15} />{location}</p>
+        <p className="home-event-tile-location"><Users size={15} />{event.attendeeCount ?? 0} {language === "tr" ? "katılımcı" : "attendees"}</p>
+        <p className="home-event-tile-location"><DistanceLabel latitude={event.latitude} longitude={event.longitude}/></p>
       </div>
     </Link>
   );

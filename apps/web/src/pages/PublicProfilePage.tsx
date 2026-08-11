@@ -5,24 +5,39 @@ import {
   CalendarDays,
   Flag,
   Globe2,
+  Mail,
   MapPin,
-  MessageCircle,
+  MoreVertical,
+  Settings,
+  Share2,
   UserCheck,
   UserPlus,
 } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type CSSProperties, type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { DiscoveryCard } from "../components/DiscoveryCard";
+import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
 import {
   createBlock,
   createContentReport,
   followUser,
   getPublicProfile,
   getPublicProfileById,
+  getContentNotification,
   getUserSession,
+  inviteEventParticipant,
+  listMyEvents,
   listReportRules,
+  setContentNotification,
   unfollowUser,
 } from "../lib/api";
+
+function ageFrom(value: string | Date) {
+  const birth = new Date(value); const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  if (today.getMonth() < birth.getMonth() || today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate()) age -= 1;
+  return Math.max(0, age);
+}
 
 export function PublicProfilePage() {
   const { username = "", userId = "" } = useParams();
@@ -30,6 +45,13 @@ export function PublicProfilePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [reportOpen, setReportOpen] = useState(false);
+  const [privacyNotice, setPrivacyNotice] = useState(false);
+  const [mutualOpen, setMutualOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [guestOpen, setGuestOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [profileEventTab, setProfileEventTab] = useState<"future" | "past" | "organizer">("future");
+  const [profilePlaceTab, setProfilePlaceTab] = useState<"all" | "organizer">("all");
   const profileQuery = useQuery({
     queryKey: ["public-profile", username || userId, user?.id],
     queryFn: () => userId ? getPublicProfileById(userId) : getPublicProfile(username),
@@ -41,6 +63,10 @@ export function PublicProfilePage() {
     enabled: Boolean(user),
   });
   const profile = profileQuery.data;
+  const notification = useQuery({ queryKey: ["content-notification", "user", profile?.id], queryFn: () => getContentNotification("user", profile!.id), enabled: Boolean(user && profile && !profile.relationship.isSelf) });
+  const managedEvents = useQuery({ queryKey: ["my-events", user?.id, "profile-guest-list"], queryFn: listMyEvents, enabled: Boolean(user && guestOpen) });
+  const notificationMutation = useMutation({ mutationFn: () => setContentNotification("user", profile!.id, !notification.data?.enabled), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["content-notification", "user", profile?.id] }); setNotificationOpen(false); } });
+  const guestMutation = useMutation({ mutationFn: (eventId: string) => inviteEventParticipant(eventId, { userId: profile!.id, role: "attendee" }, "user"), onSuccess: () => setGuestOpen(false) });
   const followMutation = useMutation({
     mutationFn: () =>
       profile?.relationship.following
@@ -119,20 +145,17 @@ export function PublicProfilePage() {
               "Konum paylaşılmadı"}
           </p>
           <div className="profile-metrics">
-            <span>
+            <button onClick={() => setPrivacyNotice(true)} type="button">
               <b>{profile.followerCount}</b> takipçi
-            </span>
-            <span>
+            </button>
+            <Link to="/community?scope=following">
               <b>{profile.followingCount}</b> takip
-            </span>
-            <span>
-              <b>{profile.commonInterestCount}</b> ortak ilgi
-            </span>
+            </Link>
           </div>
         </div>
         <div className="public-profile-actions">
           {profile.relationship.isSelf ? (
-            <Link className="primary-action" to="/account">
+            <Link className="primary-action" to="/settings">
               Profili düzenle
             </Link>
           ) : user ? (
@@ -154,37 +177,29 @@ export function PublicProfilePage() {
                 )}
                 {profile.relationship.following ? "Takipte" : "Takip et"}
               </button>
-              {profile.relationship.canMessage ? (
-                <Link
-                  className="secondary-action"
-                  to={`/messages?peer=${profile.id}`}
-                >
-                  <MessageCircle size={18} /> Mesaj gönder
-                </Link>
-              ) : null}
-              <button
-                className="ghost-action"
-                onClick={() => setReportOpen((open) => !open)}
-                type="button"
-              >
-                <Flag size={18} /> Raporla
-              </button>
-              <button
-                className="ghost-action danger"
-                disabled={blockMutation.isPending}
-                onClick={() => blockMutation.mutate()}
-                type="button"
-              >
-                <Ban size={18} /> Engelle
-              </button>
+              <details className="action-menu profile-actions-menu"><summary aria-label="Profil aksiyonları"><MoreVertical size={20}/></summary><div>{profile.relationship.canMessage ? <Link to={`/messages?peer=${profile.id}`}><Mail size={18}/> Mesaj gönder</Link> : null}<button onClick={() => setNotificationOpen(true)} type="button">{notification.data?.enabled ? "Bildirimleri kapat" : "Set a notification"}</button><button onClick={() => setGuestOpen(true)} type="button"><UserPlus size={18}/> Add to guest list</button>{profile.stats ? <a href="#profile-stats">Interaction statistics about you</a> : null}<button onClick={() => setShareOpen(true)} type="button"><Share2 size={18}/> Paylaş</button><button onClick={() => setReportOpen((open) => !open)} type="button"><Flag size={18}/> Kullanıcıyı raporla</button><button className="danger" disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()} type="button"><Ban size={18}/> Kullanıcıyı engelle</button></div></details>
             </>
           ) : (
             <Link className="primary-action" to="/account">
               Takip etmek için giriş yap
             </Link>
           )}
+          {profile.relationship.isSelf ? <details className="action-menu profile-actions-menu"><summary aria-label="Profil ayarları"><MoreVertical size={20}/></summary><div><a href="#profile-stats">Interaction statistics about you</a><Link to="/settings"><Settings size={18}/> Ayarlar</Link><button onClick={() => setShareOpen(true)} type="button"><Share2 size={18}/> Paylaş</button></div></details> : null}
         </div>
       </header>
+      {privacyNotice ? <div className="profile-privacy-toast" role="status"><span>Sadece takip ettiklerinizi görebilirsiniz.</span><button onClick={() => setPrivacyNotice(false)} type="button">Kapat</button></div> : null}
+      <NotificationDialog open={notificationOpen} onClose={() => setNotificationOpen(false)} enabled={Boolean(notification.data?.enabled)} pending={notificationMutation.isPending} onConfirm={() => notificationMutation.mutate()} title={profile.name}/>
+      <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} title={profile.name} url={window.location.href}/>
+      {guestOpen ? <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Guest List'e ekle"><div><button aria-label="Kapat" onClick={() => setGuestOpen(false)}>×</button><h2>{profile.name}</h2><p>Kullanıcıyı yönettiğin etkinliklerden birinin guest listesine ekle.</p><div className="admin-list">{managedEvents.data?.map((event) => <button className="admin-list-row" disabled={guestMutation.isPending} key={event.id} onClick={() => guestMutation.mutate(event.id)}><strong>{event.title}</strong><span>{new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date(event.startsAt))}</span></button>)}</div>{!managedEvents.isLoading && !managedEvents.data?.length ? <p className="form-help">Yönettiğin uygun etkinlik bulunmuyor.</p> : null}{guestMutation.isError ? <p className="form-error">Kullanıcı guest listesine eklenemedi.</p> : null}</div></div> : null}
+      <section className="profile-facts" aria-label="Profil bilgileri">
+        {profile.accountType === "individual" && profile.birthDate ? <span>{profile.gender === "male" ? "He" : profile.gender === "female" ? "She" : "They"} is {ageFrom(profile.birthDate)} y.o.</span> : null}
+        {profile.city || profile.country ? <span>Based in {profile.city || profile.country}.</span> : null}
+        {profile.accountType === "corporate" ? <>{profile.companyName ? <span><strong>İşletme:</strong> {profile.companyName}</span> : null}{profile.tradeName ? <span><strong>Ticari unvan:</strong> {profile.tradeName}</span> : null}{profile.companyType ? <span><strong>Şirket türü:</strong> {profile.companyType}</span> : null}{profile.businessCategory ? <span><strong>Kategori:</strong> {profile.businessCategory}</span> : null}{profile.address || profile.district ? <span><strong>Adres:</strong> {[profile.address, profile.district, profile.city, profile.country].filter(Boolean).join(", ")}</span> : null}</> : null}
+      </section>
+      {!profile.relationship.isSelf && profile.commonInterestCount > 0 ? (
+        <button className="mutualism-bar" onClick={() => setMutualOpen(true)} type="button"><strong>{profile.commonInterestCount} ortak ilgi alanınız var</strong><span>Mutualizm analizini gör →</span></button>
+      ) : null}
+      {mutualOpen ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setMutualOpen(false)}><section aria-modal="true" className="content-dialog mutualism-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><div className="section-header"><div><p className="eyebrow">Mutualizm Analizi</p><h2>{profile.name} ile ortak noktalarınız</h2></div><button onClick={() => setMutualOpen(false)} type="button">Kapat</button></div><p>{profile.commonInterestCount} ortak ilgi alanı, yeni bir bağlantı kurmak için güçlü bir başlangıç.</p><div className="profile-interest-list">{profile.interests.filter((interest) => interest.common).map((interest) => <Link className="profile-interest is-common" key={interest.tag.id} to={`/tags/${interest.tag.slug}`}><span>#{interest.tag.name}</span><small>Ortak ilgi alanı</small></Link>)}</div>{profile.relationship.canMessage ? <Link className="primary-action" to={`/messages?peer=${profile.id}`}><Mail size={17}/> Sohbet başlat</Link> : null}</section></div> : null}
       {reportOpen ? (
         <form
           className="identity-panel public-profile-report"
@@ -245,10 +260,10 @@ export function PublicProfilePage() {
           )}
         </section>
       ) : null}
-      <section className="identity-panel">
+      <section className="identity-panel" id="interests">
         <div className="section-header compact">
           <h2>İlgi alanları</h2>
-          <span>{profile.interests.length} tag</span>
+          {profile.relationship.isSelf ? <Link to="/account#interests">+ Profile etiket ekle</Link> : <span>{profile.interests.length} etiket</span>}
         </div>
         <div className="profile-interest-list">
           {profile.interests.map((interest) => (
@@ -259,17 +274,17 @@ export function PublicProfilePage() {
                   : "profile-interest"
               }
               key={interest.tag.id}
-              to={`/events?tag=${interest.tag.slug}`}
+              to={`/tags/${interest.tag.slug}?author=${profile.username}`}
             >
-              <span>#{interest.tag.name}</span>
+              <span>{interest.sentiment === "like" ? "❤️" : interest.sentiment === "dislike" ? "👎" : "➖"} #{interest.tag.name}</span>
               <small>
-                {interest.common
+                İlgi Alanı · {interest.common
                   ? "Ortak ilgi"
                   : interest.sentiment === "like"
                     ? "Beğeniyor"
                     : interest.sentiment === "dislike"
                       ? "Beğenmiyor"
-                      : "Nötr"}
+                      : "Nötr"}{interest.commentCount ? ` · ✎ ${interest.commentCount} gönderi` : ""}
               </small>
             </Link>
           ))}
@@ -288,6 +303,7 @@ export function PublicProfilePage() {
           <Globe2 size={18} /> {profile.website}
         </a>
       ) : null}
+      {profile.stats ? <section className="identity-panel" id="profile-stats"><h2>Profil etkileşim istatistikleri</h2><div className="compact-metrics interaction-chart-grid">{Object.entries(profile.stats).map(([label, value]) => <article key={label} style={{ "--metric-value": value } as CSSProperties}><strong>{value}</strong><span>{({ followers: "Takipçi", following: "Takip", interests: "İlgi alanı", events: "Etkinlik", places: "Mekân", media: "Medya", profileViews: "Profil görüntülenmesi", comments: "Yazılan post/yorum", messages: "Gönderilen mesaj", averageEventsPerMonth: "Aylık ortalama etkinlik" } as Record<string, string>)[label] ?? label}</span></article>)}</div></section> : null}
       <section className="profile-content-section">
         <div className="section-header">
           <h2>
@@ -295,9 +311,10 @@ export function PublicProfilePage() {
           </h2>
           <span>{profile.events.length}</span>
         </div>
+        <nav className="discovery-tabs compact-tabs" aria-label="Profil etkinlikleri"><button className={profileEventTab === "future" ? "active" : ""} onClick={() => setProfileEventTab("future")} type="button">Future</button><button className={profileEventTab === "past" ? "active" : ""} onClick={() => setProfileEventTab("past")} type="button">Past</button><button className={profileEventTab === "organizer" ? "active" : ""} onClick={() => setProfileEventTab("organizer")} type="button">Organizer</button></nav>
         <div className="discovery-results">
-          {profile.events.map((item) => (
-            <DiscoveryCard item={item} key={item.id} />
+          {profile.events.filter((item) => { if (profileEventTab === "organizer") return item.organizer; const date = item.meta?.split(" · ").at(-1); if (!date) return true; return profileEventTab === "future" ? new Date(date) >= new Date() : new Date(date) < new Date(); }).map((item) => (
+            <DiscoveryCard hideSubtitle item={item} key={item.id} />
           ))}
         </div>
         {!profile.events.length ? (
@@ -311,9 +328,10 @@ export function PublicProfilePage() {
           </h2>
           <span>{profile.places.length}</span>
         </div>
+        <nav className="discovery-tabs compact-tabs" aria-label="Profil mekânları"><button className={profilePlaceTab === "all" ? "active" : ""} onClick={() => setProfilePlaceTab("all")} type="button">All</button><button className={profilePlaceTab === "organizer" ? "active" : ""} onClick={() => setProfilePlaceTab("organizer")} type="button">Organizer</button></nav>
         <div className="discovery-results">
-          {profile.places.map((item) => (
-            <DiscoveryCard item={item} key={item.id} />
+          {profile.places.filter((item) => profilePlaceTab === "all" || item.organizer).map((item) => (
+            <DiscoveryCard hideSubtitle item={item} key={item.id} />
           ))}
         </div>
         {!profile.places.length ? (

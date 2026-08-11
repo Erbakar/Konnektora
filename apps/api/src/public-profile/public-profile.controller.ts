@@ -8,7 +8,7 @@ import { PublicProfileService } from "./public-profile.service";
 export class PublicProfileController {
   constructor(private readonly profiles: PublicProfileService) {}
   @Get("id/:id") @UseGuards(OptionalJwtAuthGuard)
-  getById(@Param("id") id: string, @CurrentUser() viewer?: User) { return this.profiles.getById(id, viewer?.id); }
+  getById(@Param("id") id: string, @CurrentUser() viewer?: User) { return this.profiles.getById(id, viewer?.id, viewer?.role); }
   @Get(":username") @UseGuards(OptionalJwtAuthGuard)
-  get(@Param("username") username: string, @CurrentUser() viewer?: User) { return this.profiles.getByUsername(username, viewer?.id); }
+  get(@Param("username") username: string, @CurrentUser() viewer?: User) { return this.profiles.getByUsername(username, viewer?.id, viewer?.role); }
 }

@@ -9,17 +9,21 @@ import {
   Heart,
   ImagePlus,
   LoaderCircle,
+  Mail,
   MapPin,
   MessageCircle,
+  Minus,
+  MoreVertical,
   RefreshCw,
   Search,
   Share2,
   Trash2,
+  ThumbsDown,
   UserPlus,
   Users,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
 import { ContentComments } from "../components/ContentComments";
 import { userProfilePath } from "../components/UserIdentityLink";
@@ -40,6 +44,7 @@ import {
   listFollowing,
   listMyEvents,
   listTagComments,
+  listTagRelatedUsers,
   listTags,
   recordContentView,
   resolveMediaUrl,
@@ -51,6 +56,8 @@ import {
 } from "../lib/api";
 
 export function TagsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const authorFilter = searchParams.get("author")?.replace(/^@/, "").toLocaleLowerCase("tr") ?? "";
   const { slug } = useParams();
   const navigate = useNavigate();
   const user = getUserSession();
@@ -70,6 +77,7 @@ export function TagsPage() {
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [selectedTagMedia, setSelectedTagMedia] = useState<File[]>([]);
   const tags = useQuery({ queryKey: ["tags"], queryFn: listTags });
   const tag = tags.data?.find((item) => item.slug === slug);
   const affinities = useQuery({
@@ -85,8 +93,9 @@ export function TagsPage() {
   const stats = useQuery({
     queryKey: ["tag-stats", tag?.id],
     queryFn: () => getTagStats(tag!.id),
-    enabled: Boolean(tag),
+    enabled: Boolean(tag && user && ["admin", "super_admin", "curator"].includes(user.role)),
   });
+  const relatedUsers = useQuery({ queryKey: ["tag", tag?.id, "related-users"], queryFn: () => listTagRelatedUsers(tag!.id), enabled: Boolean(tag) });
   const following = useQuery({
     queryKey: ["following", user?.id],
     queryFn: listFollowing,
@@ -125,14 +134,16 @@ export function TagsPage() {
       void client.invalidateQueries({ queryKey: ["profile-affinities"] }),
   });
   const post = useMutation({
-    mutationFn: async ({ body, file }: { body: string; file?: File }) => {
+    mutationFn: async ({ body, files }: { body: string; files: File[] }) => {
       const created = await createTagComment(tag!.id, body);
-      if (file) await uploadTagCommentMedia(created.id, file);
+      await Promise.all(files.map((file) => uploadTagCommentMedia(created.id, file)));
       return created;
     },
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["tag-comments", tag?.id] });
       void client.invalidateQueries({ queryKey: ["tag-stats", tag?.id] });
+      setSelectedTagMedia([]);
+      window.setTimeout(() => document.querySelector(".tag-post-card")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
     },
   });
   const like = useMutation({
@@ -205,6 +216,7 @@ export function TagsPage() {
           .toLocaleLowerCase("tr")
           .includes(commentQuery.toLocaleLowerCase("tr"));
       if (!matches) return false;
+      if (authorFilter && comment.author?.username?.toLocaleLowerCase("tr") !== authorFilter) return false;
       if (postTab === "following")
         return Boolean(comment.author && followingIds.has(comment.author.id));
       if (postTab === "photo" || postTab === "video")
@@ -245,22 +257,6 @@ export function TagsPage() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          {user &&
-          query.trim().length >= 2 &&
-          !visibleTags.some(
-            (item) =>
-              item.name.toLocaleLowerCase("tr") ===
-              query.trim().toLocaleLowerCase("tr"),
-          ) ? (
-            <button
-              className="create-inline-link"
-              disabled={create.isPending}
-              onClick={() => create.mutate()}
-              type="button"
-            >
-              Oluştur
-            </button>
-          ) : null}
         </label>
         <div className="feed-tabs" role="tablist">
           {(["popular", "for_you", "following", "new"] as const).map(
@@ -325,6 +321,7 @@ export function TagsPage() {
                 ? "Bu adla yeni bir ilgi alanı oluşturabilirsin."
                 : "Yeni ilgi alanı oluşturmak için giriş yap."}
             </p>
+            {user && query.trim().length >= 2 ? <button className="primary-action" disabled={create.isPending} onClick={() => create.mutate()} type="button">{create.isPending ? "Oluşturuluyor…" : `“${query.trim()}” ilgi alanını oluştur`}</button> : null}
           </div>
         ) : null}
       </section>
@@ -367,10 +364,10 @@ export function TagsPage() {
             <Share2 size={17} />
             Paylaş
           </button>
-          <Link className="secondary-action" to={`/tags/${tag.slug}/users`}>
-            <Users size={17} />
-            İlgili kullanıcılar
-          </Link>
+          <details className="detail-action-menu"><summary aria-label="Etiket işlemleri"><MoreVertical size={20}/></summary><div>
+            {user && ["admin", "super_admin", "curator"].includes(user.role) ? <a href="#tag-stats"><Eye size={17}/>Etkileşim istatistikleri</a> : null}
+            {user ? <button onClick={async () => { const details = window.prompt("Rapor nedenini yazın:"); if (details?.trim()) await createContentReport({ targetType: "tag", targetId: tag.id, reason: "Uygunsuz etiket", details: details.trim() }); }}><Flag size={17}/>Etiketi rapor et</button> : null}
+          </div></details>
         </div>
       </div>
       <section className="admin-form tag-sentiment-panel">
@@ -385,11 +382,7 @@ export function TagsPage() {
               key={value}
               onClick={() => save.mutate(value)}
             >
-              {value === "like"
-                ? "Beğeniyorum"
-                : value === "ok"
-                  ? "Sorun değil"
-                  : "Beğenmiyorum"}
+              {value === "like" ? <><Heart size={17}/> Beğeniyorum</> : value === "ok" ? <><Minus size={17}/> Sorun değil</> : <><ThumbsDown size={17}/> Beğenmiyorum</>}
             </button>
           ))}
         </div>
@@ -397,9 +390,16 @@ export function TagsPage() {
           <p className="form-help">Tag'i profiline eklemek için giriş yap.</p>
         ) : null}
       </section>
-      <section className="tag-public-stats">
+      <section className="admin-form tag-related-users-preview">
+        <h2>People added to their profile</h2>
+        <Link to={`/tags/${tag.slug}/users`}><span className="attendee-avatar-stack">{(relatedUsers.data ?? []).slice(0, 8).map((member) => <span key={member.id} title={member.name}>{member.name[0]}</span>)}</span><strong>Show all {relatedUsers.data?.length ?? tag.usageCount} users</strong></Link>
+      </section>
+      {user && ["admin", "super_admin", "curator"].includes(user.role) ? <section className="tag-public-stats" id="tag-stats">
         {[
           { Icon: Users, value: stats.data?.followers ?? 0, label: "takipçi" },
+          { Icon: Heart, value: stats.data?.likes ?? 0, label: "beğeni" },
+          { Icon: Minus, value: stats.data?.ok ?? 0, label: "nötr" },
+          { Icon: ThumbsDown, value: stats.data?.dislikes ?? 0, label: "beğenmeme" },
           {
             Icon: CalendarDays,
             value: stats.data?.events ?? 0,
@@ -412,6 +412,8 @@ export function TagsPage() {
             label: "gönderi",
           },
           { Icon: Eye, value: stats.data?.views ?? 0, label: "görüntülenme" },
+          { Icon: MessageCircle, value: stats.data?.reactions ?? 0, label: "post beğenisi" },
+          { Icon: Eye, value: stats.data?.engagementRate ?? 0, label: "% etkileşim" },
         ].map(({ Icon, value, label }) => (
           <article key={label}>
             <Icon size={19} />
@@ -419,8 +421,9 @@ export function TagsPage() {
             <span>{label}</span>
           </article>
         ))}
-      </section>
+      </section> : null}
       <section className="admin-form">
+        {authorFilter ? <div className="filter-notice"><span>@{authorFilter} postları filtreleniyor.</span><button onClick={() => { const next = new URLSearchParams(searchParams); next.delete("author"); setSearchParams(next); }} type="button">Temizle</button></div> : null}
         <div className="section-header compact">
           <h2>
             <MessageCircle size={18} /> Bu tag'deki postlar
@@ -448,15 +451,8 @@ export function TagsPage() {
               </button>
             ),
           )}
+          <label className="tag-tab-search"><Search size={16}/><input aria-label="Postlarda ara" placeholder="Ara…" value={commentQuery} onChange={(event) => setCommentQuery(event.target.value)}/></label>
         </div>
-        <label className="tag-search">
-          <Search size={16} />
-          <input
-            placeholder="Postlarda filtrele…"
-            value={commentQuery}
-            onChange={(event) => setCommentQuery(event.target.value)}
-          />
-        </label>
         {user ? (
           <form
             className="tag-post-composer"
@@ -465,12 +461,9 @@ export function TagsPage() {
               const input = event.currentTarget.elements.namedItem(
                 "body",
               ) as HTMLTextAreaElement;
-              const fileInput = event.currentTarget.elements.namedItem(
-                "media",
-              ) as HTMLInputElement;
               if (input.value.trim())
                 post.mutate(
-                  { body: input.value.trim(), file: fileInput.files?.[0] },
+                  { body: input.value.trim(), files: selectedTagMedia },
                   { onSuccess: () => event.currentTarget.reset() },
                 );
             }}
@@ -480,7 +473,7 @@ export function TagsPage() {
               required
               minLength={1}
               maxLength={2000}
-              placeholder={`#${tag.name} hakkında bir şey yaz…`}
+              placeholder={(comments.data?.length ?? 0) === 0 ? `#${tag.name} hakkında ilk yorumu yazan sen ol…` : `#${tag.name} hakkında bir şey yaz…`}
             />
             <div>
               <label className="secondary-action">
@@ -489,10 +482,13 @@ export function TagsPage() {
                 <input
                   accept="image/*,video/mp4,video/webm"
                   hidden
+                  multiple
                   name="media"
                   type="file"
+                  onChange={(event) => setSelectedTagMedia([...(event.target.files ?? [])].slice(0, 9))}
                 />
               </label>
+              {selectedTagMedia.length ? <span className="comment-media-count">{selectedTagMedia.filter((file) => file.type.startsWith("image/")).length} resim, {selectedTagMedia.filter((file) => file.type.startsWith("video/")).length} video seçildi {post.isPending ? <LoaderCircle className="spin" size={15}/> : null}</span> : null}
               <button className="primary-action" disabled={post.isPending}>
                 Yayınla
               </button>
@@ -573,7 +569,7 @@ export function TagsPage() {
                   }
                 >
                   <MessageCircle size={17} />
-                  Yorum yap
+                  {comment.replyCount ? `${comment.replyCount} yorum` : "Yorum yap"}
                 </button>
                 <button
                   onClick={() =>
@@ -590,9 +586,8 @@ export function TagsPage() {
                   Paylaş
                 </button>
                 {comment.author ? (
-                  <Link to={`/messages?peer=${comment.author.id}`}>
-                    <MessageCircle size={17} />
-                    Mesaj
+                  <Link aria-label="Mesaj gönder" title="Mesaj gönder" to={`/messages?peer=${comment.author.id}`}>
+                    <Mail size={17} />
                   </Link>
                 ) : null}
                 {user && comment.author && comment.author.id !== user.id ? (

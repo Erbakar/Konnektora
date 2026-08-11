@@ -7,6 +7,7 @@ import {
 } from "@prisma/client";
 import {
   IsArray,
+  ArrayMaxSize,
   IsDateString,
   IsEmail,
   IsEnum,
@@ -101,6 +102,10 @@ export class CreateEventDto {
   @MinLength(3)
   @MaxLength(160)
   title!: string;
+
+  @IsOptional()
+  @IsUUID()
+  placeId?: string;
 
   @IsOptional()
   @IsString()
@@ -218,6 +223,7 @@ export class CreateEventDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(10)
   @IsUUID("4", { each: true })
   tagIds?: string[];
 }
@@ -236,6 +242,10 @@ export class InviteParticipantDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  @IsOptional()
+  @Matches(/^\+?[1-9]\d{7,14}$/)
+  phone?: string;
 
   @IsOptional()
   @IsString()

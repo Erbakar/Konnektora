@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { SmsService } from "../sms/sms.service";
-import { ImportContactsDto, InviteContactsDto } from "./contacts.dto";
+import { ImportContactsDto, InviteContactsDto, SearchContactsDto } from "./contacts.dto";
 
 @Injectable()
 export class ContactsService {
@@ -12,6 +12,57 @@ export class ContactsService {
     private readonly mail: MailService,
     private readonly sms: SmsService,
   ) {}
+
+  async search(userId: string, input: SearchContactsDto) {
+    const query = input.query.trim();
+    const type = input.type ?? "name";
+    const normalizedPhone = type === "phone" ? this.normalizePhone(query) : undefined;
+    if (type === "phone" && !normalizedPhone)
+      throw new BadRequestException("Telefon numarası ülke koduyla yazılmalıdır.");
+    const members = await this.prisma.user.findMany({
+      where: {
+        id: { not: userId },
+        status: "active",
+        privacySettings: { directoryDiscoverable: true },
+        ...(type === "email"
+          ? { email: query.toLowerCase() }
+          : type === "phone"
+            ? { phone: normalizedPhone }
+            : {
+                OR: [
+                  { username: { contains: query.replace(/^@/, ""), mode: "insensitive" } },
+                  { name: { contains: query, mode: "insensitive" } },
+                ],
+              }),
+      },
+      take: 50,
+      orderBy: [{ followerCount: "desc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        accountType: true,
+        city: true,
+        country: true,
+        followerCount: true,
+        followers: { where: { followerId: userId }, select: { followerId: true } },
+        interestTags: { select: { tagId: true } },
+      },
+    });
+    const me = await this.prisma.userInterestTag.findMany({ where: { userId }, select: { tagId: true } });
+    const myTags = new Set(me.map((item) => item.tagId));
+    return members.map((member) => ({
+      id: member.id,
+      name: member.name,
+      username: member.username,
+      accountType: member.accountType as "individual" | "corporate",
+      city: member.city,
+      country: member.country,
+      followerCount: member.followerCount,
+      commonTagCount: member.interestTags.filter((tag) => myTags.has(tag.tagId)).length,
+      following: member.followers.length > 0,
+    }));
+  }
 
   async import(userId: string, input: ImportContactsDto) {
     const contacts = input.contacts

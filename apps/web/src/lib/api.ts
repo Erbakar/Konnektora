@@ -3642,6 +3642,7 @@ function inviteMockParticipant(
     userId?: string;
     username?: string;
     email?: string;
+    phone?: string;
     name?: string;
     role?: string;
   },
@@ -6307,7 +6308,12 @@ function getMockPrivacySettings(): PrivacySettings {
       eventAudience: "everybody",
       eventInviteAudience: "everybody",
       placeAudience: "everybody",
-      placeInviteAudience: "everybody",
+    placeInviteAudience: "everybody",
+    profileNameAudience: "everybody",
+    demographicsAudience: "everybody",
+    locationAudience: "everybody",
+    websiteAudience: "everybody",
+    businessAudience: "everybody",
     }
   );
 }
@@ -7921,7 +7927,7 @@ export function changeMemberPlan(
   );
 }
 export function getContentNotification(
-  targetType: "tag" | "event" | "place",
+  targetType: "tag" | "event" | "place" | "user",
   targetId: string,
 ): Promise<{ enabled: boolean }> {
   return requestJson(
@@ -7931,7 +7937,7 @@ export function getContentNotification(
   );
 }
 export function setContentNotification(
-  targetType: "tag" | "event" | "place",
+  targetType: "tag" | "event" | "place" | "user",
   targetId: string,
   enabled: boolean,
 ): Promise<{ enabled: boolean }> {
@@ -8278,8 +8284,13 @@ export function getTagStats(tagId: string): Promise<{
   events: number;
   places: number;
   followers: number;
+  likes: number;
+  ok: number;
+  dislikes: number;
   posts: number;
   views: number;
+  reactions: number;
+  engagementRate: number;
 }> {
   return requestJson(
     `/tags/${tagId}/stats`,
@@ -8287,9 +8298,15 @@ export function getTagStats(tagId: string): Promise<{
       events: z.number(),
       places: z.number(),
       followers: z.number(),
+      likes: z.number(),
+      ok: z.number(),
+      dislikes: z.number(),
       posts: z.number(),
       views: z.number(),
+      reactions: z.number(),
+      engagementRate: z.number(),
     }),
+    { auth: "user" },
   );
 }
 export function likeTagComment(commentId: string): Promise<{ liked: boolean }> {
@@ -8352,7 +8369,7 @@ export type ContentThreadComment = {
   likeCount: number;
   createdAt: string;
   updatedAt: string;
-  author?: { id: string; name: string; username?: string | null } | null;
+  author?: { id: string; name: string; username?: string | null; avatarUrl?: string | null } | null;
   replies?: ContentThreadComment[];
 };
 
@@ -8372,6 +8389,7 @@ const contentThreadCommentSchema: z.ZodType<ContentThreadComment> = z.lazy(() =>
         id: z.string(),
         name: z.string(),
         username: z.string().nullable().optional(),
+        avatarUrl: z.string().nullable().optional(),
       })
       .nullable()
       .optional(),
@@ -8402,6 +8420,18 @@ export function createContentComment(
   });
 }
 
+export function updateContentComment(id: string, body: string): Promise<ContentThreadComment> {
+  return requestJson(`/comments/${id}`, contentThreadCommentSchema, { auth: "user", method: "PATCH", body: JSON.stringify({ body }) });
+}
+
+export function deleteContentComment(id: string): Promise<{ ok: boolean }> {
+  return requestJson(`/comments/${id}`, z.object({ ok: z.boolean() }), { auth: "user", method: "DELETE" });
+}
+
+export function toggleContentCommentLike(id: string): Promise<{ liked: boolean }> {
+  return requestJson(`/comments/${id}/like`, z.object({ liked: z.boolean() }), { auth: "user", method: "POST" });
+}
+
 export type InteractionStats = Record<string, number>;
 export function getInteractionStats(
   targetType: "event" | "place",
@@ -8410,6 +8440,7 @@ export function getInteractionStats(
   return requestJson(
     `/${targetType}-stats/${targetId}`,
     z.record(z.number().int().nonnegative()),
+    { auth: "user" },
   );
 }
 
@@ -8474,6 +8505,15 @@ export function importContacts(
     auth: "user",
     method: "POST",
     body: JSON.stringify({ source, contacts }),
+  });
+}
+export function searchContacts(
+  query: string,
+  type: "name" | "email" | "phone" = "name",
+): Promise<MemberCard[]> {
+  const params = new URLSearchParams({ query, type });
+  return requestJson(`/contacts/search?${params}`, memberCardsSchema, {
+    auth: "user",
   });
 }
 export function inviteContacts(
@@ -9081,6 +9121,7 @@ export type AdminEventInput = {
   timezone?: string;
   format: string;
   visibility?: string;
+  placeId?: string;
   city?: string;
   country?: string;
   latitude?: number;
@@ -9552,8 +9593,13 @@ export type RelatedUser = {
   username?: string | null;
   city?: string | null;
   country?: string | null;
+  gender?: string | null;
+  birthDate?: string | null;
+  commonTagCount?: number;
+  sentiment?: string;
   profileVerifiedAt?: string | null;
   relation: string;
+  status?: string;
   checkedIn: boolean;
 };
 const relatedUserSchema: z.ZodType<RelatedUser> = z.object({
@@ -9562,14 +9608,20 @@ const relatedUserSchema: z.ZodType<RelatedUser> = z.object({
   username: z.string().nullable().optional(),
   city: z.string().nullable().optional(),
   country: z.string().nullable().optional(),
+  gender: z.string().nullable().optional(),
+  birthDate: z.string().datetime().nullable().optional(),
+  commonTagCount: z.number().int().nonnegative().optional(),
+  sentiment: z.string().optional(),
   profileVerifiedAt: z.string().nullable().optional(),
   relation: z.string(),
+  status: z.string().optional(),
   checkedIn: z.boolean(),
 });
 export function listEventRelatedUsers(eventId: string): Promise<RelatedUser[]> {
   return requestJson(
     `/events/${eventId}/related-users`,
     z.array(relatedUserSchema),
+    { auth: "user" },
   );
 }
 
@@ -9657,6 +9709,7 @@ export type PlaceInput = {
   name: string;
   description?: string;
   placeType?: string;
+  visibility?: string;
   tagIds?: string[];
   country?: string;
   city?: string;
@@ -9737,12 +9790,12 @@ export function listPlaceMembers(id: string): Promise<PlaceMember[]> {
 }
 
 export function listPlaceRelatedUsers(id: string): Promise<RelatedUser[]> {
-  return requestJson(`/places/${id}/related-users`, z.array(relatedUserSchema));
+  return requestJson(`/places/${id}/related-users`, z.array(relatedUserSchema), { auth: "user" });
 }
 
 export function invitePlaceMember(
   id: string,
-  input: { userId?: string; email?: string; username?: string; role?: string },
+  input: { userId?: string; email?: string; phone?: string; username?: string; role?: string },
 ): Promise<PlaceMember> {
   return requestJson(`/places/${id}/invite`, placeMemberSchema, {
     auth: "user",

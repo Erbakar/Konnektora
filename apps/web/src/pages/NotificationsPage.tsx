@@ -19,7 +19,7 @@ export function NotificationsPage() {
   const waitingTypes = new Set(["event_invite", "place_invite", "follow_request", "participation_request", "membership_request"]);
   const visible = notifications.data?.filter((item) => tab === "all" || waitingTypes.has(item.type)) ?? [];
   return <section className="page">
-    <div className="section-header"><div><p className="eyebrow">Hesabın</p><h1>Bildirimler</h1><p className="lead">{notifications.data?.filter((item) => !item.readAt).length ?? 0} okunmamış bildirimin var.</p></div></div>
+    <div className="section-header"><div><p className="eyebrow">Hesabın</p><h1>Bildirimler</h1><p className="lead">{notifications.data?.filter((item) => !item.readAt).length ?? 0} okunmamış bildirimin var.</p></div><Link className="secondary-action" to="/settings/notifications">Bildirim Ayarları</Link></div>
     <div className="feed-tabs" role="tablist" aria-label="Bildirim türü"><button className={tab === "all" ? "active" : ""} onClick={() => setTab("all")} role="tab" aria-selected={tab === "all"}>Tümü</button><button className={tab === "waiting" ? "active" : ""} onClick={() => setTab("waiting")} role="tab" aria-selected={tab === "waiting"}>Onay bekleyenler</button></div>
     <div className="admin-list">
       {visible.map((item) => <article className={`admin-list-row${item.readAt ? "" : " is-unread"}`} key={item.id}>

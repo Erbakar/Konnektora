@@ -1,6 +1,6 @@
 import type { Contact } from "@konnektora/shared";
 import { useMutation } from "@tanstack/react-query";
-import { BookUser, MailPlus, Smartphone, UserPlus } from "lucide-react";
+import { BookUser, MailPlus, Search, Smartphone, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { UserIdentityLink, userProfilePath } from "../components/UserIdentityLink";
@@ -9,12 +9,15 @@ import {
   getUserSession,
   importContacts,
   inviteContacts,
+  searchContacts,
 } from "../lib/api";
 import { pickGoogleContacts, pickPhoneContacts } from "../lib/socialProviders";
 
 export function ContactsPage() {
   const user = getUserSession();
   const [notice, setNotice] = useState("");
+  const [manualType, setManualType] = useState<"name" | "email" | "phone">("name");
+  const [manualQuery, setManualQuery] = useState("");
   const importMutation = useMutation({
     mutationFn: ({
       source,
@@ -29,6 +32,10 @@ export function ContactsPage() {
     mutationFn: inviteContacts,
     onSuccess: (data) => setNotice(`${data.invitedCount} davet gönderildi.`),
     onError: () => setNotice("Davetler gönderilemedi."),
+  });
+  const searchMutation = useMutation({
+    mutationFn: () => searchContacts(manualQuery.trim(), manualType),
+    onError: (error: Error) => setNotice(error.message),
   });
   if (!user)
     return (
@@ -65,6 +72,14 @@ export function ContactsPage() {
         <BookUser size={42} />
       </header>
       {notice ? <p className="form-help">{notice}</p> : null}
+      <form className="admin-form contact-manual-search" onSubmit={(event) => { event.preventDefault(); setNotice(""); if (manualQuery.trim().length >= 2) searchMutation.mutate(); }}>
+        <h2>Manuel arama</h2>
+        <p className="form-help">Yalnızca “arkadaşlarım beni bulabilir” seçeneği açık üyeler sonuçlarda gösterilir.</p>
+        <div className="form-grid"><label>Arama türü<select value={manualType} onChange={(event) => setManualType(event.target.value as typeof manualType)}><option value="name">Ad veya kullanıcı adı</option><option value="email">E-posta adresi</option><option value="phone">Telefon numarası</option></select></label><label>{manualType === "name" ? "Ad veya kullanıcı adı" : manualType === "email" ? "E-posta" : "Telefon"}<input inputMode={manualType === "phone" ? "tel" : "text"} minLength={2} onChange={(event) => setManualQuery(event.target.value)} placeholder={manualType === "name" ? "@kullanici veya Ad Soyad" : manualType === "email" ? "uye@example.com" : "+905551234567"} required type={manualType === "email" ? "email" : "text"} value={manualQuery}/></label></div>
+        <button className="primary-action" disabled={searchMutation.isPending}><Search size={17}/>{searchMutation.isPending ? "Aranıyor…" : "Ara"}</button>
+        {searchMutation.data?.length ? <div className="onboarding-people">{searchMutation.data.map((member) => <article key={member.id}><UserIdentityLink user={member} avatarClassName="conversation-avatar" showName={false}/><div><strong><Link to={userProfilePath(member)}>{member.username ? `@${member.username}` : member.name}</Link></strong><small>{member.commonTagCount} ortak ilgi alanı · {member.followerCount} takipçi</small></div><button className="secondary-action" onClick={() => void followUser(member.id)} type="button"><UserPlus size={17}/>Takip et</button></article>)}</div> : null}
+        {searchMutation.isSuccess && !searchMutation.data.length ? <div className="empty-state compact"><strong>Bulunabilir bir üye eşleşmedi.</strong><p>Üye olmayan veya bulunmak istemeyen kişiye ücretsiz Konnektora daveti gönderebilirsin.</p>{manualType !== "name" ? <button className="secondary-action" disabled={inviteMutation.isPending} onClick={() => inviteMutation.mutate([{ name: manualQuery.trim(), ...(manualType === "email" ? { email: manualQuery.trim() } : { phone: manualQuery.trim() }) }])} type="button"><MailPlus size={17}/>Üyeliğe davet et</button> : null}</div> : null}
+      </form>
       <div className="contact-source-grid">
         <button
           className="social-provider-button"

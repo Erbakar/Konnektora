@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useLanguage } from "../lib/i18n";
 
 export function SiteFooter() {
-  const { t } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
   return (
     <footer className="site-footer">
       <div className="site-footer-inner">
@@ -15,28 +15,24 @@ export function SiteFooter() {
             <strong>{t("discover")}</strong>
             <Link to="/events">{t("events")}</Link>
             <Link to="/places">{t("places")}</Link>
-            <Link to="/messages">{t("messages")}</Link>
-            <Link to="/events?tag=startup">{t("tags")}</Link>
-            <Link to="/events?tag=networking">{t("networking")}</Link>
+            <Link to="/tags">{t("tags")}</Link>
           </div>
           <div>
-            <strong>{t("community")}</strong>
-            <Link to="/events?tag=founder">{t("founders")}</Link>
-            <Link to="/events?tag=yatirim">{t("investment")}</Link>
-            <Link to="/admin">{t("organizerTools")}</Link>
-          </div>
-          <div>
-            <strong>Konnektora</strong>
-            <a href="https://github.com/Erbakar/Konnektora" rel="noreferrer" target="_blank">
-              GitHub
-            </a>
-            <Link to="/admin">{t("adminLogin")}</Link>
+            <strong>{language === "tr" ? "Yardım" : "Help"}</strong>
             <Link to="/contact">{t("contact")}</Link>
             <Link to="/help">{t("help")}</Link>
+          </div>
+          <div>
+            <strong>{language === "tr" ? "Yasal" : "Legal"}</strong>
             <Link to="/about">{t("about")}</Link>
             <Link to="/privacy">{t("privacy")}</Link>
             <Link to="/terms">{t("terms")}</Link>
             <Link to="/cookies">{t("cookies")}</Link>
+          </div>
+          <div>
+            <strong>Languages</strong>
+            <button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")} type="button">English</button>
+            <button className={language === "tr" ? "active" : ""} onClick={() => setLanguage("tr")} type="button">Türkçe</button>
           </div>
         </div>
       </div>

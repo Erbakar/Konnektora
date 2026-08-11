@@ -173,6 +173,12 @@ const PolicyPage = lazy(() =>
     default: module.PolicyPage,
   })),
 );
+const SettingsCenterPage = lazy(() =>
+  import("./pages/SettingsCenterPage").then((module) => ({ default: module.SettingsCenterPage })),
+);
+const SettingsSectionPage = lazy(() =>
+  import("./pages/SettingsCenterPage").then((module) => ({ default: module.SettingsSectionPage })),
+);
 
 const queryClient = new QueryClient();
 
@@ -216,6 +222,13 @@ const router = createBrowserRouter([
       { path: "tags/:slug", element: <TagsPage /> },
       { path: "tags/:slug/users", element: <RelatedUsersPage kind="tag" /> },
       { path: "account", element: <AccountPage /> },
+      { path: "settings", element: <SettingsCenterPage /> },
+      { path: "settings/profile-pictures", element: <SettingsSectionPage section="profile-pictures" /> },
+      { path: "settings/profile", element: <SettingsSectionPage section="profile" /> },
+      { path: "settings/account", element: <SettingsSectionPage section="account" /> },
+      { path: "settings/notifications", element: <SettingsSectionPage section="notifications" /> },
+      { path: "settings/privacy", element: <SettingsSectionPage section="privacy" /> },
+      { path: "settings/business", element: <SettingsSectionPage section="business" /> },
       { path: "contact", element: <ContactPage /> },
       { path: "help", element: <HelpCenterPage /> },
       { path: "help/faqs", element: <HelpCenterPage /> },
@@ -243,9 +256,7 @@ createRoot(document.getElementById("root")!).render(
       <QueryClientProvider client={queryClient}>
         <Suspense
           fallback={
-            <div className="page route-loading" role="status">
-              Sayfa yükleniyor…
-            </div>
+            <div className="page route-loading app-loading-screen" role="status"><div className="loading-mark" aria-hidden="true"/><strong>Sayfa yükleniyor…</strong><span>İçerik hazırlanıyor</span></div>
           }
         >
           <RouterProvider router={router} />

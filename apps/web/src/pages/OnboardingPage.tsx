@@ -318,12 +318,16 @@ export function OnboardingPage() {
             onSubmit={(event: FormEvent<HTMLFormElement>) => {
               event.preventDefault();
               const form = new FormData(event.currentTarget);
+              const birthDateValue = form.get("birthDate");
+              const birthDate = typeof birthDateValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(birthDateValue)
+                ? new Date(`${birthDateValue}T00:00:00.000Z`).toISOString()
+                : undefined;
               profileSave.mutate({
                 name: profile.data.name,
                 username: String(form.get("username")),
                 country: String(form.get("country")),
                 city: String(form.get("city")),
-                birthDate: String(form.get("birthDate")) ? `${String(form.get("birthDate"))}T00:00:00.000Z` : undefined,
+                birthDate,
                 gender: (String(form.get("gender")) as "male" | "female") || undefined,
                 website: normalizeWebsite(String(form.get("website"))),
               });

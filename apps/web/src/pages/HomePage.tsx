@@ -1,19 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
-  Briefcase,
+  Building2,
   Globe2,
   Hash,
-  Lightbulb,
   MapPin,
   Megaphone,
-  Rocket,
   Search,
   Sparkles,
   TrendingUp,
   UserRoundPlus,
   UserPlus,
-  Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
@@ -24,29 +21,11 @@ import {
   getDiscoveryFeed,
   listAnnouncements,
   listEvents,
+  listPlaces,
   listTags,
 } from "../lib/api";
 import { mockEvents } from "../lib/mockData";
 import { useLanguage } from "../lib/i18n";
-
-const categoryMeta: Record<string, { icon: typeof Rocket; copy: string }> = {
-  startup: {
-    icon: Rocket,
-    copy: "Demo nights, product clinics and builder sessions.",
-  },
-  networking: {
-    icon: Users,
-    copy: "Curated rooms for meaningful professional connections.",
-  },
-  yatirim: {
-    icon: TrendingUp,
-    copy: "Investor AMAs, funding clinics and capital roundtables.",
-  },
-  founder: {
-    icon: Lightbulb,
-    copy: "Founder circles, matching labs and accountability groups.",
-  },
-};
 
 const popularCities = [
   { name: "London", country: "United Kingdom" },
@@ -193,6 +172,10 @@ export function HomePage() {
     queryKey: ["announcements", "home"],
     queryFn: listAnnouncements,
   });
+  const { data: recentPlaces } = useQuery({
+    queryKey: ["places", "home", "recent"],
+    queryFn: () => listPlaces(new URLSearchParams({ page: "1", pageSize: "8" })),
+  });
   const { data: discovery } = useQuery({
     queryKey: ["discovery-feed", trendScope],
     queryFn: () => getDiscoveryFeed({ scope: trendScope }),
@@ -265,7 +248,7 @@ export function HomePage() {
               <h2>{c.pulse}</h2>
               <p>{c.pulseCopy}</p>
             </div>
-            <Link className="discovery-search-action" to="/search">
+            <Link className="discovery-search-action" to="/community">
               {c.discoverCommunity} <ArrowRight size={18} />
             </Link>
             <span className="active-community-count">
@@ -309,43 +292,6 @@ export function HomePage() {
             </section>
           </div>
 
-          <section className="discovery-trends">
-            <header>
-              <div>
-                <span className="discovery-trends-icon">
-                  <Hash size={20} />
-                </span>
-                <div>
-                  <h3>{c.trends}</h3>
-                  <p>{c.trendsCopy}</p>
-                </div>
-              </div>
-              <div className="trend-scope-tabs">
-                <button
-                  className={trendScope === "local" ? "active" : ""}
-                  onClick={() => setTrendScope("local")}
-                  type="button"
-                >
-                  {language === "tr" ? "Ülkemde" : "My country"}
-                </button>
-                <button
-                  className={trendScope === "global" ? "active" : ""}
-                  onClick={() => setTrendScope("global")}
-                  type="button"
-                >
-                  Global
-                </button>
-                <Link to="/events">
-                  {c.allCategories} <ArrowRight size={16} />
-                </Link>
-              </div>
-            </header>
-            <div className="discovery-row compact">
-              {discovery.trendingTags.slice(0, 8).map((item) => (
-                <DiscoveryCard item={item} key={item.id} />
-              ))}
-            </div>
-          </section>
           {discovery.localEvents.length ? (
             <section className="discovery-trends regional-discovery">
               <header>
@@ -461,51 +407,39 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="corp-section">
-        <div className="corp-section-head corp-section-head-center">
-          <div>
-            <h2>{c.categories}</h2>
-            <p>{c.categoriesCopy}</p>
+      {discovery ? (
+        <section className="corp-section home-trending-interests">
+          <header className="corp-section-head">
+            <div>
+              <span className="discovery-trends-icon"><Hash size={20} /></span>
+              <h2>{c.trends}</h2>
+              <p>{c.trendsCopy}</p>
+            </div>
+            <div className="trend-scope-tabs">
+              <button className={trendScope === "local" ? "active" : ""} onClick={() => setTrendScope("local")} type="button">{language === "tr" ? "Ülkemde" : "My country"}</button>
+              <button className={trendScope === "global" ? "active" : ""} onClick={() => setTrendScope("global")} type="button">Global</button>
+            </div>
+          </header>
+          <div className="home-trending-tag-cloud">
+            {discovery.trendingTags.map((item) => <Link key={item.id} to={item.href}>#{item.title.replace(/^#/, "")}</Link>)}
           </div>
-        </div>
-        <div className="corp-category-grid">
-          {tags.map((tag) => {
-            const meta = categoryMeta[tag.slug] ?? {
-              icon: Briefcase,
-              copy: "Find relevant people and events.",
-            };
-            const Icon = meta.icon;
-            const turkishCategoryCopy: Record<string, string> = {
-              startup: "Demo geceleri, ürün klinikleri ve üretici buluşmaları.",
-              networking:
-                "Anlamlı profesyonel bağlantılar için seçilmiş ortamlar.",
-              yatirim:
-                "Yatırımcı buluşmaları, fon hazırlığı ve sermaye oturumları.",
-              founder:
-                "Kurucu çemberleri, eşleşme atölyeleri ve dayanışma grupları.",
-            };
+        </section>
+      ) : null}
 
-            return (
-              <Link
-                className="corp-category-card"
-                key={tag.id}
-                to={`/events?tag=${tag.slug}`}
-              >
-                <span className="corp-category-icon">
-                  <Icon size={22} />
-                </span>
-                <strong>{tag.name}</strong>
-                <span>
-                  {language === "tr"
-                    ? (turkishCategoryCopy[tag.slug] ??
-                      "İlgili insanları ve etkinlikleri keşfet.")
-                    : meta.copy}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
+      {recentPlaces?.items.length ? (
+        <section className="corp-section corp-section-muted">
+          <div className="corp-section-head">
+            <div><h2>{language === "tr" ? "Yeni eklenen mekânlar" : "Recently added places"}</h2><p>{language === "tr" ? "Topluluğa en son katılan mekânları keşfet." : "Discover the newest places in the community."}</p></div>
+            <Link className="corp-link" to="/places">{language === "tr" ? "Tüm mekânlar" : "All places"}<ArrowRight size={18}/></Link>
+          </div>
+          <div className="corp-carousel">
+            {recentPlaces.items.map((place) => <Link className="home-place-tile" key={place.id} to={`/places/${place.slug}`}>
+              {place.coverImageUrl ? <img alt="" src={place.coverImageUrl}/> : <span className="home-place-fallback"><Building2 size={28}/></span>}
+              <span><strong>{place.name}</strong><small>{[place.city, place.country].filter(Boolean).join(", ") || (language === "tr" ? "Konum belirtilmedi" : "Location not specified")}</small></span>
+            </Link>)}
+          </div>
+        </section>
+      ) : null}
 
       <section className="corp-section corp-section-muted">
         <div className="corp-section-head corp-section-head-center">
@@ -547,7 +481,7 @@ export function HomePage() {
         <div className="corp-steps">
           <article>
             <Search size={28} />
-            <strong>{c.discoverEvents}</strong>
+            <strong>{language === "tr" ? "Etkinlikleri ve mekânları keşfet" : "Discover events and places"}</strong>
             <p>{c.discoverEventsCopy}</p>
             <Link className="corp-link" to="/events">
               {c.start}
@@ -555,13 +489,13 @@ export function HomePage() {
           </article>
           <article>
             <UserPlus size={28} />
-            <strong>{c.findPeople}</strong>
-            <p>{c.findPeopleCopy}</p>
+            <strong>{language === "tr" ? "Doğru insanları bul" : "Find the right people"}</strong>
+            <p>{language === "tr" ? "İlgi alanlarını profiline ekleyerek kendini ifade et; ortak ilgi alanlarını ve AI destekli uyumunu gör, davetler ve onay akışlarıyla bağlantı kur." : c.findPeopleCopy}</p>
           </article>
           <article>
             <Sparkles size={28} />
             <strong>{c.host}</strong>
-            <p>{c.hostCopy}</p>
+            <p>{language === "tr" ? "Etkinlik oluştur, davetli listelerini yönet, check-in sırasında listeleri gör ve topluluğunu güvenle büyüt." : c.hostCopy}</p>
             <Link className="corp-link" to="/admin">
               {c.organizer}
             </Link>

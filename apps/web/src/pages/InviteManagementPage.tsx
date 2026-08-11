@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { EventParticipant, PlaceMember } from "@konnektora/shared";
 import {
   CheckCircle2,
@@ -22,6 +22,8 @@ import {
   inviteEventParticipant,
   invitePlaceMember,
   listEventParticipants,
+  listFollowing,
+  listMyEvents,
   listPlaceMembers,
   scanEventTicket,
   scanPlaceMemberPass,
@@ -44,13 +46,17 @@ export function EventInviteManagementPage() {
     enabled: Boolean(event.data && user),
     retry: false,
   });
+  const following = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
+  const managedEvents = useQuery({ queryKey: ["my-events", user?.id], queryFn: listMyEvents, enabled: Boolean(user) });
+  const oldEventQueries = useQueries({ queries: (managedEvents.data ?? []).filter((item) => item.id !== event.data?.id).slice(0, 5).map((item) => ({ queryKey: ["event-participants", item.id, "invite-source"], queryFn: () => listEventParticipants(item.id, "user"), enabled: Boolean(event.data) })) });
+  const previousAttendees = oldEventQueries.flatMap((query) => query.data ?? []).filter((item, index, all) => item.user && all.findIndex((other) => other.userId === item.userId) === index);
   const refresh = () => {
     void client.invalidateQueries({
       queryKey: ["event-participants", event.data?.id],
     });
   };
   const invite = useMutation({
-    mutationFn: (input: { username?: string; email?: string; role?: string }) =>
+    mutationFn: (input: { userId?: string; username?: string; email?: string; phone?: string; name?: string; role?: string }) =>
       inviteEventParticipant(event.data!.id, input, "user"),
     onSuccess: refresh,
   });
@@ -98,10 +104,16 @@ export function EventInviteManagementPage() {
           invite.mutate({
             username: form.username,
             email: form.email,
+            phone: form.phone,
             role: form.role,
           })
         }
       />
+      <section className="admin-form invite-source-section"><h2>Davet kaynakları</h2><div className="invite-source-grid">
+        <div><h3>Takip ettiklerim</h3>{following.data?.map((member) => <button disabled={invite.isPending} key={member.id} onClick={() => invite.mutate({ userId: member.id, role: "attendee" })} type="button"><UserPlus size={16}/>{member.name}</button>)}</div>
+        <div><h3>Eski etkinlik katılımcıları</h3>{previousAttendees.map((participant) => <button disabled={invite.isPending} key={participant.userId} onClick={() => invite.mutate({ userId: participant.userId, role: "attendee" })} type="button"><Users size={16}/>{participant.user?.name ?? participant.userId}</button>)}</div>
+        <div><h3>Rehberden tara</h3><Link className="secondary-action" to="/contacts">Telefon rehberi veya Google Contacts</Link></div>
+      </div></section>
       <QrCheckInScanner
         label="Etkinlik QR check-in"
         pending={scan.isPending}
@@ -145,13 +157,14 @@ export function PlaceInviteManagementPage() {
     enabled: Boolean(place.data && user),
     retry: false,
   });
+  const following = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
   const refresh = () => {
     void client.invalidateQueries({
       queryKey: ["place-members", place.data?.id],
     });
   };
   const invite = useMutation({
-    mutationFn: (input: { username?: string; email?: string; role?: string }) =>
+    mutationFn: (input: { userId?: string; username?: string; email?: string; phone?: string; role?: string }) =>
       invitePlaceMember(place.data!.id, input),
     onSuccess: refresh,
   });
@@ -196,10 +209,16 @@ export function PlaceInviteManagementPage() {
           invite.mutate({
             username: form.username,
             email: form.email,
+            phone: form.phone,
             role: form.role,
           })
         }
       />
+      <section className="admin-form invite-source-section"><h2>Davet kaynakları</h2><div className="invite-source-grid">
+        <div><h3>Takip ettiklerim</h3>{following.data?.map((member) => <button disabled={invite.isPending} key={member.id} onClick={() => invite.mutate({ userId: member.id, role: "member" })} type="button"><UserPlus size={16}/>{member.name}</button>)}</div>
+        <div><h3>Guest listeler</h3><Link className="secondary-action" to="/community">Topluluk ve guest listelerden seç</Link></div>
+        <div><h3>Rehberden tara</h3><Link className="secondary-action" to="/contacts">Telefon rehberi veya Google Contacts</Link></div>
+      </div></section>
       <QrCheckInScanner
         label="Mekân üye kartı check-in"
         pending={scan.isPending}
@@ -276,6 +295,8 @@ function InviteForm({
   onSubmit: (input: {
     username?: string;
     email?: string;
+    phone?: string;
+    name?: string;
     role: string;
   }) => void;
 }) {
@@ -289,10 +310,13 @@ function InviteForm({
           .trim()
           .replace(/^@/, "");
         const email = String(form.get("email") || "").trim();
-        if (username || email)
+        const phone = String(form.get("phone") || "").trim().replace(/[\s()-]/g, "");
+        if (username || email || phone)
           onSubmit({
             username: username || undefined,
             email: email || undefined,
+            phone: phone || undefined,
+            name: String(form.get("name") || "").trim() || undefined,
             role: String(form.get("role") || "attendee"),
           });
       }}
@@ -307,8 +331,16 @@ function InviteForm({
           <input name="username" placeholder="@kullanici" />
         </label>
         <label>
+          Ad soyad
+          <input name="name" placeholder="Ad Soyad" />
+        </label>
+        <label>
           E-posta
           <input name="email" type="email" placeholder="uye@example.com" />
+        </label>
+        <label>
+          Telefon
+          <input name="phone" inputMode="tel" pattern="\+?[1-9][0-9]{7,14}" placeholder="+905551234567" />
         </label>
         <label>
           Rol

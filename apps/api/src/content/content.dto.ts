@@ -43,6 +43,13 @@ export class CreateCommentDto {
   body!: string;
 }
 
+export class UpdateCommentDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(3000)
+  body!: string;
+}
+
 export class CreateReactionDto {
   @IsEnum(ReportTargetType)
   targetType!: ReportTargetType;

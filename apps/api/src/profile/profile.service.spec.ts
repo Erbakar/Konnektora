@@ -141,7 +141,12 @@ describe("ProfileService", () => {
       eventAudience: "everybody",
       eventInviteAudience: "everybody",
       placeAudience: "everybody",
-      placeInviteAudience: "everybody"
+      placeInviteAudience: "everybody",
+      profileNameAudience: "everybody",
+      demographicsAudience: "everybody",
+      locationAudience: "everybody",
+      websiteAudience: "everybody",
+      businessAudience: "everybody"
     });
   });
 

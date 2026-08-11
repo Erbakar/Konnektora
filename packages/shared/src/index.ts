@@ -44,7 +44,7 @@ export function parseRichText(value: string): RichTextToken[] {
           .replace(/[\u0300-\u036f]/g, "")
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-|-$/g, "");
-        return { type: "tag", text, href: `/tags/${encodeURIComponent(slug)}` };
+        return { type: "tag", text: label, href: `/tags/${encodeURIComponent(slug)}` };
       }
       return { type: "text", text };
     });
@@ -121,6 +121,11 @@ export const privacySettingsSchema = z.object({
   eventInviteAudience: privacyAudienceSchema,
   placeAudience: privacyAudienceSchema,
   placeInviteAudience: privacyAudienceSchema,
+  profileNameAudience: privacyAudienceSchema,
+  demographicsAudience: privacyAudienceSchema,
+  locationAudience: privacyAudienceSchema,
+  websiteAudience: privacyAudienceSchema,
+  businessAudience: privacyAudienceSchema,
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional(),
 });
@@ -171,6 +176,8 @@ export const memberCardSchema = z.object({
   followerCount: z.number().int().nonnegative(),
   commonTagCount: z.number().int().nonnegative(),
   following: z.boolean(),
+  gender: z.string().nullable().optional(),
+  birthDate: z.string().datetime().or(z.date()).nullable().optional(),
 });
 export const memberCardsSchema = z.array(memberCardSchema);
 export const socialProviderSchema = z.enum(["google", "facebook"]);
@@ -249,6 +256,10 @@ export const discoveryItemSchema = z.object({
   href: z.string(),
   imageUrl: z.string().nullable(),
   meta: z.string().nullable(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
+  attendeeCount: z.number().int().nonnegative().optional(),
+  organizer: z.boolean().optional(),
 });
 export const discoveryActivitySchema = discoveryItemSchema.extend({
   action: z.string(),
@@ -489,11 +500,15 @@ export const tagSchema = z.object({
   categoryId: z.string().uuid().nullable(),
   status: tagStatusSchema,
   usageCount: z.number().int().nonnegative(),
+  eventCount: z.number().int().nonnegative().optional(),
+  placeCount: z.number().int().nonnegative().optional(),
 });
 export const publicProfileInterestSchema = z.object({
   tag: tagSchema,
   sentiment: z.enum(["like", "ok", "dislike"]),
   common: z.boolean(),
+  commentCount: z.number().int().nonnegative().optional(),
+  lastActivityAt: z.string().datetime().or(z.date()).optional(),
 });
 export const publicProfileSchema = z.object({
   id: z.string().uuid(),
@@ -501,6 +516,14 @@ export const publicProfileSchema = z.object({
   username: z.string(),
   accountType: accountTypeSchema,
   website: z.string().nullable(),
+  gender: z.string().nullable().optional(),
+  birthDate: z.string().datetime().or(z.date()).nullable().optional(),
+  district: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  companyName: z.string().nullable().optional(),
+  tradeName: z.string().nullable().optional(),
+  companyType: z.string().nullable().optional(),
+  businessCategory: z.string().nullable().optional(),
   city: z.string().nullable(),
   country: z.string().nullable(),
   followerCount: z.number().int().nonnegative(),
@@ -525,6 +548,7 @@ export const publicProfileSchema = z.object({
   }),
   events: z.array(discoveryItemSchema),
   places: z.array(discoveryItemSchema),
+  stats: z.record(z.number().nonnegative()).optional(),
 });
 
 export const profileVerificationRequestSchema = z.object({
@@ -583,6 +607,7 @@ export const tagCommentSchema = z.object({
   body: z.string().min(1).max(1000),
   likeCount: z.number().int().nonnegative(),
   liked: z.boolean().optional(),
+  replyCount: z.number().int().nonnegative().optional(),
   media: z
     .array(
       z.object({ id: z.string().uuid(), url: z.string(), type: z.string() }),
@@ -604,6 +629,7 @@ export const tagCommentsSchema = z.array(tagCommentSchema);
 
 export const eventSchema = z.object({
   id: z.string().uuid(),
+  placeId: z.string().uuid().nullable().optional(),
   createdById: z.string().uuid().nullable().optional(),
   title: z.string().min(3).max(160),
   slug: slugSchema,
@@ -620,6 +646,10 @@ export const eventSchema = z.object({
   latitude: z.number().min(-90).max(90).nullable().optional(),
   longitude: z.number().min(-180).max(180).nullable().optional(),
   attendeeCount: z.number().int().nonnegative().optional(),
+  viewerParticipation: z
+    .object({ role: z.string(), status: z.string() })
+    .nullable()
+    .optional(),
   language: z.string().min(2).max(16),
   organizerName: z.string().max(160).nullable(),
   externalRegistrationUrl: z.string().url().nullable(),
@@ -1071,6 +1101,7 @@ export const adminPlaceSchema = z.object({
   slug: slugSchema,
   description: z.string().nullable(),
   placeType: z.string().optional(),
+  visibility: eventVisibilitySchema.optional(),
   status: z.string(),
   coverImageUrl: z.string().nullable(),
   country: z.string().nullable(),
@@ -1104,6 +1135,7 @@ export const placeSchema = adminPlaceSchema
     slug: true,
     description: true,
     placeType: true,
+    visibility: true,
     status: true,
     coverImageUrl: true,
     country: true,
@@ -1120,12 +1152,15 @@ export const placeSchema = adminPlaceSchema
   .extend({
     tags: z.array(tagSchema).optional(),
     isFollowing: z.boolean(),
+    followingMemberCount: z.number().int().nonnegative().optional(),
     viewerMembership: z
       .object({
         status: placeMemberStatusSchema,
         role: placeMemberRoleSchema,
       })
       .nullable(),
+    events: z.array(eventSchema).optional(),
+    managers: z.array(z.object({ id: z.string().uuid(), name: z.string(), username: z.string().nullable(), role: placeMemberRoleSchema, avatarUrl: z.string().nullable().optional() })).optional(),
   });
 
 export const placeListSchema = z.object({

@@ -2,10 +2,11 @@ import { ArrowUpRight, CalendarDays, Hash, MapPin, UserRound } from "lucide-reac
 import { Link } from "react-router-dom";
 import type { DiscoveryItem } from "@konnektora/shared";
 import { useLanguage } from "../lib/i18n";
+import { DistanceLabel } from "./DistanceLabel";
 
 const icons = { user: UserRound, tag: Hash, event: CalendarDays, place: MapPin };
 
-export function DiscoveryCard({ item }: { item: DiscoveryItem }) {
+export function DiscoveryCard({ item, hideSubtitle = false }: { item: DiscoveryItem; hideSubtitle?: boolean }) {
   const { language } = useLanguage();
   const Icon = icons[item.kind];
   const initials = item.title
@@ -38,8 +39,10 @@ export function DiscoveryCard({ item }: { item: DiscoveryItem }) {
       <span className="discovery-card-copy">
         <small>{kindLabel}</small>
         <strong>{item.title}</strong>
-        {subtitle ? <span className="discovery-card-subtitle">{subtitle}</span> : null}
+        {!hideSubtitle && subtitle ? <span className="discovery-card-subtitle">{subtitle}</span> : null}
         <span className="discovery-card-meta">{meta}</span>
+        {item.kind === "event" && item.attendeeCount != null ? <span className="discovery-card-meta">{item.attendeeCount} attendees</span> : null}
+        {(item.kind === "event" || item.kind === "place") ? <DistanceLabel latitude={item.latitude} longitude={item.longitude}/> : null}
       </span>
       <span className="discovery-card-arrow" aria-hidden="true"><ArrowUpRight size={17} /></span>
     </Link>

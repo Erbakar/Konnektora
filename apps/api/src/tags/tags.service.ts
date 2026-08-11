@@ -48,13 +48,15 @@ export class TagsService {
           select: { targetId: true },
         })
       : [];
-    return this.prisma.tag.findMany({
+    const tags = await this.prisma.tag.findMany({
       where: {
         status: "active",
         id: { notIn: blocks.map((block) => block.targetId) },
       },
       orderBy: [{ usageCount: "desc" }, { name: "asc" }],
+      include: { _count: { select: { events: { where: { event: { status: "published", startsAt: { gte: new Date() } } } }, places: { where: { place: { status: "active" } } } } } },
     });
+    return tags.map(({ _count, ...tag }) => ({ ...tag, eventCount: _count.events, placeCount: _count.places }));
   }
 
   async listTagComments(tagId: string, userId?: string) {
@@ -80,7 +82,7 @@ export class TagsService {
       include: { author: { select: tagAuthorSelect } },
     });
     const ids = comments.map((comment) => comment.id);
-    const [media, liked] = await Promise.all([
+    const [media, liked, replyCounts] = await Promise.all([
       ids.length
         ? this.prisma.mediaFile.findMany({
             where: {
@@ -102,6 +104,7 @@ export class TagsService {
             select: { targetId: true },
           })
         : [],
+      ids.length ? this.prisma.contentComment.groupBy({ by: ["targetId"], where: { targetType: "tag_comment", targetId: { in: ids }, status: "active" }, _count: { _all: true } }) : [],
     ]);
     const likedIds = new Set(liked.map((item) => item.targetId));
     return comments.map((comment) => ({
@@ -114,6 +117,7 @@ export class TagsService {
       canDelete: comment.authorId === userId,
       author: tagAuthor(comment.author),
       liked: likedIds.has(comment.id),
+      replyCount: replyCounts.find((item) => item.targetId === comment.id)?._count._all ?? 0,
       media: media
         .filter((item) => item.contentId === comment.id)
         .map((item) => ({ id: item.id, url: item.url, type: item.type })),
@@ -128,9 +132,13 @@ export class TagsService {
       username: true,
       city: true,
       country: true,
+      gender: true,
+      birthDate: true,
       profileVerifiedAt: true,
+      privacySettings: { select: { demographicsAudience: true, locationAudience: true } },
+      interestTags: { select: { tagId: true } },
     } as const;
-    const [interests, posts] = await Promise.all([
+    const [interests, posts, viewerInterests] = await Promise.all([
       this.prisma.userInterestTag.findMany({
         where: { tagId, user: { status: "active" } },
         take: 100,
@@ -147,7 +155,20 @@ export class TagsService {
         take: 100,
         include: { author: { select: userSelect } },
       }),
+      viewerId ? this.prisma.userInterestTag.findMany({ where: { userId: viewerId }, select: { tagId: true } }) : [],
     ]);
+    const viewerTagIds = new Set(viewerInterests.map((item) => item.tagId));
+    const present = (member: (typeof interests)[number]["user"]) => ({
+      id: member.id,
+      name: member.name,
+      username: member.username,
+      city: viewerId === member.id || member.privacySettings?.locationAudience === "everybody" ? member.city : null,
+      country: viewerId === member.id || member.privacySettings?.locationAudience === "everybody" ? member.country : null,
+      gender: viewerId === member.id || member.privacySettings?.demographicsAudience === "everybody" ? member.gender : null,
+      birthDate: viewerId === member.id || member.privacySettings?.demographicsAudience === "everybody" ? member.birthDate : null,
+      profileVerifiedAt: member.profileVerifiedAt,
+      commonTagCount: (member.interestTags ?? []).filter((item) => viewerTagIds.has(item.tagId)).length,
+    });
     const users = new Map<
       string,
       {
@@ -156,21 +177,26 @@ export class TagsService {
         username: string | null;
         city: string | null;
         country: string | null;
+        gender: string | null;
+        birthDate: Date | null;
         profileVerifiedAt: Date | null;
+        commonTagCount: number;
+        sentiment?: string;
         relation: string;
         checkedIn: boolean;
       }
     >();
     for (const interest of interests)
       users.set(interest.user.id, {
-        ...interest.user,
+        ...present(interest.user),
         relation: "ilgileniyor",
+        sentiment: interest.sentiment,
         checkedIn: false,
       });
     for (const post of posts) {
       if (!post.author) continue;
       users.set(post.author.id, {
-        ...post.author,
+        ...present(post.author),
         relation: users.has(post.author.id)
           ? "ilgileniyor · paylaşım yaptı"
           : "paylaşım yaptı",
@@ -180,17 +206,20 @@ export class TagsService {
     return [...users.values()];
   }
 
-  async getPublicStats(tagId: string, userId?: string) {
-    await this.ensureTagVisible(tagId, userId);
-    const [events, places, followers, posts, views] = await Promise.all([
+  async getPublicStats(tagId: string, user: User) {
+    if (!["admin", "super_admin", "curator"].includes(user.role)) throw new ForbiddenException("Etiket istatistiklerini görüntüleme yetkiniz yok.");
+    await this.ensureTagVisible(tagId, user.id);
+    const [events, places, sentiments, posts, views, reactionSummary] = await Promise.all([
       this.prisma.eventTag.count({
         where: { tagId, event: { status: "published" } },
       }),
       this.prisma.placeTag.count({
         where: { tagId, place: { status: "active" } },
       }),
-      this.prisma.userInterestTag.count({
-        where: { tagId, sentiment: { in: ["like", "ok"] } },
+      this.prisma.userInterestTag.groupBy({
+        by: ["sentiment"],
+        where: { tagId },
+        _count: { _all: true },
       }),
       this.prisma.contentComment.count({
         where: { targetType: "tag", targetId: tagId, status: "active" },
@@ -198,8 +227,28 @@ export class TagsService {
       this.prisma.contentView.count({
         where: { targetType: "tag", targetId: tagId },
       }),
+      this.prisma.contentComment.aggregate({
+        where: { targetType: "tag", targetId: tagId, status: "active" },
+        _sum: { likeCount: true },
+      }),
     ]);
-    return { events, places, followers, posts, views };
+    const sentimentCount = (sentiment: string) => sentiments.find((item) => item.sentiment === sentiment)?._count._all ?? 0;
+    const likes = sentimentCount("like");
+    const ok = sentimentCount("ok");
+    const dislikes = sentimentCount("dislike");
+    const reactions = reactionSummary._sum.likeCount ?? 0;
+    return {
+      events,
+      places,
+      followers: likes + ok,
+      likes,
+      ok,
+      dislikes,
+      posts,
+      views,
+      reactions,
+      engagementRate: views > 0 ? Math.round((posts + reactions) / views * 100) : 0,
+    };
   }
 
   async toggleCommentLike(commentId: string, userId: string) {
@@ -292,7 +341,7 @@ export class TagsService {
         targetType: "tag",
         targetId: tagId,
         authorId: userId,
-        body: body.trim(),
+        body: body.trim().replace(/\n{3,}/g, "\n\n"),
       },
       include: { author: { select: tagAuthorSelect } },
     });
@@ -321,7 +370,7 @@ export class TagsService {
       throw new ForbiddenException("Bu gönderi düzenlenemez.");
     const updated = await this.prisma.contentComment.update({
       where: { id: comment.id },
-      data: { body: body.trim() },
+      data: { body: body.trim().replace(/\n{3,}/g, "\n\n") },
       include: { author: { select: tagAuthorSelect } },
     });
     return {

@@ -81,7 +81,7 @@ export class NotificationsService {
 
   async setContentSubscription(userId: string, targetType: string, targetId: string, enabled: boolean) {
     this.assertContentTargetType(targetType);
-    const model = targetType === "tag" ? this.prisma.tag : targetType === "event" ? this.prisma.event : this.prisma.place;
+    const model = targetType === "tag" ? this.prisma.tag : targetType === "event" ? this.prisma.event : targetType === "place" ? this.prisma.place : this.prisma.user;
     const target = await (model as any).findUnique({ where: { id: targetId }, select: { id: true } });
     if (!target) throw new NotFoundException("Bildirim hedefi bulunamadı.");
     const subscription = await this.prisma.contentNotificationSubscription.upsert({
@@ -93,7 +93,7 @@ export class NotificationsService {
   }
 
   private assertContentTargetType(targetType: string) {
-    if (!["tag", "event", "place"].includes(targetType)) throw new BadRequestException("Bildirim hedef türü geçersiz.");
+    if (!["tag", "event", "place", "user"].includes(targetType)) throw new BadRequestException("Bildirim hedef türü geçersiz.");
   }
 
   async registerPushSubscription(userId: string, input: RegisterPushSubscriptionDto, userAgent?: string) {

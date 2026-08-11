@@ -7,30 +7,34 @@ import {
   ExternalLink,
   Flag,
   MapPin,
-  QrCode,
+  MoreVertical,
   Share2,
   ShieldCheck,
   UserPlus,
   Users,
 } from "lucide-react";
-import QRCode from "qrcode";
-import { type FormEvent, useState } from "react";
+import { type CSSProperties, type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
 import { ContentComments } from "../components/ContentComments";
 import { ContentMediaGallery } from "../components/ContentMediaGallery";
+import { EventCard } from "../components/EventCard";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
 import {
   confirmEventPayment,
+  archiveMyEvent,
   createBlock,
   createContentReport,
   createEventPayment,
   getContentNotification,
   getEvent,
   getInteractionStats,
-  getMyEventTicket,
   getUserSession,
   listEventTicketTypes,
+  listEventParticipants,
+  listEventRelatedUsers,
+  listFollowing,
+  listEvents,
   listReportRules,
   purchaseEventTickets,
   requestEventAttendance,
@@ -45,7 +49,7 @@ export function EventDetailPage() {
   const [reportOpen, setReportOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [ticketQr, setTicketQr] = useState<string | null>(null);
+  const [recommendationsExpanded, setRecommendationsExpanded] = useState(false);
   const [ticketPickerOpen, setTicketPickerOpen] = useState(false);
   const [ticketQuantities, setTicketQuantities] = useState<
     Record<string, number>
@@ -55,6 +59,7 @@ export function EventDetailPage() {
     queryFn: () => getEvent(slug),
     enabled: Boolean(slug),
   });
+  const canManage = Boolean(event && user && (event.createdById === user.id || event.viewerParticipation?.status === "accepted" && ["organizer", "manager"].includes(event.viewerParticipation.role) || ["admin", "super_admin", "curator"].includes(user.role)));
   const { data: reportRules = [] } = useQuery({
     queryKey: ["report-rules", "event"],
     queryFn: () => listReportRules("event"),
@@ -65,10 +70,19 @@ export function EventDetailPage() {
     queryFn: () => listEventTicketTypes(event!.id),
     enabled: Boolean(event),
   });
+  const participantsQuery = useQuery({
+    queryKey: ["event-participants-preview", event?.id],
+    queryFn: () => listEventParticipants(event!.id, "user"),
+    enabled: canManage,
+    retry: false,
+  });
+  const relatedUsersQuery = useQuery({ queryKey: ["event", event?.id, "related-users"], queryFn: () => listEventRelatedUsers(event!.id), enabled: Boolean(event) });
+  const followingQuery = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
+  const recommendationsQuery = useQuery({ queryKey: ["event-recommendations", event?.id], queryFn: () => listEvents(new URLSearchParams({ pageSize: "20" })), enabled: Boolean(event) });
   const statsQuery = useQuery({
     queryKey: ["interaction-stats", "event", event?.id],
     queryFn: () => getInteractionStats("event", event!.id),
-    enabled: Boolean(event),
+    enabled: canManage,
   });
   const notificationQuery = useQuery({
     queryKey: ["content-notification", "event", event?.id],
@@ -117,14 +131,6 @@ export function EventDetailPage() {
       );
     },
   });
-  const ticketMutation = useMutation({
-    mutationFn: getMyEventTicket,
-    onSuccess: async (ticket) => {
-      setTicketQr(
-        await QRCode.toDataURL(ticket.qrPayload, { width: 240, margin: 1 }),
-      );
-    },
-  });
   const reportMutation = useMutation({
     mutationFn: createContentReport,
   });
@@ -136,6 +142,7 @@ export function EventDetailPage() {
       navigate("/events");
     },
   });
+  const archiveMutation = useMutation({ mutationFn: () => archiveMyEvent(event!.id), onSuccess: () => navigate("/events") });
 
   if (isLoading) {
     return <section className="page">Etkinlik yükleniyor...</section>;
@@ -144,6 +151,8 @@ export function EventDetailPage() {
   if (!event) {
     return <section className="page">Etkinlik bulunamadı.</section>;
   }
+  const eventTagIds = new Set(event.tags.map((tag) => tag.id));
+  const recommendedEvents = (recommendationsQuery.data?.items ?? []).filter((item) => item.id !== event.id).map((item) => ({ item, score: item.tags.filter((tag) => eventTagIds.has(tag.id)).length * 5 + Number(item.organizerName === event.organizerName) * 3 + Number(Boolean(item.city && item.city === event.city)) * 2 + Math.min(item.attendeeCount ?? 0, 100) / 100 })).sort((a, b) => b.score - a.score).map(({ item }) => item).slice(0, recommendationsExpanded ? 5 : 2);
 
   return (
     <article className="page detail-page">
@@ -171,66 +180,17 @@ export function EventDetailPage() {
         </span>
         <span>
           <ShieldCheck size={16} />
-          {event.organizerName || "Konnektora topluluğu"}
+          {event.createdById ? <Link to={`/users/id/${event.createdById}`}>{event.organizerName || "Konnektora topluluğu"}</Link> : event.organizerName || "Konnektora topluluğu"}
         </span>
       </div>
+      <Link className="detail-more-link" to={`/events/${event.slug}#more-info`}>More about the event and place</Link>
       <div className="tag-row">
         {event.tags.map((tag) => (
           <span key={tag.id}>{tag.name}</span>
         ))}
       </div>
-      <div className="detail-actions">
-        <Link className="secondary-action" to={`/events/${event.slug}/users`}>
-          <Users size={18} />
-          İlgili kullanıcılar
-        </Link>
-        <button
-          className="secondary-action"
-          aria-pressed={notificationQuery.data?.enabled}
-          disabled={!user || notificationMutation.isPending}
-          onClick={() => setNotificationOpen(true)}
-        >
-          <Bell size={18} />
-          {notificationQuery.data?.enabled
-            ? "Bildirim açık"
-            : "Bildirim kapalı"}
-        </button>
-        <button className="secondary-action" onClick={() => setShareOpen(true)}>
-          <Share2 size={18} />
-          Paylaş
-        </button>
-        {event.createdById === user?.id ? (
-          <Link
-            className="secondary-action"
-            to={`/events/${event.slug}/invites`}
-          >
-            <UserPlus size={18} />
-            Davet ve misafirler
-          </Link>
-        ) : null}
-        {ticketTypesQuery.data?.length ? (
-          <button
-            className="primary-action"
-            onClick={() => setTicketPickerOpen(true)}
-          >
-            <CreditCard size={18} /> Bilet al
-          </button>
-        ) : null}
-        {user && event.price > 0 ? (
-          <button
-            className="primary-action"
-            disabled={paymentMutation.isPending || paymentMutation.isSuccess}
-            onClick={() => paymentMutation.mutate()}
-          >
-            <CreditCard size={18} />
-            {paymentMutation.isSuccess
-              ? "Ödeme tamamlandı"
-              : paymentMutation.isPending
-                ? "Ödeniyor…"
-                : `${new Intl.NumberFormat("tr-TR", { style: "currency", currency: event.currency }).format(event.price)} · Bilet al`}
-          </button>
-        ) : null}
-        {user ? (
+      <div className="detail-actions event-primary-actions">
+        {user && !canManage ? (
           <button
             className="primary-action"
             disabled={attendMutation.isPending}
@@ -250,53 +210,28 @@ export function EventDetailPage() {
                     ? "Katılım isteği gönder"
                     : "Katıl"}
           </button>
-        ) : (
+        ) : !user ? (
           <Link className="primary-action" to="/account">
             <Users size={18} />
             Katılmak için giriş yap
           </Link>
-        )}
-        <a
-          className="secondary-action"
-          href={`mailto:?subject=${encodeURIComponent(event.title)}&body=${encodeURIComponent(
-            `${event.title}\n\n${window.location.href}`,
-          )}`}
-        >
-          <UserPlus size={18} />
-          Davet et
-        </a>
-        {user ? (
-          <button
-            className="ghost-action"
-            onClick={() => setReportOpen((current) => !current)}
-            type="button"
-          >
-            <Flag size={18} />
-            Raporla
-          </button>
         ) : null}
-        {user ? (
-          <button
-            className="secondary-action"
-            disabled={ticketMutation.isPending}
-            onClick={() => ticketMutation.mutate(event.id)}
-            type="button"
-          >
-            <QrCode size={18} />
-            {ticketMutation.isPending ? "Hazırlanıyor" : "QR Biletim"}
-          </button>
-        ) : null}
-        {user ? (
-          <button
-            className="ghost-action"
-            disabled={blockMutation.isPending}
-            onClick={() => blockMutation.mutate()}
-            type="button"
-          >
-            <Ban size={18} />
-            Engelle
-          </button>
-        ) : null}
+        {canManage ? <Link className="secondary-action" to={`/events/${event.slug}/invites`}><UserPlus size={18}/>Davet et</Link> : <a className="secondary-action" href={`mailto:?subject=${encodeURIComponent(event.title)}&body=${encodeURIComponent(`${event.title}\n\n${window.location.href}`)}`}><UserPlus size={18}/>Davet et</a>}
+        <button className="secondary-action" onClick={() => setShareOpen(true)}><Share2 size={18}/>Paylaş</button>
+        <details className="detail-action-menu">
+          <summary aria-label="Etkinlik işlemleri"><MoreVertical size={20}/></summary>
+          <div>
+            {user ? <button aria-pressed={notificationQuery.data?.enabled} disabled={notificationMutation.isPending} onClick={() => setNotificationOpen(true)}><Bell size={18}/>{notificationQuery.data?.enabled ? "Bildirimleri kapat" : "Bildirimleri aç"}</button> : null}
+            {ticketTypesQuery.data?.length ? <button onClick={() => setTicketPickerOpen(true)}><CreditCard size={18}/>Biletleri gör</button> : null}
+            {user && event.price > 0 ? <button disabled={paymentMutation.isPending || paymentMutation.isSuccess} onClick={() => paymentMutation.mutate()}><CreditCard size={18}/>{paymentMutation.isSuccess ? "Ödeme tamamlandı" : paymentMutation.isPending ? "Ödeniyor…" : "Bilet al"}</button> : null}
+            {canManage ? <Link to={`/events/${event.slug}/invites`}><ShieldCheck size={18}/>Check-in control</Link> : null}
+            {event.createdById === user?.id ? <Link to="/account#events"><ExternalLink size={18}/>Etkinliği düzenle</Link> : null}
+            {event.createdById === user?.id ? <button disabled={archiveMutation.isPending} onClick={() => window.confirm("Etkinlik silinsin mi? Satılmış tüm biletler otomatik olarak iade edilecek ve bu işlem geri alınamayacaktır.") && archiveMutation.mutate()}><Flag size={18}/>Etkinliği sil</button> : null}
+            {statsQuery.data ? <a href="#interaction-stats"><ShieldCheck size={18}/>Etkileşim istatistikleri</a> : null}
+            {user && !canManage ? <button onClick={() => setReportOpen((current) => !current)}><Flag size={18}/>Etkinliği rapor et</button> : null}
+            {user && !canManage ? <button disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()}><Ban size={18}/>Etkinliği engelle</button> : null}
+          </div>
+        </details>
       </div>
       {attendMutation.isError ? (
         <p className="form-error">
@@ -477,57 +412,48 @@ export function EventDetailPage() {
           Katılım talebi gönderilemedi. Lütfen tekrar dene.
         </p>
       ) : null}
-      {ticketMutation.data && ticketQr ? (
-        <section
-          className="admin-form compact-form"
-          aria-label="Etkinlik QR bileti"
-        >
-          <strong>{ticketMutation.data.eventTitle}</strong>
-          <img
-            alt="Etkinlik giriş QR kodu"
-            height="240"
-            src={ticketQr}
-            width="240"
-          />
-          <p className="form-help">
-            Bu tek kullanımlık kodu girişte organizatöre göster.
-          </p>
-        </section>
-      ) : null}
-      {ticketMutation.isError ? (
-        <p className="form-error">
-          Bilet yalnızca onaylanmış katılımcılar için oluşturulabilir.
-        </p>
-      ) : null}
       {reportMutation.data ? (
         <p className="form-success">Rapor alındı. Admin panelde incelenecek.</p>
       ) : null}
       {reportMutation.isError ? (
         <p className="form-error">Rapor gönderilemedi. Lütfen tekrar dene.</p>
       ) : null}
-      <p className="detail-copy">
+      <section className="admin-form event-attendee-preview">
+        <h2>Katılımcılar</h2>
+        <Link to={`/events/${event.slug}/users`}>
+          <span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).sort((a, b) => Number((followingQuery.data ?? []).some((item) => item.id === b.id)) - Number((followingQuery.data ?? []).some((item) => item.id === a.id))).slice(0, 8).map((participant) => <span key={participant.id} title={participant.name}>{participant.name?.[0] ?? "?"}</span>)}</span>
+          <strong>{event.attendeeCount ?? relatedUsersQuery.data?.length ?? 0} attendees · {participantsQuery.data?.filter((item) => item.status === "invited").length ?? 0} invited · {(relatedUsersQuery.data ?? []).filter((participant) => (followingQuery.data ?? []).some((item) => item.id === participant.id)).length} following</strong>
+        </Link>
+      </section>
+      <p className="detail-copy" id="more-info">
         <RichText text={event.description} />
       </p>
       {statsQuery.data ? (
-        <section className="admin-form">
+        <section className="admin-form" id="interaction-stats">
           <h2>Etkileşim istatistikleri</h2>
-          <div className="compact-metrics">
-            <article>
+          <div className="compact-metrics interaction-chart-grid">
+            <article style={{ "--metric-value": statsQuery.data.accepted ?? 0 } as CSSProperties}>
               <strong>{statsQuery.data.accepted ?? 0}</strong>
               <span>Katılımcı</span>
             </article>
-            <article>
+            <article style={{ "--metric-value": statsQuery.data.attended ?? 0 } as CSSProperties}>
               <strong>{statsQuery.data.attended ?? 0}</strong>
               <span>Check-in</span>
             </article>
-            <article>
+            <article style={{ "--metric-value": statsQuery.data.comments ?? 0 } as CSSProperties}>
               <strong>{statsQuery.data.comments ?? 0}</strong>
               <span>Yorum</span>
             </article>
-            <article>
+            <article style={{ "--metric-value": statsQuery.data.views ?? 0 } as CSSProperties}>
               <strong>{statsQuery.data.views ?? 0}</strong>
               <span>Görüntülenme</span>
             </article>
+            <article style={{ "--metric-value": statsQuery.data.ticketsSold ?? 0 } as CSSProperties}><strong>{statsQuery.data.ticketsSold ?? 0}</strong><span>Satılan bilet</span></article>
+            <article style={{ "--metric-value": statsQuery.data.ticketRevenue ?? 0 } as CSSProperties}><strong>{statsQuery.data.ticketRevenue ?? 0}</strong><span>Bilet geliri</span></article>
+            <article style={{ "--metric-value": statsQuery.data.refunds ?? 0 } as CSSProperties}><strong>{statsQuery.data.refunds ?? 0}</strong><span>İade</span></article>
+            <article style={{ "--metric-value": statsQuery.data.rsvpRate ?? 0 } as CSSProperties}><strong>%{statsQuery.data.rsvpRate ?? 0}</strong><span>RSVP dönüşümü</span></article>
+            <article style={{ "--metric-value": statsQuery.data.attendanceRate ?? 0 } as CSSProperties}><strong>%{statsQuery.data.attendanceRate ?? 0}</strong><span>Katılım oranı</span></article>
+            <article style={{ "--metric-value": statsQuery.data.engagementRate ?? 0 } as CSSProperties}><strong>%{statsQuery.data.engagementRate ?? 0}</strong><span>Etkileşim oranı</span></article>
           </div>
         </section>
       ) : null}
@@ -572,7 +498,7 @@ export function EventDetailPage() {
                 >
                   <div>
                     <strong>
-                      {item.type === "break" ? `☕ ${item.title}` : item.title}
+                      {item.type === "break" ? <>☕ <RichText text={item.title}/></> : <RichText text={item.title}/>}
                     </strong>
                     {item.startsAt ? (
                       <span>
@@ -626,7 +552,10 @@ export function EventDetailPage() {
         targetId={event.id}
         targetType="event"
         title="Etkinlik yorumları"
+        organizerId={event.createdById}
+        canManage={canManage}
       />
+      {recommendedEvents.length ? <section className="admin-form event-recommendations"><div className="section-header compact"><div><h2>İlginizi çekebilecek diğer etkinlikler</h2><p>Ortak ilgi alanları, konum, organizatör ve popülerliğe göre seçildi.</p></div>{!recommendationsExpanded && (recommendationsQuery.data?.items.length ?? 0) > 2 ? <button className="secondary-action" onClick={() => setRecommendationsExpanded(true)} type="button">Daha fazla göster</button> : null}</div><div className="event-grid">{recommendedEvents.map((item) => <EventCard event={item} key={item.id}/>)}</div></section> : null}
       <NotificationDialog
         open={notificationOpen}
         onClose={() => setNotificationOpen(false)}

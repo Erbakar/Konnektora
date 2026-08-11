@@ -9,6 +9,9 @@ const memberSelect = {
   city: true,
   country: true,
   followerCount: true,
+  gender: true,
+  birthDate: true,
+  privacySettings: { select: { demographicsAudience: true } },
   interestTags: { select: { tagId: true } }
 } as const;
 
@@ -90,7 +93,7 @@ export class SocialService {
     return { ok: true as const, following: false };
   }
 
-  private toMemberCard(user: { id: string; name: string; username: string | null; accountType: string; city: string | null; country: string | null; followerCount: number; interestTags: { tagId: string }[] }, ownTags: Set<string>, following: boolean) {
+  private toMemberCard(user: { id: string; name: string; username: string | null; accountType: string; city: string | null; country: string | null; followerCount: number; gender?: string | null; birthDate?: Date | null; privacySettings?: { demographicsAudience: string } | null; interestTags: { tagId: string }[] }, ownTags: Set<string>, following: boolean) {
     return {
       id: user.id,
       name: user.name,
@@ -100,7 +103,9 @@ export class SocialService {
       country: user.country,
       followerCount: user.followerCount,
       commonTagCount: user.interestTags.filter((item) => ownTags.has(item.tagId)).length,
-      following
+      following,
+      gender: user.privacySettings?.demographicsAudience === "everybody" ? user.gender ?? null : null,
+      birthDate: user.privacySettings?.demographicsAudience === "everybody" ? user.birthDate ?? null : null
     };
   }
 }

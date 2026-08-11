@@ -1,4 +1,6 @@
-import { Bell, BellOff, Copy, Mail, Share2 } from "lucide-react";
+import { Bell, BellOff, Copy, Mail, QrCode, Share2 } from "lucide-react";
+import QRCode from "qrcode";
+import { useEffect, useState } from "react";
 
 export function ShareDialog({
   open,
@@ -11,6 +13,11 @@ export function ShareDialog({
   title: string;
   url: string;
 }) {
+  const [qrImage, setQrImage] = useState("");
+  useEffect(() => {
+    if (!open) return;
+    void QRCode.toDataURL(url, { width: 240, margin: 1 }).then(setQrImage);
+  }, [open, url]);
   if (!open) return null;
   const message = `${title}\n${url}`;
   return (
@@ -29,6 +36,7 @@ export function ShareDialog({
           Paylaş
         </h2>
         <p>Bağlantıyı istediğin kanaldan topluluğunla paylaş.</p>
+        {qrImage ? <div className="share-dialog-qr"><QrCode size={18}/><img alt={`${title} QR kodu`} height="180" src={qrImage} width="180"/><small>Afiş ve basılı materyaller için doğrudan içerik bağlantısı</small></div> : null}
         <div className="share-dialog-actions">
           <button
             className="secondary-action"

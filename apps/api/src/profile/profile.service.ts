@@ -99,7 +99,12 @@ export class ProfileService {
       eventAudience: "everybody" as const,
       eventInviteAudience: "everybody" as const,
       placeAudience: "everybody" as const,
-      placeInviteAudience: "everybody" as const
+      placeInviteAudience: "everybody" as const,
+      profileNameAudience: "everybody" as const,
+      demographicsAudience: "everybody" as const,
+      locationAudience: "everybody" as const,
+      websiteAudience: "everybody" as const,
+      businessAudience: "everybody" as const
     };
   }
 

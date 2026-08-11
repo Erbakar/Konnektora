@@ -138,19 +138,21 @@ export class ContentService {
     return media;
   }
 
-  listComments(targetType: ReportTargetType, targetId: string) {
-    return this.prisma.contentComment.findMany({
+  async listComments(targetType: ReportTargetType, targetId: string) {
+    const comments = await this.prisma.contentComment.findMany({
       where: { status: "active", targetType, targetId, parentId: null },
       orderBy: [{ createdAt: "desc" }],
       include: {
-        author: { select: { id: true, email: true, name: true, username: true, role: true, status: true } },
+        author: { select: { id: true, email: true, name: true, username: true, role: true, status: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } },
         replies: {
           where: { status: "active" },
           orderBy: [{ createdAt: "asc" }],
-          include: { author: { select: { id: true, email: true, name: true, username: true, role: true, status: true } } }
+          include: { author: { select: { id: true, email: true, name: true, username: true, role: true, status: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } }
         }
       }
     });
+    const present = (comment: any): any => ({ ...comment, author: comment.author ? { ...comment.author, avatarUrl: comment.author.uploadedMedia?.[0]?.url ?? null, uploadedMedia: undefined } : null, replies: comment.replies?.map(present) });
+    return comments.map(present);
   }
 
   createComment(input: CreateCommentDto, user: User) {
@@ -160,9 +162,38 @@ export class ContentService {
         targetId: input.targetId,
         parent: input.parentId ? { connect: { id: input.parentId } } : undefined,
         author: { connect: { id: user.id } },
-        body: input.body.trim()
+        body: input.body.trim().replace(/\n{3,}/g, "\n\n")
       }
     });
+  }
+
+  async updateComment(id: string, body: string, user: User) {
+    const comment = await this.prisma.contentComment.findUnique({ where: { id } });
+    if (!comment || comment.status !== "active") throw new NotFoundException("Yorum bulunamadı.");
+    if (comment.authorId !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu yorumu düzenleyemezsiniz.");
+    return this.prisma.contentComment.update({ where: { id }, data: { body: body.trim().replace(/\n{3,}/g, "\n\n") } });
+  }
+
+  async deleteComment(id: string, user: User) {
+    const comment = await this.prisma.contentComment.findUnique({ where: { id } });
+    if (!comment || comment.status !== "active") throw new NotFoundException("Yorum bulunamadı.");
+    let manager = false;
+    if (comment.targetType === ReportTargetType.event) manager = Boolean(await this.prisma.event.findFirst({ where: { id: comment.targetId, createdById: user.id }, select: { id: true } }));
+    if (comment.targetType === ReportTargetType.place) manager = Boolean(await this.prisma.place.findFirst({ where: { id: comment.targetId, createdById: user.id }, select: { id: true } }));
+    if (comment.authorId !== user.id && !manager && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu yorumu silemezsiniz.");
+    await this.prisma.contentComment.update({ where: { id }, data: { status: "deleted" } });
+    return { ok: true };
+  }
+
+  async toggleCommentLike(id: string, user: User) {
+    const comment = await this.prisma.contentComment.findUnique({ where: { id }, select: { id: true } });
+    if (!comment) throw new NotFoundException("Yorum bulunamadı.");
+    const key = { targetType: ReportTargetType.comment_reply, targetId: id, userId: user.id, reaction: "like" };
+    const existing = await this.prisma.contentReaction.findUnique({ where: { targetType_targetId_userId_reaction: key } });
+    await this.prisma.$transaction(existing
+      ? [this.prisma.contentReaction.delete({ where: { id: existing.id } }), this.prisma.contentComment.update({ where: { id }, data: { likeCount: { decrement: 1 } } })]
+      : [this.prisma.contentReaction.create({ data: key }), this.prisma.contentComment.update({ where: { id }, data: { likeCount: { increment: 1 } } })]);
+    return { liked: !existing };
   }
 
   async createReaction(input: CreateReactionDto, user: User) {
