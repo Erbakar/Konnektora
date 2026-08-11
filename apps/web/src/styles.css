@@ -2080,6 +2080,30 @@ select:focus-visible {
 .loading-mark { animation: loading-pulse 1.1s ease-in-out infinite alternate; background: url('/brand/konnektora-logo.svg') center/contain no-repeat; height: 54px; width: 180px; }
 @keyframes loading-pulse { from { opacity: .45; transform: scale(.98); } to { opacity: 1; transform: scale(1.02); } }
 
+.route-error-page {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: center;
+  margin: 0 auto;
+  min-height: 70vh;
+  padding: 32px 20px;
+  text-align: center;
+}
+.route-error-page h1,
+.route-error-page p { margin: 0; }
+.route-error-page p {
+  color: #596860;
+  line-height: 1.6;
+  max-width: 620px;
+  overflow-wrap: anywhere;
+}
+.route-error-page .row-actions {
+  justify-content: center;
+  margin-top: 8px;
+}
+
 /* Tek font ailesini kökte tanımla; bileşenlerin kendi görsel hiyerarşisini
    korumak için iç içe metin ve başlık ölçülerini burada zorlamıyoruz. */
 .app-shell {

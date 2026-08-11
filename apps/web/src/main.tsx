@@ -1,10 +1,68 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import React, { lazy, Suspense } from "react";
+import React, { lazy as reactLazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import {
+  createBrowserRouter,
+  isRouteErrorResponse,
+  RouterProvider,
+  useRouteError,
+} from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { LanguageProvider } from "./lib/i18n";
 import "./styles.css";
+
+const chunkReloadKey = "konnektora:chunk-reload";
+const chunkLoadErrorPattern =
+  /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i;
+
+const lazy: typeof reactLazy = (loader) =>
+  reactLazy(async () => {
+    try {
+      const module = await loader();
+      sessionStorage.removeItem(chunkReloadKey);
+      return module;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const reloadMarker = `${window.location.pathname}${window.location.search}`;
+
+      if (
+        chunkLoadErrorPattern.test(message) &&
+        sessionStorage.getItem(chunkReloadKey) !== reloadMarker
+      ) {
+        sessionStorage.setItem(chunkReloadKey, reloadMarker);
+        window.location.reload();
+        return await new Promise<never>(() => undefined);
+      }
+
+      throw error;
+    }
+  });
+
+function RouteErrorPage() {
+  const error = useRouteError();
+  const message = isRouteErrorResponse(error)
+    ? error.statusText
+    : error instanceof Error
+      ? error.message
+      : "Sayfa yüklenirken beklenmeyen bir sorun oluştu.";
+
+  return (
+    <main className="route-error-page" role="alert">
+      <div className="loading-mark" aria-hidden="true" />
+      <span className="eyebrow">Bağlantı yenilenemedi</span>
+      <h1>Sayfayı yeniden yükleyelim.</h1>
+      <p>{message}</p>
+      <div className="row-actions">
+        <button className="primary-action" onClick={() => window.location.reload()}>
+          Tekrar dene
+        </button>
+        <a className="secondary-action" href="/">
+          Ana sayfaya dön
+        </a>
+      </div>
+    </main>
+  );
+}
 
 const AccountPage = lazy(() =>
   import("./pages/AccountPage").then((module) => ({
@@ -183,10 +241,15 @@ const SettingsSectionPage = lazy(() =>
 const queryClient = new QueryClient();
 
 const router = createBrowserRouter([
-  { path: "/mobile", element: <MobileAppPage /> },
+  {
+    path: "/mobile",
+    element: <MobileAppPage />,
+    errorElement: <RouteErrorPage />,
+  },
   {
     path: "/",
     element: <AppLayout />,
+    errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: <HomePage /> },
       { path: "feed", element: <FeedPage /> },
