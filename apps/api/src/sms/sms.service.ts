@@ -12,6 +12,10 @@ export class SmsService {
     const apiKey = this.config.get<string>("SMS_API_KEY");
 
     if (!webhookUrl) {
+      if (this.config.get<string>("ALLOW_SMS_VERIFICATION_BYPASS") === "true") {
+        this.logger.warn(`Temporary SMS verification bypass is active for ${phone}.`);
+        return;
+      }
       if (this.config.get<string>("NODE_ENV") === "production") {
         throw new ServiceUnavailableException("SMS servisi yapılandırılmamış.");
       }

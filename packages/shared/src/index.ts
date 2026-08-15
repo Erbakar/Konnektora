@@ -99,6 +99,7 @@ export const phoneVerificationResponseSchema = z.object({
   ok: z.literal(true),
   expiresInSeconds: z.number().int().positive(),
   developmentCode: z.string().length(6).optional(),
+  verificationMode: z.enum(["sms", "temporary_bypass"]).optional(),
 });
 export const availabilitySchema = z.object({
   emailAvailable: z.boolean().nullable(),

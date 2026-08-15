@@ -26,6 +26,7 @@ export function OnboardingPage() {
   const [phone, setPhone] = useState("");
   const [expires, setExpires] = useState(0);
   const [developmentCode, setDevelopmentCode] = useState("");
+  const [temporarySmsBypass, setTemporarySmsBypass] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoQueue, setPhotoQueue] = useState<File[]>([]);
@@ -101,6 +102,7 @@ export function OnboardingPage() {
       setExpires(data.expiresInSeconds);
       setDevelopmentCode(data.developmentCode ?? "");
       setVerificationCode(data.developmentCode ?? "");
+      setTemporarySmsBypass(data.verificationMode === "temporary_bypass");
     },
   });
   const phoneConfirm = useMutation({
@@ -293,7 +295,7 @@ export function OnboardingPage() {
                 <label>
                   Doğrulama kodu
                   <VerificationCodeInput autoFocus name="code" onChange={(event) => setVerificationCode(event.target.value)} required value={verificationCode} />
-                  <span className="form-help">Telefonuna gelen 6 haneli kodu yaz.</span>
+                  <span className="form-help">{temporarySmsBypass ? "Test süresince herhangi bir 6 haneli kod yazabilirsin." : "Telefonuna gelen 6 haneli kodu yaz."}</span>
                 </label>
                 <button className="primary-action" disabled={phoneConfirm.isPending || verificationCode.length !== 6} type="submit">
                   {phoneConfirm.isPending ? "Doğrulanıyor…" : "Doğrula ve devam et"}

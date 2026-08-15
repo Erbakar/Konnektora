@@ -6,7 +6,7 @@ import { createHash } from "crypto";
 import { AuthService } from "./auth.service";
 
 describe("AuthService", () => {
-  const createService = () => {
+  const createService = (config: Record<string, string | undefined> = {}) => {
     const prisma = {
       user: {
         findUnique: jest.fn(),
@@ -56,7 +56,7 @@ describe("AuthService", () => {
         mailService as never,
         smsService as never,
         {
-          get: jest.fn().mockReturnValue("development"),
+          get: jest.fn((key: string) => config[key] ?? (key === "NODE_ENV" ? "development" : undefined)),
         } as unknown as ConfigService,
       ),
       prisma,
@@ -359,6 +359,36 @@ describe("AuthService", () => {
       service.confirmPhoneVerification("user-8", {
         phone: "+905551112233",
         code,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      phone: "+905551112233",
+      phoneVerified: true,
+    });
+  });
+
+  it("accepts any six-digit code only when the temporary SMS bypass is enabled", async () => {
+    const { service, prisma } = createService({
+      NODE_ENV: "production",
+      ALLOW_SMS_VERIFICATION_BYPASS: "true",
+    });
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.phoneVerification.findFirst.mockResolvedValue({
+      id: "verification-1",
+      codeHash: createHash("sha256").update("123456").digest("hex"),
+      attempts: 0,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.phoneVerification.update.mockResolvedValue({});
+    prisma.user.update.mockResolvedValue({
+      phone: "+905551112233",
+      phoneVerified: true,
+    });
+
+    await expect(
+      service.confirmPhoneVerification("user-8", {
+        phone: "+905551112233",
+        code: "654321",
       }),
     ).resolves.toEqual({
       ok: true,

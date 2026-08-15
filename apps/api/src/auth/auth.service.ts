@@ -433,6 +433,9 @@ export class AuthService {
   }
 
   async requestPhoneVerification(userId: string, input: RequestPhoneVerificationDto) {
+    const bypassEnabled =
+      !this.config.get<string>("SMS_WEBHOOK_URL") &&
+      this.config.get<string>("ALLOW_SMS_VERIFICATION_BYPASS") === "true";
     const owner = await this.prisma.user.findFirst({
       where: { phone: input.phone, id: { not: userId } },
       select: { id: true },
@@ -463,11 +466,15 @@ export class AuthService {
     return {
       ok: true as const,
       expiresInSeconds: 120,
+      verificationMode: bypassEnabled ? ("temporary_bypass" as const) : ("sms" as const),
       ...(process.env.NODE_ENV === "production" ? {} : { developmentCode: code }),
     };
   }
 
   async confirmPhoneVerification(userId: string, input: ConfirmPhoneVerificationDto) {
+    const bypassEnabled =
+      !this.config.get<string>("SMS_WEBHOOK_URL") &&
+      this.config.get<string>("ALLOW_SMS_VERIFICATION_BYPASS") === "true";
     const owner = await this.prisma.user.findFirst({
       where: { phone: input.phone, id: { not: userId } },
       select: { id: true },
@@ -483,7 +490,7 @@ export class AuthService {
     if (!verification || verification.expiresAt.getTime() < Date.now() || verification.attempts >= 5) {
       throw new BadRequestException("Kod geçersiz veya süresi dolmuş.");
     }
-    if (verification.codeHash !== this.hashToken(input.code)) {
+    if (!bypassEnabled && verification.codeHash !== this.hashToken(input.code)) {
       await this.prisma.phoneVerification.update({
         where: { id: verification.id },
         data: { attempts: { increment: 1 } },
