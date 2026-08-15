@@ -20,14 +20,17 @@ import { DiscoveryCard } from "../components/DiscoveryCard";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
 import {
   createBlock,
+  createGuestList,
   createContentReport,
   followUser,
   getPublicProfile,
   getPublicProfileById,
   getContentNotification,
   getUserSession,
+  addGuestListMember,
   inviteEventParticipant,
   listMyEvents,
+  listGuestLists,
   listReportRules,
   setContentNotification,
   unfollowUser,
@@ -66,8 +69,11 @@ export function PublicProfilePage() {
   const profile = profileQuery.data;
   const notification = useQuery({ queryKey: ["content-notification", "user", profile?.id], queryFn: () => getContentNotification("user", profile!.id), enabled: Boolean(user && profile && !profile.relationship.isSelf) });
   const managedEvents = useQuery({ queryKey: ["my-events", user?.id, "profile-guest-list"], queryFn: listMyEvents, enabled: Boolean(user && guestOpen) });
+  const namedGuestLists = useQuery({ queryKey: ["guest-lists", user?.id], queryFn: listGuestLists, enabled: Boolean(user && guestOpen) });
   const notificationMutation = useMutation({ mutationFn: () => setContentNotification("user", profile!.id, !notification.data?.enabled), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["content-notification", "user", profile?.id] }); setNotificationOpen(false); } });
   const guestMutation = useMutation({ mutationFn: (eventId: string) => inviteEventParticipant(eventId, { userId: profile!.id, role: "attendee" }, "user"), onSuccess: () => setGuestOpen(false) });
+  const namedGuestMutation = useMutation({ mutationFn: (listId: string) => addGuestListMember(listId, profile!.id), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["guest-lists", user?.id] }); setGuestOpen(false); } });
+  const createNamedGuestList = useMutation({ mutationFn: (name: string) => createGuestList(name), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["guest-lists", user?.id] }) });
   const followMutation = useMutation({
     mutationFn: () =>
       profile?.relationship.following
@@ -187,16 +193,17 @@ export function PublicProfilePage() {
           )}
           {profile.relationship.isSelf ? <details className="action-menu profile-actions-menu"><summary aria-label="Profil ayarları"><MoreVertical size={20}/></summary><div><a href="#profile-stats">Interaction statistics about you</a><Link to="/settings"><Settings size={18}/> Ayarlar</Link><button onClick={() => setShareOpen(true)} type="button"><Share2 size={18}/> Paylaş</button></div></details> : null}
         </div>
+        <div className="profile-sidebar-facts" aria-label="Profil bilgileri">
+          {profile.accountType === "individual" && profile.birthDate ? <span>{profile.gender === "male" ? "He" : profile.gender === "female" ? "She" : "They"} is {ageFrom(profile.birthDate)} y.o.</span> : null}
+          {profile.city || profile.country ? <span><MapPin size={15}/> {[profile.city, profile.country].filter(Boolean).join(", ")}</span> : null}
+          {profile.accountType === "corporate" ? <>{profile.companyName ? <span><strong>İşletme:</strong> {profile.companyName}</span> : null}{profile.tradeName ? <span><strong>Ticari unvan:</strong> {profile.tradeName}</span> : null}{profile.companyType ? <span><strong>Şirket türü:</strong> {profile.companyType}</span> : null}{profile.businessCategory ? <span><strong>Kategori:</strong> {profile.businessCategory}</span> : null}{profile.address || profile.district ? <span><strong>Adres:</strong> {[profile.address, profile.district, profile.city, profile.country].filter(Boolean).join(", ")}</span> : null}</> : null}
+          {profile.website ? <a href={profile.website} rel="noreferrer" target="_blank"><Globe2 size={16}/> {profile.website}</a> : null}
+        </div>
       </header>
       {privacyNotice ? <div className="profile-privacy-toast" role="status"><span>Sadece takip ettiklerinizi görebilirsiniz.</span><button onClick={() => setPrivacyNotice(false)} type="button">Kapat</button></div> : null}
       <NotificationDialog open={notificationOpen} onClose={() => setNotificationOpen(false)} enabled={Boolean(notification.data?.enabled)} pending={notificationMutation.isPending} onConfirm={() => notificationMutation.mutate()} title={profile.name}/>
       <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} title={profile.name} url={window.location.href}/>
-      {guestOpen ? <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Guest List'e ekle"><div><button aria-label="Kapat" onClick={() => setGuestOpen(false)}>×</button><h2>{profile.name}</h2><p>Kullanıcıyı yönettiğin etkinliklerden birinin guest listesine ekle.</p><div className="admin-list">{managedEvents.data?.map((event) => <button className="admin-list-row" disabled={guestMutation.isPending} key={event.id} onClick={() => guestMutation.mutate(event.id)}><strong>{event.title}</strong><span>{new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date(event.startsAt))}</span></button>)}</div>{!managedEvents.isLoading && !managedEvents.data?.length ? <p className="form-help">Yönettiğin uygun etkinlik bulunmuyor.</p> : null}{guestMutation.isError ? <p className="form-error">Kullanıcı guest listesine eklenemedi.</p> : null}</div></div> : null}
-      <section className="profile-facts" aria-label="Profil bilgileri">
-        {profile.accountType === "individual" && profile.birthDate ? <span>{profile.gender === "male" ? "He" : profile.gender === "female" ? "She" : "They"} is {ageFrom(profile.birthDate)} y.o.</span> : null}
-        {profile.city || profile.country ? <span>Based in {profile.city || profile.country}.</span> : null}
-        {profile.accountType === "corporate" ? <>{profile.companyName ? <span><strong>İşletme:</strong> {profile.companyName}</span> : null}{profile.tradeName ? <span><strong>Ticari unvan:</strong> {profile.tradeName}</span> : null}{profile.companyType ? <span><strong>Şirket türü:</strong> {profile.companyType}</span> : null}{profile.businessCategory ? <span><strong>Kategori:</strong> {profile.businessCategory}</span> : null}{profile.address || profile.district ? <span><strong>Adres:</strong> {[profile.address, profile.district, profile.city, profile.country].filter(Boolean).join(", ")}</span> : null}{profile.website ? <a href={profile.website} rel="noreferrer" target="_blank"><Globe2 size={16}/> {profile.website}</a> : null}</> : null}
-      </section>
+      {guestOpen ? <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Guest List'e ekle"><div><button aria-label="Kapat" onClick={() => setGuestOpen(false)}>×</button><h2>{profile.name}</h2><p>Kullanıcıyı isimlendirilmiş bir listeye veya doğrudan etkinliğe ekle.</p><form className="inline-create-guest-list" onSubmit={(event) => { event.preventDefault(); const input = event.currentTarget.elements.namedItem("listName") as HTMLInputElement; if (input.value.trim()) { createNamedGuestList.mutate(input.value.trim()); input.value = ""; } }}><input name="listName" placeholder="Yeni liste adı"/><button className="secondary-action" disabled={createNamedGuestList.isPending}>Liste oluştur</button></form><h3>Guest listeler</h3><div className="admin-list">{namedGuestLists.data?.map((list) => <button className="admin-list-row" disabled={namedGuestMutation.isPending || list.members.some((member) => member.userId === profile.id)} key={list.id} onClick={() => namedGuestMutation.mutate(list.id)}><strong>{list.name}</strong><span>{list.members.length} kişi{list.members.some((member) => member.userId === profile.id) ? " · Zaten listede" : ""}</span></button>)}</div><h3>Etkinlikler</h3><div className="admin-list">{managedEvents.data?.map((event) => <button className="admin-list-row" disabled={guestMutation.isPending} key={event.id} onClick={() => guestMutation.mutate(event.id)}><strong>{event.title}</strong><span>{new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date(event.startsAt))}</span></button>)}</div>{guestMutation.isError || namedGuestMutation.isError ? <p className="form-error">Kullanıcı guest listesine eklenemedi.</p> : null}</div></div> : null}
       {!profile.relationship.isSelf && profile.commonInterestCount > 0 ? (
         <button className="mutualism-bar" onClick={() => setMutualOpen(true)} type="button"><strong>{profile.commonInterestCount} ortak ilgi alanınız var</strong><span>Mutualizm analizini gör →</span></button>
       ) : null}
@@ -294,16 +301,6 @@ export function PublicProfilePage() {
           ) : null}
         </div>
       </section>
-      {profile.website && profile.accountType !== "corporate" ? (
-        <a
-          className="profile-website"
-          href={profile.website}
-          rel="noreferrer"
-          target="_blank"
-        >
-          <Globe2 size={18} /> {profile.website}
-        </a>
-      ) : null}
       {profile.stats ? <section className="identity-panel" id="profile-stats"><h2>Profil etkileşim istatistikleri</h2><div className="compact-metrics interaction-chart-grid">{Object.entries(profile.stats).map(([label, value]) => <article key={label} style={{ "--metric-value": value } as CSSProperties}><strong>{value}</strong><span>{({ followers: "Takipçi", following: "Takip", interests: "İlgi alanı", events: "Etkinlik", places: "Mekân", media: "Medya", profileViews: "Profil görüntülenmesi", comments: "Yazılan post/yorum", messages: "Gönderilen mesaj", averageEventsPerMonth: "Aylık ortalama etkinlik" } as Record<string, string>)[label] ?? label}</span></article>)}</div></section> : null}
       <section className="profile-content-section">
         <div className="section-header">

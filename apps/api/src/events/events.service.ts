@@ -978,6 +978,55 @@ export class EventsService {
     });
   }
 
+  async listGuestLists(user: User) {
+    return this.prisma.guestList.findMany({
+      where: { ownerId: user.id },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        members: {
+          orderBy: { createdAt: "desc" },
+          include: { user: { select: { id: true, name: true, username: true, email: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } },
+        },
+      },
+    });
+  }
+
+  createGuestList(name: string, user: User) {
+    return this.prisma.guestList.create({ data: { ownerId: user.id, name: name.trim() }, include: { members: true } });
+  }
+
+  async renameGuestList(id: string, name: string, user: User) {
+    await this.ensureOwnGuestList(id, user);
+    return this.prisma.guestList.update({ where: { id }, data: { name: name.trim() } });
+  }
+
+  async deleteGuestList(id: string, user: User) {
+    await this.ensureOwnGuestList(id, user);
+    return this.prisma.guestList.delete({ where: { id } });
+  }
+
+  async addGuestListMember(id: string, memberId: string, user: User) {
+    await this.ensureOwnGuestList(id, user);
+    const member = await this.prisma.user.findFirst({ where: { id: memberId, status: "active" }, select: { id: true } });
+    if (!member) throw new NotFoundException("Guest list'e eklenecek kullanıcı bulunamadı.");
+    return this.prisma.guestListMember.upsert({
+      where: { guestListId_userId: { guestListId: id, userId: memberId } },
+      create: { guestListId: id, userId: memberId },
+      update: {},
+    });
+  }
+
+  async removeGuestListMember(id: string, memberId: string, user: User) {
+    await this.ensureOwnGuestList(id, user);
+    return this.prisma.guestListMember.deleteMany({ where: { guestListId: id, userId: memberId } });
+  }
+
+  private async ensureOwnGuestList(id: string, user: User) {
+    const list = await this.prisma.guestList.findUnique({ where: { id }, select: { ownerId: true } });
+    if (!list) throw new NotFoundException("Guest list bulunamadı.");
+    if (list.ownerId !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu guest list'i yönetme yetkiniz yok.");
+  }
+
   private async ensureCanManageParticipants(eventId: string, user: User, allowCurator = false) {
     if (["admin", "super_admin"].includes(user.role) || allowCurator && user.role === "curator") {
       return;
