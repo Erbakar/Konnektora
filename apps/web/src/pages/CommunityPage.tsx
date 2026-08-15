@@ -43,7 +43,7 @@ export function CommunityPage() {
   });
   const addGuest = useMutation({ mutationFn: (eventId: string) => inviteEventParticipant(eventId, { userId: guestTarget!.id, role: "attendee" }, "user"), onSuccess: () => setGuestTarget(null) });
 
-  if (!user) return <div className="page"><section className="feed-state"><strong>Topluluğu görmek için giriş yap.</strong><Link className="primary-action" to="/account">Giriş yap</Link></section></div>;
+  if (!user) return <div className="page"><section className="feed-state"><strong>Topluluğu görmek için giriş yap.</strong><Link className="primary-action" to="/login">Giriş yap</Link></section></div>;
   return <div className="page community-page">
     <header className="feed-heading"><div><span className="eyebrow">Konnektora topluluğu</span><h1>İnsanlar</h1><p>Yeni üyeleri keşfet, takip ettiklerini ve etkinlik misafirlerini tek yerde yönet.</p></div></header>
     <div className="feed-tabs" role="tablist">

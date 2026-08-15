@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import {
   createBrowserRouter,
   isRouteErrorResponse,
+  Navigate,
   RouterProvider,
   useRouteError,
 } from "react-router-dom";
@@ -284,7 +285,9 @@ const router = createBrowserRouter([
       { path: "tags", element: <TagsPage /> },
       { path: "tags/:slug", element: <TagsPage /> },
       { path: "tags/:slug/users", element: <RelatedUsersPage kind="tag" /> },
-      { path: "account", element: <AccountPage /> },
+      { path: "login", element: <AccountPage initialMode="login" /> },
+      { path: "events/create", element: <AccountPage eventCreator /> },
+      { path: "account", element: <Navigate replace to="/settings" /> },
       { path: "settings", element: <SettingsCenterPage /> },
       { path: "settings/profile-pictures", element: <SettingsSectionPage section="profile-pictures" /> },
       { path: "settings/profile", element: <SettingsSectionPage section="profile" /> },

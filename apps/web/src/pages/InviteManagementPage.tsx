@@ -60,6 +60,13 @@ export function EventInviteManagementPage() {
       inviteEventParticipant(event.data!.id, input, "user"),
     onSuccess: refresh,
   });
+  const bulkInvite = useMutation({
+    mutationFn: async (sourceIndex: number) => {
+      const source = oldEventQueries[sourceIndex]?.data ?? [];
+      await Promise.all(source.filter((item) => item.userId).map((item) => inviteEventParticipant(event.data!.id, { userId: item.userId, role: "attendee" }, "user")));
+    },
+    onSuccess: refresh,
+  });
   const status = useMutation({
     mutationFn: ({ userId, value }: { userId: string; value: string }) =>
       updateEventParticipantStatus(event.data!.id, userId, value, "user"),
@@ -111,6 +118,7 @@ export function EventInviteManagementPage() {
       />
       <section className="admin-form invite-source-section"><h2>Davet kaynakları</h2><div className="invite-source-grid">
         <div><h3>Takip ettiklerim</h3>{following.data?.map((member) => <button disabled={invite.isPending} key={member.id} onClick={() => invite.mutate({ userId: member.id, role: "attendee" })} type="button"><UserPlus size={16}/>{member.name}</button>)}</div>
+        <div><h3>Guest listeler</h3>{(managedEvents.data ?? []).filter((item) => item.id !== event.data?.id).slice(0, 5).map((item, sourceIndex) => <button disabled={bulkInvite.isPending || !(oldEventQueries[sourceIndex]?.data?.length)} key={item.id} onClick={() => bulkInvite.mutate(sourceIndex)} type="button"><Users size={16}/>{item.title} ({oldEventQueries[sourceIndex]?.data?.length ?? 0})</button>)}</div>
         <div><h3>Eski etkinlik katılımcıları</h3>{previousAttendees.map((participant) => <button disabled={invite.isPending} key={participant.userId} onClick={() => invite.mutate({ userId: participant.userId, role: "attendee" })} type="button"><Users size={16}/>{participant.user?.name ?? participant.userId}</button>)}</div>
         <div><h3>Rehberden tara</h3><Link className="secondary-action" to="/contacts">Telefon rehberi veya Google Contacts</Link></div>
       </div></section>
@@ -552,7 +560,7 @@ function LoginState() {
       <LogIn size={38} />
       <h1>Davet yönetimi</h1>
       <p>Bu alanı kullanmak için giriş yap.</p>
-      <Link className="primary-action" to="/account">
+      <Link className="primary-action" to="/login">
         Giriş yap
       </Link>
     </section>

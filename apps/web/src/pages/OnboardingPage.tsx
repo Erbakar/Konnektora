@@ -152,9 +152,7 @@ export function OnboardingPage() {
           <Sparkles size={42} />
           <h1>E-postanı doğrula</h1>
           <p>Hesabın oluşturuldu. Gönderdiğimiz doğrulama bağlantısını aç; hesabın aktif olduğunda sihirbaz telefon adımından devam edecek.</p>
-          <Link className="primary-action" to="/account">
-            Hesap durumuna dön
-          </Link>
+          <button className="primary-action" onClick={() => window.location.reload()} type="button">Aktivasyonu kontrol et</button>
         </div>
       </section>
     );
@@ -229,6 +227,8 @@ export function OnboardingPage() {
               E-posta
               <EmailInput name="email" onBlur={(event) => void checkAvailability({ email: normalizeEmail(event.target.value) }).then((data) => setAvailabilityText(data.emailAvailable ? "E-posta kullanılabilir" : "E-posta kullanımda"))} required />
               <span className="form-help">Örnek: ada@ornek.com</span>
+              {availabilityText ? <span className={availabilityText.includes("kullanımda") ? "field-error" : "form-help"}>{availabilityText}</span> : null}
+              {register.isError ? <span className="field-error">Bu e-posta kullanımdaysa giriş yapın; değilse adresi kontrol edip yeniden deneyin.</span> : null}
             </label>
             <label>
               GSM numarası
@@ -250,11 +250,9 @@ export function OnboardingPage() {
                 <Link to="/terms">Koşulları</Link> ve <Link to="/privacy">Gizlilik Politikasını</Link> kabul ediyorum.
               </span>
             </label>
-            {availabilityText ? <p className="form-help">{availabilityText}</p> : null}
             <button className="primary-action" disabled={register.isPending} type="submit">
               Hesabı oluştur <ArrowRight size={18} />
             </button>
-            {register.isError ? <p className="form-error">Hesap oluşturulamadı. Alanları ve şifre gücünü kontrol et.</p> : null}
           </form>
         ) : null}
 

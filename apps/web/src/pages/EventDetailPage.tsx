@@ -176,7 +176,7 @@ export function EventDetailPage() {
         </span>
         <span>
           <MapPin size={16} />
-          {[event.city, event.country].filter(Boolean).join(", ") || "Online"}
+          {event.format === "online" ? "Online" : event.place ? <Link to={`/places/${event.place.slug}`}>{event.place.name} · {[event.place.address, event.place.city, event.place.country].filter(Boolean).join(", ")}</Link> : [event.locationName, event.locationAddress, event.city, event.country].filter(Boolean).join(", ") || "Konum belirtilmedi"}
         </span>
         <span>
           <ShieldCheck size={16} />
@@ -211,7 +211,7 @@ export function EventDetailPage() {
                     : "Katıl"}
           </button>
         ) : !user ? (
-          <Link className="primary-action" to="/account">
+          <Link className="primary-action" to="/login">
             <Users size={18} />
             Katılmak için giriş yap
           </Link>
@@ -225,7 +225,7 @@ export function EventDetailPage() {
             {ticketTypesQuery.data?.length ? <button onClick={() => setTicketPickerOpen(true)}><CreditCard size={18}/>Biletleri gör</button> : null}
             {user && event.price > 0 ? <button disabled={paymentMutation.isPending || paymentMutation.isSuccess} onClick={() => paymentMutation.mutate()}><CreditCard size={18}/>{paymentMutation.isSuccess ? "Ödeme tamamlandı" : paymentMutation.isPending ? "Ödeniyor…" : "Bilet al"}</button> : null}
             {canManage ? <Link to={`/events/${event.slug}/invites`}><ShieldCheck size={18}/>Check-in control</Link> : null}
-            {event.createdById === user?.id ? <Link to="/account#events"><ExternalLink size={18}/>Etkinliği düzenle</Link> : null}
+            {event.createdById === user?.id ? <Link to="/events/create"><ExternalLink size={18}/>Etkinliği düzenle</Link> : null}
             {event.createdById === user?.id ? <button disabled={archiveMutation.isPending} onClick={() => window.confirm("Etkinlik silinsin mi? Satılmış tüm biletler otomatik olarak iade edilecek ve bu işlem geri alınamayacaktır.") && archiveMutation.mutate()}><Flag size={18}/>Etkinliği sil</button> : null}
             {statsQuery.data ? <a href="#interaction-stats"><ShieldCheck size={18}/>Etkileşim istatistikleri</a> : null}
             {user && !canManage ? <button onClick={() => setReportOpen((current) => !current)}><Flag size={18}/>Etkinliği rapor et</button> : null}
@@ -499,15 +499,8 @@ export function EventDetailPage() {
                   <div>
                     <strong>
                       {item.type === "break" ? <>☕ <RichText text={item.title}/></> : <RichText text={item.title}/>}
+                      {item.startsAt ? <time>{new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.startsAt))}</time> : null}
                     </strong>
-                    {item.startsAt ? (
-                      <span>
-                        {new Intl.DateTimeFormat("tr-TR", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        }).format(new Date(item.startsAt))}
-                      </span>
-                    ) : null}
                     {item.description ? (
                       <span>
                         <RichText text={item.description} />

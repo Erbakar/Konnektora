@@ -51,7 +51,7 @@ export function TicketsPage() {
       <section className="page empty-state">
         <Ticket size={40} />
         <h1>Biletlerim</h1>
-        <Link to="/account">Giriş yap</Link>
+        <Link to="/login">Giriş yap</Link>
       </section>
     );
   return (

@@ -476,6 +476,9 @@ export function TagsPage() {
               placeholder={(comments.data?.length ?? 0) === 0 ? `#${tag.name} hakkında ilk yorumu yazan sen ol…` : `#${tag.name} hakkında bir şey yaz…`}
             />
             <div>
+              <button className="primary-action" disabled={post.isPending}>
+                Yayınla
+              </button>
               <label className="secondary-action">
                 <ImagePlus size={17} />
                 Fotoğraf/video
@@ -489,9 +492,6 @@ export function TagsPage() {
                 />
               </label>
               {selectedTagMedia.length ? <span className="comment-media-count">{selectedTagMedia.filter((file) => file.type.startsWith("image/")).length} resim, {selectedTagMedia.filter((file) => file.type.startsWith("video/")).length} video seçildi {post.isPending ? <LoaderCircle className="spin" size={15}/> : null}</span> : null}
-              <button className="primary-action" disabled={post.isPending}>
-                Yayınla
-              </button>
             </div>
           </form>
         ) : null}

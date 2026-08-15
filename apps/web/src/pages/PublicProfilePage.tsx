@@ -7,6 +7,7 @@ import {
   Globe2,
   Mail,
   MapPin,
+  MessageCircle,
   MoreVertical,
   Settings,
   Share2,
@@ -148,9 +149,9 @@ export function PublicProfilePage() {
             <button onClick={() => setPrivacyNotice(true)} type="button">
               <b>{profile.followerCount}</b> takipçi
             </button>
-            <Link to="/community?scope=following">
+            {profile.relationship.isSelf ? <Link to="/community?scope=following">
               <b>{profile.followingCount}</b> takip
-            </Link>
+            </Link> : null}
           </div>
         </div>
         <div className="public-profile-actions">
@@ -180,7 +181,7 @@ export function PublicProfilePage() {
               <details className="action-menu profile-actions-menu"><summary aria-label="Profil aksiyonları"><MoreVertical size={20}/></summary><div>{profile.relationship.canMessage ? <Link to={`/messages?peer=${profile.id}`}><Mail size={18}/> Mesaj gönder</Link> : null}<button onClick={() => setNotificationOpen(true)} type="button">{notification.data?.enabled ? "Bildirimleri kapat" : "Set a notification"}</button><button onClick={() => setGuestOpen(true)} type="button"><UserPlus size={18}/> Add to guest list</button>{profile.stats ? <a href="#profile-stats">Interaction statistics about you</a> : null}<button onClick={() => setShareOpen(true)} type="button"><Share2 size={18}/> Paylaş</button><button onClick={() => setReportOpen((open) => !open)} type="button"><Flag size={18}/> Kullanıcıyı raporla</button><button className="danger" disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()} type="button"><Ban size={18}/> Kullanıcıyı engelle</button></div></details>
             </>
           ) : (
-            <Link className="primary-action" to="/account">
+            <Link className="primary-action" to="/login">
               Takip etmek için giriş yap
             </Link>
           )}
@@ -263,7 +264,7 @@ export function PublicProfilePage() {
       <section className="identity-panel" id="interests">
         <div className="section-header compact">
           <h2>İlgi alanları</h2>
-          {profile.relationship.isSelf ? <Link to="/account#interests">+ Profile etiket ekle</Link> : <span>{profile.interests.length} etiket</span>}
+          {profile.relationship.isSelf ? <Link to="/settings/profile">+ Profile etiket ekle</Link> : <span>{profile.interests.length} etiket</span>}
         </div>
         <div className="profile-interest-list">
           {profile.interests.map((interest) => (
@@ -276,15 +277,15 @@ export function PublicProfilePage() {
               key={interest.tag.id}
               to={`/tags/${interest.tag.slug}?author=${profile.username}`}
             >
-              <span>{interest.sentiment === "like" ? "❤️" : interest.sentiment === "dislike" ? "👎" : "➖"} #{interest.tag.name}</span>
+              <span><b className={`interest-sentiment interest-sentiment-${interest.sentiment}`}>{interest.sentiment === "like" ? "♡" : interest.sentiment === "dislike" ? "⌄" : "−"}</b> #{interest.tag.name}</span>
               <small>
-                İlgi Alanı · {interest.common
+                {interest.common
                   ? "Ortak ilgi"
                   : interest.sentiment === "like"
                     ? "Beğeniyor"
                     : interest.sentiment === "dislike"
                       ? "Beğenmiyor"
-                      : "Nötr"}{interest.commentCount ? ` · ✎ ${interest.commentCount} gönderi` : ""}
+                      : "Nötr"}{interest.commentCount ? <> · <MessageCircle size={13}/> {interest.commentCount} gönderi</> : null}
               </small>
             </Link>
           ))}

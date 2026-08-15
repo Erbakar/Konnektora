@@ -19,18 +19,18 @@ export function SettingsCenterPage() {
 }
 
 const sections: Record<string, { title: string; description: string; target: string }> = {
-  "profile-pictures": { title: "Profil fotoğrafları", description: "Profil görsellerini ekle, sırala ve profil fotoğrafını seç.", target: "/account#profile-pictures" },
-  profile: { title: "Profili düzenle", description: "Temel bilgiler, kurumsal bilgiler ve ilgi alanlarını düzenle.", target: "/account#profile" },
-  account: { title: "Hesap ayarları", description: "Telefon, parola, bağlı hesaplar ve hesap durumunu yönet.", target: "/account#account-settings" },
-  notifications: { title: "Bildirim ayarları", description: "E-posta ve anlık bildirim tercihlerini düzenle.", target: "/account#notifications" },
-  privacy: { title: "Gizlilik ayarları", description: "Profil, mesaj, etkinlik ve mekân görünürlüğünü yönet.", target: "/account#privacy" },
+  "profile-pictures": { title: "Profil fotoğrafları", description: "Profil görsellerini ekle, sırala ve profil fotoğrafını seç.", target: "/settings/profile-pictures" },
+  profile: { title: "Profili düzenle", description: "Temel bilgiler, kurumsal bilgiler ve ilgi alanlarını düzenle.", target: "/settings/profile" },
+  account: { title: "Hesap ayarları", description: "Telefon, parola, bağlı hesaplar ve hesap durumunu yönet.", target: "/settings/account" },
+  notifications: { title: "Bildirim ayarları", description: "E-posta ve anlık bildirim tercihlerini düzenle.", target: "/settings/notifications" },
+  privacy: { title: "Gizlilik ayarları", description: "Profil, mesaj, etkinlik ve mekân görünürlüğünü yönet.", target: "/settings/privacy" },
   business: { title: "Business ve ödeme ayarları", description: "Paket, fatura, banka ve ödeme ayarlarını yönet.", target: "/finance" },
 };
 
 export function SettingsSectionPage({ section }: { section: string }) {
   const item = sections[section] ?? sections.account!;
   const user = getUserSession();
-  return <section className="page settings-section-page"><Link className="back-link" to="/settings">← Ayarlar Merkezi</Link><div className="section-header"><div><p className="eyebrow">Ayarlar</p><h1>{item.title}</h1><p className="lead">{item.description}</p></div></div>{!user ? <div className="identity-panel"><h2>Giriş gerekli</h2><p>Bu ayarları görüntülemek ve değiştirmek için hesabınıza giriş yapın.</p><Link className="primary-action" to="/account">Giriş yap</Link></div> : section === "profile-pictures" ? <ProfilePicturesSettings/> : section === "profile" ? <ProfileSettings/> : section === "account" ? <AccountSettings/> : section === "notifications" ? <NotificationSettings/> : section === "privacy" ? <PrivacySettings/> : <BusinessSettings/>}</section>;
+  return <section className="page settings-section-page"><Link className="back-link" to="/settings">← Ayarlar Merkezi</Link><div className="section-header"><div><p className="eyebrow">Ayarlar</p><h1>{item.title}</h1><p className="lead">{item.description}</p></div></div>{!user ? <div className="identity-panel"><h2>Giriş gerekli</h2><p>Bu ayarları görüntülemek ve değiştirmek için hesabınıza giriş yapın.</p><Link className="primary-action" to="/login">Giriş yap</Link></div> : section === "profile-pictures" ? <ProfilePicturesSettings/> : section === "profile" ? <ProfileSettings/> : section === "account" ? <AccountSettings/> : section === "notifications" ? <NotificationSettings/> : section === "privacy" ? <PrivacySettings/> : <BusinessSettings/>}</section>;
 }
 
 function ProfilePicturesSettings() {
@@ -53,7 +53,7 @@ function ProfileSettings() {
 
 function AccountSettings() {
   const change = useMutation({ mutationFn: changePassword });
-  return <form className="identity-panel settings-form" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = new FormData(event.currentTarget); const currentPassword = String(form.get("currentPassword") || ""); const newPassword = String(form.get("newPassword") || ""); const confirmation = String(form.get("confirmation") || ""); if (newPassword !== confirmation) return window.alert("Yeni şifreler eşleşmiyor."); change.mutate({ currentPassword, newPassword }); }}><h2>Şifreyi değiştir</h2><label>Mevcut şifre<input autoComplete="current-password" name="currentPassword" required type="password"/></label><label>Yeni şifre<input autoComplete="new-password" minLength={8} name="newPassword" required type="password"/></label><label>Yeni şifre tekrar<input autoComplete="new-password" minLength={8} name="confirmation" required type="password"/></label><button className="primary-action" disabled={change.isPending}>Şifreyi güncelle</button>{change.isSuccess ? <p className="form-success">Şifre güncellendi.</p> : null}{change.isError ? <p className="form-error">Şifre güncellenemedi.</p> : null}<Link to="/account#account-settings">Telefon, bağlı hesaplar ve hesap dondurma seçenekleri</Link></form>;
+  return <form className="identity-panel settings-form" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = new FormData(event.currentTarget); const currentPassword = String(form.get("currentPassword") || ""); const newPassword = String(form.get("newPassword") || ""); const confirmation = String(form.get("confirmation") || ""); if (newPassword !== confirmation) return window.alert("Yeni şifreler eşleşmiyor."); change.mutate({ currentPassword, newPassword }); }}><h2>Şifreyi değiştir</h2><label>Mevcut şifre<input autoComplete="current-password" name="currentPassword" required type="password"/></label><label>Yeni şifre<input autoComplete="new-password" minLength={8} name="newPassword" required type="password"/></label><label>Yeni şifre tekrar<input autoComplete="new-password" minLength={8} name="confirmation" required type="password"/></label><button className="primary-action" disabled={change.isPending}>Şifreyi güncelle</button>{change.isSuccess ? <p className="form-success">Şifre güncellendi.</p> : null}{change.isError ? <p className="form-error">Şifre güncellenemedi.</p> : null}<Link to="/settings/account">Telefon, bağlı hesaplar ve hesap dondurma seçenekleri</Link></form>;
 }
 
 const notificationLabels: Record<string, string> = { tag_request: "Etiket talebi", private_message: "Özel mesaj", mention: "Bahsedilme", comment: "Yorum", password_changed: "Şifre değişikliği", email_changed: "E-posta değişikliği", phone_changed: "Telefon değişikliği", login: "Yeni giriş", admin_message: "Yönetim mesajı", event_invite: "Etkinlik daveti", event_manager: "Etkinlik yöneticiliği", place_invite: "Mekân daveti", place_manager: "Mekân yöneticiliği" };

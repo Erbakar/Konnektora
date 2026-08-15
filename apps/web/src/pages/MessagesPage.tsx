@@ -21,7 +21,7 @@ export function MessagesPage() {
   const recipientResults = useQuery({ queryKey: ["message-recipient-search", recipientQuery], queryFn: () => searchDiscovery(recipientQuery), enabled: recipientQuery.trim().length >= 2 });
   const refresh = () => { void client.invalidateQueries({ queryKey: ["conversation-messages", peerId] }); void client.invalidateQueries({ queryKey: ["conversations"] }); };
   useEffect(() => { const selected = conversations.data?.items.find((item) => item.peer.id === peerId); if (selected?.unreadCount) void markConversationRead(peerId).then(refresh); }, [peerId, conversations.data?.items]);
-  if (!user) return <section className="page empty-state"><MessageCircle size={40}/><h1>Mesajlar</h1><p>Konuşmalarını görmek için giriş yap.</p><Link className="primary-action" to="/account">Giriş yap</Link></section>;
+  if (!user) return <section className="page empty-state"><MessageCircle size={40}/><h1>Mesajlar</h1><p>Konuşmalarını görmek için giriş yap.</p><Link className="primary-action" to="/login">Giriş yap</Link></section>;
   const list = conversations.data?.items ?? [];
   const selectedConversation = conversations.data?.items.find((item) => item.peer.id === peerId);
   const suggested = suggestions.data?.find((item) => item.id === peerId);

@@ -172,6 +172,7 @@ export class EventsService {
       },
       include: {
         tags: { include: { tag: true } },
+        place: { select: { id: true, name: true, slug: true, address: true, city: true, country: true } },
         participants: userId ? { where: { userId }, select: { role: true, status: true }, take: 1 } : false,
         _count: {
           select: {

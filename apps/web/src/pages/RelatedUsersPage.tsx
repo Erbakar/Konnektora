@@ -31,8 +31,7 @@ export function RelatedUsersPage({
   const [view, setView] = useState<"cards" | "list">("cards");
   const [gender, setGender] = useState("");
   const [sentiment, setSentiment] = useState("");
-  const [minAge, setMinAge] = useState("");
-  const [maxAge, setMaxAge] = useState("");
+  const [ageRange, setAgeRange] = useState("");
   const [guestTarget, setGuestTarget] = useState<{ id: string; name: string } | null>(null);
   const target = useQuery({
     queryKey: [kind, slug],
@@ -74,9 +73,10 @@ export function RelatedUsersPage({
     const matchesFilter = filter === "all" || filter === "attendees" && ["accepted", "attended"].includes(user.status ?? "accepted") || filter === "invited" && ["invited", "requested"].includes(user.status ?? "") || filter === "following" && followingIds.has(user.id) || filter === "checked-in" && user.checkedIn || filter === "organizers" && /creator|owner|organizer|manager|sahip|yönetici/.test(relation);
     const matchesGender = !gender || user.gender === gender;
     const matchesSentiment = !sentiment || user.sentiment === sentiment;
-    const matchesAge = (!minAge || age != null && age >= Number(minAge)) && (!maxAge || age != null && age <= Number(maxAge));
+    const [minimumAge, maximumAge] = ageRange ? ageRange.split("-").map(Number) : [];
+    const matchesAge = !ageRange || age != null && age >= minimumAge! && (Number.isNaN(maximumAge) || age <= maximumAge!);
     return matchesQuery && matchesFilter && matchesGender && matchesSentiment && matchesAge;
-  }), [filter, followingIds, gender, maxAge, minAge, query, sentiment, users.data]);
+  }), [ageRange, filter, followingIds, gender, query, sentiment, users.data]);
   const toggleFollow = useMutation({
     mutationFn: (id: string) => followingIds.has(id) ? unfollowUser(id) : followUser(id),
     onSuccess: () => client.invalidateQueries({ queryKey: ["following"] }),
@@ -110,7 +110,7 @@ export function RelatedUsersPage({
       </header>
       <section className="related-users-tools" aria-label="Kullanıcı filtreleri">
         <label className="search-box"><Search size={17}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Kullanıcı, şehir veya ülke ara"/></label>
-        <div className="related-user-advanced-filters"><label>Cinsiyet<select value={gender} onChange={(event) => setGender(event.target.value)}><option value="">Tümü</option><option value="female">Kadın</option><option value="male">Erkek</option><option value="unknown">Belirtilmemiş</option></select></label><label>En az yaş<input min="13" onChange={(event) => setMinAge(event.target.value)} type="number" value={minAge}/></label><label>En çok yaş<input min="13" onChange={(event) => setMaxAge(event.target.value)} type="number" value={maxAge}/></label>{kind === "tag" ? <label>Duygu<select value={sentiment} onChange={(event) => setSentiment(event.target.value)}><option value="">Tümü</option><option value="like">Beğeniyor</option><option value="ok">Nötr</option><option value="dislike">Beğenmiyor</option></select></label> : null}<button onClick={() => { setQuery(""); setGender(""); setSentiment(""); setMinAge(""); setMaxAge(""); setFilter("all"); }} type="button">Filtreyi sıfırla</button></div>
+        <div className="related-user-advanced-filters"><label>Cinsiyet<select value={gender} onChange={(event) => setGender(event.target.value)}><option value="">Tümü</option><option value="female">Kadın</option><option value="male">Erkek</option><option value="unknown">Belirtilmemiş</option></select></label><label>Yaş aralığı<select value={ageRange} onChange={(event) => setAgeRange(event.target.value)}><option value="">Any age</option><option value="18-24">18–24</option><option value="25-34">25–34</option><option value="35-44">35–44</option><option value="45-54">45–54</option><option value="55-64">55–64</option><option value="65-Infinity">65+</option></select></label>{kind === "tag" ? <label>Duygu<select value={sentiment} onChange={(event) => setSentiment(event.target.value)}><option value="">Tümü</option><option value="like">Beğeniyor</option><option value="ok">Nötr</option><option value="dislike">Beğenmiyor</option></select></label> : null}<button onClick={() => { setQuery(""); setGender(""); setSentiment(""); setAgeRange(""); setFilter("all"); }} type="button">Filtreyi sıfırla</button></div>
         <div className="feed-tabs" role="tablist">
           <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>Tümü ({users.data?.length ?? 0})</button>
           {kind === "event" ? <button className={filter === "attendees" ? "active" : ""} onClick={() => setFilter("attendees")}>Attendees ({(users.data ?? []).filter((item) => ["accepted", "attended"].includes(item.status ?? "accepted")).length})</button> : null}
@@ -124,9 +124,7 @@ export function RelatedUsersPage({
       <section className={view === "cards" ? "related-user-grid" : "management-list related-user-list"}>
         {visibleUsers.map((user) => (
           <article className="related-user-card" key={user.id}>
-            <span className="post-avatar">
-              {user.name.charAt(0).toLocaleUpperCase("tr-TR")}
-            </span>
+            <UserIdentityLink avatarClassName="post-avatar" showName={false} user={user}/>
             <div>
               <strong>
                 <UserIdentityLink user={user} />

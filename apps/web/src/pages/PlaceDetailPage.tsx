@@ -189,7 +189,7 @@ export function PlaceDetailPage() {
             {place.isFollowing ? "Takibi bırak" : "Takip et"}
           </button>
         ) : (
-          <Link className="primary-action" to="/account">
+          <Link className="primary-action" to="/login">
             Takip etmek için giriş yap
           </Link>
         )}

@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, CalendarDays, ChevronDown, Home, LayoutDashboard, LogOut, MapPin, Menu, MessageCircle, QrCode, Search, Settings, Tag, Ticket, UserRound, Users, X } from "lucide-react";
+import { Bell, CalendarDays, ChevronDown, Home, LogOut, MapPin, Menu, MessageCircle, QrCode, Search, Settings, Tag, Ticket, UserRound, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
-import { clearUserSession, getUserSession, listConversations } from "../lib/api";
+import { clearUserSession, getUserSession, listConversations, listMyNotifications } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
 
 export function AppLayout() {
@@ -19,6 +19,13 @@ export function AppLayout() {
     enabled: Boolean(user),
     refetchInterval: 30_000
   });
+  const notificationsQuery = useQuery({
+    queryKey: ["my-notifications", user?.id],
+    queryFn: listMyNotifications,
+    enabled: Boolean(user),
+    refetchInterval: 30_000,
+  });
+  const unreadNotifications = notificationsQuery.data?.filter((item) => !item.readAt).length ?? 0;
 
   useEffect(() => {
     setMenuOpen(false);
@@ -79,7 +86,6 @@ export function AppLayout() {
               {language === "tr" ? "Diğer" : "More"} <ChevronDown size={16} />
             </button>
             {moreOpen ? <div className="corp-nav-more-menu" role="menu">
-              <NavLink role="menuitem" to="/notifications"><Bell size={18} /><span>{language === "tr" ? "Bildirimler" : "Notifications"}</span></NavLink>
               <NavLink role="menuitem" to="/tickets"><Ticket size={18} /><span>{language === "tr" ? "Biletlerim" : "My tickets"}</span></NavLink>
               <NavLink role="menuitem" to="/identity"><QrCode size={18} /><span>{t("memberId")}</span></NavLink>
               <NavLink role="menuitem" to="/search"><Search size={18} /><span>{t("search")}</span></NavLink>
@@ -95,10 +101,10 @@ export function AppLayout() {
             <button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")} type="button">EN</button>
           </div>
           {user ? <>
-            <NavLink className="corp-topbar-link" to="/account"><UserRound size={18} /> {user.name}</NavLink>
-            <NavLink className="corp-topbar-admin" to="/admin" title="Admin"><LayoutDashboard size={18} /></NavLink>
+            <NavLink className="corp-topbar-link" to="/settings"><UserRound size={18} /> {user.name}</NavLink>
+            <NavLink className="corp-topbar-notifications" to="/notifications"><Bell size={18}/><span>{language === "tr" ? "Bildirimler" : "Notifications"}</span>{unreadNotifications ? <b>{unreadNotifications}</b> : null}</NavLink>
           </> : <>
-            <NavLink className="corp-topbar-link" to="/account">{t("login")}</NavLink>
+            <NavLink className="corp-topbar-link" to="/login">{t("login")}</NavLink>
             <NavLink className="corp-topbar-cta" to="/onboarding">{language === "tr" ? "Kayıt ol" : "Sign up"}</NavLink>
           </>}
         </div>
@@ -133,17 +139,15 @@ export function AppLayout() {
           </div>
           {user ? <>
             <div className="mobile-menu-profile"><span>{user.name.slice(0, 1).toUpperCase()}</span><div><strong>{user.name}</strong><small>{user.email}</small></div></div>
-            <NavLink to="/account" onClick={() => setMenuOpen(false)}><UserRound size={18} /> {user.name}</NavLink>
             <NavLink to="/search" onClick={() => setMenuOpen(false)}><Search size={18} /> {t("search")}</NavLink>
             <NavLink to="/identity" onClick={() => setMenuOpen(false)}><QrCode size={18} /> {t("memberId")}</NavLink>
             <NavLink to="/community" onClick={() => setMenuOpen(false)}><Users size={18} /> {language === "tr" ? "Topluluk" : "Community"}</NavLink>
             <NavLink to="/notifications" onClick={() => setMenuOpen(false)}><Bell size={18} /> {language === "tr" ? "Bildirimler" : "Notifications"}</NavLink>
             <NavLink to="/settings" onClick={() => setMenuOpen(false)}><Settings size={18} /> {language === "tr" ? "Ayarlar Merkezi" : "Settings center"}</NavLink>
             <NavLink to="/tickets" onClick={() => setMenuOpen(false)}><Ticket size={18} /> {language === "tr" ? "Biletlerim" : "My tickets"}</NavLink>
-            <NavLink className="corp-mobile-menu-admin" to="/admin" onClick={() => setMenuOpen(false)}><LayoutDashboard size={18} />{t("admin")}</NavLink>
             <button className="mobile-menu-logout" onClick={() => { clearUserSession(); window.location.assign("/"); }} type="button"><LogOut size={18} /> {language === "tr" ? "Çıkış" : "Log out"}</button>
           </> : <>
-            <NavLink className="corp-mobile-menu-link" to="/account" onClick={() => setMenuOpen(false)}>{t("login")}</NavLink>
+            <NavLink className="corp-mobile-menu-link" to="/login" onClick={() => setMenuOpen(false)}>{t("login")}</NavLink>
             <NavLink className="corp-mobile-menu-cta" to="/onboarding" onClick={() => setMenuOpen(false)}>{language === "tr" ? "Kayıt ol" : "Sign up"}</NavLink>
           </>}
         </nav>

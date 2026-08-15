@@ -26,9 +26,9 @@ export function VerifyEmailPage() {
       {mutation.data ? (
         <>
           <p>Hesabın aktifleştirildi.</p>
-          <Link className="primary-action" to="/account">
+          <Link className="primary-action" to="/onboarding">
             <Check size={18} />
-            Üye alanına geç
+            Telefon doğrulamasına devam et
           </Link>
         </>
       ) : null}
@@ -106,7 +106,7 @@ export function AcceptInvitePage() {
       </form>
       {mutation.data ? (
         <p className="form-success">
-          Davet kabul edildi. <Link to="/account">Üye alanına geç</Link>
+          Davet kabul edildi. <Link to="/feed">Akışa geç</Link>
         </p>
       ) : null}
       {mutation.isError || !token ? <p className="form-error">Davet linki geçersiz veya süresi dolmuş.</p> : null}
