@@ -6,6 +6,11 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# Temporary production QA mode. Remove this block and set VITE_MOCK_API=false
+# when a writable production DATABASE_URL is connected to the API function.
+[context.production.environment]
+  VITE_MOCK_API = "true"
+
 [functions]
   node_bundler = "esbuild"
   external_node_modules = [
