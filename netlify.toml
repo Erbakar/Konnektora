@@ -12,6 +12,7 @@
 [functions]
   node_bundler = "esbuild"
   external_node_modules = [
+    "@netlify/database",
     "@nestjs/common",
     "@nestjs/config",
     "@nestjs/core",
