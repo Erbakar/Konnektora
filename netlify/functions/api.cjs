@@ -1,5 +1,9 @@
 require("reflect-metadata");
 
+// Netlify Functions ship the application under a read-only /var/task directory.
+// Existing upload controllers resolve their temporary storage from cwd.
+if (process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME) process.chdir("/tmp");
+
 const express = require("express");
 const { randomUUID } = require("crypto");
 const rateLimit = require("express-rate-limit").rateLimit;
