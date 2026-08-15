@@ -12,6 +12,11 @@ export function SiteFooter() {
         </div>
         <div className="site-footer-columns">
           <div>
+            <strong>Konnektora</strong>
+            <Link to="/store">{language === "tr" ? "Mağaza" : "Store"}</Link>
+            <Link to="/business">For business</Link>
+          </div>
+          <div>
             <strong>{t("discover")}</strong>
             <Link to="/events">{t("events")}</Link>
             <Link to="/places">{t("places")}</Link>

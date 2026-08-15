@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, BriefcaseBusiness, CalendarDays, ChevronDown, Home, LayoutDashboard, LogOut, MapPin, Menu, MessageCircle, QrCode, Search, Settings, Store, Tag, Ticket, UserRound, Users, X } from "lucide-react";
+import { Bell, CalendarDays, ChevronDown, Home, LayoutDashboard, LogOut, MapPin, Menu, MessageCircle, QrCode, Search, Settings, Tag, Ticket, UserRound, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
@@ -82,8 +82,6 @@ export function AppLayout() {
               <NavLink role="menuitem" to="/notifications"><Bell size={18} /><span>{language === "tr" ? "Bildirimler" : "Notifications"}</span></NavLink>
               <NavLink role="menuitem" to="/tickets"><Ticket size={18} /><span>{language === "tr" ? "Biletlerim" : "My tickets"}</span></NavLink>
               <NavLink role="menuitem" to="/identity"><QrCode size={18} /><span>{t("memberId")}</span></NavLink>
-              <NavLink role="menuitem" to="/business"><BriefcaseBusiness size={18} /><span>{language === "tr" ? "İşletme" : "Business"}</span></NavLink>
-              <NavLink role="menuitem" to="/store"><Store size={18} /><span>{language === "tr" ? "Mağaza" : "Store"}</span></NavLink>
               <NavLink role="menuitem" to="/search"><Search size={18} /><span>{t("search")}</span></NavLink>
               <NavLink role="menuitem" to="/community"><Users size={18} /><span>{language === "tr" ? "Topluluk" : "Community"}</span></NavLink>
               <NavLink role="menuitem" to="/onboarding"><UserRound size={18} /><span>{t("create")}</span></NavLink>
@@ -142,8 +140,6 @@ export function AppLayout() {
             <NavLink to="/notifications" onClick={() => setMenuOpen(false)}><Bell size={18} /> {language === "tr" ? "Bildirimler" : "Notifications"}</NavLink>
             <NavLink to="/settings" onClick={() => setMenuOpen(false)}><Settings size={18} /> {language === "tr" ? "Ayarlar Merkezi" : "Settings center"}</NavLink>
             <NavLink to="/tickets" onClick={() => setMenuOpen(false)}><Ticket size={18} /> {language === "tr" ? "Biletlerim" : "My tickets"}</NavLink>
-            <NavLink to="/business" onClick={() => setMenuOpen(false)}><BriefcaseBusiness size={18} /> {language === "tr" ? "İşletme" : "Business"}</NavLink>
-            <NavLink to="/store" onClick={() => setMenuOpen(false)}><Store size={18} /> {language === "tr" ? "Mağaza" : "Store"}</NavLink>
             <NavLink className="corp-mobile-menu-admin" to="/admin" onClick={() => setMenuOpen(false)}><LayoutDashboard size={18} />{t("admin")}</NavLink>
             <button className="mobile-menu-logout" onClick={() => { clearUserSession(); window.location.assign("/"); }} type="button"><LogOut size={18} /> {language === "tr" ? "Çıkış" : "Log out"}</button>
           </> : <>
