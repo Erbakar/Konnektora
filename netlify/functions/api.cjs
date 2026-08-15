@@ -18,6 +18,11 @@ const { AppModule } = require("../../apps/api/dist/app.module");
 
 let cachedHandler;
 
+function requestKey(req) {
+  const forwarded = req.headers["x-nf-client-connection-ip"] || req.headers["x-forwarded-for"];
+  return String(forwarded || "netlify-client").split(",")[0].trim();
+}
+
 async function createHandler() {
   const expressApp = express();
   expressApp.set("trust proxy", 1);
@@ -33,8 +38,8 @@ async function createHandler() {
     res.on("finish", () => console.log(JSON.stringify({ level: "info", event: "http_request", requestId, method: req.method, path: req.url.split("?")[0], status: res.statusCode, durationMs: Date.now() - startedAt })));
     next();
   });
-  expressApp.use(rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: "draft-7", legacyHeaders: false, skip: (req) => req.path.startsWith("/health") }));
-  expressApp.use("/auth", rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: "draft-7", legacyHeaders: false }));
+  expressApp.use(rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: "draft-7", legacyHeaders: false, keyGenerator: requestKey, skip: (req) => req.path.startsWith("/health") }));
+  expressApp.use("/auth", rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: "draft-7", legacyHeaders: false, keyGenerator: requestKey }));
 
   const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
     logger: ["error", "warn", "log"]
