@@ -27,10 +27,11 @@ import { NotificationsModule } from "./notifications/notifications.module";
 import { TicketsModule } from "./tickets/tickets.module";
 import { CuratorsModule } from "./curators/curators.module";
 import { AutomationsModule } from "./automations/automations.module";
+import { validateEnvironment } from "./config/validate-environment";
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
     PrismaModule,
     AuthModule,
     AutomationsModule,

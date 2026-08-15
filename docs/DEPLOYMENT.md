@@ -49,13 +49,18 @@ PUBLIC_APP_URL=https://konnektora.netlify.app
 NODE_VERSION=22
 NODE_ENV=production
 VITE_MOCK_API=false
+VITE_API_URL=/api
 EMAIL_FROM=Konnektora <noreply@your-domain.com>
 RESEND_API_KEY=<resend-api-key>
+SMS_WEBHOOK_URL=<sms-provider-https-endpoint>
+SMS_API_KEY=<sms-provider-api-key>
 VAPID_SUBJECT=mailto:support@your-domain.com
 VAPID_PUBLIC_KEY=<web-push-public-key>
 VAPID_PRIVATE_KEY=<web-push-private-key>
 ALLOW_PRODUCTION_SEED=false
 ```
+
+API production modunda eksik `DATABASE_URL`, `JWT_SECRET`, origin, e-posta veya SMS ayarıyla başlamaz. Böylece aktivasyon ve GSM doğrulaması sessizce devre dışı kalmış bir sürüm yayına alınamaz.
 
 Web Push anahtarlarını bir kez `npx web-push generate-vapid-keys` komutuyla üretin. Aynı anahtar çiftini kalıcı olarak saklayın; anahtar değişirse mevcut tarayıcı abonelikleri yeniden oluşturulmalıdır.
 
