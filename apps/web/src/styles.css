@@ -3178,6 +3178,8 @@ select:focus-visible {
 .guest-list-manager > article { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; }
 .guest-list-manager > article > header { display: flex; justify-content: space-between; gap: 12px; }
 .guest-list-manager > article > header > div:first-child { display: grid; }
+.guest-list-rename { display: flex; flex-wrap: wrap; gap: 6px; }
+.guest-list-rename input { min-width: 0; flex: 1 1 150px; }
 .guest-list-member-chips { display: flex; flex-wrap: wrap; gap: 7px; }
 .guest-list-member-chips > span { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 999px; background: #edf4ef; }
 .guest-list-member-chips button { border: 0; background: transparent; cursor: pointer; }
