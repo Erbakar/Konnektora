@@ -10,7 +10,7 @@ describe("validateEnvironment", () => {
   });
 
   it("accepts a complete production environment", () => {
-    const config = { NODE_ENV: "production", DATABASE_URL: "postgresql://db", JWT_SECRET: "a".repeat(32), WEB_ORIGIN: "https://konnektora.netlify.app", PUBLIC_APP_URL: "https://konnektora.netlify.app", EMAIL_FROM: "Konnektora <noreply@example.com>", RESEND_API_KEY: "re_test", SMS_WEBHOOK_URL: "https://sms.example.com/send" };
+    const config = { NODE_ENV: "production", DATABASE_URL: "postgresql://db", JWT_SECRET: "a".repeat(32), WEB_ORIGIN: "https://konnektora.netlify.app", PUBLIC_APP_URL: "https://konnektora.netlify.app" };
     expect(validateEnvironment(config)).toBe(config);
   });
 });
