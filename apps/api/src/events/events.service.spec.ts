@@ -21,6 +21,8 @@ describe("EventsService", () => {
       },
       userBlock: { findMany: jest.fn() },
       user: { findUnique: jest.fn(), create: jest.fn() },
+      guestList: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+      guestListMember: { upsert: jest.fn(), deleteMany: jest.fn() },
       eventParticipant: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
@@ -45,6 +47,23 @@ describe("EventsService", () => {
       prisma,
     };
   };
+
+  it("creates and lists named guest lists for the current owner", async () => {
+    const { service, prisma } = createService();
+    prisma.guestList.create.mockResolvedValue({ id: "list-1", name: "VIP", ownerId: actor.id, members: [] });
+    prisma.guestList.findMany.mockResolvedValue([{ id: "list-1", name: "VIP", ownerId: actor.id, members: [] }]);
+    await expect(service.createGuestList(" VIP ", actor as never)).resolves.toEqual(expect.objectContaining({ name: "VIP" }));
+    await service.listGuestLists(actor as never);
+    expect(prisma.guestList.create).toHaveBeenCalledWith(expect.objectContaining({ data: { ownerId: actor.id, name: "VIP" } }));
+    expect(prisma.guestList.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { ownerId: actor.id } }));
+  });
+
+  it("prevents another user from editing a named guest list", async () => {
+    const { service, prisma } = createService();
+    prisma.guestList.findUnique.mockResolvedValue({ ownerId: "another-user" });
+    await expect(service.renameGuestList("list-1", "New name", actor as never)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.guestList.update).not.toHaveBeenCalled();
+  });
 
   it("keeps invite-only events closed to users without an invitation", async () => {
     const { service, prisma } = createService();

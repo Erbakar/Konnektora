@@ -82,34 +82,6 @@ export function ContentComments({
           "all", "Tümü"
         ], ["organizer", `Organizatör (${(comments.data ?? []).filter((item) => item.authorId === organizerId).length})`], ["following", `Takip ettiklerim (${(comments.data ?? []).filter((item) => Boolean(item.authorId && followingIds.has(item.authorId))).length})`], ["popular", "Popüler"], ["photos", "Fotoğraflar"], ["videos", "Videolar"]] as const).map(([value, label]) => <button className={filter === value ? "active" : ""} key={value} onClick={() => setFilter(value)} type="button">{label}</button>)}
       </div>
-      {user ? (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (body.trim()) create.mutate();
-          }}
-        >
-          <textarea
-            maxLength={3000}
-            placeholder="Yorum yaz…"
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-          />
-          {targetType !== "tag_comment" ? <label className="comment-media-picker"><ImagePlus size={17}/><span>Fotoğraf/video ekle</span><input accept="image/*,video/*" hidden multiple onChange={(event) => setMedia([...(event.target.files ?? [])].slice(0, 9))} type="file"/></label> : null}
-          {media.length ? <span className="comment-media-count">{media.filter((file) => file.type.startsWith("image/")).length} resim, {media.filter((file) => file.type.startsWith("video/")).length} video seçildi {create.isPending ? <LoaderCircle className="spin" size={15}/> : null}</span> : null}
-          <button
-            className="primary-action"
-            disabled={!body.trim() || create.isPending}
-          >
-            <Send size={17} />
-            Gönder
-          </button>
-        </form>
-      ) : (
-        <p className="form-help">
-          <Link to="/account">Giriş yaparak</Link> yorum yazabilirsin.
-        </p>
-      )}
       <div className="admin-list">
         {filteredComments.map((comment) => (
           <article className="admin-list-row" key={comment.id}>
@@ -139,6 +111,27 @@ export function ContentComments({
           </article>
         ))}
       </div>
+      {user ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (body.trim()) create.mutate();
+          }}
+        >
+          <textarea
+            maxLength={3000}
+            placeholder="Yorum yaz…"
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+          />
+          <button className="primary-action" disabled={!body.trim() || create.isPending}>
+            <Send size={17} />
+            {targetType === "tag_comment" ? "Yayınla" : "Gönder"}
+          </button>
+          {targetType !== "tag_comment" ? <label className="comment-media-picker"><ImagePlus size={17}/><span>Fotoğraf/video ekle</span><input accept="image/*,video/*" hidden multiple onChange={(event) => setMedia([...(event.target.files ?? [])].slice(0, 9))} type="file"/></label> : null}
+          {media.length ? <span className="comment-media-count">{media.filter((file) => file.type.startsWith("image/")).length} resim, {media.filter((file) => file.type.startsWith("video/")).length} video seçildi {create.isPending ? <LoaderCircle className="spin" size={15}/> : null}</span> : null}
+        </form>
+      ) : <p className="form-help"><Link to="/login">Giriş yaparak</Link> yorum yazabilirsin.</p>}
       {comments.isError ? (
         <p className="form-error">Yorumlar yüklenemedi.</p>
       ) : null}
@@ -162,7 +155,7 @@ function CommentActions({ comment, currentUserId, following, targetType, canMana
   if (!currentUserId) return null;
   return <div className="comment-actions">
     <button disabled={like.isPending} onClick={() => like.mutate()} type="button"><Heart size={14}/>{comment.likeCount || "Beğen"}</button>
-    <button onClick={() => { const body = window.prompt("Yanıtını yaz"); if (body?.trim()) reply.mutate(body.trim()); }} type="button"><Reply size={14}/>Yanıtla</button>
+    <button onClick={() => { const body = window.prompt("Yanıtını yaz"); if (body?.trim()) reply.mutate(body.trim()); }} type="button"><Reply size={14}/>{comment.replies?.length ?? 0} yorum</button>
     {comment.authorId && comment.authorId !== currentUserId ? <button disabled={follow.isPending} onClick={() => follow.mutate()} type="button"><UserPlus size={14}/>{following ? "Takibi bırak" : "Takip et"}</button> : null}
     {comment.authorId && comment.authorId !== currentUserId ? <Link aria-label="Mesaj gönder" title="Mesaj gönder" to={`/messages?peer=${comment.authorId}`}><Mail size={14}/></Link> : null}
     <button onClick={() => void navigator.share?.({ url: window.location.href })} type="button"><Share2 size={14}/>Paylaş</button>

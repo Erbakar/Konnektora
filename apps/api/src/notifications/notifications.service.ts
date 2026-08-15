@@ -155,17 +155,18 @@ export class NotificationsService {
 
   private async deliver(notificationId: string, channel: string, user: { id: string; name: string; email: string }, input: NotificationInput) {
     try {
+      const targetUrl = await this.targetUrl(input);
       let provider = channel === "email" ? "resend" : "web-push";
       let providerId: string | undefined;
       let skipped = false;
       if (channel === "email") {
-        const result = await this.mail.sendNotificationEmail({ to: user.email, name: user.name, title: input.title, body: input.body, targetType: input.targetType, targetId: input.targetId });
+        const result = await this.mail.sendNotificationEmail({ to: user.email, name: user.name, title: input.title, body: input.body, targetType: input.targetType, targetId: input.targetId, targetUrl });
         provider = result.provider;
         providerId = result.providerId;
       } else {
         const subscriptions = await this.prisma.pushSubscription.findMany({ where: { userId: user.id } });
         if (!subscriptions.length) skipped = true;
-        const results = await Promise.all(subscriptions.map((subscription) => this.push.send(subscription, { title: input.title, body: input.body, url: this.targetUrl(input) })));
+        const results = await Promise.all(subscriptions.map((subscription) => this.push.send(subscription, { title: input.title, body: input.body, url: targetUrl })));
         skipped ||= results.every((result) => result.skipped);
         providerId = results.find((result) => !result.skipped)?.providerId;
       }
@@ -181,11 +182,21 @@ export class NotificationsService {
     }
   }
 
-  private targetUrl(input: NotificationInput) {
+  private async targetUrl(input: NotificationInput) {
     if (input.targetType === "post" && input.targetId) return `/feed?post=${input.targetId}`;
-    if (input.targetType === "user" && input.targetId) return `/users/${input.targetId}`;
-    if (input.targetType === "event" && input.targetId) return `/events/${input.targetId}`;
-    if (input.targetType === "place" && input.targetId) return `/places/${input.targetId}`;
-    return "/account";
+    if (input.targetType === "user" && input.targetId) return `/users/id/${input.targetId}`;
+    if (input.targetType === "event" && input.targetId) {
+      const event = await this.prisma.event.findUnique({ where: { id: input.targetId }, select: { slug: true } });
+      return event ? `/events/${event.slug}` : "/events";
+    }
+    if (input.targetType === "place" && input.targetId) {
+      const place = await this.prisma.place.findUnique({ where: { id: input.targetId }, select: { slug: true } });
+      return place ? `/places/${place.slug}` : "/places";
+    }
+    if (input.targetType === "tag" && input.targetId) {
+      const tag = await this.prisma.tag.findUnique({ where: { id: input.targetId }, select: { slug: true } });
+      return tag ? `/tags/${tag.slug}` : "/tags";
+    }
+    return "/feed";
   }
 }

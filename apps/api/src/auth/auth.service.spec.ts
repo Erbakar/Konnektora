@@ -92,7 +92,7 @@ describe("AuthService", () => {
     });
   });
 
-  it("activates an invited user for phone onboarding and sends optional email verification", async () => {
+  it("keeps an invited user pending until email or phone verification and sends email verification", async () => {
     const { service, prisma, mailService } = createService();
     const invitedUser = {
       id: "user-1",
@@ -108,7 +108,7 @@ describe("AuthService", () => {
       ...invitedUser,
       name: "Active Invitee",
       passwordHash: "new-hash",
-      status: "active",
+      status: "pending",
     };
 
     prisma.user.findUnique.mockResolvedValue(invitedUser);
@@ -125,7 +125,7 @@ describe("AuthService", () => {
       where: { id: invitedUser.id },
       data: expect.objectContaining({
         name: "Active Invitee",
-        status: "active",
+        status: "pending",
       }),
     });
     expect(result).toEqual({

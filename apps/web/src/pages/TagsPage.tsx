@@ -58,6 +58,7 @@ import {
 export function TagsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const authorFilter = searchParams.get("author")?.replace(/^@/, "").toLocaleLowerCase("tr") ?? "";
+  const authorIdFilter = searchParams.get("authorId") ?? "";
   const { slug } = useParams();
   const navigate = useNavigate();
   const user = getUserSession();
@@ -130,8 +131,13 @@ export function TagsPage() {
           .map((item) => ({ tagId: item.tag.id, sentiment: item.sentiment })),
         { tagId: tag!.id, sentiment: next },
       ]),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["profile-affinities"] }),
+    onSuccess: async () => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["profile-affinities"] }),
+        client.invalidateQueries({ queryKey: ["tag", tag?.id, "related-users"] }),
+        client.invalidateQueries({ queryKey: ["tags"] }),
+      ]);
+    },
   });
   const post = useMutation({
     mutationFn: async ({ body, files }: { body: string; files: File[] }) => {
@@ -216,7 +222,8 @@ export function TagsPage() {
           .toLocaleLowerCase("tr")
           .includes(commentQuery.toLocaleLowerCase("tr"));
       if (!matches) return false;
-      if (authorFilter && comment.author?.username?.toLocaleLowerCase("tr") !== authorFilter) return false;
+      if (authorIdFilter && comment.author?.id !== authorIdFilter) return false;
+      if (!authorIdFilter && authorFilter && comment.author?.username?.toLocaleLowerCase("tr") !== authorFilter) return false;
       if (postTab === "following")
         return Boolean(comment.author && followingIds.has(comment.author.id));
       if (postTab === "photo" || postTab === "video")
@@ -392,7 +399,7 @@ export function TagsPage() {
       </section>
       <section className="admin-form tag-related-users-preview">
         <h2>People added to their profile</h2>
-        <Link to={`/tags/${tag.slug}/users`}><span className="attendee-avatar-stack">{(relatedUsers.data ?? []).slice(0, 8).map((member) => <span key={member.id} title={member.name}>{member.name[0]}</span>)}</span><strong>Show all {relatedUsers.data?.length ?? tag.usageCount} users</strong></Link>
+        <Link to={`/tags/${tag.slug}/users`}><span className="attendee-avatar-stack">{(relatedUsers.data ?? []).slice(0, 8).map((member) => <span key={member.id} title={member.name}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</span>)}</span><strong>Show all {relatedUsers.data?.length ?? tag.usageCount} users</strong></Link>
       </section>
       {user && ["admin", "super_admin", "curator"].includes(user.role) ? <section className="tag-public-stats" id="tag-stats">
         {[
@@ -423,7 +430,7 @@ export function TagsPage() {
         ))}
       </section> : null}
       <section className="admin-form">
-        {authorFilter ? <div className="filter-notice"><span>@{authorFilter} postları filtreleniyor.</span><button onClick={() => { const next = new URLSearchParams(searchParams); next.delete("author"); setSearchParams(next); }} type="button">Temizle</button></div> : null}
+        {authorFilter || authorIdFilter ? <div className="filter-notice"><span>{authorFilter ? `@${authorFilter}` : "Seçilen kullanıcı"} postları filtreleniyor.</span><button onClick={() => { const next = new URLSearchParams(searchParams); next.delete("author"); next.delete("authorId"); setSearchParams(next); }} type="button">Temizle</button></div> : null}
         <div className="section-header compact">
           <h2>
             <MessageCircle size={18} /> Bu tag'deki postlar
@@ -476,6 +483,9 @@ export function TagsPage() {
               placeholder={(comments.data?.length ?? 0) === 0 ? `#${tag.name} hakkında ilk yorumu yazan sen ol…` : `#${tag.name} hakkında bir şey yaz…`}
             />
             <div>
+              <button className="primary-action" disabled={post.isPending}>
+                Yayınla
+              </button>
               <label className="secondary-action">
                 <ImagePlus size={17} />
                 Fotoğraf/video
@@ -489,9 +499,6 @@ export function TagsPage() {
                 />
               </label>
               {selectedTagMedia.length ? <span className="comment-media-count">{selectedTagMedia.filter((file) => file.type.startsWith("image/")).length} resim, {selectedTagMedia.filter((file) => file.type.startsWith("video/")).length} video seçildi {post.isPending ? <LoaderCircle className="spin" size={15}/> : null}</span> : null}
-              <button className="primary-action" disabled={post.isPending}>
-                Yayınla
-              </button>
             </div>
           </form>
         ) : null}

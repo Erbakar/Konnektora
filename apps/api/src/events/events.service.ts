@@ -172,6 +172,7 @@ export class EventsService {
       },
       include: {
         tags: { include: { tag: true } },
+        place: { select: { id: true, name: true, slug: true, address: true, city: true, country: true } },
         participants: userId ? { where: { userId }, select: { role: true, status: true }, take: 1 } : false,
         _count: {
           select: {
@@ -434,6 +435,7 @@ export class EventsService {
             gender: true,
             birthDate: true,
             profileVerifiedAt: true,
+            uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
             privacySettings: { select: { demographicsAudience: true, locationAudience: true } },
             interestTags: { select: { tagId: true } },
           },
@@ -450,6 +452,7 @@ export class EventsService {
       gender: actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.gender : null,
       birthDate: actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.birthDate : null,
       profileVerifiedAt: participant.user.profileVerifiedAt,
+      avatarUrl: participant.user.uploadedMedia?.[0]?.url ?? null,
       commonTagCount: (participant.user.interestTags ?? []).filter((item) => viewerTagIds.has(item.tagId)).length,
       relation: participant.role,
       status: participant.status,
@@ -549,7 +552,7 @@ export class EventsService {
   }
 
   async checkInWithTicket(eventId: string, token: string, actor: User) {
-    await this.ensureCanManageParticipants(eventId, actor);
+    await this.ensureCanManageParticipants(eventId, actor, true);
     const participant = await this.prisma.eventParticipant.findUnique({
       where: { checkInTokenHash: this.hashCheckInToken(token) },
     });
@@ -590,7 +593,7 @@ export class EventsService {
     input: InviteParticipantDto,
     actor: User,
   ) {
-    await this.ensureCanManageParticipants(eventId, actor);
+    await this.ensureCanManageParticipants(eventId, actor, true);
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
       select: { id: true, title: true, slug: true },
@@ -941,9 +944,19 @@ export class EventsService {
       return user;
     }
 
+    if (input.name && !input.email) {
+      const user = await this.prisma.user.findFirst({
+        where: { name: { equals: input.name.trim(), mode: "insensitive" }, status: "active" },
+        orderBy: { followerCount: "desc" },
+      });
+      if (!user)
+        throw new NotFoundException("Bu ad soyad ile davet edilebilecek kullanıcı bulunamadı.");
+      return user;
+    }
+
     if (!input.email) {
       throw new BadRequestException(
-        "Davet için kullanıcı adı, userId, telefon veya email gerekli.",
+        "Davet için kullanıcı adı, ad soyad, userId, telefon veya email gerekli.",
       );
     }
 
@@ -963,6 +976,55 @@ export class EventsService {
         status: "invited",
       },
     });
+  }
+
+  async listGuestLists(user: User) {
+    return this.prisma.guestList.findMany({
+      where: { ownerId: user.id },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        members: {
+          orderBy: { createdAt: "desc" },
+          include: { user: { select: { id: true, name: true, username: true, email: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } },
+        },
+      },
+    });
+  }
+
+  createGuestList(name: string, user: User) {
+    return this.prisma.guestList.create({ data: { ownerId: user.id, name: name.trim() }, include: { members: true } });
+  }
+
+  async renameGuestList(id: string, name: string, user: User) {
+    await this.ensureOwnGuestList(id, user);
+    return this.prisma.guestList.update({ where: { id }, data: { name: name.trim() } });
+  }
+
+  async deleteGuestList(id: string, user: User) {
+    await this.ensureOwnGuestList(id, user);
+    return this.prisma.guestList.delete({ where: { id } });
+  }
+
+  async addGuestListMember(id: string, memberId: string, user: User) {
+    await this.ensureOwnGuestList(id, user);
+    const member = await this.prisma.user.findFirst({ where: { id: memberId, status: "active" }, select: { id: true } });
+    if (!member) throw new NotFoundException("Guest list'e eklenecek kullanıcı bulunamadı.");
+    return this.prisma.guestListMember.upsert({
+      where: { guestListId_userId: { guestListId: id, userId: memberId } },
+      create: { guestListId: id, userId: memberId },
+      update: {},
+    });
+  }
+
+  async removeGuestListMember(id: string, memberId: string, user: User) {
+    await this.ensureOwnGuestList(id, user);
+    return this.prisma.guestListMember.deleteMany({ where: { guestListId: id, userId: memberId } });
+  }
+
+  private async ensureOwnGuestList(id: string, user: User) {
+    const list = await this.prisma.guestList.findUnique({ where: { id }, select: { ownerId: true } });
+    if (!list) throw new NotFoundException("Guest list bulunamadı.");
+    if (list.ownerId !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu guest list'i yönetme yetkiniz yok.");
   }
 
   private async ensureCanManageParticipants(eventId: string, user: User, allowCurator = false) {

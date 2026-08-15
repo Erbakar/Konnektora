@@ -135,6 +135,7 @@ export class TagsService {
       gender: true,
       birthDate: true,
       profileVerifiedAt: true,
+      uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
       privacySettings: { select: { demographicsAudience: true, locationAudience: true } },
       interestTags: { select: { tagId: true } },
     } as const;
@@ -167,6 +168,7 @@ export class TagsService {
       gender: viewerId === member.id || member.privacySettings?.demographicsAudience === "everybody" ? member.gender : null,
       birthDate: viewerId === member.id || member.privacySettings?.demographicsAudience === "everybody" ? member.birthDate : null,
       profileVerifiedAt: member.profileVerifiedAt,
+      avatarUrl: member.uploadedMedia?.[0]?.url ?? null,
       commonTagCount: (member.interestTags ?? []).filter((item) => viewerTagIds.has(item.tagId)).length,
     });
     const users = new Map<
@@ -180,6 +182,7 @@ export class TagsService {
         gender: string | null;
         birthDate: Date | null;
         profileVerifiedAt: Date | null;
+        avatarUrl: string | null;
         commonTagCount: number;
         sentiment?: string;
         relation: string;

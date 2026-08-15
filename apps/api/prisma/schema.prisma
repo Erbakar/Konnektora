@@ -271,6 +271,8 @@ model User {
   createdEvents                Event[]                   @relation("EventCreatedBy")
   updatedEvents                Event[]                   @relation("EventUpdatedBy")
   eventParticipations          EventParticipant[]
+  ownedGuestLists             GuestList[]                @relation("GuestListOwner")
+  guestListMemberships        GuestListMember[]
   ticketRefunds                TicketRefund[]
   ticketOrders                 EventTicketOrder[]        @relation("TicketBuyer")
   ownedTickets                 OwnedEventTicket[]        @relation("TicketOwner")
@@ -879,6 +881,33 @@ model EventParticipant {
   @@unique([eventId, userId])
   @@index([eventId, status])
   @@map("event_participants")
+}
+
+model GuestList {
+  id        String            @id @default(uuid())
+  ownerId   String            @map("owner_id")
+  name      String
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+  owner     User              @relation("GuestListOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members   GuestListMember[]
+
+  @@unique([ownerId, name])
+  @@index([ownerId, updatedAt])
+  @@map("guest_lists")
+}
+
+model GuestListMember {
+  id        String    @id @default(uuid())
+  guestListId String  @map("guest_list_id")
+  userId    String    @map("user_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  guestList GuestList @relation(fields: [guestListId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([guestListId, userId])
+  @@index([userId])
+  @@map("guest_list_members")
 }
 
 model TicketRefund {

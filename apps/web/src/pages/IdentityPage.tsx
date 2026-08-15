@@ -55,7 +55,7 @@ export function IdentityPage() {
         <QrCode size={42} />
         <h1>Üye kartı</h1>
         <p>QR kartını kullanmak için giriş yap.</p>
-        <Link className="primary-action" to="/account">
+        <Link className="primary-action" to="/login">
           Giriş yap
         </Link>
       </section>

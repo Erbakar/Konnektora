@@ -6,7 +6,7 @@ export type RichTextToken = {
   href?: string;
 };
 const richTextPattern =
-  /(“”[^“”]+“”|“[^”]+”|"[^"]+"|[^\s|]+\|(?:https?:\/\/)?[^\s]+|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|@[\p{L}\p{N}_.]{2,30})/gu;
+  /(“”[^“”]+“”|""[^"]+""|[^\s|]+\|(?:https?:\/\/)?[^\s]+|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|@[\p{L}\p{N}_.]{2,30})/gu;
 export function parseRichText(value: string): RichTextToken[] {
   return value
     .split(richTextPattern)
@@ -27,10 +27,8 @@ export function parseRichText(value: string): RichTextToken[] {
         const href = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
         return { type: "url", text: label, href };
       }
-      if (/^(?:“”.+“”|“.+”|".+")$/u.test(text)) {
-        const label = text.startsWith("“”")
-          ? text.slice(2, -2)
-          : text.slice(1, -1);
+      if (/^(?:“”.+“”|"".+"")$/u.test(text)) {
+        const label = text.slice(2, -2);
         const slug = label
           .trim()
           .toLocaleLowerCase("tr-TR")
@@ -645,6 +643,9 @@ export const eventSchema = z.object({
   country: z.string().max(120).nullable(),
   latitude: z.number().min(-90).max(90).nullable().optional(),
   longitude: z.number().min(-180).max(180).nullable().optional(),
+  locationName: z.string().max(180).nullable().optional(),
+  locationAddress: z.string().max(500).nullable().optional(),
+  place: z.object({ id: z.string().uuid(), name: z.string(), slug: slugSchema, address: z.string().nullable(), city: z.string().nullable(), country: z.string().nullable() }).nullable().optional(),
   attendeeCount: z.number().int().nonnegative().optional(),
   viewerParticipation: z
     .object({ role: z.string(), status: z.string() })

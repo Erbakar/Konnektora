@@ -30,7 +30,6 @@ import {
   getInteractionStats,
   getPlace,
   getUserSession,
-  invitePlaceMember,
   listPlaceMembers,
   listPlaces,
   respondPlaceInvite,
@@ -112,14 +111,6 @@ export function PlaceDetailPage() {
       respondPlaceInvite(place!.id, status),
     onSuccess: refresh,
   });
-  const inviteMutation = useMutation({
-    mutationFn: (input: { email: string; role: string }) =>
-      invitePlaceMember(place!.id, input),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: ["place-members", place?.id],
-      }),
-  });
   const memberMutation = useMutation({
     mutationFn: ({
       userId,
@@ -189,7 +180,7 @@ export function PlaceDetailPage() {
             {place.isFollowing ? "Takibi bırak" : "Takip et"}
           </button>
         ) : (
-          <Link className="primary-action" to="/account">
+          <Link className="primary-action" to="/login">
             Takip etmek için giriş yap
           </Link>
         )}
@@ -361,39 +352,7 @@ export function PlaceDetailPage() {
             <h2>Üye ve yöneticiler</h2>
             <span>{membersQuery.data?.length ?? 0} kişi</span>
           </div>
-          <form
-            className="guest-invite-form"
-            onSubmit={(event: FormEvent<HTMLFormElement>) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              inviteMutation.mutate({
-                email: String(form.get("email")),
-                role: String(form.get("role")),
-              });
-              event.currentTarget.reset();
-            }}
-          >
-            <label>
-              E-posta
-              <input name="email" required type="email" />
-            </label>
-            <label>
-              Rol
-              <select name="role">
-                <option value="member">Üye</option>
-                <option value="manager">Yönetici</option>
-              </select>
-            </label>
-            <button
-              className="secondary-action"
-              disabled={inviteMutation.isPending}
-            >
-              <UserPlus size={16} /> Davet et
-            </button>
-          </form>
-          {inviteMutation.isError ? (
-            <p className="form-error">Davet gönderilemedi.</p>
-          ) : null}
+          <Link className="secondary-action" to={`/places/${place.slug}/invites`}><UserPlus size={16}/> Davet yöntemini seç</Link>
           <div className="guest-list">
             {membersQuery.data?.map((member) => (
               <div className="guest-list-row" key={member.userId}>

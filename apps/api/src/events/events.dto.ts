@@ -262,3 +262,15 @@ export class UpdateParticipantDto {
   @IsEnum(EventParticipantStatus)
   status!: EventParticipantStatus;
 }
+
+export class GuestListDto {
+  @IsString()
+  @MinLength(2)
+  @MaxLength(80)
+  name!: string;
+}
+
+export class GuestListMemberDto {
+  @IsUUID()
+  userId!: string;
+}

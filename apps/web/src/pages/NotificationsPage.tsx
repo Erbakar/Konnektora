@@ -15,7 +15,7 @@ export function NotificationsPage() {
     onSuccess: () => void client.invalidateQueries({ queryKey: ["my-notifications", user?.id] }),
   });
 
-  if (!user) return <section className="page empty-state"><Bell size={42}/><h1>Bildirimler</h1><p>Bildirimlerini görmek için giriş yap.</p><Link className="primary-action" to="/account">Giriş yap</Link></section>;
+  if (!user) return <section className="page empty-state"><Bell size={42}/><h1>Bildirimler</h1><p>Bildirimlerini görmek için giriş yap.</p><Link className="primary-action" to="/login">Giriş yap</Link></section>;
   const waitingTypes = new Set(["event_invite", "place_invite", "follow_request", "participation_request", "membership_request"]);
   const visible = notifications.data?.filter((item) => tab === "all" || waitingTypes.has(item.type)) ?? [];
   return <section className="page">

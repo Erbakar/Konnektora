@@ -60,4 +60,11 @@ describe("NotificationsService", () => {
     await expect(service.setContentSubscription("user-1", "user", "profile-2", true)).resolves.toEqual({ enabled: true });
     expect(contentNotificationSubscription.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ targetType: "user", targetId: "profile-2" }) }));
   });
+
+  it("uses public slugs in event notification links", async () => {
+    notificationPreference.findUnique.mockResolvedValue({ channel: DeliveryChannel.email });
+    event.findUnique.mockResolvedValue({ slug: "founder-night" });
+    await service.dispatch({ userId: "user-1", topic: NotificationTopic.event_invite, type: "event_invite", title: "Davet", body: "Etkinliğe davetlisin", targetType: "event", targetId: "event-1" });
+    expect(mail.sendNotificationEmail).toHaveBeenCalledWith(expect.objectContaining({ targetUrl: "/events/founder-night" }));
+  });
 });

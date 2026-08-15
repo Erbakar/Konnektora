@@ -14,9 +14,9 @@ export class MailService {
 
   constructor(private readonly configService: ConfigService) {}
 
-  async sendNotificationEmail(input: { to: string; name: string; title: string; body: string; targetType?: string; targetId?: string }) {
+  async sendNotificationEmail(input: { to: string; name: string; title: string; body: string; targetType?: string; targetId?: string; targetUrl?: string }) {
     const appUrl = this.getAppUrl();
-    const targetUrl = input.targetType && input.targetId ? `${appUrl}/${input.targetType === "post" ? "feed" : input.targetType + "s"}/${input.targetId}` : `${appUrl}/account`;
+    const targetUrl = input.targetUrl ? `${appUrl}${input.targetUrl}` : `${appUrl}/feed`;
     const safeName = this.escapeHtml(input.name);
     const safeBody = this.escapeHtml(input.body);
     return this.send({
@@ -33,8 +33,8 @@ export class MailService {
     await this.send({
       to: input.to,
       subject: "Konnektora hesabın hazır",
-      text: `Merhaba ${input.name}, Konnektora hesabın aktif. Etkinlikleri keşfetmek ve kendi etkinliğini yayınlamak için giriş yapabilirsin: ${appUrl}/account`,
-      html: `<p>Merhaba ${input.name},</p><p>Konnektora hesabın aktif. Etkinlikleri keşfetmek ve kendi etkinliğini yayınlamak için giriş yapabilirsin.</p><p><a href="${appUrl}/account">Konnektora'ya gir</a></p>`
+      text: `Merhaba ${input.name}, Konnektora hesabın aktif. Etkinlikleri keşfetmek ve kendi etkinliğini yayınlamak için giriş yapabilirsin: ${appUrl}/feed`,
+      html: `<p>Merhaba ${input.name},</p><p>Konnektora hesabın aktif. Etkinlikleri keşfetmek ve kendi etkinliğini yayınlamak için giriş yapabilirsin.</p><p><a href="${appUrl}/feed">Konnektora'ya gir</a></p>`
     });
   }
 

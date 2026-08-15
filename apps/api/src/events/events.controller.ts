@@ -18,6 +18,8 @@ import { RequirePermissions } from "../auth/permissions";
 import {
   CreateEventDto,
   EventQueryDto,
+  GuestListDto,
+  GuestListMemberDto,
   InviteParticipantDto,
   ScanCheckInTicketDto,
   UpdateParticipantDto,
@@ -69,6 +71,30 @@ export class EventsController {
   listMyTickets(@CurrentUser() user: User) {
     return this.eventsService.listMyTickets(user.id);
   }
+
+  @Get("guest-lists")
+  @UseGuards(JwtAuthGuard)
+  listGuestLists(@CurrentUser() user: User) { return this.eventsService.listGuestLists(user); }
+
+  @Post("guest-lists")
+  @UseGuards(JwtAuthGuard)
+  createGuestList(@Body() body: GuestListDto, @CurrentUser() user: User) { return this.eventsService.createGuestList(body.name, user); }
+
+  @Patch("guest-lists/:id")
+  @UseGuards(JwtAuthGuard)
+  renameGuestList(@Param("id") id: string, @Body() body: GuestListDto, @CurrentUser() user: User) { return this.eventsService.renameGuestList(id, body.name, user); }
+
+  @Delete("guest-lists/:id")
+  @UseGuards(JwtAuthGuard)
+  deleteGuestList(@Param("id") id: string, @CurrentUser() user: User) { return this.eventsService.deleteGuestList(id, user); }
+
+  @Post("guest-lists/:id/members")
+  @UseGuards(JwtAuthGuard)
+  addGuestListMember(@Param("id") id: string, @Body() body: GuestListMemberDto, @CurrentUser() user: User) { return this.eventsService.addGuestListMember(id, body.userId, user); }
+
+  @Delete("guest-lists/:id/members/:userId")
+  @UseGuards(JwtAuthGuard)
+  removeGuestListMember(@Param("id") id: string, @Param("userId") userId: string, @CurrentUser() user: User) { return this.eventsService.removeGuestListMember(id, userId, user); }
 
   @Patch("me/events/:id")
   @UseGuards(JwtAuthGuard)

@@ -43,7 +43,7 @@ export function ContactsPage() {
         <BookUser size={42} />
         <h1>Arkadaşlarını bul</h1>
         <p>Rehber eşleştirmesi için giriş yapmalısın.</p>
-        <Link className="primary-action" to="/account">
+        <Link className="primary-action" to="/login">
           Giriş yap
         </Link>
       </section>

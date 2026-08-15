@@ -228,6 +228,7 @@ type MockUser = {
   email: string;
   password: string;
   username?: string | null;
+  avatarUrl?: string | null;
   status?: AdminManagedUser["status"];
   role?: "user" | "curator" | "admin" | "super_admin";
   adminRoleGroupId?: string | null;
@@ -359,6 +360,10 @@ export function setUserSession(response: LoginResponse) {
 
 export function getUserSession() {
   return readStorage<LoginResponse["user"] | null>(USER_KEY, null);
+}
+
+export function updateUserSession(user: LoginResponse["user"]) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
 export function clearUserSession() {
@@ -9587,10 +9592,27 @@ export function listEventParticipants(
   );
 }
 
+export type GuestList = {
+  id: string;
+  name: string;
+  members: Array<{ id: string; userId: string; user: { id: string; name: string; username?: string | null; email: string; uploadedMedia?: Array<{ url: string }> } }>;
+};
+const guestListSchema: z.ZodType<GuestList> = z.object({
+  id: z.string(), name: z.string(),
+  members: z.array(z.object({ id: z.string(), userId: z.string(), user: z.object({ id: z.string(), name: z.string(), username: z.string().nullable().optional(), email: z.string(), uploadedMedia: z.array(z.object({ url: z.string() })).optional() }) })),
+});
+export function listGuestLists(): Promise<GuestList[]> { return requestJson("/guest-lists", z.array(guestListSchema), { auth: "user" }); }
+export function createGuestList(name: string): Promise<GuestList> { return requestJson("/guest-lists", guestListSchema, { auth: "user", method: "POST", body: JSON.stringify({ name }) }); }
+export function renameGuestList(id: string, name: string) { return requestJson(`/guest-lists/${id}`, z.object({ id: z.string(), name: z.string() }), { auth: "user", method: "PATCH", body: JSON.stringify({ name }) }); }
+export function deleteGuestList(id: string) { return requestJson(`/guest-lists/${id}`, z.object({ id: z.string() }), { auth: "user", method: "DELETE" }); }
+export function addGuestListMember(id: string, userId: string) { return requestJson(`/guest-lists/${id}/members`, z.object({ id: z.string(), userId: z.string() }), { auth: "user", method: "POST", body: JSON.stringify({ userId }) }); }
+export function removeGuestListMember(id: string, userId: string) { return requestJson(`/guest-lists/${id}/members/${userId}`, z.object({ count: z.number() }), { auth: "user", method: "DELETE" }); }
+
 export type RelatedUser = {
   id: string;
   name: string;
   username?: string | null;
+  avatarUrl?: string | null;
   city?: string | null;
   country?: string | null;
   gender?: string | null;
@@ -9606,6 +9628,7 @@ const relatedUserSchema: z.ZodType<RelatedUser> = z.object({
   id: z.string(),
   name: z.string(),
   username: z.string().nullable().optional(),
+  avatarUrl: z.string().nullable().optional(),
   city: z.string().nullable().optional(),
   country: z.string().nullable().optional(),
   gender: z.string().nullable().optional(),
@@ -9795,7 +9818,7 @@ export function listPlaceRelatedUsers(id: string): Promise<RelatedUser[]> {
 
 export function invitePlaceMember(
   id: string,
-  input: { userId?: string; email?: string; phone?: string; username?: string; role?: string },
+  input: { userId?: string; email?: string; phone?: string; username?: string; name?: string; role?: string },
 ): Promise<PlaceMember> {
   return requestJson(`/places/${id}/invite`, placeMemberSchema, {
     auth: "user",

@@ -29,11 +29,25 @@ services:
         sync: false
       - key: RESEND_API_KEY
         sync: false
+      - key: SMS_WEBHOOK_URL
+        sync: false
+      - key: SMS_API_KEY
+        sync: false
       - key: VAPID_SUBJECT
         value: mailto:support@konnektora.com
       - key: VAPID_PUBLIC_KEY
         sync: false
       - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: FACEBOOK_APP_ID
+        sync: false
+      - key: FACEBOOK_APP_SECRET
+        sync: false
+      - key: FACE_VERIFICATION_URL
+        sync: false
+      - key: FACE_VERIFICATION_API_KEY
         sync: false
 
 databases:

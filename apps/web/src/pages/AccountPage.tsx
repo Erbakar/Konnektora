@@ -140,11 +140,11 @@ function profileTimezone(city?: string | null, country?: string | null) {
   return timezoneOptions.some((item) => item.value === local) ? local : "UTC";
 }
 
-export function AccountPage() {
+export function AccountPage({ initialMode = "register", eventCreator = false }: { initialMode?: "login" | "register"; eventCreator?: boolean }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [user, setUser] = useState(() => getUserSession());
-  const [mode, setMode] = useState<"login" | "register">("register");
+  const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [registrationAccountType, setRegistrationAccountType] =
     useState<AccountType>("individual");
   const [showFrozenConfirmation, setShowFrozenConfirmation] = useState(
@@ -260,6 +260,7 @@ export function AccountPage() {
             ? "Hesap oluşturuldu. Email doğrulama linkini kontrol et."
             : "Giriş yapıldı. Artık etkinlik oluşturabilirsin.",
       });
+      navigate(mode === "login" ? "/feed" : "/onboarding");
     },
     onError: () =>
       setNotice({
@@ -455,7 +456,7 @@ export function AccountPage() {
     onSuccess: () => {
       clearUserSession();
       window.sessionStorage.setItem("konnektora_account_frozen", "1");
-      window.location.assign("/account");
+      window.location.assign("/login");
     },
     onError: () =>
       setNotice({
@@ -853,7 +854,7 @@ export function AccountPage() {
   }
 
   return (
-    <section className="page account-page">
+    <section className={`page account-page${eventCreator ? " event-create-only" : ""}`}>
       <div className="section-header">
         <div>
           <p className="eyebrow">Community</p>
@@ -1431,7 +1432,7 @@ export function AccountPage() {
               </form>
             ) : null}
             <form
-              className="admin-form"
+              className="admin-form event-create-form"
               id="account-settings"
               onSubmit={
                 pendingPhone ? handlePhoneConfirmation : handlePhoneRequest
@@ -2026,7 +2027,7 @@ export function AccountPage() {
                     </select>
                   </label>
                 </div>
-                <TagPicker initialIds={interestTagIds} label="Etkinlik etiketleri" tags={tags}/>
+                <TagPicker label="Etkinlik etiketleri" recommendedIds={interestTagIds} tags={tags}/>
                 <div className="event-step-actions">
                   <button
                     className="primary-action"
