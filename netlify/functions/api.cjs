@@ -11,6 +11,7 @@ const helmet = require("helmet");
 const serverless = require("serverless-http");
 const { ValidationPipe } = require("@nestjs/common");
 const { ConfigService } = require("@nestjs/config");
+const { getConnectionString } = require("@netlify/database");
 const { NestFactory } = require("@nestjs/core");
 const { ExpressAdapter } = require("@nestjs/platform-express");
 const { AppModule } = require("../../apps/api/dist/app.module");
@@ -58,6 +59,9 @@ async function createHandler() {
 }
 
 exports.handler = async (event, context) => {
+  if (!process.env.DATABASE_URL) {
+    process.env.DATABASE_URL = getConnectionString();
+  }
   cachedHandler = cachedHandler || (await createHandler());
   return cachedHandler(event, context);
 };
