@@ -60,7 +60,7 @@ VAPID_PRIVATE_KEY=<web-push-private-key>
 ALLOW_PRODUCTION_SEED=false
 ```
 
-API production modunda eksik `DATABASE_URL`, `JWT_SECRET`, origin, e-posta veya SMS ayarıyla başlamaz. Böylece aktivasyon ve GSM doğrulaması sessizce devre dışı kalmış bir sürüm yayına alınamaz.
+API production modunda eksik `DATABASE_URL`, `JWT_SECRET` veya origin ayarıyla başlamaz. E-posta ve SMS sağlayıcılarının durumu `/health/ready` cevabında ayrıca görünür; test ortamı sağlayıcılar eklenmeden çalışabilir.
 
 Web Push anahtarlarını bir kez `npx web-push generate-vapid-keys` komutuyla üretin. Aynı anahtar çiftini kalıcı olarak saklayın; anahtar değişirse mevcut tarayıcı abonelikleri yeniden oluşturulmalıdır.
 
