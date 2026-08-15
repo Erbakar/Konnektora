@@ -29,24 +29,49 @@ export class MailService {
 
   async sendAccountActivatedEmail(input: { to: string; name: string }) {
     const appUrl = this.getAppUrl();
+    const feedUrl = `${appUrl}/feed`;
+    const safeName = this.escapeHtml(input.name);
 
     await this.send({
       to: input.to,
-      subject: "Konnektora hesabın hazır",
-      text: `Merhaba ${input.name}, Konnektora hesabın aktif. Etkinlikleri keşfetmek ve kendi etkinliğini yayınlamak için giriş yapabilirsin: ${appUrl}/feed`,
-      html: `<p>Merhaba ${input.name},</p><p>Konnektora hesabın aktif. Etkinlikleri keşfetmek ve kendi etkinliğini yayınlamak için giriş yapabilirsin.</p><p><a href="${appUrl}/feed">Konnektora'ya gir</a></p>`
+      subject: "Konnektora'ya hoş geldin — hesabın hazır",
+      text: `Merhaba ${input.name}, Konnektora hesabın hazır. Akışı keşfet, ilgilendiğin etkinliklere katıl ve profilini tamamla: ${feedUrl}`,
+      html: this.renderBrandedEmail({
+        preheader: "Konnektora hesabın hazır. Güvenilir bağlantılar kurmaya başla.",
+        eyebrow: "HOŞ GELDİN",
+        title: `Bağlantıların şimdi başlıyor, ${safeName}.`,
+        intro: "Hesabın aktif. İlgi alanlarına göre insanları ve etkinlikleri keşfedebilir, kendi topluluğunu büyütmeye başlayabilirsin.",
+        buttonLabel: "Akışa git",
+        buttonUrl: feedUrl,
+        highlights: [
+          { number: "01", title: "Akışını keşfet", body: "İlgi alanlarına ve bağlantılarına göre seçilen içeriklere göz at." },
+          { number: "02", title: "Etkinliklere katıl", body: "Yeni buluşmaları keşfet, davetlerini ve katılımını tek yerden yönet." },
+          { number: "03", title: "Profilini tamamla", body: "Doğru kişilerin seni bulabilmesi için ilgi alanlarını ve bilgilerini ekle." }
+        ],
+        footerNote: "Bu e-posta, Konnektora üyeliğin başarıyla etkinleştirildiği için gönderildi."
+      })
     });
   }
 
   async sendVerificationEmail(input: { to: string; name: string; token: string }) {
     const appUrl = this.getAppUrl();
     const verifyUrl = `${appUrl}/verify-email?token=${encodeURIComponent(input.token)}`;
+    const safeName = this.escapeHtml(input.name);
 
     await this.send({
       to: input.to,
-      subject: "Konnektora email doğrulama",
-      text: `Merhaba ${input.name}, Konnektora hesabını doğrulamak için linki aç: ${verifyUrl}`,
-      html: `<p>Merhaba ${input.name},</p><p>Konnektora hesabını doğrulamak için aşağıdaki linki aç.</p><p><a href="${verifyUrl}">Email adresimi doğrula</a></p>`
+      subject: "E-posta adresini doğrula — Konnektora",
+      text: `Merhaba ${input.name}, Konnektora üyeliğine devam etmek için e-posta adresini 24 saat içinde doğrula: ${verifyUrl}`,
+      html: this.renderBrandedEmail({
+        preheader: "Konnektora üyeliğine devam etmek için e-posta adresini doğrula.",
+        eyebrow: "SON BİR ADIM",
+        title: `E-posta adresini doğrula, ${safeName}.`,
+        intro: "Güvenilir bir topluluğun parçası olman için bu adresin sana ait olduğunu doğrulamamız gerekiyor.",
+        buttonLabel: "E-posta adresimi doğrula",
+        buttonUrl: verifyUrl,
+        notice: "Bu bağlantı 24 saat boyunca geçerlidir. Ardından üyelik akışına kaldığın yerden devam edebilirsin.",
+        footerNote: "Bu hesabı sen oluşturmadıysan e-postayı yok sayabilirsin; herhangi bir işlem yapılmaz."
+      })
     });
   }
 
@@ -166,6 +191,23 @@ export class MailService {
 
   private getAppUrl() {
     return this.configService.get<string>("PUBLIC_APP_URL")?.replace(/\/$/, "") ?? "http://localhost:5173";
+  }
+
+  private renderBrandedEmail(input: {
+    preheader: string;
+    eyebrow: string;
+    title: string;
+    intro: string;
+    buttonLabel: string;
+    buttonUrl: string;
+    notice?: string;
+    highlights?: Array<{ number: string; title: string; body: string }>;
+    footerNote: string;
+  }) {
+    const highlights = input.highlights?.map((item) => `<tr><td style="padding:0 0 12px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;background:#f2f8f4;border:1px solid #dce7df;border-radius:14px;"><tr><td width="46" valign="top" style="padding:16px 0 16px 16px;color:#1d6545;font:800 12px/1.4 Arial,sans-serif;letter-spacing:.08em;">${item.number}</td><td style="padding:14px 16px 14px 8px;"><div style="color:#10231f;font:700 15px/1.4 Arial,sans-serif;">${item.title}</div><div style="padding-top:3px;color:#627169;font:400 13px/1.55 Arial,sans-serif;">${item.body}</div></td></tr></table></td></tr>`).join("") ?? "";
+    const notice = input.notice ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;border-collapse:separate;background:#f2f8f4;border-left:4px solid #38a96c;border-radius:10px;"><tr><td style="padding:14px 16px;color:#365148;font:400 13px/1.55 Arial,sans-serif;">${input.notice}</td></tr></table>` : "";
+
+    return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${input.title}</title></head><body style="margin:0;padding:0;background:#f6f8f6;color:#10231f;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${input.preheader}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;background:#f6f8f6;border-collapse:collapse;"><tr><td align="center" style="padding:28px 12px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;max-width:620px;border-collapse:separate;background:#ffffff;border:1px solid #dce7df;border-radius:24px;overflow:hidden;"><tr><td style="padding:24px 30px;background:#103c2c;"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td width="42" height="42" align="center" style="width:42px;height:42px;border-radius:11px;background:#caff6a;color:#103c2c;font:900 21px/42px Arial,sans-serif;">K</td><td style="padding-left:12px;color:#ffffff;font:800 20px/1.2 Arial,sans-serif;letter-spacing:-.4px;">Konnektora</td></tr></table></td></tr><tr><td style="padding:42px 34px 34px;"><div style="margin-bottom:14px;color:#1d6545;font:800 11px/1.4 Arial,sans-serif;letter-spacing:.16em;">${input.eyebrow}</div><h1 style="margin:0;color:#10231f;font:800 32px/1.16 Arial,sans-serif;letter-spacing:-.8px;">${input.title}</h1><p style="margin:18px 0 0;color:#526159;font:400 16px/1.65 Arial,sans-serif;">${input.intro}</p><table role="presentation" cellspacing="0" cellpadding="0" style="margin:28px 0;"><tr><td style="border-radius:10px;background:#1d6545;"><a href="${input.buttonUrl}" style="display:inline-block;padding:14px 22px;color:#ffffff;font:700 15px/1.2 Arial,sans-serif;text-decoration:none;">${input.buttonLabel} →</a></td></tr></table>${notice}${highlights ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:28px;border-collapse:collapse;">${highlights}</table>` : ""}<p style="margin:28px 0 0;color:#7a8780;font:400 12px/1.6 Arial,sans-serif;">Buton çalışmıyorsa bu bağlantıyı tarayıcında aç:<br><a href="${input.buttonUrl}" style="color:#1d6545;text-decoration:underline;word-break:break-all;">${input.buttonUrl}</a></p></td></tr><tr><td style="padding:22px 34px;background:#f2f8f4;border-top:1px solid #dce7df;"><p style="margin:0;color:#627169;font:400 12px/1.6 Arial,sans-serif;">${input.footerNote}</p><p style="margin:10px 0 0;color:#87938d;font:400 11px/1.5 Arial,sans-serif;">© ${new Date().getFullYear()} Konnektora · Güvenilir bağlantılar, anlamlı topluluklar.</p></td></tr></table></td></tr></table></body></html>`;
   }
 
   private escapeHtml(value: string) {
