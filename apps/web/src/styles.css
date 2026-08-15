@@ -8537,7 +8537,40 @@ select:focus-visible {
     #f7faf8;
 }
 
-@media (max-width: 1280px) {
+@media (min-width: 1101px) and (max-width: 1320px) {
+  .corp-topbar {
+    gap: 10px;
+    padding-inline: 20px;
+  }
+
+  .corp-nav {
+    gap: 0;
+  }
+
+  .corp-nav a {
+    font-size: 14px;
+    gap: 5px;
+    padding-inline: 10px;
+  }
+
+  .corp-nav-more > button {
+    font-size: 14px;
+    padding-inline: 9px;
+  }
+
+  .corp-topbar-actions {
+    gap: 6px;
+  }
+
+  .corp-topbar-link {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 1100px) {
   .corp-topbar {
     gap: 12px;
     grid-template-columns: 1fr auto;
