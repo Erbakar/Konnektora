@@ -22,9 +22,12 @@
     "express",
     "express-rate-limit",
     "helmet",
+    "express-rate-limit",
+    "helmet",
     "passport",
     "reflect-metadata",
     "rxjs",
+    "web-push",
     "serverless-http"
   ]
   included_files = [
