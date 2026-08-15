@@ -2027,7 +2027,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     </select>
                   </label>
                 </div>
-                <TagPicker initialIds={interestTagIds} label="Etkinlik etiketleri" tags={tags}/>
+                <TagPicker label="Etkinlik etiketleri" recommendedIds={interestTagIds} tags={tags}/>
                 <div className="event-step-actions">
                   <button
                     className="primary-action"

@@ -228,6 +228,7 @@ type MockUser = {
   email: string;
   password: string;
   username?: string | null;
+  avatarUrl?: string | null;
   status?: AdminManagedUser["status"];
   role?: "user" | "curator" | "admin" | "super_admin";
   adminRoleGroupId?: string | null;
@@ -359,6 +360,10 @@ export function setUserSession(response: LoginResponse) {
 
 export function getUserSession() {
   return readStorage<LoginResponse["user"] | null>(USER_KEY, null);
+}
+
+export function updateUserSession(user: LoginResponse["user"]) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
 export function clearUserSession() {
@@ -9591,6 +9596,7 @@ export type RelatedUser = {
   id: string;
   name: string;
   username?: string | null;
+  avatarUrl?: string | null;
   city?: string | null;
   country?: string | null;
   gender?: string | null;
@@ -9606,6 +9612,7 @@ const relatedUserSchema: z.ZodType<RelatedUser> = z.object({
   id: z.string(),
   name: z.string(),
   username: z.string().nullable().optional(),
+  avatarUrl: z.string().nullable().optional(),
   city: z.string().nullable().optional(),
   country: z.string().nullable().optional(),
   gender: z.string().nullable().optional(),
@@ -9795,7 +9802,7 @@ export function listPlaceRelatedUsers(id: string): Promise<RelatedUser[]> {
 
 export function invitePlaceMember(
   id: string,
-  input: { userId?: string; email?: string; phone?: string; username?: string; role?: string },
+  input: { userId?: string; email?: string; phone?: string; username?: string; name?: string; role?: string },
 ): Promise<PlaceMember> {
   return requestJson(`/places/${id}/invite`, placeMemberSchema, {
     auth: "user",

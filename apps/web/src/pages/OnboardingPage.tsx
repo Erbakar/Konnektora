@@ -5,7 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { TagSentiment } from "@konnektora/shared";
 import { EmailInput, PhoneInput, VerificationCodeInput } from "../components/FormInputs";
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
-import { checkAvailability, completeOnboarding, confirmPhoneVerification, followUser, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, uploadProfileMedia } from "../lib/api";
+import { checkAvailability, completeOnboarding, confirmPhoneVerification, followUser, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, updateUserSession, uploadProfileMedia } from "../lib/api";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
 
 const steps = ["Hesap", "Telefon", "Temel bilgiler", "Profil fotoğrafı", "İlgi alanları", "Topluluk"];
@@ -21,7 +21,7 @@ export function OnboardingPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [session, setSession] = useState(getUserSession());
-  const [step, setStep] = useState(session?.status === "active" ? 1 : 0);
+  const [step, setStep] = useState(session ? 1 : 0);
   const [accountType, setAccountType] = useState<"individual" | "corporate">("individual");
   const [phone, setPhone] = useState("");
   const [expires, setExpires] = useState(0);
@@ -38,32 +38,32 @@ export function OnboardingPage() {
   const onboarding = useQuery({
     queryKey: ["onboarding", session?.id],
     queryFn: getOnboardingStatus,
-    enabled: session?.status === "active",
+    enabled: Boolean(session),
   });
   const profile = useQuery({
     queryKey: ["profile", session?.id],
     queryFn: getMyProfile,
-    enabled: session?.status === "active",
+    enabled: Boolean(session),
   });
   const media = useQuery({
     queryKey: ["profile-media", session?.id],
     queryFn: listProfileMedia,
-    enabled: session?.status === "active",
+    enabled: Boolean(session),
   });
   const tags = useQuery({
     queryKey: ["tags", "onboarding"],
     queryFn: listTags,
-    enabled: session?.status === "active",
+    enabled: Boolean(session),
   });
   const affinities = useQuery({
     queryKey: ["profile-affinities", session?.id],
     queryFn: getProfileAffinities,
-    enabled: session?.status === "active",
+    enabled: Boolean(session),
   });
   const suggestions = useQuery({
     queryKey: ["member-suggestions", session?.id],
     queryFn: listMemberSuggestions,
-    enabled: session?.status === "active" && step === 5,
+    enabled: Boolean(session) && step === 5,
   });
 
   useEffect(() => {
@@ -92,7 +92,7 @@ export function OnboardingPage() {
     onSuccess: (response) => {
       setUserSession(response);
       setSession(response.user);
-      setStep(response.user.status === "active" ? 1 : 0);
+      setStep(1);
     },
   });
   const phoneRequest = useMutation({
@@ -106,6 +106,11 @@ export function OnboardingPage() {
   const phoneConfirm = useMutation({
     mutationFn: (code: string) => confirmPhoneVerification(phone, code),
     onSuccess: () => {
+      if (session) {
+        const activeSession = { ...session, status: "active" as const };
+        setSession(activeSession);
+        updateUserSession(activeSession);
+      }
       void queryClient.invalidateQueries({ queryKey: ["profile"] });
       void queryClient.invalidateQueries({ queryKey: ["onboarding"] });
       setStep(2);
@@ -145,18 +150,6 @@ export function OnboardingPage() {
   const selectedCount = Object.keys(sentiments).length;
   const currentTag = useMemo(() => tags.data?.find((tag) => tag.id === emotionTagId), [emotionTagId, tags.data]);
 
-  if (session?.status === "pending")
-    return (
-      <section className="page onboarding-shell">
-        <div className="onboarding-card empty-state">
-          <Sparkles size={42} />
-          <h1>E-postanı doğrula</h1>
-          <p>Hesabın oluşturuldu. Gönderdiğimiz doğrulama bağlantısını aç; hesabın aktif olduğunda sihirbaz telefon adımından devam edecek.</p>
-          <button className="primary-action" onClick={() => window.location.reload()} type="button">Aktivasyonu kontrol et</button>
-        </div>
-      </section>
-    );
-
   return (
     <section className="page onboarding-shell">
       <header className="onboarding-header">
@@ -175,6 +168,7 @@ export function OnboardingPage() {
         ))}
       </nav>
       <div className="onboarding-card">
+        {session?.status === "pending" && step === 1 ? <div className="onboarding-verification-choice"><Sparkles size={22}/><p>Aktivasyon e-postasındaki bağlantıyı açabilir veya aşağıda GSM doğrulamasını tamamlayarak devam edebilirsin.</p></div> : null}
         {step === 0 ? (
           <form
             onSubmit={(event: FormEvent<HTMLFormElement>) => {

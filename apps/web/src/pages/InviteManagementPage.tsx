@@ -10,13 +10,14 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
-import type { FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { QrCheckInScanner } from "../components/QrCheckInScanner";
 import {
   checkInEventParticipant,
   checkInPlaceMember,
   getEvent,
+  getFinanceDashboard,
   getPlace,
   getUserSession,
   inviteEventParticipant,
@@ -31,9 +32,12 @@ import {
   updatePlaceMember,
 } from "../lib/api";
 
+type InviteMethod = "following" | "guest_lists" | "old_attendees" | "username" | "email" | "phone" | "phonebook" | "gmail";
+
 export function EventInviteManagementPage() {
   const { slug = "" } = useParams();
   const user = getUserSession();
+  const [inviteMethod, setInviteMethod] = useState<InviteMethod>("following");
   const client = useQueryClient();
   const event = useQuery({
     queryKey: ["event", slug],
@@ -48,6 +52,8 @@ export function EventInviteManagementPage() {
   });
   const following = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
   const managedEvents = useQuery({ queryKey: ["my-events", user?.id], queryFn: listMyEvents, enabled: Boolean(user) });
+  const finance = useQuery({ queryKey: ["finance", user?.id, "invite-entitlement"], queryFn: getFinanceDashboard, enabled: Boolean(user?.accountType === "corporate") });
+  const canUseGuestLists = Boolean(user && (["admin", "super_admin", "curator"].includes(user.role) || user.accountType === "corporate" && finance.data?.business.plan !== "starter"));
   const oldEventQueries = useQueries({ queries: (managedEvents.data ?? []).filter((item) => item.id !== event.data?.id).slice(0, 5).map((item) => ({ queryKey: ["event-participants", item.id, "invite-source"], queryFn: () => listEventParticipants(item.id, "user"), enabled: Boolean(event.data) })) });
   const previousAttendees = oldEventQueries.flatMap((query) => query.data ?? []).filter((item, index, all) => item.user && all.findIndex((other) => other.userId === item.userId) === index);
   const refresh = () => {
@@ -105,23 +111,25 @@ export function EventInviteManagementPage() {
       shareUrl={`${window.location.origin}/events/${event.data.slug}`}
       kind="Etkinlik"
     >
-      <InviteForm
+      <InviteMethodPicker active={inviteMethod} includeOldEvents includeGuestLists={canUseGuestLists} onChange={setInviteMethod}/>
+      {["username", "email", "phone"].includes(inviteMethod) ? <InviteForm
+        method={inviteMethod as "username" | "email" | "phone"}
         pending={invite.isPending}
         onSubmit={(form) =>
           invite.mutate({
             username: form.username,
+            name: form.name,
             email: form.email,
             phone: form.phone,
             role: form.role,
           })
         }
-      />
-      <section className="admin-form invite-source-section"><h2>Davet kaynakları</h2><div className="invite-source-grid">
-        <div><h3>Takip ettiklerim</h3>{following.data?.map((member) => <button disabled={invite.isPending} key={member.id} onClick={() => invite.mutate({ userId: member.id, role: "attendee" })} type="button"><UserPlus size={16}/>{member.name}</button>)}</div>
-        <div><h3>Guest listeler</h3>{(managedEvents.data ?? []).filter((item) => item.id !== event.data?.id).slice(0, 5).map((item, sourceIndex) => <button disabled={bulkInvite.isPending || !(oldEventQueries[sourceIndex]?.data?.length)} key={item.id} onClick={() => bulkInvite.mutate(sourceIndex)} type="button"><Users size={16}/>{item.title} ({oldEventQueries[sourceIndex]?.data?.length ?? 0})</button>)}</div>
-        <div><h3>Eski etkinlik katılımcıları</h3>{previousAttendees.map((participant) => <button disabled={invite.isPending} key={participant.userId} onClick={() => invite.mutate({ userId: participant.userId, role: "attendee" })} type="button"><Users size={16}/>{participant.user?.name ?? participant.userId}</button>)}</div>
-        <div><h3>Rehberden tara</h3><Link className="secondary-action" to="/contacts">Telefon rehberi veya Google Contacts</Link></div>
-      </div></section>
+      /> : null}
+      {inviteMethod === "following" ? <InviteSource title="Takip ettiklerim">{following.data?.map((member) => <button disabled={invite.isPending} key={member.id} onClick={() => invite.mutate({ userId: member.id, role: "attendee" })} type="button"><UserPlus size={16}/>{member.name}</button>)}</InviteSource> : null}
+      {inviteMethod === "guest_lists" && canUseGuestLists ? <InviteSource title="Guest listeler">{(managedEvents.data ?? []).filter((item) => item.id !== event.data?.id).slice(0, 5).map((item, sourceIndex) => <button disabled={bulkInvite.isPending || !(oldEventQueries[sourceIndex]?.data?.length)} key={item.id} onClick={() => bulkInvite.mutate(sourceIndex)} type="button"><Users size={16}/>{item.title} ({oldEventQueries[sourceIndex]?.data?.length ?? 0})</button>)}</InviteSource> : null}
+      {inviteMethod === "old_attendees" ? <InviteSource title="Eski etkinlik katılımcıları">{previousAttendees.map((participant) => <button disabled={invite.isPending} key={participant.userId} onClick={() => invite.mutate({ userId: participant.userId, role: "attendee" })} type="button"><Users size={16}/>{participant.user?.name ?? participant.userId}</button>)}</InviteSource> : null}
+      {inviteMethod === "phonebook" ? <InviteSource title="Telefon rehberi"><Link className="secondary-action" to="/contacts?source=phone">Telefon rehberini tara</Link></InviteSource> : null}
+      {inviteMethod === "gmail" ? <InviteSource title="Gmail"><Link className="secondary-action" to="/contacts?source=google">Google Contacts ile tara</Link></InviteSource> : null}
       <QrCheckInScanner
         label="Etkinlik QR check-in"
         pending={scan.isPending}
@@ -153,6 +161,7 @@ export function EventInviteManagementPage() {
 export function PlaceInviteManagementPage() {
   const { slug = "" } = useParams();
   const user = getUserSession();
+  const [inviteMethod, setInviteMethod] = useState<InviteMethod>("following");
   const client = useQueryClient();
   const place = useQuery({
     queryKey: ["place", slug],
@@ -172,7 +181,7 @@ export function PlaceInviteManagementPage() {
     });
   };
   const invite = useMutation({
-    mutationFn: (input: { userId?: string; username?: string; email?: string; phone?: string; role?: string }) =>
+    mutationFn: (input: { userId?: string; username?: string; email?: string; phone?: string; name?: string; role?: string }) =>
       invitePlaceMember(place.data!.id, input),
     onSuccess: refresh,
   });
@@ -211,22 +220,24 @@ export function PlaceInviteManagementPage() {
       shareUrl={`${window.location.origin}/places/${place.data.slug}`}
       kind="Mekân"
     >
-      <InviteForm
+      <InviteMethodPicker active={inviteMethod} includeGuestLists onChange={setInviteMethod}/>
+      {["username", "email", "phone"].includes(inviteMethod) ? <InviteForm
+        method={inviteMethod as "username" | "email" | "phone"}
         pending={invite.isPending}
         onSubmit={(form) =>
           invite.mutate({
             username: form.username,
+            name: form.name,
             email: form.email,
             phone: form.phone,
             role: form.role,
           })
         }
-      />
-      <section className="admin-form invite-source-section"><h2>Davet kaynakları</h2><div className="invite-source-grid">
-        <div><h3>Takip ettiklerim</h3>{following.data?.map((member) => <button disabled={invite.isPending} key={member.id} onClick={() => invite.mutate({ userId: member.id, role: "member" })} type="button"><UserPlus size={16}/>{member.name}</button>)}</div>
-        <div><h3>Guest listeler</h3><Link className="secondary-action" to="/community">Topluluk ve guest listelerden seç</Link></div>
-        <div><h3>Rehberden tara</h3><Link className="secondary-action" to="/contacts">Telefon rehberi veya Google Contacts</Link></div>
-      </div></section>
+      /> : null}
+      {inviteMethod === "following" ? <InviteSource title="Takip ettiklerim">{following.data?.map((member) => <button disabled={invite.isPending} key={member.id} onClick={() => invite.mutate({ userId: member.id, role: "member" })} type="button"><UserPlus size={16}/>{member.name}</button>)}</InviteSource> : null}
+      {inviteMethod === "guest_lists" ? <InviteSource title="Guest listeler"><Link className="secondary-action" to="/community">Topluluk ve guest listelerden seç</Link></InviteSource> : null}
+      {inviteMethod === "phonebook" ? <InviteSource title="Telefon rehberi"><Link className="secondary-action" to="/contacts?source=phone">Telefon rehberini tara</Link></InviteSource> : null}
+      {inviteMethod === "gmail" ? <InviteSource title="Gmail"><Link className="secondary-action" to="/contacts?source=google">Google Contacts ile tara</Link></InviteSource> : null}
       <QrCheckInScanner
         label="Mekân üye kartı check-in"
         pending={scan.isPending}
@@ -295,10 +306,30 @@ function ManagementShell({
   );
 }
 
+function InviteMethodPicker({ active, includeOldEvents = false, includeGuestLists = false, onChange }: { active: InviteMethod; includeOldEvents?: boolean; includeGuestLists?: boolean; onChange: (method: InviteMethod) => void }) {
+  const methods: Array<[InviteMethod, string]> = [
+    ["following", "Takip ettiklerimden seç"],
+    ...(includeGuestLists ? [["guest_lists", "Guest listeden seç"] as [InviteMethod, string]] : []),
+    ...(includeOldEvents ? [["old_attendees", "Eski etkinlik katılımcıları"] as [InviteMethod, string]] : []),
+    ["username", "Kullanıcı adı veya ad soyad"],
+    ["email", "E-posta adresi"],
+    ["phone", "Telefon numarası"],
+    ["phonebook", "Telefon rehberini tara"],
+    ["gmail", "Gmail'i tara"],
+  ];
+  return <section className="admin-form invite-method-picker"><h2>Davet yöntemini seç</h2><div>{methods.map(([value, label]) => <button className={active === value ? "active" : ""} key={value} onClick={() => onChange(value)} type="button">{label}</button>)}</div></section>;
+}
+
+function InviteSource({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section className="admin-form invite-source-section"><h2>{title}</h2><div className="invite-source-list">{children}</div></section>;
+}
+
 function InviteForm({
+  method,
   pending,
   onSubmit,
 }: {
+  method: "username" | "email" | "phone";
   pending: boolean;
   onSubmit: (input: {
     username?: string;
@@ -319,12 +350,13 @@ function InviteForm({
           .replace(/^@/, "");
         const email = String(form.get("email") || "").trim();
         const phone = String(form.get("phone") || "").trim().replace(/[\s()-]/g, "");
-        if (username || email || phone)
+        const name = String(form.get("name") || "").trim();
+        if (username || email || phone || name)
           onSubmit({
             username: username || undefined,
             email: email || undefined,
             phone: phone || undefined,
-            name: String(form.get("name") || "").trim() || undefined,
+            name: name || undefined,
             role: String(form.get("role") || "attendee"),
           });
       }}
@@ -334,22 +366,22 @@ function InviteForm({
         Yeni davet
       </h2>
       <div className="form-grid">
-        <label>
+        {method === "username" ? <><label>
           Kullanıcı adı
           <input name="username" placeholder="@kullanici" />
         </label>
         <label>
           Ad soyad
           <input name="name" placeholder="Ad Soyad" />
-        </label>
-        <label>
+        </label></> : null}
+        {method === "email" ? <label>
           E-posta
           <input name="email" type="email" placeholder="uye@example.com" />
-        </label>
-        <label>
+        </label> : null}
+        {method === "phone" ? <label>
           Telefon
           <input name="phone" inputMode="tel" pattern="\+?[1-9][0-9]{7,14}" placeholder="+905551234567" />
-        </label>
+        </label> : null}
         <label>
           Rol
           <select name="role">

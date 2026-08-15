@@ -4443,6 +4443,9 @@ select:focus-visible {
   position: fixed;
   right: 0;
   top: 72px;
+  max-height: calc(100dvh - 72px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: 19;
 }
 
@@ -4964,6 +4967,13 @@ select:focus-visible {
   position: relative;
 }
 
+.corp-user-links {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .corp-topbar-notifications b {
   align-items: center;
   background: #d62828;
@@ -4975,6 +4985,14 @@ select:focus-visible {
   min-height: 20px;
   min-width: 20px;
   padding: 0 5px;
+}
+
+.mobile-notification-badge {
+  background: #d62828;
+  border-radius: 999px;
+  color: #fff;
+  margin-left: auto;
+  padding: 2px 7px;
 }
 
 .content-media-gallery > button {
@@ -5072,12 +5090,60 @@ select:focus-visible {
   font-weight: 700;
 }
 
+.onboarding-verification-choice {
+  align-items: center;
+  background: #eef7f1;
+  border: 1px solid #cce5d5;
+  border-radius: 12px;
+  color: #174d37;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px;
+}
+
+.onboarding-verification-choice p { margin: 0; }
+
+.settings-profile-stack {
+  display: grid;
+  gap: 20px;
+}
+
+.settings-interest-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-interest-grid article,
+.settings-interest-grid label {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.settings-interest-grid article {
+  background: #f5f8f6;
+  border-radius: 10px;
+  justify-content: space-between;
+  padding: 10px;
+}
+
+.tag-picker-suggestions .recommended {
+  border-color: #287a58;
+  color: #176b4d;
+  font-weight: 800;
+}
+
+@media (max-width: 700px) {
+  .settings-interest-grid { grid-template-columns: 1fr; }
+}
+
 .event-primary-actions {
   align-items: center;
 }
 
 .detail-action-menu {
-  margin-left: auto;
   position: relative;
 }
 
@@ -5320,11 +5386,39 @@ select:focus-visible {
   text-align: left;
 }
 
+.invite-method-picker > div {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.invite-method-picker button,
+.invite-source-list > button {
+  background: #f5f8f6;
+  border: 1px solid #dbe5df;
+  border-radius: 10px;
+  cursor: pointer;
+  padding: 12px;
+  text-align: left;
+}
+
+.invite-method-picker button.active {
+  background: #1f5f46;
+  border-color: #1f5f46;
+  color: #fff;
+}
+
+.invite-source-list {
+  display: grid;
+  gap: 8px;
+}
+
 .event-timezone-field { order: -2; }
 .event-start-field { order: -1; }
 
 @media (max-width: 760px) {
   .invite-source-grid { grid-template-columns: 1fr; }
+  .invite-method-picker > div { grid-template-columns: 1fr; }
 }
 
 .detail-more-link {
@@ -5356,6 +5450,13 @@ select:focus-visible {
   justify-content: center;
   margin-left: -8px;
   width: 38px;
+}
+
+.attendee-avatar-stack img {
+  border-radius: inherit;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
 }
 
 .share-dialog-qr {
@@ -9124,11 +9225,15 @@ select:focus-visible {
 }
 .tag-post-card header {
   display: flex;
-  justify-content: space-between;
+  gap: 10px;
+  justify-content: flex-start;
 }
 .tag-post-card time {
   color: var(--muted-color, #667085);
   font-size: 0.8rem;
+}
+.tag-post-card > p {
+  white-space: pre-wrap;
 }
 .tag-post-media {
   display: grid;
@@ -9162,6 +9267,16 @@ select:focus-visible {
   color: #dc2626;
 }
 @media (max-width: 700px) {
+  .mutualism-bar {
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    left: 12px;
+    margin: 0;
+    position: fixed;
+    right: 12px;
+    top: auto;
+    width: auto;
+    z-index: 30;
+  }
   .tag-public-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

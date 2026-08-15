@@ -58,7 +58,7 @@ export class AuthService {
         throw new ConflictException("Bu email adresi zaten kullanılıyor.");
       }
 
-      const activatedUser = await this.prisma.user.update({
+      const pendingUser = await this.prisma.user.update({
         where: { id: existing.id },
         data: {
           name: input.name.trim(),
@@ -71,18 +71,18 @@ export class AuthService {
           businessCategory: input.accountType === "corporate" ? input.businessCategory : null,
           passwordHash: await hash(input.password, 10),
           emailVerified: false,
-          status: "active",
+          status: "pending",
         },
       });
 
-      const token = await this.createEmailToken(activatedUser.id, "verify_email");
+      const token = await this.createEmailToken(pendingUser.id, "verify_email");
       await this.mailService.sendVerificationEmail({
-        to: activatedUser.email,
-        name: activatedUser.name,
+        to: pendingUser.email,
+        name: pendingUser.name,
         token,
       });
 
-      return this.createLoginResponse(activatedUser);
+      return this.createLoginResponse(pendingUser);
     }
 
     const user = await this.prisma.user.create({
@@ -98,7 +98,7 @@ export class AuthService {
         companyType: input.accountType === "corporate" ? input.companyType : null,
         businessCategory: input.accountType === "corporate" ? input.businessCategory : null,
         role: "user",
-        status: "active",
+        status: "pending",
       },
     });
 
@@ -498,7 +498,7 @@ export class AuthService {
       }),
       this.prisma.user.update({
         where: { id: userId },
-        data: { phone: input.phone, phoneVerified: true },
+        data: { phone: input.phone, phoneVerified: true, status: "active" },
       }),
     ]);
     return {

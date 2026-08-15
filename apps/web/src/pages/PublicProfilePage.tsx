@@ -195,7 +195,7 @@ export function PublicProfilePage() {
       <section className="profile-facts" aria-label="Profil bilgileri">
         {profile.accountType === "individual" && profile.birthDate ? <span>{profile.gender === "male" ? "He" : profile.gender === "female" ? "She" : "They"} is {ageFrom(profile.birthDate)} y.o.</span> : null}
         {profile.city || profile.country ? <span>Based in {profile.city || profile.country}.</span> : null}
-        {profile.accountType === "corporate" ? <>{profile.companyName ? <span><strong>İşletme:</strong> {profile.companyName}</span> : null}{profile.tradeName ? <span><strong>Ticari unvan:</strong> {profile.tradeName}</span> : null}{profile.companyType ? <span><strong>Şirket türü:</strong> {profile.companyType}</span> : null}{profile.businessCategory ? <span><strong>Kategori:</strong> {profile.businessCategory}</span> : null}{profile.address || profile.district ? <span><strong>Adres:</strong> {[profile.address, profile.district, profile.city, profile.country].filter(Boolean).join(", ")}</span> : null}</> : null}
+        {profile.accountType === "corporate" ? <>{profile.companyName ? <span><strong>İşletme:</strong> {profile.companyName}</span> : null}{profile.tradeName ? <span><strong>Ticari unvan:</strong> {profile.tradeName}</span> : null}{profile.companyType ? <span><strong>Şirket türü:</strong> {profile.companyType}</span> : null}{profile.businessCategory ? <span><strong>Kategori:</strong> {profile.businessCategory}</span> : null}{profile.address || profile.district ? <span><strong>Adres:</strong> {[profile.address, profile.district, profile.city, profile.country].filter(Boolean).join(", ")}</span> : null}{profile.website ? <a href={profile.website} rel="noreferrer" target="_blank"><Globe2 size={16}/> {profile.website}</a> : null}</> : null}
       </section>
       {!profile.relationship.isSelf && profile.commonInterestCount > 0 ? (
         <button className="mutualism-bar" onClick={() => setMutualOpen(true)} type="button"><strong>{profile.commonInterestCount} ortak ilgi alanınız var</strong><span>Mutualizm analizini gör →</span></button>
@@ -275,7 +275,7 @@ export function PublicProfilePage() {
                   : "profile-interest"
               }
               key={interest.tag.id}
-              to={`/tags/${interest.tag.slug}?author=${profile.username}`}
+              to={`/tags/${interest.tag.slug}?authorId=${profile.id}`}
             >
               <span><b className={`interest-sentiment interest-sentiment-${interest.sentiment}`}>{interest.sentiment === "like" ? "♡" : interest.sentiment === "dislike" ? "⌄" : "−"}</b> #{interest.tag.name}</span>
               <small>
@@ -294,7 +294,7 @@ export function PublicProfilePage() {
           ) : null}
         </div>
       </section>
-      {profile.website ? (
+      {profile.website && profile.accountType !== "corporate" ? (
         <a
           className="profile-website"
           href={profile.website}

@@ -435,6 +435,7 @@ export class EventsService {
             gender: true,
             birthDate: true,
             profileVerifiedAt: true,
+            uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
             privacySettings: { select: { demographicsAudience: true, locationAudience: true } },
             interestTags: { select: { tagId: true } },
           },
@@ -451,6 +452,7 @@ export class EventsService {
       gender: actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.gender : null,
       birthDate: actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.birthDate : null,
       profileVerifiedAt: participant.user.profileVerifiedAt,
+      avatarUrl: participant.user.uploadedMedia?.[0]?.url ?? null,
       commonTagCount: (participant.user.interestTags ?? []).filter((item) => viewerTagIds.has(item.tagId)).length,
       relation: participant.role,
       status: participant.status,
@@ -550,7 +552,7 @@ export class EventsService {
   }
 
   async checkInWithTicket(eventId: string, token: string, actor: User) {
-    await this.ensureCanManageParticipants(eventId, actor);
+    await this.ensureCanManageParticipants(eventId, actor, true);
     const participant = await this.prisma.eventParticipant.findUnique({
       where: { checkInTokenHash: this.hashCheckInToken(token) },
     });
@@ -591,7 +593,7 @@ export class EventsService {
     input: InviteParticipantDto,
     actor: User,
   ) {
-    await this.ensureCanManageParticipants(eventId, actor);
+    await this.ensureCanManageParticipants(eventId, actor, true);
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
       select: { id: true, title: true, slug: true },
@@ -942,9 +944,19 @@ export class EventsService {
       return user;
     }
 
+    if (input.name && !input.email) {
+      const user = await this.prisma.user.findFirst({
+        where: { name: { equals: input.name.trim(), mode: "insensitive" }, status: "active" },
+        orderBy: { followerCount: "desc" },
+      });
+      if (!user)
+        throw new NotFoundException("Bu ad soyad ile davet edilebilecek kullanıcı bulunamadı.");
+      return user;
+    }
+
     if (!input.email) {
       throw new BadRequestException(
-        "Davet için kullanıcı adı, userId, telefon veya email gerekli.",
+        "Davet için kullanıcı adı, ad soyad, userId, telefon veya email gerekli.",
       );
     }
 

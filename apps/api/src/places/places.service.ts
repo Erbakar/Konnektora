@@ -352,6 +352,7 @@ export class PlacesService {
             gender: true,
             birthDate: true,
             profileVerifiedAt: true,
+            uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
             privacySettings: { select: { demographicsAudience: true, locationAudience: true } },
             interestTags: { select: { tagId: true } },
           },
@@ -368,6 +369,7 @@ export class PlacesService {
       gender: actor?.id === member.user.id || member.user.privacySettings?.demographicsAudience === "everybody" ? member.user.gender : null,
       birthDate: actor?.id === member.user.id || member.user.privacySettings?.demographicsAudience === "everybody" ? member.user.birthDate : null,
       profileVerifiedAt: member.user.profileVerifiedAt,
+      avatarUrl: member.user.uploadedMedia?.[0]?.url ?? null,
       commonTagCount: (member.user.interestTags ?? []).filter((item) => viewerTagIds.has(item.tagId)).length,
       relation: member.role,
       checkedIn: Boolean(member.checkedInAt),
@@ -376,7 +378,7 @@ export class PlacesService {
 
   async invite(placeId: string, input: InvitePlaceMemberDto, actor: User) {
     const place = await this.ensureCanManage(placeId, actor);
-    if (!input.userId && !input.email && !input.username && !input.phone)
+    if (!input.userId && !input.email && !input.username && !input.phone && !input.name)
       throw new BadRequestException(
         "Kullanıcı adı, telefon veya e-posta belirtilmelidir.",
       );
@@ -387,7 +389,9 @@ export class PlacesService {
           ? { username: input.username.replace(/^@/, "").toLowerCase().trim() }
           : input.phone
             ? { phone: input.phone.replace(/[\s()-]/g, "") }
-            : { email: input.email!.toLowerCase().trim() },
+            : input.email
+              ? { email: input.email.toLowerCase().trim() }
+              : { name: { equals: input.name!.trim(), mode: "insensitive" }, status: "active" },
     });
     if (!user)
       throw new NotFoundException("Davet edilecek kullanıcı bulunamadı.");

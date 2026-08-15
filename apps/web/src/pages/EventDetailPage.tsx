@@ -38,6 +38,7 @@ import {
   listReportRules,
   purchaseEventTickets,
   requestEventAttendance,
+  resolveMediaUrl,
   setContentNotification,
 } from "../lib/api";
 
@@ -421,7 +422,7 @@ export function EventDetailPage() {
       <section className="admin-form event-attendee-preview">
         <h2>Katılımcılar</h2>
         <Link to={`/events/${event.slug}/users`}>
-          <span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).sort((a, b) => Number((followingQuery.data ?? []).some((item) => item.id === b.id)) - Number((followingQuery.data ?? []).some((item) => item.id === a.id))).slice(0, 8).map((participant) => <span key={participant.id} title={participant.name}>{participant.name?.[0] ?? "?"}</span>)}</span>
+          <span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).sort((a, b) => Number((followingQuery.data ?? []).some((item) => item.id === b.id)) - Number((followingQuery.data ?? []).some((item) => item.id === a.id))).slice(0, 8).map((participant) => <span key={participant.id} title={participant.name}>{participant.avatarUrl ? <img alt="" src={resolveMediaUrl(participant.avatarUrl)}/> : participant.name?.[0] ?? "?"}</span>)}</span>
           <strong>{event.attendeeCount ?? relatedUsersQuery.data?.length ?? 0} attendees · {participantsQuery.data?.filter((item) => item.status === "invited").length ?? 0} invited · {(relatedUsersQuery.data ?? []).filter((participant) => (followingQuery.data ?? []).some((item) => item.id === participant.id)).length} following</strong>
         </Link>
       </section>

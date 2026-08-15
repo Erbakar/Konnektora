@@ -47,6 +47,7 @@ export class InvitePlaceMemberDto {
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @Matches(/^\+?[1-9]\d{7,14}$/) phone?: string;
   @IsOptional() @IsString() @MaxLength(40) username?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(160) name?: string;
   @IsOptional() @IsEnum(PlaceMemberRole) role?: PlaceMemberRole;
 }
 

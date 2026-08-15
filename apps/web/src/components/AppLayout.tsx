@@ -101,8 +101,7 @@ export function AppLayout() {
             <button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")} type="button">EN</button>
           </div>
           {user ? <>
-            <NavLink className="corp-topbar-link" to="/settings"><UserRound size={18} /> {user.name}</NavLink>
-            <NavLink className="corp-topbar-notifications" to="/notifications"><Bell size={18}/><span>{language === "tr" ? "Bildirimler" : "Notifications"}</span>{unreadNotifications ? <b>{unreadNotifications}</b> : null}</NavLink>
+            <div className="corp-user-links"><NavLink className="corp-topbar-link" to="/settings"><UserRound size={18} /> {user.name}</NavLink><NavLink className="corp-topbar-notifications" to="/notifications"><Bell size={15}/><span>{language === "tr" ? "Bildirimler" : "Notifications"}</span>{unreadNotifications ? <b>{unreadNotifications}</b> : null}</NavLink></div>
           </> : <>
             <NavLink className="corp-topbar-link" to="/login">{t("login")}</NavLink>
             <NavLink className="corp-topbar-cta" to="/onboarding">{language === "tr" ? "Kayıt ol" : "Sign up"}</NavLink>
@@ -142,7 +141,7 @@ export function AppLayout() {
             <NavLink to="/search" onClick={() => setMenuOpen(false)}><Search size={18} /> {t("search")}</NavLink>
             <NavLink to="/identity" onClick={() => setMenuOpen(false)}><QrCode size={18} /> {t("memberId")}</NavLink>
             <NavLink to="/community" onClick={() => setMenuOpen(false)}><Users size={18} /> {language === "tr" ? "Topluluk" : "Community"}</NavLink>
-            <NavLink to="/notifications" onClick={() => setMenuOpen(false)}><Bell size={18} /> {language === "tr" ? "Bildirimler" : "Notifications"}</NavLink>
+            <NavLink to="/notifications" onClick={() => setMenuOpen(false)}><Bell size={18} /> {language === "tr" ? "Bildirimler" : "Notifications"}{unreadNotifications ? <b className="mobile-notification-badge">{unreadNotifications}</b> : null}</NavLink>
             <NavLink to="/settings" onClick={() => setMenuOpen(false)}><Settings size={18} /> {language === "tr" ? "Ayarlar Merkezi" : "Settings center"}</NavLink>
             <NavLink to="/tickets" onClick={() => setMenuOpen(false)}><Ticket size={18} /> {language === "tr" ? "Biletlerim" : "My tickets"}</NavLink>
             <button className="mobile-menu-logout" onClick={() => { clearUserSession(); window.location.assign("/"); }} type="button"><LogOut size={18} /> {language === "tr" ? "Çıkış" : "Log out"}</button>
