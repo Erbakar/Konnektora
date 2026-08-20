@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
 import { clearUserSession, getUserSession, listConversations, listMyNotifications } from "../lib/api";
+import { memberAppHref, publicSiteHref } from "../lib/domains";
 import { useLanguage } from "../lib/i18n";
 
 export function AppLayout() {
@@ -58,9 +59,9 @@ export function AppLayout() {
   return (
     <div className={`app-shell${user ? " authenticated-shell" : ""}`}>
       <header className="corp-topbar">
-        <NavLink to="/" className="brand" aria-label="Konnektora ana sayfa">
+        <a href={publicSiteHref()} className="brand" aria-label="Konnektora ana sayfa">
           <img alt="Konnektora" src="/brand/konnektora-logo.svg" />
-        </NavLink>
+        </a>
 
         {user ? <nav className="corp-nav" aria-label={t("navigation")}>
           <NavLink to="/feed"><Home size={18} /> {t("feed")}</NavLink>
@@ -103,8 +104,8 @@ export function AppLayout() {
           {user ? <>
             <div className="corp-user-links"><NavLink className="corp-topbar-link" to="/settings"><UserRound size={18} /> {user.name}</NavLink><NavLink className="corp-topbar-notifications" to="/notifications"><Bell size={15}/><span>{language === "tr" ? "Bildirimler" : "Notifications"}</span>{unreadNotifications ? <b>{unreadNotifications}</b> : null}</NavLink></div>
           </> : <>
-            <NavLink className="corp-topbar-link" to="/login">{t("login")}</NavLink>
-            <NavLink className="corp-topbar-cta" to="/onboarding">{language === "tr" ? "Kayıt ol" : "Sign up"}</NavLink>
+            <a className="corp-topbar-link" href={memberAppHref("/login")}>{t("login")}</a>
+            <a className="corp-topbar-cta" href={memberAppHref("/onboarding")}>{language === "tr" ? "Kayıt ol" : "Sign up"}</a>
           </>}
         </div>
 
@@ -146,8 +147,8 @@ export function AppLayout() {
             <NavLink to="/tickets" onClick={() => setMenuOpen(false)}><Ticket size={18} /> {language === "tr" ? "Biletlerim" : "My tickets"}</NavLink>
             <button className="mobile-menu-logout" onClick={() => { clearUserSession(); window.location.assign("/"); }} type="button"><LogOut size={18} /> {language === "tr" ? "Çıkış" : "Log out"}</button>
           </> : <>
-            <NavLink className="corp-mobile-menu-link" to="/login" onClick={() => setMenuOpen(false)}>{t("login")}</NavLink>
-            <NavLink className="corp-mobile-menu-cta" to="/onboarding" onClick={() => setMenuOpen(false)}>{language === "tr" ? "Kayıt ol" : "Sign up"}</NavLink>
+            <a className="corp-mobile-menu-link" href={memberAppHref("/login")} onClick={() => setMenuOpen(false)}>{t("login")}</a>
+            <a className="corp-mobile-menu-cta" href={memberAppHref("/onboarding")} onClick={() => setMenuOpen(false)}>{language === "tr" ? "Kayıt ol" : "Sign up"}</a>
           </>}
         </nav>
       </div>

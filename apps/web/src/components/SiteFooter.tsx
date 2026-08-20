@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { memberAppHref } from "../lib/domains";
 import { useLanguage } from "../lib/i18n";
 
 export function SiteFooter() {
@@ -13,7 +14,7 @@ export function SiteFooter() {
         <div className="site-footer-columns">
           <div>
             <strong>Konnektora</strong>
-            <Link to="/store">{language === "tr" ? "Mağaza" : "Store"}</Link>
+            <a href={memberAppHref("/store")}>{language === "tr" ? "Mağaza" : "Store"}</a>
             <Link to="/business">For business</Link>
           </div>
           <div>

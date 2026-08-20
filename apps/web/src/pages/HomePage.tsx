@@ -24,6 +24,7 @@ import {
   listPlaces,
   listTags,
 } from "../lib/api";
+import { memberAppHref } from "../lib/domains";
 import { mockEvents } from "../lib/mockData";
 import { useLanguage } from "../lib/i18n";
 
@@ -202,9 +203,9 @@ export function HomePage() {
             <Link className="corp-btn corp-btn-primary" to="/events">
               {c.explore}
             </Link>
-            <Link className="corp-btn corp-btn-secondary" to="/onboarding">
+            <a className="corp-btn corp-btn-secondary" href={memberAppHref("/onboarding")}>
               {c.join}
-            </Link>
+            </a>
           </div>
           <form className="hero-search" action="/search">
             <Search size={20} />
@@ -248,9 +249,9 @@ export function HomePage() {
               <h2>{c.pulse}</h2>
               <p>{c.pulseCopy}</p>
             </div>
-            <Link className="discovery-search-action" to="/community">
+            <a className="discovery-search-action" href={memberAppHref("/community")}>
               {c.discoverCommunity} <ArrowRight size={18} />
-            </Link>
+            </a>
             <span className="active-community-count">
               <i />
               {discovery.activeUserCount} aktif üye
@@ -384,9 +385,9 @@ export function HomePage() {
               ? "Yakınındaki etkinliklerden güvenli davetli listelerine kadar topluluğun bütün yolculuğunu tek yerde gör."
               : "See the full community journey, from nearby events to trusted guest lists, in one place."}
           </p>
-          <Link className="corp-btn corp-btn-primary" to="/onboarding">
+          <a className="corp-btn corp-btn-primary" href={memberAppHref("/onboarding")}>
             {c.joinCommunity}
-          </Link>
+          </a>
         </div>
         <div className="home-story-media">
           <video
@@ -496,9 +497,9 @@ export function HomePage() {
             <Sparkles size={28} />
             <strong>{c.host}</strong>
             <p>{language === "tr" ? "Etkinlik oluştur, davetli listelerini yönet, check-in sırasında listeleri gör ve topluluğunu güvenle büyüt." : c.hostCopy}</p>
-            <Link className="corp-link" to="/admin">
+            <a className="corp-link" href={memberAppHref("/admin")}>
               {c.organizer}
-            </Link>
+            </a>
           </article>
         </div>
       </section>
