@@ -1,7 +1,7 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { memberAppHref } from "../lib/domains";
+import { publicSiteHref } from "../lib/domains";
 import { useLanguage } from "../lib/i18n";
 
 type FooterSection = "konnektora" | "discover" | "help" | "legal";
@@ -21,7 +21,7 @@ export function SiteFooter() {
           <p>{t("footerCopy")}</p>
           <div className="site-footer-mobile-actions">
             <Link to="/events">{language === "tr" ? "Etkinlikleri keşfet" : "Explore events"}</Link>
-            <a href={memberAppHref("/onboarding")}>{language === "tr" ? "Topluluğa katıl" : "Join the community"}</a>
+            <a href={publicSiteHref("/onboarding")}>{language === "tr" ? "Topluluğa katıl" : "Join the community"}</a>
           </div>
         </div>
         <nav className="site-footer-columns" aria-label={language === "tr" ? "Alt bilgi bağlantıları" : "Footer links"}>
@@ -31,7 +31,7 @@ export function SiteFooter() {
             </button>
             <strong className="site-footer-section-title">Konnektora</strong>
             <div className="site-footer-section-links" id="footer-konnektora-links">
-              <a href={memberAppHref("/store")}>{language === "tr" ? "Mağaza" : "Store"}</a>
+              <a href={publicSiteHref("/store")}>{language === "tr" ? "Mağaza" : "Store"}</a>
               <Link to="/business">For business</Link>
             </div>
           </div>

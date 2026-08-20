@@ -1,7 +1,7 @@
 import { MailService } from "./mail.service";
 
 describe("MailService branded account emails", () => {
-  const config = { get: jest.fn((key: string) => ({ RESEND_API_KEY: "re_test", EMAIL_FROM: "Konnektora <noreply@konnektora.com>", PUBLIC_APP_URL: "https://app.konnektora.com" })[key]) };
+  const config = { get: jest.fn((key: string) => ({ RESEND_API_KEY: "re_test", EMAIL_FROM: "Konnektora <noreply@konnektora.com>", PUBLIC_APP_URL: "https://konnektora.com" })[key]) };
   const fetchMock = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "email-1" }) });
   let service: MailService;
 
@@ -25,7 +25,7 @@ describe("MailService branded account emails", () => {
     await service.sendAccountActivatedEmail({ to: "user@example.com", name: "Ada" });
     const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
     expect(request.subject).toContain("hoş geldin");
-    expect(request.html).toContain("https://app.konnektora.com/feed");
+    expect(request.html).toContain("https://konnektora.com/feed");
     expect(request.html).toContain("Akışını keşfet");
     expect(request.html).toContain("Profilini tamamla");
   });

@@ -24,7 +24,7 @@ import {
   listPlaces,
   listTags,
 } from "../lib/api";
-import { memberAppHref } from "../lib/domains";
+import { publicSiteHref } from "../lib/domains";
 import { mockEvents } from "../lib/mockData";
 import { useLanguage } from "../lib/i18n";
 
@@ -203,7 +203,7 @@ export function HomePage() {
             <Link className="corp-btn corp-btn-primary" to="/events">
               {c.explore}
             </Link>
-            <a className="corp-btn corp-btn-secondary" href={memberAppHref("/onboarding")}>
+            <a className="corp-btn corp-btn-secondary" href={publicSiteHref("/onboarding")}>
               {c.join}
             </a>
           </div>
@@ -249,7 +249,7 @@ export function HomePage() {
               <h2>{c.pulse}</h2>
               <p>{c.pulseCopy}</p>
             </div>
-            <a className="discovery-search-action" href={memberAppHref("/community")}>
+            <a className="discovery-search-action" href={publicSiteHref("/community")}>
               {c.discoverCommunity} <ArrowRight size={18} />
             </a>
             <span className="active-community-count">
@@ -385,7 +385,7 @@ export function HomePage() {
               ? "Yakınındaki etkinliklerden güvenli davetli listelerine kadar topluluğun bütün yolculuğunu tek yerde gör."
               : "See the full community journey, from nearby events to trusted guest lists, in one place."}
           </p>
-          <a className="corp-btn corp-btn-primary" href={memberAppHref("/onboarding")}>
+          <a className="corp-btn corp-btn-primary" href={publicSiteHref("/onboarding")}>
             {c.joinCommunity}
           </a>
         </div>
@@ -497,7 +497,7 @@ export function HomePage() {
             <Sparkles size={28} />
             <strong>{c.host}</strong>
             <p>{language === "tr" ? "Etkinlik oluştur, davetli listelerini yönet, check-in sırasında listeleri gör ve topluluğunu güvenle büyüt." : c.hostCopy}</p>
-            <a className="corp-link" href={memberAppHref("/admin")}>
+            <a className="corp-link" href={publicSiteHref("/admin")}>
               {c.organizer}
             </a>
           </article>

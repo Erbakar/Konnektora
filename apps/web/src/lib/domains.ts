@@ -11,28 +11,10 @@ export const publicSiteOrigin = trimTrailingSlash(
     (isLocalHostname ? window.location.origin : "https://konnektora.com"),
 );
 
-export const memberAppOrigin = trimTrailingSlash(
-  import.meta.env.VITE_MEMBER_APP_URL?.trim() ||
-    (isLocalHostname ? window.location.origin : "https://app.konnektora.com"),
-);
-
 function absoluteHref(origin: string, path: string) {
   return new URL(path, `${origin}/`).toString();
 }
 
 export function publicSiteHref(path = "/") {
   return absoluteHref(publicSiteOrigin, path);
-}
-
-export function memberAppHref(path = "/") {
-  return absoluteHref(memberAppOrigin, path);
-}
-
-export function isMemberAppHost() {
-  return hostname === new URL(memberAppOrigin).hostname.toLowerCase();
-}
-
-export function isPublicSiteHost() {
-  const publicHostname = new URL(publicSiteOrigin).hostname.toLowerCase();
-  return hostname === publicHostname || hostname === `www.${publicHostname}`;
 }

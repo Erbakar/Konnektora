@@ -1,23 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import React, { lazy as reactLazy, Suspense, useEffect } from "react";
+import React, { lazy as reactLazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import {
   createBrowserRouter,
   isRouteErrorResponse,
   Navigate,
-  Outlet,
   RouterProvider,
-  useLocation,
   useRouteError,
 } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
-import { getUserSession } from "./lib/api";
-import {
-  isMemberAppHost,
-  isPublicSiteHost,
-  memberAppHref,
-  publicSiteHref,
-} from "./lib/domains";
+import { publicSiteHref } from "./lib/domains";
 import { LanguageProvider } from "./lib/i18n";
 import "./styles.css";
 
@@ -250,37 +242,6 @@ const SettingsSectionPage = lazy(() =>
 
 const queryClient = new QueryClient();
 
-function DomainAwareHomePage() {
-  if (isMemberAppHost()) {
-    return <Navigate replace to={getUserSession() ? "/feed" : "/login"} />;
-  }
-
-  return <HomePage />;
-}
-
-function MembershipDomainGuard() {
-  const location = useLocation();
-  const redirectHref = isPublicSiteHost()
-    ? memberAppHref(`${location.pathname}${location.search}${location.hash}`)
-    : null;
-
-  useEffect(() => {
-    if (redirectHref) window.location.replace(redirectHref);
-  }, [redirectHref]);
-
-  if (redirectHref) {
-    return (
-      <div className="page route-loading app-loading-screen" role="status">
-        <div className="loading-mark" aria-hidden="true" />
-        <strong>Üyelik alanına yönlendiriliyorsunuz…</strong>
-        <span>Güvenli uygulama açılıyor</span>
-      </div>
-    );
-  }
-
-  return <Outlet />;
-}
-
 const router = createBrowserRouter([
   {
     path: "/mobile",
@@ -292,7 +253,7 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     errorElement: <RouteErrorPage />,
     children: [
-      { index: true, element: <DomainAwareHomePage /> },
+      { index: true, element: <HomePage /> },
       { path: "business", element: <BusinessLandingPage /> },
       { path: "curators", element: <CuratorsPage /> },
       { path: "events", element: <EventsPage /> },
@@ -320,7 +281,6 @@ const router = createBrowserRouter([
       { path: "help/faq/:faqId", element: <HelpCenterPage /> },
       { path: "help/search", element: <HelpCenterPage /> },
       {
-        element: <MembershipDomainGuard />,
         children: [
           { path: "feed", element: <FeedPage /> },
           { path: "community", element: <CommunityPage /> },
