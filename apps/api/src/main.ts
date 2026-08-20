@@ -19,7 +19,15 @@ async function bootstrap() {
   if (serveWebApp) app.setGlobalPrefix("api");
 
   app.set("trust proxy", 1);
-  app.use(helmet({ crossOriginResourcePolicy: false }));
+  app.use(helmet({
+    crossOriginResourcePolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        mediaSrc: ["'self'", "data:", "blob:", "https:"]
+      }
+    }
+  }));
   app.use((request: Request, response: Response, next: NextFunction) => {
     const requestId = request.header("x-request-id")?.slice(0, 100) || randomUUID();
     response.setHeader("x-request-id", requestId);
