@@ -1,5 +1,4 @@
-import { useEffect, useState, type InputHTMLAttributes } from "react";
-import { formatPhone } from "../lib/formats";
+import type { InputHTMLAttributes } from "react";
 
 type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type">;
 
@@ -17,13 +16,7 @@ export function EmailInput(props: InputProps) {
   );
 }
 
-export function PhoneInput({ defaultValue, value, onChange, ...props }: InputProps) {
-  const [phone, setPhone] = useState(() => formatPhone(String(value ?? defaultValue ?? "")));
-
-  useEffect(() => {
-    if (value !== undefined) setPhone(formatPhone(String(value)));
-  }, [value]);
-
+export function PhoneInput(props: InputProps) {
   return (
     <input
       autoComplete="tel"
@@ -31,13 +24,6 @@ export function PhoneInput({ defaultValue, value, onChange, ...props }: InputPro
       placeholder="+90 555 111 22 33"
       type="tel"
       {...props}
-      value={phone}
-      onChange={(event) => {
-        const formatted = formatPhone(event.target.value);
-        setPhone(formatted);
-        event.target.value = formatted;
-        onChange?.(event);
-      }}
     />
   );
 }
