@@ -156,16 +156,11 @@ const isLocalApiUrl =
   API_URL.includes("localhost") || API_URL.includes("127.0.0.1");
 const isNetlifyPreview =
   isBrowser && window.location.hostname.endsWith("netlify.app");
-const isKonnektoraProduction =
-  isBrowser && window.location.hostname.endsWith("konnektora.com");
 const USE_MOCK_FALLBACK =
   MOCK_API_SETTING === "true" ||
   (MOCK_API_SETTING !== "false" &&
     import.meta.env.PROD &&
-    (!CONFIGURED_API_URL ||
-      isLocalApiUrl ||
-      isNetlifyPreview ||
-      isKonnektoraProduction));
+    (isLocalApiUrl || isNetlifyPreview));
 const USE_DEMO_CONTENT = import.meta.env.PROD;
 const TOKEN_KEY = "konnektora_admin_token";
 const USER_TOKEN_KEY = "konnektora_user_token";
@@ -332,9 +327,37 @@ type RequestOptions = RequestInit & {
 };
 
 class ApiHttpError extends Error {
-  constructor(readonly status: number) {
-    super(`API request failed: ${status}`);
+  readonly name = "ApiHttpError";
+
+  constructor(
+    readonly status: number,
+    message?: string,
+  ) {
+    super(message || `API request failed: ${status}`);
   }
+}
+
+async function readApiErrorMessage(response: Response) {
+  const body = await response.text();
+  if (!body) return undefined;
+
+  try {
+    const payload = JSON.parse(body) as {
+      message?: string | string[];
+      error?: string;
+    };
+    const message = payload.message;
+
+    if (Array.isArray(message)) return message.filter(Boolean).join(" ");
+    if (typeof message === "string" && message.trim()) return message.trim();
+    if (typeof payload.error === "string" && payload.error.trim()) {
+      return payload.error.trim();
+    }
+  } catch {
+    // Non-JSON service responses are intentionally hidden from the UI.
+  }
+
+  return undefined;
 }
 
 export function getAdminToken() {
@@ -824,7 +847,10 @@ async function requestJson<T>(
     });
 
     if (!response.ok) {
-      throw new ApiHttpError(response.status);
+      throw new ApiHttpError(
+        response.status,
+        await readApiErrorMessage(response),
+      );
     }
 
     if (response.status === 204) {

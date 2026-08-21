@@ -3,6 +3,7 @@ import { type FormEvent } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import { EmailInput, PhoneInput } from "../components/FormInputs";
+import { ServiceFeedback } from "../components/ServiceFeedback";
 import { createUserMessage, type UserMessageInput } from "../lib/api";
 import { normalizePhone } from "../lib/formats";
 
@@ -63,7 +64,13 @@ export function ContactPage() {
           {mutation.isPending ? "Gönderiliyor" : "Mesaj gönder"}
         </button>
         {mutation.data ? <div className="support-success" role="status"><strong>Mesajınız gönderildi.</strong><span>En kısa sürede size yanıt vereceğiz.</span></div> : null}
-        {mutation.isError ? <p className="form-error">Mesaj gönderilemedi. Lütfen tekrar dene.</p> : null}
+        {mutation.isError ? (
+          <ServiceFeedback
+            compact
+            error={mutation.error}
+            fallback="Mesajın gönderilemedi. Bilgilerini kaybetmeden yeniden deneyebilirsin."
+          />
+        ) : null}
       </form>
     </section>
   );

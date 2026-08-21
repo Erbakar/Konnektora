@@ -1,6 +1,7 @@
 import type { IScannerControls } from "@zxing/browser";
 import { Camera, Keyboard, QrCode, X } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { getServiceErrorMessage } from "../lib/serviceErrors";
 
 export function QrCheckInScanner({
   onScan,
@@ -29,9 +30,7 @@ export function QrCheckInScanner({
       setCameraOpen(false);
     } catch (error) {
       last.current = "";
-      setNotice(
-        error instanceof Error ? error.message : "QR kodu doğrulanamadı.",
-      );
+      setNotice(getServiceErrorMessage(error, "QR kodu doğrulanamadı. Lütfen yeniden dene."));
     }
   }
 

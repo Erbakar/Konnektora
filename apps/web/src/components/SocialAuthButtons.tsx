@@ -1,7 +1,7 @@
 import type { LoginResponse, SocialProvider } from "@konnektora/shared";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
 import { getSocialCredential } from "../lib/socialProviders";
+import { ServiceFeedback } from "./ServiceFeedback";
 
 export function SocialAuthButtons({
   action,
@@ -13,12 +13,10 @@ export function SocialAuthButtons({
   ) => Promise<LoginResponse>;
   onSuccess: (response: LoginResponse) => void;
 }) {
-  const [error, setError] = useState("");
   const mutation = useMutation({
     mutationFn: async (provider: SocialProvider) =>
       action(provider, await getSocialCredential(provider)),
     onSuccess,
-    onError: (reason: Error) => setError(reason.message),
   });
   return (
     <div className="social-auth">
@@ -43,7 +41,13 @@ export function SocialAuthButtons({
           <span className="provider-letter">f</span> Facebook ile devam et
         </button>
       </div>
-      {error ? <p className="form-error">{error}</p> : null}
+      {mutation.isError ? (
+        <ServiceFeedback
+          compact
+          error={mutation.error}
+          fallback="Sosyal hesapla giriş tamamlanamadı. Yeniden deneyebilir veya e-posta ile devam edebilirsin."
+        />
+      ) : null}
     </div>
   );
 }

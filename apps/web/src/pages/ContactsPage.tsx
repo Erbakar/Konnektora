@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { BookUser, MailPlus, Search, Smartphone, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { ServiceFeedback } from "../components/ServiceFeedback";
 import { UserIdentityLink, userProfilePath } from "../components/UserIdentityLink";
 import {
   followUser,
@@ -11,13 +12,19 @@ import {
   inviteContacts,
   searchContacts,
 } from "../lib/api";
+import { getServiceErrorMessage } from "../lib/serviceErrors";
 import { pickGoogleContacts, pickPhoneContacts } from "../lib/socialProviders";
 
 export function ContactsPage() {
   const user = getUserSession();
   const [notice, setNotice] = useState("");
+  const [noticeTone, setNoticeTone] = useState<"error" | "success">("success");
   const [manualType, setManualType] = useState<"name" | "email" | "phone">("name");
   const [manualQuery, setManualQuery] = useState("");
+  const showError = (error: unknown, fallback: string) => {
+    setNoticeTone("error");
+    setNotice(getServiceErrorMessage(error, fallback));
+  };
   const importMutation = useMutation({
     mutationFn: ({
       source,
@@ -26,16 +33,22 @@ export function ContactsPage() {
       source: "phone" | "google";
       contacts: Contact[];
     }) => importContacts(source, contacts),
-    onError: (error: Error) => setNotice(error.message),
+    onError: (error) =>
+      showError(error, "Kişiler şu anda eşleştirilemedi. Lütfen yeniden dene."),
   });
   const inviteMutation = useMutation({
     mutationFn: inviteContacts,
-    onSuccess: (data) => setNotice(`${data.invitedCount} davet gönderildi.`),
-    onError: () => setNotice("Davetler gönderilemedi."),
+    onSuccess: (data) => {
+      setNoticeTone("success");
+      setNotice(`${data.invitedCount} davet gönderildi.`);
+    },
+    onError: (error) =>
+      showError(error, "Davetler şu anda gönderilemedi. Lütfen yeniden dene."),
   });
   const searchMutation = useMutation({
     mutationFn: () => searchContacts(manualQuery.trim(), manualType),
-    onError: (error: Error) => setNotice(error.message),
+    onError: (error) =>
+      showError(error, "Arama şu anda tamamlanamadı. Lütfen yeniden dene."),
   });
   if (!user)
     return (
@@ -71,7 +84,9 @@ export function ContactsPage() {
         </div>
         <BookUser size={42} />
       </header>
-      {notice ? <p className="form-help">{notice}</p> : null}
+      {notice ? (
+        <ServiceFeedback compact message={notice} tone={noticeTone} />
+      ) : null}
       <form className="admin-form contact-manual-search" onSubmit={(event) => { event.preventDefault(); setNotice(""); if (manualQuery.trim().length >= 2) searchMutation.mutate(); }}>
         <h2>Manuel arama</h2>
         <p className="form-help">Yalnızca “arkadaşlarım beni bulabilir” seçeneği açık üyeler sonuçlarda gösterilir.</p>
@@ -85,8 +100,8 @@ export function ContactsPage() {
           className="social-provider-button"
           disabled={importMutation.isPending}
           onClick={() =>
-            void select("phone").catch((error: Error) =>
-              setNotice(error.message),
+            void select("phone").catch((error) =>
+              showError(error, "Telefon rehberi açılamadı. İzinleri kontrol edip yeniden dene."),
             )
           }
           type="button"
@@ -98,8 +113,8 @@ export function ContactsPage() {
           className="social-provider-button"
           disabled={importMutation.isPending}
           onClick={() =>
-            void select("google").catch((error: Error) =>
-              setNotice(error.message),
+            void select("google").catch((error) =>
+              showError(error, "Google kişileri açılamadı. Lütfen yeniden dene."),
             )
           }
           type="button"

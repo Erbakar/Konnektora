@@ -4,6 +4,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { TagSentiment } from "@konnektora/shared";
 import { EmailInput, PhoneInput, VerificationCodeInput } from "../components/FormInputs";
+import { ServiceFeedback } from "../components/ServiceFeedback";
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
 import { checkAvailability, completeOnboarding, confirmPhoneVerification, followUser, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, updateUserSession, uploadProfileMedia } from "../lib/api";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
@@ -147,6 +148,13 @@ export function OnboardingPage() {
       setStep(5);
     },
   });
+  const follow = useMutation({
+    mutationFn: followUser,
+    onSuccess: () =>
+      void queryClient.invalidateQueries({
+        queryKey: ["member-suggestions"],
+      }),
+  });
   const finish = useMutation({
     mutationFn: completeOnboarding,
     onSuccess: () => navigate("/identity"),
@@ -172,6 +180,13 @@ export function OnboardingPage() {
         ))}
       </nav>
       <div className="onboarding-card">
+        {onboarding.isError ? (
+          <ServiceFeedback
+            error={onboarding.error}
+            fallback="Profil adımların şu anda alınamadı. Bağlantını kontrol edip yeniden deneyebilirsin."
+            onRetry={() => void onboarding.refetch()}
+          />
+        ) : null}
         {session?.status === "pending" && step === 1 ? <div className="onboarding-verification-choice"><Sparkles size={22}/><p>{verificationEmailSent === false ? "Hesabın oluşturuldu ancak aktivasyon e-postası şu an teslim edilemedi. Aşağıda ekranda üretilen demo GSM kodunu girerek üyeliğini hemen aktifleştirebilirsin." : "Hesabın oluşturuldu. Aktivasyon e-postasındaki bağlantıyı açabilir veya aşağıda ekranda üretilen demo GSM kodunu girerek hemen devam edebilirsin."}</p></div> : null}
         {step === 0 ? (
           <form
@@ -226,7 +241,6 @@ export function OnboardingPage() {
               <EmailInput name="email" onBlur={(event) => void checkAvailability({ email: normalizeEmail(event.target.value) }).then((data) => setAvailabilityText(data.emailAvailable ? "E-posta kullanılabilir" : "E-posta kullanımda"))} required />
               <span className="form-help">Örnek: ada@ornek.com</span>
               {availabilityText ? <span className={availabilityText.includes("kullanımda") ? "field-error" : "form-help"}>{availabilityText}</span> : null}
-              {register.isError ? <span className="field-error">Bu e-posta kullanımdaysa giriş yapın; değilse adresi kontrol edip yeniden deneyin.</span> : null}
             </label>
             <label>
               GSM numarası
@@ -251,6 +265,13 @@ export function OnboardingPage() {
             <button className="primary-action" disabled={register.isPending} type="submit">
               Hesabı oluştur <ArrowRight size={18} />
             </button>
+            {register.isError ? (
+              <ServiceFeedback
+                compact
+                error={register.error}
+                fallback="Hesap oluşturulamadı. Bilgilerini kontrol edip yeniden dene."
+              />
+            ) : null}
           </form>
         ) : null}
 
@@ -286,7 +307,13 @@ export function OnboardingPage() {
               <button className="primary-action" disabled={phoneRequest.isPending || expires > 0} type="submit">
                 {phoneRequest.isPending ? "Kod oluşturuluyor…" : expires ? `${expires} sn` : "Doğrulama kodu oluştur"}
               </button>
-              {phoneRequest.isError ? <p className="form-error" role="alert">Kod oluşturulamadı. Telefon numaranı kontrol edip tekrar dene.</p> : null}
+              {phoneRequest.isError ? (
+                <ServiceFeedback
+                  compact
+                  error={phoneRequest.error}
+                  fallback="Kod oluşturulamadı. Telefon numaranı kontrol edip tekrar dene."
+                />
+              ) : null}
             </form>
             {demoCode ? (
               <div className="demo-verification-code" role="status">
@@ -310,7 +337,13 @@ export function OnboardingPage() {
                 <button className="primary-action" disabled={phoneConfirm.isPending || verificationCode.length !== 6} type="submit">
                   {phoneConfirm.isPending ? "Doğrulanıyor…" : "Doğrula ve devam et"}
                 </button>
-                {phoneConfirm.isError ? <p className="form-error">Kod hatalı veya süresi dolmuş. Yeni kod isteyip tekrar dene.</p> : null}
+                {phoneConfirm.isError ? (
+                  <ServiceFeedback
+                    compact
+                    error={phoneConfirm.error}
+                    fallback="Kod doğru değil veya süresi dolmuş. Yeni kod isteyip tekrar dene."
+                  />
+                ) : null}
               </form>
             ) : null}
           </div>
@@ -371,17 +404,24 @@ export function OnboardingPage() {
               Web sitesi
               <input defaultValue={profile.data.website ?? ""} name="website" placeholder="ornek.com (isteğe bağlı)" />
             </label>
-            {profileSave.isError ? <p className="form-error">Bilgiler kaydedilemedi: {(profileSave.error as Error).message}</p> : null}
+            {profileSave.isError ? (
+              <ServiceFeedback
+                compact
+                error={profileSave.error}
+                fallback="Profil bilgilerin kaydedilemedi. Alanları kontrol edip yeniden dene."
+              />
+            ) : null}
             <WizardButtons back={() => setStep(1)} nextLabel="Kaydet ve devam et" />
           </form>
         ) : null}
         {step === 2 && profile.isError ? (
           <div className="empty-state">
-            <h2>Profil yüklenemedi</h2>
-            <p>{(profile.error as Error).message}</p>
-            <button className="secondary-action" onClick={() => profile.refetch()} type="button">
-              Tekrar dene
-            </button>
+            <ServiceFeedback
+              error={profile.error}
+              fallback="Profil bilgilerin şu anda yüklenemedi."
+              onRetry={() => void profile.refetch()}
+              title="Profil yüklenemedi"
+            />
           </div>
         ) : null}
 
@@ -438,6 +478,21 @@ export function OnboardingPage() {
                 </div>
               </div>
             ) : null}
+            {photoUpload.isError ? (
+              <ServiceFeedback
+                compact
+                error={photoUpload.error}
+                fallback="Fotoğraf yüklenemedi. JPG, PNG veya WebP biçiminde daha küçük bir görsel deneyebilirsin."
+              />
+            ) : null}
+            {media.isError ? (
+              <ServiceFeedback
+                compact
+                error={media.error}
+                fallback="Yüklediğin fotoğraflar alınamadı."
+                onRetry={() => void media.refetch()}
+              />
+            ) : null}
             <div className="onboarding-media-row">{media.data?.map((item) => (item.type === "image" ? <img alt="Profil yüklemesi" key={item.id} src={item.url} /> : <video key={item.id} src={item.url} />))}</div>
             <WizardButtons back={() => setStep(2)} disabled={!media.data?.some((item) => item.type === "image")} next={() => setStep(4)} />
           </div>
@@ -455,8 +510,26 @@ export function OnboardingPage() {
                 </button>
               ))}
             </div>
+            {tags.isError || affinities.isError ? (
+              <ServiceFeedback
+                compact
+                error={tags.error ?? affinities.error}
+                fallback="İlgi alanların şu anda yüklenemedi."
+                onRetry={() => {
+                  void tags.refetch();
+                  void affinities.refetch();
+                }}
+              />
+            ) : null}
             <p className="form-help">{selectedCount} tag seçildi</p>
             <WizardButtons back={() => setStep(3)} disabled={!selectedCount} next={() => affinitySave.mutate()} />
+            {affinitySave.isError ? (
+              <ServiceFeedback
+                compact
+                error={affinitySave.error}
+                fallback="İlgi alanların kaydedilemedi. Seçimlerini kontrol edip yeniden dene."
+              />
+            ) : null}
           </div>
         ) : null}
 
@@ -479,14 +552,8 @@ export function OnboardingPage() {
                   </div>
                   <button
                     className="secondary-action"
-                    onClick={() =>
-                      followUser(member.id).then(
-                        () =>
-                          void queryClient.invalidateQueries({
-                            queryKey: ["member-suggestions"],
-                          }),
-                      )
-                    }
+                    disabled={follow.isPending}
+                    onClick={() => follow.mutate(member.id)}
                     type="button"
                   >
                     <UserPlus size={17} /> Takip et
@@ -494,7 +561,29 @@ export function OnboardingPage() {
                 </article>
               ))}
             </div>
+            {suggestions.isError ? (
+              <ServiceFeedback
+                compact
+                error={suggestions.error}
+                fallback="Üye önerileri şu anda yüklenemedi. Bu adımı daha sonra da tamamlayabilirsin."
+                onRetry={() => void suggestions.refetch()}
+              />
+            ) : null}
+            {follow.isError ? (
+              <ServiceFeedback
+                compact
+                error={follow.error}
+                fallback="Bu üyeyi şu anda takip edemedik. Yeniden deneyebilirsin."
+              />
+            ) : null}
             <WizardButtons back={() => setStep(4)} next={() => finish.mutate()} nextLabel="Kaydet ve tamamla" />
+            {finish.isError ? (
+              <ServiceFeedback
+                compact
+                error={finish.error}
+                fallback="Profil tamamlanamadı. Eksik adımları kontrol edip yeniden dene."
+              />
+            ) : null}
           </div>
         ) : null}
       </div>

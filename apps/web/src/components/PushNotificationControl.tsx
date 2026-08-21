@@ -1,7 +1,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Bell, BellOff } from "lucide-react";
 import { useState } from "react";
+import { ServiceFeedback } from "./ServiceFeedback";
 import { getPushPublicKey, registerPushSubscription, removePushSubscription } from "../lib/api";
+import { getServiceErrorMessage } from "../lib/serviceErrors";
 
 function decodeKey(value: string) {
   const padding = "=".repeat((4 - value.length % 4) % 4);
@@ -27,7 +29,13 @@ export function PushNotificationControl() {
       setEnabled(true);
       setMessage("Push bildirimleri bu cihazda etkin.");
     },
-    onError: (error) => setMessage(error instanceof Error ? error.message : "Push etkinleştirilemedi.")
+    onError: (error) =>
+      setMessage(
+        getServiceErrorMessage(
+          error,
+          "Bildirimler şu anda etkinleştirilemedi. Lütfen yeniden dene.",
+        ),
+      ),
   });
   const disable = useMutation({
     mutationFn: async () => {
@@ -39,7 +47,14 @@ export function PushNotificationControl() {
       }
       setEnabled(false);
       setMessage("Push bildirimleri bu cihazda kapatıldı.");
-    }
+    },
+    onError: (error) =>
+      setMessage(
+        getServiceErrorMessage(
+          error,
+          "Bildirimler şu anda kapatılamadı. Lütfen yeniden dene.",
+        ),
+      ),
   });
 
   if (!supported) return <p className="muted">Bu tarayıcı Web Push bildirimlerini desteklemiyor.</p>;
@@ -49,7 +64,19 @@ export function PushNotificationControl() {
       <button className="secondary-action" disabled={enable.isPending || disable.isPending || publicKey.isLoading} onClick={() => enabled ? disable.mutate() : enable.mutate()} type="button">
         {enabled ? <BellOff size={17} /> : <Bell size={17} />} {enabled ? "Bu cihazda kapat" : "Bu cihazda etkinleştir"}
       </button>
-      {message ? <small role="status">{message}</small> : null}
+      {publicKey.error && !message ? (
+        <ServiceFeedback
+          compact
+          error={publicKey.error}
+          fallback="Bildirim servisine şu anda ulaşılamıyor. Lütfen daha sonra yeniden dene."
+        />
+      ) : message ? (
+        <ServiceFeedback
+          compact
+          message={message}
+          tone={enable.isError || disable.isError ? "error" : "success"}
+        />
+      ) : null}
     </div>
   );
 }

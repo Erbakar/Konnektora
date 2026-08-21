@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { scanMember } from "../lib/api";
+import { getServiceErrorMessage } from "../lib/serviceErrors";
 
 type NdefRecord = { data?: DataView; encoding?: string };
 type NdefReadingEvent = Event & { message: { records: NdefRecord[] } };
@@ -57,9 +58,14 @@ export function MemberDeviceScanner({
         queryKey: ["member-scans", userId],
       });
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       lastPayload.current = "";
-      setNotice(error.message || "Kart geçersiz veya artık kullanılamıyor.");
+      setNotice(
+        getServiceErrorMessage(
+          error,
+          "Kart geçersiz veya artık kullanılamıyor. Lütfen yeniden dene.",
+        ),
+      );
     },
   });
 

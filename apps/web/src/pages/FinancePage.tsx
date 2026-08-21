@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BadgeCheck, Banknote, BarChart3, Building2, Check, CircleDollarSign, CreditCard, Landmark, PackageCheck, ReceiptText, ShieldCheck, Store, WalletCards } from "lucide-react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { ServiceFeedback } from "../components/ServiceFeedback";
 import { changeBusinessPlan, getFinanceDashboard, getUserSession, requestPayout, updateFinanceSettings } from "../lib/api";
 
 const statusLabel: Record<string, string> = { pending: "Bekliyor", succeeded: "Başarılı", failed: "Başarısız", refunded: "İade edildi", partially_refunded: "Kısmi iade", cancelled: "İptal" };
@@ -12,7 +13,7 @@ export function FinancePage() {
   const plan = useMutation({ mutationFn: (selected: "starter" | "growth" | "scale") => changeBusinessPlan(selected, selected === "starter" ? undefined : `pm_sandbox_${crypto.randomUUID()}`), onSuccess: refresh });
   if (!user) return <section className="page empty-state"><WalletCards size={42}/><h1>Ödemeler ve finans</h1><p>Finansal bilgilerini görmek için giriş yap.</p><Link className="primary-action" to="/login">Giriş yap</Link></section>;
   if (finance.isLoading) return <div className="page finance-state">Finans bilgileri yükleniyor…</div>;
-  if (finance.isError || !finance.data) return <div className="page empty-state"><h1>Finans bilgileri yüklenemedi</h1><p>API veya veritabanı bağlantısını kontrol edin.</p></div>;
+  if (finance.isError || !finance.data) return <div className="page empty-state"><ServiceFeedback error={finance.error} fallback="Finans bilgilerin şu anda yüklenemedi. Biraz sonra yeniden deneyebilirsin." onRetry={() => void finance.refetch()} title="Finans bilgileri yüklenemedi"/></div>;
   const data = finance.data; const business = user.accountType === "corporate";
   function save(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); settings.mutate(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value).trim() || undefined])) as Parameters<typeof updateFinanceSettings>[0]); }
   return <main className="page finance-page"><header className="finance-heading"><div><span className="eyebrow">İşletme, mağaza ve ödemeler</span><h1>İşletme merkezi</h1><p>Paketini, etkinliklerini, mekânlarını, gelirini ve kurumsal doğrulamalarını tek sayfadan yönet.</p></div><div className={`kyc-pill ${data.account.kycStatus}`}><ShieldCheck size={18}/><span>KYC</span><strong>{data.account.kycStatus === "approved" ? "Onaylı" : data.account.kycStatus === "pending" ? "İnceleniyor" : "Tamamlanmadı"}</strong></div></header>

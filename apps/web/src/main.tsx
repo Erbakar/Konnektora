@@ -9,6 +9,7 @@ import {
   useRouteError,
 } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
+import { ServiceFeedback } from "./components/ServiceFeedback";
 import { publicSiteHref } from "./lib/domains";
 import { LanguageProvider } from "./lib/i18n";
 import "./styles.css";
@@ -42,22 +43,21 @@ const lazy: typeof reactLazy = (loader) =>
 
 function RouteErrorPage() {
   const error = useRouteError();
-  const message = isRouteErrorResponse(error)
-    ? error.statusText
-    : error instanceof Error
-      ? error.message
-      : "Sayfa yüklenirken beklenmeyen bir sorun oluştu.";
+  const serviceError = isRouteErrorResponse(error)
+    ? { message: error.statusText, status: error.status }
+    : error;
 
   return (
     <main className="route-error-page" role="alert">
       <div className="loading-mark" aria-hidden="true" />
       <span className="eyebrow">Bağlantı yenilenemedi</span>
       <h1>Sayfayı yeniden yükleyelim.</h1>
-      <p>{message}</p>
+      <ServiceFeedback
+        error={serviceError}
+        fallback="Sayfa yüklenirken beklenmeyen bir sorun oluştu. Yeniden deneyebilirsin."
+        onRetry={() => window.location.reload()}
+      />
       <div className="row-actions">
-        <button className="primary-action" onClick={() => window.location.reload()}>
-          Tekrar dene
-        </button>
         <a className="secondary-action" href={publicSiteHref()}>
           Ana sayfaya dön
         </a>

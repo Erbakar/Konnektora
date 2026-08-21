@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Check, KeyRound, MailCheck, UserRound } from "lucide-react";
 import { type FormEvent, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { ServiceFeedback } from "../components/ServiceFeedback";
 import { acceptInvite, confirmEmail, resetPassword, setUserSession } from "../lib/api";
 
 export function VerifyEmailPage() {
@@ -32,7 +33,19 @@ export function VerifyEmailPage() {
           </Link>
         </>
       ) : null}
-      {mutation.isError || !token ? <p className="form-error">Doğrulama linki geçersiz veya süresi dolmuş.</p> : null}
+      {mutation.isError ? (
+        <ServiceFeedback
+          error={mutation.error}
+          fallback="Doğrulama bağlantısı geçersiz, daha önce kullanılmış veya süresi dolmuş olabilir. Yeni bir doğrulama e-postası isteyebilirsin."
+          title="E-posta doğrulanamadı"
+        />
+      ) : null}
+      {!token ? (
+        <ServiceFeedback
+          message="E-postadaki doğrulama butonunu kullanarak bu sayfayı yeniden aç."
+          title="Doğrulama bağlantısı eksik"
+        />
+      ) : null}
     </section>
   );
 }
@@ -64,8 +77,20 @@ export function ResetPasswordPage() {
           Şifreyi kaydet
         </button>
       </form>
-      {mutation.data ? <p className="form-success">Şifren güncellendi ve giriş yapıldı.</p> : null}
-      {mutation.isError || !token ? <p className="form-error">Şifre sıfırlama linki geçersiz veya süresi dolmuş.</p> : null}
+      {mutation.data ? <ServiceFeedback compact message="Şifren güncellendi ve hesabına giriş yapıldı." tone="success" /> : null}
+      {mutation.isError ? (
+        <ServiceFeedback
+          error={mutation.error}
+          fallback="Şifre sıfırlama bağlantısı geçersiz, daha önce kullanılmış veya süresi dolmuş olabilir."
+          title="Şifre güncellenemedi"
+        />
+      ) : null}
+      {!token ? (
+        <ServiceFeedback
+          message="Yeni bir şifre sıfırlama e-postası isteyip gelen bağlantıyı aç."
+          title="Şifre sıfırlama bağlantısı eksik"
+        />
+      ) : null}
     </section>
   );
 }
@@ -109,7 +134,19 @@ export function AcceptInvitePage() {
           Davet kabul edildi. <Link to="/feed">Akışa geç</Link>
         </p>
       ) : null}
-      {mutation.isError || !token ? <p className="form-error">Davet linki geçersiz veya süresi dolmuş.</p> : null}
+      {mutation.isError ? (
+        <ServiceFeedback
+          error={mutation.error}
+          fallback="Davet bağlantısı geçersiz, daha önce kullanılmış veya süresi dolmuş olabilir."
+          title="Davet kabul edilemedi"
+        />
+      ) : null}
+      {!token ? (
+        <ServiceFeedback
+          message="Sana gönderilen davet e-postasındaki bağlantıyı kullanarak yeniden aç."
+          title="Davet bağlantısı eksik"
+        />
+      ) : null}
     </section>
   );
 }

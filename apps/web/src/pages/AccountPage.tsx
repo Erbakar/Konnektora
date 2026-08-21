@@ -30,6 +30,7 @@ import {
   PhoneInput,
   VerificationCodeInput,
 } from "../components/FormInputs";
+import { ServiceFeedback } from "../components/ServiceFeedback";
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
 import { ProfileVerificationPanel } from "../components/ProfileVerificationPanel";
 import { PushNotificationControl } from "../components/PushNotificationControl";
@@ -39,6 +40,7 @@ import { TagPicker } from "../components/TagPicker";
 import { userProfilePath } from "../components/UserIdentityLink";
 import { getSocialCredential } from "../lib/socialProviders";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
+import { getServiceErrorMessage } from "../lib/serviceErrors";
 import {
   type AdminEventInput,
   type RegistrationInput,
@@ -264,10 +266,13 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       });
       navigate(mode === "login" ? "/feed" : "/onboarding");
     },
-    onError: () =>
+    onError: (error) =>
       setNotice({
         tone: "error",
-        message: "İşlem tamamlanamadı. Bilgileri kontrol edip tekrar dene.",
+        message: getServiceErrorMessage(
+          error,
+          "İşlem tamamlanamadı. Bilgilerini kontrol edip yeniden dene.",
+        ),
       }),
   });
   const socialAccountMutation = useMutation({
@@ -285,8 +290,14 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       queryClient.setQueryData(["social-accounts", user?.id], accounts);
       setNotice({ tone: "success", message: "Bağlı hesaplar güncellendi." });
     },
-    onError: (error: Error) =>
-      setNotice({ tone: "error", message: error.message }),
+    onError: (error) =>
+      setNotice({
+        tone: "error",
+        message: getServiceErrorMessage(
+          error,
+          "Bağlı hesap işlemi tamamlanamadı. Yeniden deneyebilirsin.",
+        ),
+      }),
   });
   const forgotPasswordMutation = useMutation({
     mutationFn: requestPasswordReset,
@@ -295,10 +306,13 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         tone: "success",
         message: "Şifre sıfırlama linki email adresine gönderildi.",
       }),
-    onError: () =>
+    onError: (error) =>
       setNotice({
         tone: "error",
-        message: "Şifre sıfırlama isteği gönderilemedi.",
+        message: getServiceErrorMessage(
+          error,
+          "Şifre sıfırlama isteği gönderilemedi. Birkaç dakika sonra yeniden dene.",
+        ),
       }),
   });
   const reactivateMutation = useMutation({
@@ -312,10 +326,13 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         message: "Hesabınız yeniden aktifleştirildi.",
       });
     },
-    onError: () =>
+    onError: (error) =>
       setNotice({
         tone: "error",
-        message: "Dondurulmuş hesap bulunamadı veya şifre hatalı.",
+        message: getServiceErrorMessage(
+          error,
+          "Dondurulmuş hesap bulunamadı veya şifre doğru değil.",
+        ),
       }),
   });
   const resendVerificationMutation = useMutation({
@@ -327,8 +344,14 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
           ? "E-posta servisi şu an teslimatı kabul etmedi. Demo telefon koduyla devam edebilirsin."
           : "Doğrulama e-postası tekrar gönderildi.",
       }),
-    onError: () =>
-      setNotice({ tone: "error", message: "Doğrulama emaili gönderilemedi." }),
+    onError: (error) =>
+      setNotice({
+        tone: "error",
+        message: getServiceErrorMessage(
+          error,
+          "Doğrulama e-postası gönderilemedi. Birkaç dakika sonra yeniden dene.",
+        ),
+      }),
   });
 
   const eventMutation = useMutation({
@@ -879,11 +902,11 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       </div>
 
       {notice ? (
-        <p
-          className={notice.tone === "success" ? "form-success" : "form-error"}
-        >
-          {notice.message}
-        </p>
+        <ServiceFeedback
+          compact
+          message={notice.message}
+          tone={notice.tone}
+        />
       ) : null}
       {showFrozenConfirmation ? (
         <div
@@ -2591,11 +2614,7 @@ function ProfileMediaPanel({
         </p>
       ) : null}
       {notice ? (
-        <p
-          className={notice.tone === "success" ? "form-success" : "form-error"}
-        >
-          {notice.message}
-        </p>
+        <ServiceFeedback compact message={notice.message} tone={notice.tone} />
       ) : null}
       <div className="profile-media-grid">
         {media.map((item, index) => (
@@ -2938,11 +2957,7 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
         </button>
       </form>
       {notice ? (
-        <p
-          className={notice.tone === "success" ? "form-success" : "form-error"}
-        >
-          {notice.message}
-        </p>
+        <ServiceFeedback compact message={notice.message} tone={notice.tone} />
       ) : null}
       <div className="guest-list">
         {participants.map((participant) => (

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BadgeCheck, Camera, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { getProfileVerification, submitProfileVerification } from "../lib/api";
+import { getServiceErrorMessage } from "../lib/serviceErrors";
 
 const challenges = [
   { value: "blink" as const, label: "İki kez göz kırp" },
@@ -31,7 +32,13 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
       stopCamera();
       void queryClient.invalidateQueries({ queryKey: ["public-profile"] });
     },
-    onError: (reason: Error) => setError(reason.message),
+    onError: (reason) =>
+      setError(
+        getServiceErrorMessage(
+          reason,
+          "Fotoğraf doğrulaması tamamlanamadı. Lütfen yeniden dene.",
+        ),
+      ),
   });
 
   useEffect(
