@@ -268,7 +268,7 @@ export function OnboardingPage() {
         {step === 1 ? (
           <div>
             <h2>Telefonunu doğrula</h2>
-            <p>Hesabın zaten oluşturuldu. Bu adım yalnızca telefon numaranı doğrular ve üyeliğini engellemez.</p>
+            <p>Telefon numaranı yazıp kod oluştur. Üretilen 6 haneli kodu hemen aşağıda açılan alana gir; bu adım üyeliğini engellemez.</p>
             <form
               onSubmit={(event: FormEvent<HTMLFormElement>) => {
                 event.preventDefault();
@@ -284,8 +284,9 @@ export function OnboardingPage() {
                 <span className="form-help">0555… veya +90 555… biçiminde yazabilirsin.</span>
               </label>
               <button className="primary-action" disabled={phoneRequest.isPending || expires > 0} type="submit">
-                {expires ? `${expires} sn` : "Doğrulama kodu oluştur"}
+                {phoneRequest.isPending ? "Kod oluşturuluyor…" : expires ? `${expires} sn` : "Doğrulama kodu oluştur"}
               </button>
+              {phoneRequest.isError ? <p className="form-error" role="alert">Kod oluşturulamadı. Telefon numaranı kontrol edip tekrar dene.</p> : null}
             </form>
             {demoCode ? (
               <div className="demo-verification-code" role="status">
@@ -294,7 +295,7 @@ export function OnboardingPage() {
                 <p>Bu kodu aşağıdaki alana kendin gir. Kod iki dakika geçerlidir.</p>
               </div>
             ) : null}
-            {expires || demoCode ? (
+            {phoneRequest.isSuccess || expires > 0 || demoCode ? (
               <form
                 onSubmit={(event: FormEvent<HTMLFormElement>) => {
                   event.preventDefault();
