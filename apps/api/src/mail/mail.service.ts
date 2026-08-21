@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 type MailMessage = {
@@ -78,12 +78,22 @@ export class MailService {
   async sendPasswordResetEmail(input: { to: string; name: string; token: string }) {
     const appUrl = this.getAppUrl();
     const resetUrl = `${appUrl}/reset-password?token=${encodeURIComponent(input.token)}`;
+    const safeName = this.escapeHtml(input.name);
 
     await this.send({
       to: input.to,
-      subject: "Konnektora şifre sıfırlama",
-      text: `Merhaba ${input.name}, şifreni sıfırlamak için linki aç: ${resetUrl}`,
-      html: `<p>Merhaba ${input.name},</p><p>Şifreni sıfırlamak için aşağıdaki linki aç.</p><p><a href="${resetUrl}">Şifremi sıfırla</a></p>`
+      subject: "Şifreni güvenle yenile — Konnektora",
+      text: `Merhaba ${input.name}, Konnektora şifreni yenilemek için bağlantıyı 30 dakika içinde aç: ${resetUrl}`,
+      html: this.renderBrandedEmail({
+        preheader: "Konnektora şifreni güvenli biçimde yenile.",
+        eyebrow: "HESAP GÜVENLİĞİ",
+        title: `Şifreni yenile, ${safeName}.`,
+        intro: "Hesabın için bir şifre yenileme talebi aldık. Aşağıdaki güvenli bağlantıdan yeni şifreni belirleyebilirsin.",
+        buttonLabel: "Şifremi yenile",
+        buttonUrl: resetUrl,
+        notice: "Bu bağlantı 30 dakika boyunca ve yalnızca bir kez kullanılabilir.",
+        footerNote: "Bu talebi sen oluşturmadıysan e-postayı yok sayabilirsin; mevcut şifren değişmez."
+      })
     });
   }
 
@@ -154,8 +164,13 @@ export class MailService {
   private async send(message: MailMessage): Promise<{ provider: string; providerId?: string }> {
     const apiKey = this.configService.get<string>("RESEND_API_KEY");
     const from = this.configService.get<string>("EMAIL_FROM");
+    const replyTo = this.configService.get<string>("EMAIL_REPLY_TO");
 
     if (!apiKey || !from) {
+      if (this.configService.get<string>("NODE_ENV") === "production") {
+        this.logger.error("Canlı e-posta gönderimi için RESEND_API_KEY ve EMAIL_FROM gerekli.");
+        throw new ServiceUnavailableException("E-posta servisi yapılandırılmamış.");
+      }
       this.logger.log(`[mail:dev] ${message.subject} -> ${message.to}`);
       return { provider: "development" };
     }
@@ -172,7 +187,8 @@ export class MailService {
           to: [message.to],
           subject: message.subject,
           text: message.text,
-          html: message.html
+          html: message.html,
+          ...(replyTo ? { reply_to: replyTo } : {})
         })
       });
 
@@ -182,6 +198,7 @@ export class MailService {
         throw new Error(`E-posta sağlayıcısı ${response.status} yanıtı verdi.`);
       }
       const payload = await response.json() as { id?: string };
+      this.logger.log(`E-posta Resend tarafından kabul edildi${payload.id ? ` (${payload.id})` : ""}.`);
       return { provider: "resend", providerId: payload.id };
     } catch (error) {
       this.logger.error("Mail provider'a ulaşılamadı.", error);

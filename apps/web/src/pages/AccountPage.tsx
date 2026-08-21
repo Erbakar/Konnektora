@@ -257,7 +257,9 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         tone: "success",
         message:
           response.user.status === "pending"
-            ? "Hesap oluşturuldu. Email doğrulama linkini kontrol et."
+            ? response.verificationEmailSent === false
+              ? "Hesap oluşturuldu. E-posta teslim edilemediyse onboarding ekranındaki demo telefon koduyla devam edebilirsin."
+              : "Hesap oluşturuldu. E-posta doğrulama bağlantısını kontrol et."
             : "Giriş yapıldı. Artık etkinlik oluşturabilirsin.",
       });
       navigate(mode === "login" ? "/feed" : "/onboarding");
@@ -318,10 +320,12 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   });
   const resendVerificationMutation = useMutation({
     mutationFn: requestEmailVerification,
-    onSuccess: () =>
+    onSuccess: (response) =>
       setNotice({
-        tone: "success",
-        message: "Doğrulama emaili tekrar gönderildi.",
+        tone: response.sent === false ? "error" : "success",
+        message: response.sent === false
+          ? "E-posta servisi şu an teslimatı kabul etmedi. Demo telefon koduyla devam edebilirsin."
+          : "Doğrulama e-postası tekrar gönderildi.",
       }),
     onError: () =>
       setNotice({ tone: "error", message: "Doğrulama emaili gönderilemedi." }),
@@ -468,10 +472,12 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     mutationFn: requestPhoneVerification,
     onSuccess: (response, phone) => {
       setPendingPhone(phone);
-      setDevelopmentPhoneCode(response.developmentCode ?? null);
+      setDevelopmentPhoneCode(response.demoCode ?? response.developmentCode ?? null);
       setNotice({
         tone: "success",
-        message: "Doğrulama kodu gönderildi. Kod 2 dakika geçerlidir.",
+        message: response.demoCode
+          ? "Demo doğrulama kodu oluşturuldu. Kodu aşağıdaki alana girin."
+          : "Doğrulama kodu gönderildi. Kod 2 dakika geçerlidir.",
       });
     },
     onError: () =>
@@ -1455,14 +1461,15 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     {pendingPhone} numarasına gönderilen 6 haneli kodu girin.
                   </p>
                   {developmentPhoneCode ? (
-                    <p className="form-help">
-                      Geliştirme kodu: {developmentPhoneCode}
-                    </p>
+                    <div className="demo-verification-code" role="status">
+                      <span>Demo doğrulama kodun</span>
+                      <strong>{developmentPhoneCode}</strong>
+                      <p>Kodu aşağıdaki alana kendin gir.</p>
+                    </div>
                   ) : null}
                   <label>
                     Doğrulama kodu
                     <VerificationCodeInput
-                      defaultValue={developmentPhoneCode ?? ""}
                       name="code"
                       required
                     />

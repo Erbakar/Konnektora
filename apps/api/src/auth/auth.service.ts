@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import { User } from "@prisma/client";
@@ -17,6 +17,8 @@ const EMAIL_TOKEN_TTL_MS = {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -76,13 +78,16 @@ export class AuthService {
       });
 
       const token = await this.createEmailToken(pendingUser.id, "verify_email");
-      await this.mailService.sendVerificationEmail({
+      const verificationEmailSent = await this.sendVerificationEmailSafely({
         to: pendingUser.email,
         name: pendingUser.name,
         token,
       });
 
-      return this.createLoginResponse(pendingUser);
+      return {
+        ...(await this.createLoginResponse(pendingUser)),
+        verificationEmailSent,
+      };
     }
 
     const user = await this.prisma.user.create({
@@ -103,13 +108,16 @@ export class AuthService {
     });
 
     const token = await this.createEmailToken(user.id, "verify_email");
-    await this.mailService.sendVerificationEmail({
+    const verificationEmailSent = await this.sendVerificationEmailSafely({
       to: user.email,
       name: user.name,
       token,
     });
 
-    return this.createLoginResponse(user);
+    return {
+      ...(await this.createLoginResponse(user)),
+      verificationEmailSent,
+    };
   }
 
   async socialLogin(input: SocialAuthDto) {
@@ -272,12 +280,12 @@ export class AuthService {
     }
 
     const token = await this.createEmailToken(user.id, "verify_email");
-    await this.mailService.sendVerificationEmail({
+    const sent = await this.sendVerificationEmailSafely({
       to: user.email,
       name: user.name,
       token,
     });
-    return { ok: true };
+    return { ok: true, sent };
   }
 
   async confirmEmail(input: TokenDto) {
@@ -287,7 +295,7 @@ export class AuthService {
       data: { status: "active", emailVerified: true },
     });
 
-    await this.mailService.sendAccountActivatedEmail({
+    await this.sendAccountActivatedEmailSafely({
       to: user.email,
       name: user.name,
     });
@@ -320,12 +328,12 @@ export class AuthService {
     }
 
     const token = await this.createEmailToken(user.id, "verify_email");
-    await this.mailService.sendVerificationEmail({
+    const sent = await this.sendVerificationEmailSafely({
       to: user.email,
       name: user.name,
       token,
     });
-    return { ok: true };
+    return { ok: true, sent };
   }
 
   async sendPasswordResetForUser(userId: string) {
@@ -433,7 +441,7 @@ export class AuthService {
   }
 
   async requestPhoneVerification(userId: string, input: RequestPhoneVerificationDto) {
-    const bypassEnabled =
+    const demoMode =
       !this.config.get<string>("SMS_WEBHOOK_URL") &&
       this.config.get<string>("ALLOW_SMS_VERIFICATION_BYPASS") === "true";
     const owner = await this.prisma.user.findFirst({
@@ -466,22 +474,27 @@ export class AuthService {
     return {
       ok: true as const,
       expiresInSeconds: 120,
-      verificationMode: bypassEnabled ? ("temporary_bypass" as const) : ("sms" as const),
-      ...(process.env.NODE_ENV === "production" ? {} : { developmentCode: code }),
+      verificationMode: demoMode ? ("demo" as const) : ("sms" as const),
+      ...(demoMode ? { demoCode: code } : {}),
+      ...(this.config.get<string>("NODE_ENV") === "production" || demoMode ? {} : { developmentCode: code }),
     };
   }
 
   async confirmPhoneVerification(userId: string, input: ConfirmPhoneVerificationDto) {
-    const bypassEnabled =
-      !this.config.get<string>("SMS_WEBHOOK_URL") &&
-      this.config.get<string>("ALLOW_SMS_VERIFICATION_BYPASS") === "true";
-    const owner = await this.prisma.user.findFirst({
-      where: { phone: input.phone, id: { not: userId } },
-      select: { id: true },
-    });
+    const [owner, account] = await Promise.all([
+      this.prisma.user.findFirst({
+        where: { phone: input.phone, id: { not: userId } },
+        select: { id: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, name: true, status: true },
+      }),
+    ]);
     if (owner) {
       throw new ConflictException("Bu telefon numarası artık başka bir hesapta kullanılıyor.");
     }
+    if (!account) throw new NotFoundException("Kullanıcı bulunamadı.");
 
     const verification = await this.prisma.phoneVerification.findFirst({
       where: { userId, phone: input.phone, consumedAt: null },
@@ -490,7 +503,7 @@ export class AuthService {
     if (!verification || verification.expiresAt.getTime() < Date.now() || verification.attempts >= 5) {
       throw new BadRequestException("Kod geçersiz veya süresi dolmuş.");
     }
-    if (!bypassEnabled && verification.codeHash !== this.hashToken(input.code)) {
+    if (verification.codeHash !== this.hashToken(input.code)) {
       await this.prisma.phoneVerification.update({
         where: { id: verification.id },
         data: { attempts: { increment: 1 } },
@@ -508,6 +521,12 @@ export class AuthService {
         data: { phone: input.phone, phoneVerified: true, status: "active" },
       }),
     ]);
+    if (account.status === "pending") {
+      await this.sendAccountActivatedEmailSafely({
+        to: account.email,
+        name: account.name,
+      });
+    }
     return {
       ok: true as const,
       phone: user.phone,
@@ -530,7 +549,7 @@ export class AuthService {
       },
     });
 
-    await this.mailService.sendAccountActivatedEmail({
+    await this.sendAccountActivatedEmailSafely({
       to: user.email,
       name: user.name,
     });
@@ -570,6 +589,26 @@ export class AuthService {
 
   private hashToken(token: string) {
     return createHash("sha256").update(token).digest("hex");
+  }
+
+  private async sendVerificationEmailSafely(input: { to: string; name: string; token: string }) {
+    try {
+      await this.mailService.sendVerificationEmail(input);
+      return true;
+    } catch (error) {
+      this.logger.error("Doğrulama e-postası gönderilemedi; üyelik akışı açık bırakıldı.", error);
+      return false;
+    }
+  }
+
+  private async sendAccountActivatedEmailSafely(input: { to: string; name: string }) {
+    try {
+      await this.mailService.sendAccountActivatedEmail(input);
+      return true;
+    } catch (error) {
+      this.logger.error("Hesap onay e-postası gönderilemedi; aktivasyon tamamlandı.", error);
+      return false;
+    }
   }
 
   private async createLoginResponse(user: User) {

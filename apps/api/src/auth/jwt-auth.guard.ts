@@ -28,11 +28,15 @@ export class JwtAuthGuard implements CanActivate {
 
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
 
-    if (!user || user.status !== "active") {
+    if (!user || !this.isAllowedUser(user)) {
       throw new UnauthorizedException("Aktif kullanıcı gerekli.");
     }
 
     request.user = user;
     return true;
+  }
+
+  protected isAllowedUser(user: { status: string }) {
+    return user.status === "active";
   }
 }

@@ -98,8 +98,9 @@ export const phoneSchema = z.string().regex(/^\+[1-9]\d{7,14}$/);
 export const phoneVerificationResponseSchema = z.object({
   ok: z.literal(true),
   expiresInSeconds: z.number().int().positive(),
+  demoCode: z.string().length(6).optional(),
   developmentCode: z.string().length(6).optional(),
-  verificationMode: z.enum(["sms", "temporary_bypass"]).optional(),
+  verificationMode: z.enum(["sms", "demo", "temporary_bypass"]).optional(),
 });
 export const availabilitySchema = z.object({
   emailAvailable: z.boolean().nullable(),
@@ -990,6 +991,7 @@ export const eventParticipantSchema = z.object({
 export const loginResponseSchema = z.object({
   accessToken: z.string(),
   user: adminUserSchema,
+  verificationEmailSent: z.boolean().optional(),
 });
 
 export const contentReportSchema = z.object({

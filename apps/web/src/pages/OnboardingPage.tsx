@@ -25,8 +25,8 @@ export function OnboardingPage() {
   const [accountType, setAccountType] = useState<"individual" | "corporate">("individual");
   const [phone, setPhone] = useState("");
   const [expires, setExpires] = useState(0);
-  const [developmentCode, setDevelopmentCode] = useState("");
-  const [temporarySmsBypass, setTemporarySmsBypass] = useState(false);
+  const [demoCode, setDemoCode] = useState("");
+  const [demoVerification, setDemoVerification] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoQueue, setPhotoQueue] = useState<File[]>([]);
@@ -34,6 +34,7 @@ export function OnboardingPage() {
   const [photoZoom, setPhotoZoom] = useState(1);
   const [photoRotation, setPhotoRotation] = useState(0);
   const [availabilityText, setAvailabilityText] = useState("");
+  const [verificationEmailSent, setVerificationEmailSent] = useState<boolean | undefined>();
   const [sentiments, setSentiments] = useState<Record<string, TagSentiment>>({});
   const [emotionTagId, setEmotionTagId] = useState("");
   const onboarding = useQuery({
@@ -93,6 +94,7 @@ export function OnboardingPage() {
     onSuccess: (response) => {
       setUserSession(response);
       setSession(response.user);
+      setVerificationEmailSent(response.verificationEmailSent);
       setStep(1);
     },
   });
@@ -100,9 +102,9 @@ export function OnboardingPage() {
     mutationFn: requestPhoneVerification,
     onSuccess: (data) => {
       setExpires(data.expiresInSeconds);
-      setDevelopmentCode(data.developmentCode ?? "");
-      setVerificationCode(data.developmentCode ?? "");
-      setTemporarySmsBypass(data.verificationMode === "temporary_bypass");
+      setDemoCode(data.demoCode ?? data.developmentCode ?? "");
+      setVerificationCode("");
+      setDemoVerification(data.verificationMode === "demo" || data.verificationMode === "temporary_bypass");
     },
   });
   const phoneConfirm = useMutation({
@@ -170,7 +172,7 @@ export function OnboardingPage() {
         ))}
       </nav>
       <div className="onboarding-card">
-        {session?.status === "pending" && step === 1 ? <div className="onboarding-verification-choice"><Sparkles size={22}/><p>Aktivasyon e-postasındaki bağlantıyı açabilir veya aşağıda GSM doğrulamasını tamamlayarak devam edebilirsin.</p></div> : null}
+        {session?.status === "pending" && step === 1 ? <div className="onboarding-verification-choice"><Sparkles size={22}/><p>{verificationEmailSent === false ? "Hesabın oluşturuldu ancak aktivasyon e-postası şu an teslim edilemedi. Aşağıda ekranda üretilen demo GSM kodunu girerek üyeliğini hemen aktifleştirebilirsin." : "Hesabın oluşturuldu. Aktivasyon e-postasındaki bağlantıyı açabilir veya aşağıda ekranda üretilen demo GSM kodunu girerek hemen devam edebilirsin."}</p></div> : null}
         {step === 0 ? (
           <form
             onSubmit={(event: FormEvent<HTMLFormElement>) => {
@@ -229,7 +231,7 @@ export function OnboardingPage() {
             <label>
               GSM numarası
               <PhoneInput name="phone" pattern="\+?[0-9 ]{10,19}" required />
-              <span className="form-help">GSM doğrulaması bir sonraki adımda zorunludur.</span>
+              <span className="form-help">Bir sonraki adımda ekranda oluşturulan demo koduyla doğrulayabilirsin.</span>
             </label>
             <label>
               Şifre
@@ -266,7 +268,7 @@ export function OnboardingPage() {
         {step === 1 ? (
           <div>
             <h2>Telefonunu doğrula</h2>
-            <p>6 haneli kod iki dakika geçerlidir.</p>
+            <p>Hesabın zaten oluşturuldu. Bu adım yalnızca telefon numaranı doğrular ve üyeliğini engellemez.</p>
             <form
               onSubmit={(event: FormEvent<HTMLFormElement>) => {
                 event.preventDefault();
@@ -282,10 +284,17 @@ export function OnboardingPage() {
                 <span className="form-help">0555… veya +90 555… biçiminde yazabilirsin.</span>
               </label>
               <button className="primary-action" disabled={phoneRequest.isPending || expires > 0} type="submit">
-                {expires ? `${expires} sn` : "Kod gönder"}
+                {expires ? `${expires} sn` : "Doğrulama kodu oluştur"}
               </button>
             </form>
-            {expires || developmentCode ? (
+            {demoCode ? (
+              <div className="demo-verification-code" role="status">
+                <span>Demo doğrulama kodun</span>
+                <strong aria-label={`Demo doğrulama kodu ${demoCode}`}>{demoCode}</strong>
+                <p>Bu kodu aşağıdaki alana kendin gir. Kod iki dakika geçerlidir.</p>
+              </div>
+            ) : null}
+            {expires || demoCode ? (
               <form
                 onSubmit={(event: FormEvent<HTMLFormElement>) => {
                   event.preventDefault();
@@ -295,7 +304,7 @@ export function OnboardingPage() {
                 <label>
                   Doğrulama kodu
                   <VerificationCodeInput autoFocus name="code" onChange={(event) => setVerificationCode(event.target.value)} required value={verificationCode} />
-                  <span className="form-help">{temporarySmsBypass ? "Test süresince herhangi bir 6 haneli kod yazabilirsin." : "Telefonuna gelen 6 haneli kodu yaz."}</span>
+                  <span className="form-help">{demoVerification ? "Yukarıda senin için oluşturulan 6 haneli kodu yaz." : "Telefonuna gelen 6 haneli kodu yaz."}</span>
                 </label>
                 <button className="primary-action" disabled={phoneConfirm.isPending || verificationCode.length !== 6} type="submit">
                   {phoneConfirm.isPending ? "Doğrulanıyor…" : "Doğrula ve devam et"}

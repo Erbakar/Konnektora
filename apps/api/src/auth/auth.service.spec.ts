@@ -130,6 +130,7 @@ describe("AuthService", () => {
     });
     expect(result).toEqual({
       accessToken: "signed-token",
+      verificationEmailSent: true,
       user: {
         id: pendingUser.id,
         email: pendingUser.email,
@@ -343,6 +344,11 @@ describe("AuthService", () => {
   it("verifies the code and assigns the phone to the user", async () => {
     const { service, prisma } = createService();
     const code = "123456";
+    prisma.user.findUnique.mockResolvedValue({
+      email: "member@example.com",
+      name: "Member",
+      status: "active",
+    });
     prisma.phoneVerification.findFirst.mockResolvedValue({
       id: "verification-1",
       codeHash: createHash("sha256").update(code).digest("hex"),
@@ -367,12 +373,42 @@ describe("AuthService", () => {
     });
   });
 
-  it("accepts any six-digit code only when the temporary SMS bypass is enabled", async () => {
+  it("returns a generated demo code in production when SMS is intentionally bypassed", async () => {
+    const { service, prisma, smsService } = createService({
+      NODE_ENV: "production",
+      ALLOW_SMS_VERIFICATION_BYPASS: "true",
+    });
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.phoneVerification.findFirst.mockResolvedValue(null);
+
+    const result = await service.requestPhoneVerification("user-8", {
+      phone: "+905551112233",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      expiresInSeconds: 120,
+      verificationMode: "demo",
+      demoCode: expect.stringMatching(/^\d{6}$/),
+    });
+    expect(result).not.toHaveProperty("developmentCode");
+    expect(smsService.sendVerificationCode).toHaveBeenCalledWith(
+      "+905551112233",
+      result.demoCode,
+    );
+  });
+
+  it("rejects an incorrect code even in demo verification mode", async () => {
     const { service, prisma } = createService({
       NODE_ENV: "production",
       ALLOW_SMS_VERIFICATION_BYPASS: "true",
     });
     prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({
+      email: "member@example.com",
+      name: "Member",
+      status: "pending",
+    });
     prisma.phoneVerification.findFirst.mockResolvedValue({
       id: "verification-1",
       codeHash: createHash("sha256").update("123456").digest("hex"),
@@ -380,21 +416,13 @@ describe("AuthService", () => {
       expiresAt: new Date(Date.now() + 60_000),
     });
     prisma.phoneVerification.update.mockResolvedValue({});
-    prisma.user.update.mockResolvedValue({
-      phone: "+905551112233",
-      phoneVerified: true,
-    });
 
     await expect(
       service.confirmPhoneVerification("user-8", {
         phone: "+905551112233",
         code: "654321",
       }),
-    ).resolves.toEqual({
-      ok: true,
-      phone: "+905551112233",
-      phoneVerified: true,
-    });
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it("checks email, phone and username availability", async () => {

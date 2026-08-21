@@ -5123,6 +5123,38 @@ select:focus-visible {
 
 .onboarding-verification-choice p { margin: 0; }
 
+.demo-verification-code {
+  align-items: center;
+  background: linear-gradient(135deg, #103c2c 0%, #1c5b43 100%);
+  border: 1px solid rgba(202, 255, 106, 0.45);
+  border-radius: 16px;
+  color: #fff;
+  display: grid;
+  gap: 7px;
+  justify-items: start;
+  padding: 18px 20px;
+}
+
+.demo-verification-code span {
+  color: #caff6a;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.demo-verification-code strong {
+  font-size: clamp(28px, 7vw, 38px);
+  letter-spacing: 0.18em;
+  line-height: 1;
+}
+
+.demo-verification-code p {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  margin: 2px 0 0;
+}
+
 .settings-profile-stack {
   display: grid;
   gap: 20px;

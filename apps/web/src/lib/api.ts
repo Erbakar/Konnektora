@@ -5618,7 +5618,12 @@ function requestMockPhoneVerification(phone: string) {
     ...verifications,
     [session.id]: { phone, code, expiresAt: Date.now() + 120_000 },
   });
-  return { ok: true, expiresInSeconds: 120, developmentCode: code };
+  return {
+    ok: true,
+    expiresInSeconds: 120,
+    demoCode: code,
+    verificationMode: "demo" as const,
+  };
 }
 
 function confirmMockPhoneVerification(input: { phone: string; code: string }) {
@@ -8540,10 +8545,10 @@ export function registerUser(input: RegistrationInput): Promise<LoginResponse> {
 
 export function requestEmailVerification(
   email: string,
-): Promise<{ ok: boolean; token?: string }> {
+): Promise<{ ok: boolean; sent?: boolean; token?: string }> {
   return requestJson(
     "/auth/email/verify/request",
-    z.object({ ok: z.boolean(), token: z.string().optional() }),
+    z.object({ ok: z.boolean(), sent: z.boolean().optional(), token: z.string().optional() }),
     {
       method: "POST",
       body: JSON.stringify({ email }),

@@ -3,6 +3,7 @@ import { User } from "@prisma/client";
 import { AcceptInviteDto, AvailabilityQueryDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, SocialAuthDto, TokenDto } from "./auth.dto";
 import { CurrentUser } from "./current-user.decorator";
 import { JwtAuthGuard } from "./jwt-auth.guard";
+import { OnboardingJwtAuthGuard } from "./onboarding-jwt-auth.guard";
 import { AuthService } from "./auth.service";
 
 @Controller()
@@ -85,13 +86,13 @@ export class AuthController {
   }
 
   @Post("auth/phone/verification/request")
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OnboardingJwtAuthGuard)
   requestPhoneVerification(@CurrentUser() user: User, @Body() body: RequestPhoneVerificationDto) {
     return this.authService.requestPhoneVerification(user.id, body);
   }
 
   @Post("auth/phone/verification/confirm")
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OnboardingJwtAuthGuard)
   confirmPhoneVerification(@CurrentUser() user: User, @Body() body: ConfirmPhoneVerificationDto) {
     return this.authService.confirmPhoneVerification(user.id, body);
   }
