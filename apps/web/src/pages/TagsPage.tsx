@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Search,
   Share2,
+  SlidersHorizontal,
   Trash2,
   ThumbsDown,
   UserPlus,
@@ -28,9 +29,10 @@ import { RichText } from "../components/RichText";
 import { ContentComments } from "../components/ContentComments";
 import { userProfilePath } from "../components/UserIdentityLink";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
-import type { TagSentiment } from "@konnektora/shared";
+import { ReportDialog } from "../components/ReportDialog";
+import { EmbeddedMedia } from "../components/EmbeddedMedia";
+import type { ReportTargetType, TagSentiment } from "@konnektora/shared";
 import {
-  createContentReport,
   createTagComment,
   createUserTag,
   deleteTagComment,
@@ -64,6 +66,12 @@ export function TagsPage() {
   const user = getUserSession();
   const client = useQueryClient();
   const [query, setQuery] = useState("");
+  const [directoryFilters, setDirectoryFilters] = useState({
+    createdFrom: "",
+    createdTo: "",
+    country: "",
+    city: "",
+  });
   const [directoryTab, setDirectoryTab] = useState<
     "popular" | "for_you" | "following" | "new"
   >("popular");
@@ -79,7 +87,19 @@ export function TagsPage() {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [selectedTagMedia, setSelectedTagMedia] = useState<File[]>([]);
-  const tags = useQuery({ queryKey: ["tags"], queryFn: listTags });
+  const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
+  const tags = useQuery({
+    queryKey: ["tags", slug ? "detail" : directoryFilters],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (!slug) {
+        Object.entries(directoryFilters).forEach(([key, value]) => {
+          if (value) params.set(key, value);
+        });
+      }
+      return listTags(params);
+    },
+  });
   const tag = tags.data?.find((item) => item.slug === slug);
   const affinities = useQuery({
     queryKey: ["profile-affinities", user?.id],
@@ -91,6 +111,10 @@ export function TagsPage() {
     queryFn: () => listTagComments(tag!.id),
     enabled: Boolean(tag),
   });
+  useEffect(() => {
+    if (!comments.data || !window.location.hash.startsWith("#post-")) return;
+    window.requestAnimationFrame(() => document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: "center" }));
+  }, [comments.data]);
   const stats = useQuery({
     queryKey: ["tag-stats", tag?.id],
     queryFn: () => getTagStats(tag!.id),
@@ -265,6 +289,30 @@ export function TagsPage() {
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
+        <details className="collapsed-filter-panel">
+          <summary><SlidersHorizontal size={17}/> Filtrele</summary>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              setDirectoryFilters({
+                createdFrom: String(form.get("createdFrom") || ""),
+                createdTo: String(form.get("createdTo") || ""),
+                country: String(form.get("country") || "").trim(),
+                city: String(form.get("city") || "").trim(),
+              });
+            }}
+          >
+            <label>Oluşturulma tarihi — Başlangıç<input defaultValue={directoryFilters.createdFrom} name="createdFrom" type="date"/></label>
+            <label>Oluşturulma tarihi — Bitiş<input defaultValue={directoryFilters.createdTo} name="createdTo" type="date"/></label>
+            <label>Oluşturulduğu ülke<input defaultValue={directoryFilters.country} name="country" placeholder="Ülke"/></label>
+            <label>Oluşturulduğu şehir<input defaultValue={directoryFilters.city} name="city" placeholder="Şehir"/></label>
+            <div className="row-actions">
+              <button className="primary-action" type="submit">Uygula</button>
+              <button className="secondary-action" onClick={(event) => { event.currentTarget.form?.reset(); setDirectoryFilters({ createdFrom: "", createdTo: "", country: "", city: "" }); }} type="button">Temizle</button>
+            </div>
+          </form>
+        </details>
         <div className="feed-tabs" role="tablist">
           {(["popular", "for_you", "following", "new"] as const).map(
             (value) => (
@@ -373,7 +421,7 @@ export function TagsPage() {
           </button>
           <details className="detail-action-menu"><summary aria-label="Etiket işlemleri"><MoreVertical size={20}/></summary><div>
             {user && ["admin", "super_admin", "curator"].includes(user.role) ? <a href="#tag-stats"><Eye size={17}/>Etkileşim istatistikleri</a> : null}
-            {user ? <button onClick={async () => { const details = window.prompt("Rapor nedenini yazın:"); if (details?.trim()) await createContentReport({ targetType: "tag", targetId: tag.id, reason: "Uygunsuz etiket", details: details.trim() }); }}><Flag size={17}/>Etiketi rapor et</button> : null}
+            {user ? <button onClick={() => setReportTarget({ type: "tag", id: tag.id })}><Flag size={17}/>Etiketi rapor et</button> : null}
           </div></details>
         </div>
       </div>
@@ -399,7 +447,7 @@ export function TagsPage() {
       </section>
       <section className="admin-form tag-related-users-preview">
         <h2>People added to their profile</h2>
-        <Link to={`/tags/${tag.slug}/users`}><span className="attendee-avatar-stack">{(relatedUsers.data ?? []).slice(0, 8).map((member) => <span key={member.id} title={member.name}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</span>)}</span><strong>Show all {relatedUsers.data?.length ?? tag.usageCount} users</strong></Link>
+        <div><span className="attendee-avatar-stack">{(relatedUsers.data ?? []).slice(0, 8).map((member) => <Link key={member.id} title={`${member.name} profilini aç`} to={userProfilePath(member)}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/tags/${tag.slug}/users`}><strong>Show all {relatedUsers.data?.length ?? tag.usageCount} users</strong></Link></div>
       </section>
       {user && ["admin", "super_admin", "curator"].includes(user.role) ? <section className="tag-public-stats" id="tag-stats">
         {[
@@ -437,7 +485,9 @@ export function TagsPage() {
           </h2>
           <span>{comments.data?.length ?? 0} sonuç</span>
         </div>
-        <div className="feed-tabs">
+        <details className="collapsed-filter-panel tag-detail-filters">
+          <summary><SlidersHorizontal size={17}/> Postları filtrele</summary>
+          <div className="feed-tabs">
           {(["all", "popular", "following", "photo", "video"] as const).map(
             (value) => (
               <button
@@ -459,7 +509,8 @@ export function TagsPage() {
             ),
           )}
           <label className="tag-tab-search"><Search size={16}/><input aria-label="Postlarda ara" placeholder="Ara…" value={commentQuery} onChange={(event) => setCommentQuery(event.target.value)}/></label>
-        </div>
+          </div>
+        </details>
         {user ? (
           <form
             className="tag-post-composer"
@@ -504,9 +555,9 @@ export function TagsPage() {
         ) : null}
         <div className="tag-post-list">
           {visibleComments.map((comment) => (
-            <article className="tag-post-card" key={comment.id}>
+            <article className="tag-post-card" id={`post-${comment.id}`} key={comment.id}>
               <header>
-                <span className="post-avatar" aria-hidden="true">
+                {comment.author ? <Link className="post-avatar" aria-label={`${comment.author.name} profilini aç`} to={userProfilePath(comment.author)}>
                   {comment.author?.avatarUrl ? (
                     <img
                       alt=""
@@ -518,7 +569,7 @@ export function TagsPage() {
                       .charAt(0)
                       .toLocaleUpperCase("tr-TR")
                   )}
-                </span>
+                </Link> : <span className="post-avatar" aria-hidden="true">K</span>}
                 <strong>
                   {comment.author ? (
                     <Link to={userProfilePath(comment.author)}>
@@ -537,6 +588,7 @@ export function TagsPage() {
               <p>
                 <RichText text={comment.body} />
               </p>
+              <EmbeddedMedia text={comment.body}/>
               {comment.media?.length ? (
                 <div className="tag-post-media">
                   {comment.media.map((media) =>
@@ -579,15 +631,7 @@ export function TagsPage() {
                   {comment.replyCount ? `${comment.replyCount} yorum` : "Yorum yap"}
                 </button>
                 <button
-                  onClick={() =>
-                    void (navigator.share
-                      ? navigator.share({
-                          title: `#${tag.name}`,
-                          text: comment.body,
-                          url: window.location.href,
-                        })
-                      : navigator.clipboard.writeText(window.location.href))
-                  }
+                  onClick={() => void shareTagPost(comment.id, `#${tag.name}`, comment.body)}
                 >
                   <Share2 size={17} />
                   Paylaş
@@ -623,20 +667,7 @@ export function TagsPage() {
                       <UserPlus size={17} />
                       Guest List
                     </button>
-                    <button
-                      onClick={async () => {
-                        const details = window.prompt("Rapor nedenini yazın:");
-                        if (details?.trim()) {
-                          await createContentReport({
-                            targetType: "tag_comment",
-                            targetId: comment.id,
-                            reason: "Uygunsuz gönderi",
-                            details: details.trim(),
-                          });
-                          window.alert("Rapor incelemeye alındı.");
-                        }
-                      }}
-                    >
+                    <button onClick={() => setReportTarget({ type: "tag_comment", id: comment.id })}>
                       <Flag size={17} />
                       Rapor et
                     </button>
@@ -724,6 +755,7 @@ export function TagsPage() {
         onConfirm={() => notificationMutation.mutate()}
         title={`#${tag.name}`}
       />
+      <ReportDialog onClose={() => setReportTarget(null)} open={Boolean(reportTarget)} targetId={reportTarget?.id ?? tag.id} targetType={reportTarget?.type ?? "tag"}/>
       <ShareDialog
         open={shareOpen}
         onClose={() => setShareOpen(false)}
@@ -732,4 +764,11 @@ export function TagsPage() {
       />
     </section>
   );
+}
+
+async function shareTagPost(id: string, title: string, text: string) {
+  const url = new URL(window.location.href);
+  url.hash = `post-${id}`;
+  if (navigator.share) await navigator.share({ title, text, url: url.toString() });
+  else await navigator.clipboard.writeText(url.toString());
 }

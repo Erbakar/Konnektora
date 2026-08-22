@@ -32,6 +32,7 @@ export class IdentityService {
           where: { id: userId },
           select: {
             phoneVerified: true,
+            accountType: true,
             username: true,
             country: true,
             birthDate: true,
@@ -61,7 +62,7 @@ export class IdentityService {
       {
         key: "personal_info" as const,
         title: "Temel bilgilerini tamamla",
-        completed: Boolean(user.username && user.country && user.birthDate),
+        completed: Boolean(user.username && user.country && (user.accountType === "corporate" || user.birthDate)),
         path: "/onboarding",
       },
       {

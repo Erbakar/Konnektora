@@ -65,7 +65,7 @@ describe("AuthService", () => {
     };
   };
 
-  it("creates an active account from a verified social identity in development", async () => {
+  it("keeps a new social account pending until basic profile completion", async () => {
     const { service, prisma } = createService();
     prisma.socialAccount.findUnique.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue(null);
@@ -83,7 +83,7 @@ describe("AuthService", () => {
       credential: "demo-google",
     });
     expect(result.user.email).toBe("demo.google@konnektora.local");
-    expect(result.user.status).toBe("active");
+    expect(result.user.status).toBe("pending");
     expect(prisma.socialAccount.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         provider: "google",
@@ -139,6 +139,7 @@ describe("AuthService", () => {
         accountType: pendingUser.accountType,
         emailVerified: pendingUser.emailVerified,
         status: pendingUser.status,
+        avatarUrl: null,
       },
     });
     expect(mailService.sendVerificationEmail).toHaveBeenCalledWith({
@@ -218,7 +219,7 @@ describe("AuthService", () => {
       name: "Verified User",
       passwordHash: "hash",
       role: "user",
-      status: "active",
+      status: "pending",
       accountType: "individual",
       emailVerified: true,
     };
@@ -237,7 +238,7 @@ describe("AuthService", () => {
 
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: user.id },
-      data: { status: "active", emailVerified: true },
+      data: { emailVerified: true },
     });
   });
 

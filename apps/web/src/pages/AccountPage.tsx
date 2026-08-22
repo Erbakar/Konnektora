@@ -36,6 +36,7 @@ import { ProfileVerificationPanel } from "../components/ProfileVerificationPanel
 import { PushNotificationControl } from "../components/PushNotificationControl";
 import { RichText } from "../components/RichText";
 import { LocationPicker } from "../components/LocationPicker";
+import { CountryCityFields } from "../components/CountryCityFields";
 import { TagPicker } from "../components/TagPicker";
 import { userProfilePath } from "../components/UserIdentityLink";
 import { getSocialCredential } from "../lib/socialProviders";
@@ -149,9 +150,11 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [registrationAccountType, setRegistrationAccountType] =
     useState<AccountType>("individual");
+  const [passwordResetPath, setPasswordResetPath] = useState("");
   const [showFrozenConfirmation, setShowFrozenConfirmation] = useState(
     () => window.sessionStorage.getItem("konnektora_account_frozen") === "1",
   );
+  const [frozenCredentials, setFrozenCredentials] = useState<{ email: string; password: string } | null>(null);
   const [pendingPhone, setPendingPhone] = useState<string | null>(null);
   const [developmentPhoneCode, setDevelopmentPhoneCode] = useState<
     string | null
@@ -171,7 +174,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   } | null>(null);
   const { data: tags = [] } = useQuery({
     queryKey: ["tags"],
-    queryFn: listTags,
+    queryFn: () => listTags(),
   });
   const myEventsQuery = useQuery({
     queryKey: ["my-events", user?.id],
@@ -266,14 +269,14 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       });
       navigate(mode === "login" ? "/feed" : "/onboarding");
     },
-    onError: (error) =>
-      setNotice({
-        tone: "error",
-        message: getServiceErrorMessage(
-          error,
-          "İşlem tamamlanamadı. Bilgilerini kontrol edip yeniden dene.",
-        ),
-      }),
+    onError: (error, input) => {
+      const message = getServiceErrorMessage(error, "İşlem tamamlanamadı. Bilgilerini kontrol edip yeniden dene.");
+      if (mode === "login" && message.includes("Dondurulmuş hesap")) {
+        setFrozenCredentials({ email: input.email, password: input.password });
+        return;
+      }
+      setNotice({ tone: "error", message });
+    },
   });
   const socialAccountMutation = useMutation({
     mutationFn: async ({
@@ -301,11 +304,13 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   });
   const forgotPasswordMutation = useMutation({
     mutationFn: requestPasswordReset,
-    onSuccess: () =>
+    onSuccess: (response) => {
+      setPasswordResetPath(response.token ? `/reset-password?token=${encodeURIComponent(response.token)}` : "");
       setNotice({
         tone: "success",
         message: "Şifre sıfırlama linki email adresine gönderildi.",
-      }),
+      });
+    },
     onError: (error) =>
       setNotice({
         tone: "error",
@@ -325,6 +330,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         tone: "success",
         message: "Hesabınız yeniden aktifleştirildi.",
       });
+      setFrozenCredentials(null);
+      navigate("/");
     },
     onError: (error) =>
       setNotice({
@@ -908,6 +915,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
           tone={notice.tone}
         />
       ) : null}
+      {passwordResetPath ? <Link className="primary-action" to={passwordResetPath}>Demo şifre sıfırlama bağlantısını aç</Link> : null}
       {showFrozenConfirmation ? (
         <div
           className="emotion-modal"
@@ -934,6 +942,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
           </div>
         </div>
       ) : null}
+      {frozenCredentials ? <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Hesabı yeniden aktifleştir"><div><h2>Tekrar hoşgeldin!</h2><p>Dondurduğun hesabı yeniden aktifleştirmek istiyor musun?</p><div className="row-actions"><button className="ghost-action" onClick={() => setFrozenCredentials(null)} type="button">İptal</button><button className="primary-action" disabled={reactivateMutation.isPending} onClick={() => reactivateMutation.mutate(frozenCredentials)} type="button">Hesabı aktifleştir</button></div>{reactivateMutation.isError ? <ServiceFeedback compact error={reactivateMutation.error} fallback="Hesap yeniden aktifleştirilemedi."/> : null}</div></div> : null}
       {user?.status === "pending" ? (
         <button
           className="secondary-action"
@@ -1148,23 +1157,6 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 >
                   Şifremi unuttum
                 </button>
-                <button
-                  className="ghost-action"
-                  disabled={reactivateMutation.isPending}
-                  onClick={() => {
-                    const email = document.querySelector<HTMLInputElement>(
-                      'input[name="email"]',
-                    )?.value;
-                    const password = document.querySelector<HTMLInputElement>(
-                      'input[name="password"]',
-                    )?.value;
-                    if (email && password)
-                      reactivateMutation.mutate({ email, password });
-                  }}
-                  type="button"
-                >
-                  Dondurulmuş hesabı aktifleştir
-                </button>
               </>
             ) : null}
             <SocialAuthButtons
@@ -1176,6 +1168,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   tone: "success",
                   message: "Sosyal hesapla giriş yapıldı.",
                 });
+                navigate(response.user.status === "pending" ? "/onboarding" : "/feed");
               }}
             />
           </form>
@@ -1356,20 +1349,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       placeholder="ornek.com (isteğe bağlı)"
                     />
                   </label>
-                  <label>
-                    Ülke
-                    <input
-                      defaultValue={profileQuery.data.country ?? ""}
-                      name="country"
-                    />
-                  </label>
-                  <label>
-                    Şehir
-                    <input
-                      defaultValue={profileQuery.data.city ?? ""}
-                      name="city"
-                    />
-                  </label>
+                  <CountryCityFields defaultCity={profileQuery.data.city} defaultCountry={profileQuery.data.country}/>
                   {profileQuery.data.accountType === "individual" ? (
                     <>
                       <label>
@@ -1461,7 +1441,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               </form>
             ) : null}
             <form
-              className="admin-form event-create-form"
+              className="admin-form phone-verification-form"
               id="account-settings"
               onSubmit={
                 pendingPhone ? handlePhoneConfirmation : handlePhoneRequest
@@ -1933,7 +1913,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               )}
             </section>
             <form
-              className="admin-form"
+              className="admin-form event-create-form"
               noValidate
               onSubmit={handleEventSubmit}
             >
@@ -2077,23 +2057,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       <input name="locationName" />
                     </label>
                     <label>Var olan mekânlarımdan seç<select name="placeId" defaultValue=""><option value="">Mekân seçilmedi</option>{myPlacesQuery.data?.map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}</select></label>
-                    <LocationPicker addressName="locationAddress" />
-                    <label>
-                      Şehir
-                      <input
-                        defaultValue={profileQuery.data?.city ?? ""}
-                        name="city"
-                        placeholder="Istanbul"
-                      />
-                    </label>
-                    <label>
-                      Ülke
-                      <input
-                        defaultValue={profileQuery.data?.country ?? ""}
-                        name="country"
-                        placeholder="Turkey"
-                      />
-                    </label>
+                    <div className="location-fields-group"><CountryCityFields defaultCity={profileQuery.data?.city} defaultCountry={profileQuery.data?.country}/><LocationPicker addressName="locationAddress" /></div>
                   </div>
                 ) : null}
                 {eventFormat !== "offline" ? (

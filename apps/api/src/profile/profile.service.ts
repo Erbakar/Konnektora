@@ -29,6 +29,7 @@ const profileSelect = {
   companyType: true,
   businessCategory: true,
   emailVerified: true,
+  status: true,
   createdAt: true,
   updatedAt: true
 } as const;
@@ -68,6 +69,11 @@ export class ProfileService {
       throw new BadRequestException("Kurumsal hesaplarda işletme adı ve ticari unvan zorunludur.");
     }
 
+    const birthDate = input.birthDate ? new Date(input.birthDate) : null;
+    const shouldActivate = current.status === "pending"
+      && current.phoneVerified
+      && Boolean(username && input.country?.trim())
+      && (current.accountType === "corporate" || Boolean(birthDate));
     return this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -79,12 +85,13 @@ export class ProfileService {
         district: this.optionalText(input.district, current.district),
         address: this.optionalText(input.address, current.address),
         gender: input.gender ?? null,
-        birthDate: input.birthDate ? new Date(input.birthDate) : null,
+        birthDate,
         website: this.optionalText(input.website, current.website),
         companyName,
         tradeName,
         companyType: this.optionalText(input.companyType, current.companyType),
-        businessCategory: this.optionalText(input.businessCategory, current.businessCategory)
+        businessCategory: this.optionalText(input.businessCategory, current.businessCategory),
+        ...(shouldActivate ? { status: "active" as const } : {}),
       },
       select: profileSelect
     });

@@ -27,7 +27,7 @@ export function EventsPage() {
 
   const { data: tags = [] } = useQuery({
     queryKey: ["tags"],
-    queryFn: listTags,
+    queryFn: () => listTags(),
     placeholderData: mockTags
   });
   const { data: eventList, isLoading, isError, refetch } = useQuery({
@@ -96,9 +96,6 @@ export function EventsPage() {
       <button className="mobile-filter-toggle secondary-action" aria-expanded={filtersOpen} aria-controls="event-filters" onClick={() => setFiltersOpen((open) => !open)} type="button"><ListFilter size={18} /> Filtrele &amp; Ara</button>
       <aside className={`filters ${filtersOpen ? "mobile-filters-open" : ""}`} id="event-filters">
         <h2>Filtreler</h2>
-        <div className="event-tag-filter-cloud">{tags.map((tag) => (
-          <button key={tag.id} className={selectedTag === tag.slug ? "active-filter" : ""} onClick={() => setSearchParams({ tag: tag.slug })} type="button"><span>#{tag.name}</span><small>{tag.eventCount ?? 0}</small></button>
-        ))}</div>
         <label>
           Arama
           <input
@@ -117,13 +114,16 @@ export function EventsPage() {
           </select>
         </label>
         <label>
-          Başlangıç
+          Tarih
           <input type="date" value={selectedDateFrom} onChange={(event) => updateFilter("dateFrom", event.target.value)} />
         </label>
         <label>
           Şehir
           <input placeholder="İstanbul" value={selectedCity} onChange={(event) => updateFilter("city", event.target.value)} />
         </label>
+        <div className="event-trendy-tags"><strong>Trend etiketler</strong><div className="event-tag-filter-cloud">{tags.map((tag) => (
+          <button key={tag.id} className={selectedTag === tag.slug ? "active-filter" : ""} onClick={() => setSearchParams({ tag: tag.slug })} type="button"><span>#{tag.name}</span><small>{tag.eventCount ?? 0}</small></button>
+        ))}</div></div>
         <label>
           Ülke
           <input placeholder="Türkiye" value={selectedCountry} onChange={(event) => updateFilter("country", event.target.value)} />
@@ -145,9 +145,9 @@ export function EventsPage() {
         {!mapOpen && searchParams.size === 0 ? <div className="event-discovery-sections">
           {discoveryDefinitions.map((definition, index) => {
             const items = discoveryQueries[index]?.data?.items ?? [];
-            if (!items.length) return null;
+            if (!items.length && definition.key !== "mine") return null;
             const allParams = new URLSearchParams(definition.params);
-            return <section className={`event-discovery-section event-discovery-${definition.key}`} key={definition.key}><header><h2>{definition.title}</h2><Link to={`/events?${allParams.toString()}`}>Tümünü göster</Link></header><div className="event-grid">{items.map((event) => <EventCard event={event} key={event.id}/>)}</div></section>;
+            return <section className={`event-discovery-section event-discovery-${definition.key}`} key={definition.key}><header><h2>{definition.title}</h2>{items.length ? <Link to={`/events?${allParams.toString()}`}>Tümünü göster</Link> : null}</header>{items.length ? <div className="event-grid">{items.map((event) => <EventCard event={event} key={event.id}/>)}</div> : <p className="empty-state">Katıldığınız ve yöneticisi olduğunuz etkinlikler burada gösterilecek</p>}</section>;
           })}
         </div> : mapOpen ? <LocationMap items={events.map((event) => ({ id: event.id, title: event.title, latitude: event.latitude, longitude: event.longitude, location: [event.city, event.country].filter(Boolean).join(", ") || "Online" }))}/> : <div className="event-grid">
           {events.map((event) => (

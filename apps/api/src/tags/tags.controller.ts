@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -30,8 +31,19 @@ export class TagsController {
 
   @Get("tags")
   @UseGuards(OptionalJwtAuthGuard)
-  listPublicTags(@CurrentUser() user?: User) {
-    return this.tagsService.listPublicTags(user?.id);
+  listPublicTags(
+    @CurrentUser() user?: User,
+    @Query("createdFrom") createdFrom?: string,
+    @Query("createdTo") createdTo?: string,
+    @Query("country") country?: string,
+    @Query("city") city?: string,
+  ) {
+    return this.tagsService.listPublicTags(user?.id, {
+      createdFrom,
+      createdTo,
+      country,
+      city,
+    });
   }
 
   @Get("tag-categories")

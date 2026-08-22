@@ -8,6 +8,7 @@ import { diskStorage } from "multer";
 import { resolve } from "path";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { OnboardingJwtAuthGuard } from "../auth/onboarding-jwt-auth.guard";
 import { CreateCommentDto, CreateMediaDto, CreateReactionDto, ReorderProfileMediaDto, UpdateCommentDto } from "./content.dto";
 import { ContentService } from "./content.service";
 
@@ -50,13 +51,13 @@ export class ContentController {
   }
 
   @Get("profile/media")
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OnboardingJwtAuthGuard)
   listProfileMedia(@CurrentUser() user: User) {
     return this.contentService.listProfileMedia(user.id);
   }
 
   @Post("profile/media/upload")
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OnboardingJwtAuthGuard)
   @UseInterceptors(FileInterceptor("file", {
     storage: diskStorage({
       destination: resolve(process.cwd(), "uploads"),

@@ -6,7 +6,8 @@ import type { TagSentiment } from "@konnektora/shared";
 import { EmailInput, PhoneInput, VerificationCodeInput } from "../components/FormInputs";
 import { ServiceFeedback } from "../components/ServiceFeedback";
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
-import { checkAvailability, completeOnboarding, confirmPhoneVerification, followUser, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, updateUserSession, uploadProfileMedia } from "../lib/api";
+import { CountryCityFields } from "../components/CountryCityFields";
+import { checkAvailability, completeOnboarding, confirmPhoneVerification, followUser, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, resolveMediaUrl, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, updateUserSession, uploadProfileMedia } from "../lib/api";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
 
 const steps = ["Hesap", "Telefon", "Temel bilgiler", "Profil fotoğrafı", "İlgi alanları", "Topluluk"];
@@ -35,6 +36,7 @@ export function OnboardingPage() {
   const [photoZoom, setPhotoZoom] = useState(1);
   const [photoRotation, setPhotoRotation] = useState(0);
   const [availabilityText, setAvailabilityText] = useState("");
+  const [registrationError, setRegistrationError] = useState("");
   const [verificationEmailSent, setVerificationEmailSent] = useState<boolean | undefined>();
   const [sentiments, setSentiments] = useState<Record<string, TagSentiment>>({});
   const [emotionTagId, setEmotionTagId] = useState("");
@@ -55,7 +57,7 @@ export function OnboardingPage() {
   });
   const tags = useQuery({
     queryKey: ["tags", "onboarding"],
-    queryFn: listTags,
+    queryFn: () => listTags(),
     enabled: Boolean(session),
   });
   const affinities = useQuery({
@@ -111,11 +113,6 @@ export function OnboardingPage() {
   const phoneConfirm = useMutation({
     mutationFn: (code: string) => confirmPhoneVerification(phone, code),
     onSuccess: () => {
-      if (session) {
-        const activeSession = { ...session, status: "active" as const };
-        setSession(activeSession);
-        updateUserSession(activeSession);
-      }
       void queryClient.invalidateQueries({ queryKey: ["profile"] });
       void queryClient.invalidateQueries({ queryKey: ["onboarding"] });
       setStep(2);
@@ -123,7 +120,12 @@ export function OnboardingPage() {
   });
   const profileSave = useMutation({
     mutationFn: updateMyProfile,
-    onSuccess: () => {
+    onSuccess: (savedProfile) => {
+      if (session && savedProfile.status === "active") {
+        const activeSession = { ...session, status: "active" as const };
+        setSession(activeSession);
+        updateUserSession(activeSession);
+      }
       void queryClient.invalidateQueries({ queryKey: ["onboarding"] });
       setStep(3);
     },
@@ -157,7 +159,7 @@ export function OnboardingPage() {
   });
   const finish = useMutation({
     mutationFn: completeOnboarding,
-    onSuccess: () => navigate("/identity"),
+    onSuccess: () => navigate("/feed"),
   });
   const selectedCount = Object.keys(sentiments).length;
   const currentTag = useMemo(() => tags.data?.find((tag) => tag.id === emotionTagId), [emotionTagId, tags.data]);
@@ -194,7 +196,15 @@ export function OnboardingPage() {
               event.preventDefault();
               const form = new FormData(event.currentTarget);
               const password = String(form.get("password"));
-              if (password !== String(form.get("passwordAgain"))) return;
+              setRegistrationError("");
+              if (password !== String(form.get("passwordAgain"))) {
+                setRegistrationError("Şifreler eşleşmiyor.");
+                return;
+              }
+              if (availabilityText.includes("kullanımda")) {
+                setRegistrationError("Bu e-posta adresi zaten kullanımda.");
+                return;
+              }
               register.mutate({
                 name: String(form.get("name")),
                 email: normalizeEmail(String(form.get("email"))),
@@ -221,7 +231,7 @@ export function OnboardingPage() {
               </select>
             </label>
             <label>
-              Ad Soyad
+              {accountType === "corporate" ? "Yetkili Ad Soyadı" : "Ad Soyad"}
               <input autoComplete="name" name="name" minLength={2} placeholder="Adın ve soyadın" required />
             </label>
             {accountType === "corporate" ? (
@@ -265,6 +275,7 @@ export function OnboardingPage() {
             <button className="primary-action" disabled={register.isPending} type="submit">
               Hesabı oluştur <ArrowRight size={18} />
             </button>
+            {registrationError ? <p className="form-error">{registrationError}</p> : null}
             {register.isError ? (
               <ServiceFeedback
                 compact
@@ -281,7 +292,8 @@ export function OnboardingPage() {
             onSuccess={(response) => {
               setUserSession(response);
               setSession(response.user);
-              setStep(1);
+              if (response.user.status === "active") navigate("/feed");
+              else setStep(1);
             }}
           />
         ) : null}
@@ -380,15 +392,8 @@ export function OnboardingPage() {
               }} pattern="[A-Za-z0-9 .-]+" required />
               {availabilityText ? <span className={availabilityText.includes("uygun") ? "form-success" : "form-error"}>{availabilityText}</span> : null}
             </label>
-            <label>
-              Ülke
-              <input defaultValue={profile.data.country ?? ""} name="country" required />
-            </label>
-            <label>
-              Şehir
-              <input defaultValue={profile.data.city ?? ""} name="city" />
-            </label>
-            <label>
+            <CountryCityFields defaultCity={profile.data.city} defaultCountry={profile.data.country} requiredCountry />
+            {profile.data.accountType === "individual" ? <><label>
               Doğum tarihi
               <input defaultValue={profile.data.birthDate ? String(profile.data.birthDate).slice(0, 10) : ""} name="birthDate" required type="date" />
             </label>
@@ -399,7 +404,7 @@ export function OnboardingPage() {
                 <option value="female">Kadın</option>
                 <option value="male">Erkek</option>
               </select>
-            </label>
+            </label></> : null}
             <label>
               Web sitesi
               <input defaultValue={profile.data.website ?? ""} name="website" placeholder="ornek.com (isteğe bağlı)" />
@@ -493,7 +498,7 @@ export function OnboardingPage() {
                 onRetry={() => void media.refetch()}
               />
             ) : null}
-            <div className="onboarding-media-row">{media.data?.map((item) => (item.type === "image" ? <img alt="Profil yüklemesi" key={item.id} src={item.url} /> : <video key={item.id} src={item.url} />))}</div>
+            <div className="onboarding-media-row">{media.data?.map((item) => (item.type === "image" ? <img alt="Profil yüklemesi" key={item.id} src={resolveMediaUrl(item.url)} /> : <video key={item.id} src={resolveMediaUrl(item.url)} />))}</div>
             <WizardButtons back={() => setStep(2)} disabled={!media.data?.some((item) => item.type === "image")} next={() => setStep(4)} />
           </div>
         ) : null}

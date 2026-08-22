@@ -21,10 +21,11 @@ import { DistanceLabel } from "../components/DistanceLabel";
 import { LocationMap } from "../components/LocationMap";
 import { EventCard } from "../components/EventCard";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
+import { ReportDialog } from "../components/ReportDialog";
+import { CountryCityFields } from "../components/CountryCityFields";
 import {
   archiveMyPlace,
   createBlock,
-  createContentReport,
   followPlace,
   getContentNotification,
   getInteractionStats,
@@ -37,6 +38,7 @@ import {
   unfollowPlace,
   updateMyPlace,
   updatePlaceMember,
+  resolveMediaUrl,
 } from "../lib/api";
 
 export function PlaceDetailPage() {
@@ -47,6 +49,7 @@ export function PlaceDetailPage() {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [showAllTags, setShowAllTags] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const placeQuery = useQuery({
     queryKey: ["place", slug],
     queryFn: () => getPlace(slug),
@@ -150,7 +153,7 @@ export function PlaceDetailPage() {
     <article className="page detail-page">
       {place.coverImageUrl ? (
         <div className="detail-media">
-          <img alt="" src={place.coverImageUrl} />
+          <img alt="" src={resolveMediaUrl(place.coverImageUrl)} />
         </div>
       ) : null}
       <ContentMediaGallery targetId={place.id} targetType="place" />
@@ -193,7 +196,7 @@ export function PlaceDetailPage() {
             <Link to={`/places/${place.slug}/users`}><Users size={17}/> İlgili kullanıcılar</Link>
             {canViewStats ? <a href="#place-stats"><BarChart3 size={17}/> Mekân istatistikleri</a> : null}
             {canManage ? <><a href="#place-edit">Mekânı düzenle</a><Link to={`/places/${place.slug}/invites#check-in`}><UserPlus size={17}/> Check-in control</Link></> : null}
-            {user && !canManage ? <button onClick={async () => { const details = window.prompt("Rapor nedenini yazın:"); if (details?.trim()) { await createContentReport({ targetType: "place", targetId: place.id, reason: "Uygunsuz mekân", details: details.trim() }); window.alert("Rapor incelemeye alındı."); } }} type="button"><Flag size={17}/> Mekânı rapor et</button> : null}
+            {user && !canManage ? <button onClick={() => setReportOpen(true)} type="button"><Flag size={17}/> Mekânı rapor et</button> : null}
             {user && !canManage ? <button disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()} type="button"><Ban size={17}/> Mekânı engelle</button> : null}
           </div>
         </details>
@@ -291,14 +294,7 @@ export function PlaceDetailPage() {
                 minLength={2}
               />
             </label>
-            <label>
-              Şehir
-              <input defaultValue={place.city ?? ""} name="city" />
-            </label>
-            <label>
-              Ülke
-              <input defaultValue={place.country ?? ""} name="country" />
-            </label>
+            <CountryCityFields defaultCity={place.city} defaultCountry={place.country}/>
             <label>
               Adres
               <input defaultValue={place.address ?? ""} name="address" />
@@ -410,6 +406,7 @@ export function PlaceDetailPage() {
           </div>
         </section>
       ) : null}
+      <ReportDialog onClose={() => setReportOpen(false)} open={reportOpen} targetId={place.id} targetType="place"/>
       <ContentComments
         canManage={canManage}
         targetId={place.id}

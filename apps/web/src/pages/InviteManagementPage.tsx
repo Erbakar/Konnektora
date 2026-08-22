@@ -49,16 +49,17 @@ export function EventInviteManagementPage() {
     queryFn: () => getEvent(slug),
     enabled: Boolean(slug && user),
   });
+  const canManage = Boolean(event.data && user && (event.data.createdById === user.id || event.data.viewerParticipation?.status === "accepted" && ["organizer", "manager"].includes(event.data.viewerParticipation.role) || ["admin", "super_admin", "curator"].includes(user.role)));
   const participants = useQuery({
     queryKey: ["event-participants", event.data?.id],
     queryFn: () => listEventParticipants(event.data!.id, "user"),
-    enabled: Boolean(event.data && user),
+    enabled: canManage,
     retry: false,
   });
   const following = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
-  const managedEvents = useQuery({ queryKey: ["my-events", user?.id], queryFn: listMyEvents, enabled: Boolean(user) });
+  const managedEvents = useQuery({ queryKey: ["my-events", user?.id], queryFn: listMyEvents, enabled: canManage });
   const finance = useQuery({ queryKey: ["finance", user?.id, "invite-entitlement"], queryFn: getFinanceDashboard, enabled: Boolean(user?.accountType === "corporate") });
-  const canUseGuestLists = Boolean(user && (["admin", "super_admin", "curator"].includes(user.role) || user.accountType === "corporate" && finance.data?.business.plan !== "starter"));
+  const canUseGuestLists = Boolean(canManage && user && (["admin", "super_admin", "curator"].includes(user.role) || user.accountType === "corporate" && finance.data?.business.plan !== "starter"));
   const guestLists = useQuery({ queryKey: ["guest-lists", user?.id], queryFn: listGuestLists, enabled: Boolean(user && canUseGuestLists) });
   const oldEventQueries = useQueries({ queries: (managedEvents.data ?? []).filter((item) => item.id !== event.data?.id).slice(0, 5).map((item) => ({ queryKey: ["event-participants", item.id, "invite-source"], queryFn: () => listEventParticipants(item.id, "user"), enabled: Boolean(event.data) })) });
   const previousAttendees = oldEventQueries.flatMap((query) => query.data ?? []).filter((item, index, all) => item.user && all.findIndex((other) => other.userId === item.userId) === index);
@@ -117,17 +118,18 @@ export function EventInviteManagementPage() {
       shareUrl={`${window.location.origin}/events/${event.data.slug}`}
       kind="Etkinlik"
     >
-      <InviteMethodPicker active={inviteMethod} includeOldEvents includeGuestLists={canUseGuestLists} onChange={setInviteMethod}/>
+      <InviteMethodPicker active={inviteMethod} includeOldEvents={canManage} includeGuestLists={canUseGuestLists} onChange={setInviteMethod}/>
       {["username", "email", "phone"].includes(inviteMethod) ? <InviteForm
         method={inviteMethod as "username" | "email" | "phone"}
         pending={invite.isPending}
+        canAssignRole={canManage}
         onSubmit={(form) =>
           invite.mutate({
             username: form.username,
             name: form.name,
             email: form.email,
             phone: form.phone,
-            role: form.role,
+            role: canManage ? form.role : "attendee",
           })
         }
       /> : null}
@@ -136,7 +138,7 @@ export function EventInviteManagementPage() {
       {inviteMethod === "old_attendees" ? <InviteSource title="Eski etkinlik katılımcıları">{previousAttendees.map((participant) => <button disabled={invite.isPending} key={participant.userId} onClick={() => invite.mutate({ userId: participant.userId, role: "attendee" })} type="button"><Users size={16}/>{participant.user?.name ?? participant.userId}</button>)}</InviteSource> : null}
       {inviteMethod === "phonebook" ? <InviteSource title="Telefon rehberi"><Link className="secondary-action" to="/contacts?source=phone">Telefon rehberini tara</Link></InviteSource> : null}
       {inviteMethod === "gmail" ? <InviteSource title="Gmail"><Link className="secondary-action" to="/contacts?source=google">Google Contacts ile tara</Link></InviteSource> : null}
-      <QrCheckInScanner
+      {canManage ? <><QrCheckInScanner
         label="Etkinlik QR check-in"
         pending={scan.isPending}
         onScan={(payload) => scan.mutateAsync(payload).then(() => undefined)}
@@ -159,7 +161,7 @@ export function EventInviteManagementPage() {
             name: item.user?.name ?? item.userId,
             checkedInAt: item.checkedInAt!,
           }))}
-      />
+      /></> : null}
     </ManagementShell>
   );
 }
@@ -344,10 +346,12 @@ function GuestListManager({ lists, pending, onInvite, onChanged }: { lists: Awai
 function InviteForm({
   method,
   pending,
+  canAssignRole = true,
   onSubmit,
 }: {
   method: "username" | "email" | "phone";
   pending: boolean;
+  canAssignRole?: boolean;
   onSubmit: (input: {
     username?: string;
     email?: string;
@@ -399,14 +403,14 @@ function InviteForm({
           Telefon
           <input name="phone" inputMode="tel" pattern="\+?[1-9][0-9]{7,14}" placeholder="+905551234567" />
         </label> : null}
-        <label>
+        {canAssignRole ? <label>
           Rol
           <select name="role">
             <option value="attendee">Katılımcı / üye</option>
             <option value="manager">Yönetici</option>
             <option value="organizer">Organizatör</option>
           </select>
-        </label>
+        </label> : null}
       </div>
       <button className="primary-action" disabled={pending}>
         <Mail size={17} />

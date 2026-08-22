@@ -3,6 +3,7 @@ import { CalendarDays, MapPin, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DistanceLabel } from "./DistanceLabel";
 import { useLanguage } from "../lib/i18n";
+import { resolveMediaUrl } from "../lib/api";
 
 const turkishEventTitles: Record<string, string> = {
   "global-startup-demo-night": "Global Startup Demo Gecesi",
@@ -42,7 +43,7 @@ export function HomeEventTile({ event }: { event: Event }) {
   return (
     <Link className="home-event-tile" to={`/events/${event.slug}`}>
       <div className="home-event-tile-media">
-        {event.coverImageUrl ? <img alt="" src={event.coverImageUrl} /> : <div className="home-event-tile-fallback" />}
+        {event.coverImageUrl ? <img alt="" src={resolveMediaUrl(event.coverImageUrl)} /> : <div className="home-event-tile-fallback" />}
         <span className="home-event-tile-badge">{visibilityLabel[event.visibility]}</span>
       </div>
       <div className="home-event-tile-body">

@@ -34,6 +34,7 @@ import {
   listReportRules,
   setContentNotification,
   unfollowUser,
+  resolveMediaUrl,
 } from "../lib/api";
 
 function ageFrom(value: string | Date) {
@@ -130,7 +131,7 @@ export function PublicProfilePage() {
           {profilePhoto ? (
             <img
               alt={`${profile.name} profil fotoğrafı`}
-              src={profilePhoto.url}
+              src={resolveMediaUrl(profilePhoto.url)}
             />
           ) : (
             profile.name.slice(0, 1).toUpperCase()
@@ -260,10 +261,10 @@ export function PublicProfilePage() {
               <img
                 alt={`${profile.name} profil medyası`}
                 key={media.id}
-                src={media.url}
+                src={resolveMediaUrl(media.url)}
               />
             ) : (
-              <video controls key={media.id} src={media.url} />
+              <video controls key={media.id} src={resolveMediaUrl(media.url)} />
             ),
           )}
         </section>

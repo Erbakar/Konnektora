@@ -8,7 +8,7 @@ function userPosition() {
   if (cachedPosition) return Promise.resolve(cachedPosition);
   if (!positionRequest) positionRequest = new Promise((resolve) => {
     if (!navigator.geolocation) return resolve(null);
-    navigator.geolocation.getCurrentPosition(({ coords }) => { cachedPosition = { latitude: coords.latitude, longitude: coords.longitude }; resolve(cachedPosition); }, () => resolve(null), { maximumAge: 300_000, timeout: 5000 });
+    navigator.geolocation.getCurrentPosition(({ coords }) => { cachedPosition = { latitude: coords.latitude, longitude: coords.longitude }; resolve(cachedPosition); }, () => { positionRequest = null; resolve(null); }, { maximumAge: 300_000, timeout: 5000 });
   });
   return positionRequest;
 }
@@ -23,6 +23,10 @@ function haversine(from: { latitude: number; longitude: number }, to: { latitude
 
 export function DistanceLabel({ latitude, longitude }: { latitude?: number | null; longitude?: number | null }) {
   const [distance, setDistance] = useState<number | null>(null);
-  useEffect(() => { if (latitude == null || longitude == null) return; void userPosition().then((position) => { if (position) setDistance(haversine(position, { latitude, longitude })); }); }, [latitude, longitude]);
-  return <span><Navigation size={15}/>{distance == null ? "Mesafe hesaplanamadı" : distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(distance < 10 ? 1 : 0)} km`}</span>;
+  const [permissionNeeded, setPermissionNeeded] = useState(false);
+  const calculate = () => { if (latitude == null || longitude == null) return; setPermissionNeeded(false); void userPosition().then((position) => { if (position) setDistance(haversine(position, { latitude, longitude })); else setPermissionNeeded(true); }); };
+  useEffect(calculate, [latitude, longitude]);
+  if (latitude == null || longitude == null) return null;
+  if (permissionNeeded) return <button className="distance-permission" onClick={calculate} type="button"><Navigation size={15}/>Konum için izin verin</button>;
+  return <span><Navigation size={15}/>{distance == null ? "Konum alınıyor…" : distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(distance < 10 ? 1 : 0)} km`}</span>;
 }

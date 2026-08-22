@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { DiscoveryItem } from "@konnektora/shared";
 import { useLanguage } from "../lib/i18n";
 import { DistanceLabel } from "./DistanceLabel";
+import { resolveMediaUrl } from "../lib/api";
 
 const icons = { user: UserRound, tag: Hash, event: CalendarDays, place: MapPin };
 
@@ -29,7 +30,7 @@ export function DiscoveryCard({ item, hideSubtitle = false }: { item: DiscoveryI
     <Link className={`discovery-card discovery-${item.kind}`} to={item.href}>
       <span className="discovery-card-visual">
         {item.imageUrl ? (
-          <img alt="" src={item.imageUrl} />
+          <img alt="" src={resolveMediaUrl(item.imageUrl)} />
         ) : item.kind === "user" ? (
           <span className="discovery-card-avatar" aria-hidden="true">{initials}</span>
         ) : (

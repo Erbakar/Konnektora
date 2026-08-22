@@ -13,18 +13,18 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
-import { type CSSProperties, type FormEvent, useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
 import { ContentComments } from "../components/ContentComments";
 import { ContentMediaGallery } from "../components/ContentMediaGallery";
 import { EventCard } from "../components/EventCard";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
+import { ReportDialog } from "../components/ReportDialog";
 import {
   confirmEventPayment,
   archiveMyEvent,
   createBlock,
-  createContentReport,
   createEventPayment,
   getContentNotification,
   getEvent,
@@ -35,7 +35,6 @@ import {
   listEventRelatedUsers,
   listFollowing,
   listEvents,
-  listReportRules,
   purchaseEventTickets,
   requestEventAttendance,
   resolveMediaUrl,
@@ -61,11 +60,6 @@ export function EventDetailPage() {
     enabled: Boolean(slug),
   });
   const canManage = Boolean(event && user && (event.createdById === user.id || event.viewerParticipation?.status === "accepted" && ["organizer", "manager"].includes(event.viewerParticipation.role) || ["admin", "super_admin", "curator"].includes(user.role)));
-  const { data: reportRules = [] } = useQuery({
-    queryKey: ["report-rules", "event"],
-    queryFn: () => listReportRules("event"),
-    enabled: Boolean(user),
-  });
   const ticketTypesQuery = useQuery({
     queryKey: ["event-ticket-types", event?.id],
     queryFn: () => listEventTicketTypes(event!.id),
@@ -132,9 +126,6 @@ export function EventDetailPage() {
       );
     },
   });
-  const reportMutation = useMutation({
-    mutationFn: createContentReport,
-  });
   const blockMutation = useMutation({
     mutationFn: () => createBlock("event", event!.id),
     onSuccess: () => {
@@ -159,7 +150,7 @@ export function EventDetailPage() {
     <article className="page detail-page">
       {event.coverImageUrl ? (
         <div className="detail-media">
-          <img alt="" src={event.coverImageUrl} />
+          <img alt="" src={resolveMediaUrl(event.coverImageUrl)} />
         </div>
       ) : null}
       <ContentMediaGallery targetId={event.id} targetType="event" />
@@ -184,7 +175,7 @@ export function EventDetailPage() {
           {event.createdById ? <Link to={`/users/id/${event.createdById}`}>{event.organizerName || "Konnektora topluluğu"}</Link> : event.organizerName || "Konnektora topluluğu"}
         </span>
       </div>
-      <Link className="detail-more-link" to={`/events/${event.slug}#more-info`}>More about the event and place</Link>
+      <button className="detail-more-link" onClick={() => document.getElementById("more-info")?.scrollIntoView({ behavior: "smooth", block: "start" })} type="button">More about the event and place</button>
       <div className="tag-row">
         {event.tags.map((tag) => (
           <span key={tag.id}>{tag.name}</span>
@@ -217,7 +208,7 @@ export function EventDetailPage() {
             Katılmak için giriş yap
           </Link>
         ) : null}
-        {canManage ? <Link className="secondary-action" to={`/events/${event.slug}/invites`}><UserPlus size={18}/>Davet et</Link> : <a className="secondary-action" href={`mailto:?subject=${encodeURIComponent(event.title)}&body=${encodeURIComponent(`${event.title}\n\n${window.location.href}`)}`}><UserPlus size={18}/>Davet et</a>}
+        {user ? <Link className="secondary-action" to={`/events/${event.slug}/invites`}><UserPlus size={18}/>Davet et</Link> : <Link className="secondary-action" to={`/login?next=${encodeURIComponent(`/events/${event.slug}/invites`)}`}><UserPlus size={18}/>Davet et</Link>}
         <button className="secondary-action" onClick={() => setShareOpen(true)}><Share2 size={18}/>Paylaş</button>
         <details className="detail-action-menu">
           <summary aria-label="Etkinlik işlemleri"><MoreVertical size={20}/></summary>
@@ -226,8 +217,8 @@ export function EventDetailPage() {
             {ticketTypesQuery.data?.length ? <button onClick={() => setTicketPickerOpen(true)}><CreditCard size={18}/>Biletleri gör</button> : null}
             {user && event.price > 0 ? <button disabled={paymentMutation.isPending || paymentMutation.isSuccess} onClick={() => paymentMutation.mutate()}><CreditCard size={18}/>{paymentMutation.isSuccess ? "Ödeme tamamlandı" : paymentMutation.isPending ? "Ödeniyor…" : "Bilet al"}</button> : null}
             {canManage ? <Link to={`/events/${event.slug}/invites`}><ShieldCheck size={18}/>Check-in control</Link> : null}
-            {event.createdById === user?.id ? <Link to="/events/create"><ExternalLink size={18}/>Etkinliği düzenle</Link> : null}
-            {event.createdById === user?.id ? <button disabled={archiveMutation.isPending} onClick={() => window.confirm("Etkinlik silinsin mi? Satılmış tüm biletler otomatik olarak iade edilecek ve bu işlem geri alınamayacaktır.") && archiveMutation.mutate()}><Flag size={18}/>Etkinliği sil</button> : null}
+            {canManage ? <Link to="/events/create"><ExternalLink size={18}/>Etkinliği düzenle</Link> : null}
+            {canManage ? <button disabled={archiveMutation.isPending} onClick={() => window.confirm("Etkinlik silinsin mi? Satılmış tüm biletler otomatik olarak iade edilecek ve bu işlem geri alınamayacaktır.") && archiveMutation.mutate()}><Flag size={18}/>Etkinliği sil</button> : null}
             {statsQuery.data ? <a href="#interaction-stats"><ShieldCheck size={18}/>Etkileşim istatistikleri</a> : null}
             {user && !canManage ? <button onClick={() => setReportOpen((current) => !current)}><Flag size={18}/>Etkinliği rapor et</button> : null}
             {user && !canManage ? <button disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()}><Ban size={18}/>Etkinliği engelle</button> : null}
@@ -345,62 +336,7 @@ export function EventDetailPage() {
           Ödeme tamamlanamadı. Lütfen ödeme bilgilerini kontrol edin.
         </p>
       ) : null}
-      {reportOpen ? (
-        <form
-          className="admin-form compact-form"
-          onSubmit={(submitEvent: FormEvent<HTMLFormElement>) => {
-            submitEvent.preventDefault();
-            const form = new FormData(submitEvent.currentTarget);
-            const ruleId = String(form.get("ruleId") || "");
-            const selectedRule = reportRules.find((rule) => rule.id === ruleId);
-            reportMutation.mutate({
-              targetType: "event",
-              targetId: event.id,
-              ruleId: ruleId || undefined,
-              reason: selectedRule?.title ?? String(form.get("reason")),
-              details: String(form.get("details") || "") || undefined,
-            });
-            submitEvent.currentTarget.reset();
-          }}
-        >
-          {reportRules.length ? (
-            <label>
-              Rapor sebebi
-              <select name="ruleId" required>
-                <option value="">Sebep seç</option>
-                {reportRules.map((rule) => (
-                  <option key={rule.id} value={rule.id}>
-                    {rule.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <label>
-              Rapor sebebi
-              <input
-                name="reason"
-                placeholder="Yanıltıcı bilgi, uygunsuz içerik..."
-                required
-                minLength={3}
-                maxLength={120}
-              />
-            </label>
-          )}
-          <label>
-            Detay
-            <textarea name="details" rows={3} maxLength={1000} />
-          </label>
-          <button
-            className="secondary-action"
-            disabled={reportMutation.isPending}
-            type="submit"
-          >
-            <Flag size={18} />
-            {reportMutation.isPending ? "Gönderiliyor" : "Rapor gönder"}
-          </button>
-        </form>
-      ) : null}
+      <ReportDialog onClose={() => setReportOpen(false)} open={reportOpen} targetId={event.id} targetType="event"/>
       {attendMutation.data ? (
         <p className="form-success">
           {attendMutation.data.status === "accepted"
@@ -413,22 +349,14 @@ export function EventDetailPage() {
           Katılım talebi gönderilemedi. Lütfen tekrar dene.
         </p>
       ) : null}
-      {reportMutation.data ? (
-        <p className="form-success">Rapor alındı. Admin panelde incelenecek.</p>
-      ) : null}
-      {reportMutation.isError ? (
-        <p className="form-error">Rapor gönderilemedi. Lütfen tekrar dene.</p>
-      ) : null}
       <section className="admin-form event-attendee-preview">
         <h2>Katılımcılar</h2>
-        <Link to={`/events/${event.slug}/users`}>
-          <span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).sort((a, b) => Number((followingQuery.data ?? []).some((item) => item.id === b.id)) - Number((followingQuery.data ?? []).some((item) => item.id === a.id))).slice(0, 8).map((participant) => <span key={participant.id} title={participant.name}>{participant.avatarUrl ? <img alt="" src={resolveMediaUrl(participant.avatarUrl)}/> : participant.name?.[0] ?? "?"}</span>)}</span>
-          <strong>{event.attendeeCount ?? relatedUsersQuery.data?.length ?? 0} attendees · {participantsQuery.data?.filter((item) => item.status === "invited").length ?? 0} invited · {(relatedUsersQuery.data ?? []).filter((participant) => (followingQuery.data ?? []).some((item) => item.id === participant.id)).length} following</strong>
-        </Link>
+        <span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).sort((a, b) => Number((followingQuery.data ?? []).some((item) => item.id === b.id)) - Number((followingQuery.data ?? []).some((item) => item.id === a.id))).slice(0, 8).map((participant) => <Link key={participant.id} title={participant.name} to={`/users/id/${participant.id}`}>{participant.avatarUrl ? <img alt="" src={resolveMediaUrl(participant.avatarUrl)}/> : participant.name?.[0] ?? "?"}</Link>)}</span>
+        <Link to={`/events/${event.slug}/users`}><strong>{event.attendeeCount ?? relatedUsersQuery.data?.length ?? 0} attendees · {participantsQuery.data?.filter((item) => item.status === "invited").length ?? 0} invited · {(relatedUsersQuery.data ?? []).filter((participant) => (followingQuery.data ?? []).some((item) => item.id === participant.id)).length} following</strong></Link>
       </section>
-      <p className="detail-copy" id="more-info">
+      <section className="detail-copy" id="more-info">
         <RichText text={event.description} />
-      </p>
+      </section>
       {statsQuery.data ? (
         <section className="admin-form" id="interaction-stats">
           <h2>Etkileşim istatistikleri</h2>

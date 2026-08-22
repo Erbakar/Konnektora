@@ -32,18 +32,19 @@ export class AuthService {
       where: { email: input.email },
     });
 
-    if (!user || user.status !== "active") {
+    if (!user) {
       throw new UnauthorizedException("Geçersiz kullanıcı hesabı.");
-    }
-
-    if (options.adminOnly && !["admin", "super_admin"].includes(user.role)) {
-      throw new UnauthorizedException("Admin yetkisi gerekli.");
     }
 
     const passwordMatches = await compare(input.password, user.passwordHash);
+    if (!passwordMatches) throw new UnauthorizedException("Geçersiz kullanıcı hesabı.");
+    if (user.status === "frozen") {
+      throw new UnauthorizedException("Dondurulmuş hesap yeniden etkinleştirme onayı gerektiriyor.");
+    }
+    if (user.status !== "active") throw new UnauthorizedException("Geçersiz kullanıcı hesabı.");
 
-    if (!passwordMatches) {
-      throw new UnauthorizedException("Geçersiz kullanıcı hesabı.");
+    if (options.adminOnly && !["admin", "super_admin"].includes(user.role)) {
+      throw new UnauthorizedException("Admin yetkisi gerekli.");
     }
 
     return this.createLoginResponse(user);
@@ -132,7 +133,7 @@ export class AuthService {
       include: { user: true },
     });
     if (linked) {
-      if (linked.user.status !== "active") throw new UnauthorizedException("Bu hesapla giriş yapılamıyor.");
+      if (!["active", "pending"].includes(linked.user.status)) throw new UnauthorizedException("Bu hesapla giriş yapılamıyor.");
       await this.prisma.socialAccount.update({
         where: { id: linked.id },
         data: {
@@ -148,7 +149,7 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({
       where: { email: identity.email },
     });
-    if (existing && existing.status !== "active") throw new UnauthorizedException("Bu hesapla giriş yapılamıyor.");
+    if (existing && !["active", "pending"].includes(existing.status)) throw new UnauthorizedException("Bu hesapla giriş yapılamıyor.");
     const user =
       existing ??
       (await this.prisma.user.create({
@@ -157,7 +158,7 @@ export class AuthService {
           name: identity.name,
           passwordHash: await hash(randomBytes(32).toString("hex"), 10),
           emailVerified: true,
-          status: "active",
+          status: "pending",
         },
       }));
     await this.prisma.socialAccount.create({
@@ -292,12 +293,7 @@ export class AuthService {
     const token = await this.consumeEmailToken(input.token, "verify_email");
     const user = await this.prisma.user.update({
       where: { id: token.userId },
-      data: { status: "active", emailVerified: true },
-    });
-
-    await this.sendAccountActivatedEmailSafely({
-      to: user.email,
-      name: user.name,
+      data: { emailVerified: true },
     });
     return this.createLoginResponse(user);
   }
@@ -518,15 +514,9 @@ export class AuthService {
       }),
       this.prisma.user.update({
         where: { id: userId },
-        data: { phone: input.phone, phoneVerified: true, status: "active" },
+        data: { phone: input.phone, phoneVerified: true },
       }),
     ]);
-    if (account.status === "pending") {
-      await this.sendAccountActivatedEmailSafely({
-        to: account.email,
-        name: account.name,
-      });
-    }
     return {
       ok: true as const,
       phone: user.phone,
@@ -612,6 +602,12 @@ export class AuthService {
   }
 
   private async createLoginResponse(user: User) {
+    const avatar = this.prisma.mediaFile
+      ? await this.prisma.mediaFile.findFirst({
+          where: { contentType: "user", contentId: user.id, status: "active", type: "image", isProfilePicture: true },
+          select: { url: true },
+        })
+      : null;
     return {
       accessToken: await this.jwtService.signAsync({
         sub: user.id,
@@ -625,6 +621,7 @@ export class AuthService {
         accountType: user.accountType as "individual" | "corporate",
         emailVerified: user.emailVerified,
         status: user.status,
+        avatarUrl: avatar?.url ?? null,
       },
     };
   }

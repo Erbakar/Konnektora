@@ -333,7 +333,7 @@ export class DiscoveryService {
   }
 
   async search(rawQuery: string, userId?: string) {
-    const query = rawQuery.trim();
+    const query = rawQuery.trim().replace(/^@/, "");
     const contains = { contains: query, mode: "insensitive" as const };
     const blockedIds = await this.blockedUserIds(userId);
     const [users, tags, events, places] = await Promise.all([
@@ -413,11 +413,9 @@ export class DiscoveryService {
       id: user.id,
       title: user.name,
       subtitle: user.username ? `@${user.username}` : null,
-      href: user.username
-        ? `/users/${user.username}`
-        : `/messages?peer=${user.id}`,
+      href: `/users/id/${user.id}`,
       imageUrl: null,
-      meta: `${user.followerCount} takipçi${user.city || user.country ? ` · ${user.city ?? user.country}` : ""}`,
+      meta: `${user.followerCount} takipçi`,
     };
   }
   private tagItem(tag: {

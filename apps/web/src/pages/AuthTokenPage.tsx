@@ -26,7 +26,7 @@ export function VerifyEmailPage() {
       {mutation.isPending ? <p>Email adresin doğrulanıyor...</p> : null}
       {mutation.data ? (
         <>
-          <p>Hesabın aktifleştirildi.</p>
+          <p>E-posta adresin doğrulandı.</p>
           <Link className="primary-action" to="/onboarding">
             <Check size={18} />
             Telefon doğrulamasına devam et
@@ -77,7 +77,7 @@ export function ResetPasswordPage() {
           Şifreyi kaydet
         </button>
       </form>
-      {mutation.data ? <ServiceFeedback compact message="Şifren güncellendi ve hesabına giriş yapıldı." tone="success" /> : null}
+      {mutation.data ? <><ServiceFeedback compact message="Şifren güncellendi ve hesabına giriş yapıldı." tone="success" /><Link className="primary-action" to="/feed">Akışa geç</Link></> : null}
       {mutation.isError ? (
         <ServiceFeedback
           error={mutation.error}

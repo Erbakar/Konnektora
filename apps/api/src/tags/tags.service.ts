@@ -41,18 +41,51 @@ function tagAuthor(
 export class TagsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listPublicTags(userId?: string) {
+  async listPublicTags(
+    userId?: string,
+    filters: {
+      createdFrom?: string;
+      createdTo?: string;
+      country?: string;
+      city?: string;
+    } = {},
+  ) {
     const blocks = userId
       ? await this.prisma.userBlock.findMany({
           where: { userId, targetType: "tag" },
           select: { targetId: true },
         })
       : [];
+    const createdFrom = filters.createdFrom ? new Date(filters.createdFrom) : null;
+    const createdTo = filters.createdTo ? new Date(`${filters.createdTo}T23:59:59.999Z`) : null;
+    const where: Prisma.TagWhereInput = {
+      status: "active",
+      id: { notIn: blocks.map((block) => block.targetId) },
+      ...(createdFrom && !Number.isNaN(createdFrom.getTime()) || createdTo && !Number.isNaN(createdTo.getTime())
+        ? {
+            createdAt: {
+              ...(createdFrom && !Number.isNaN(createdFrom.getTime()) ? { gte: createdFrom } : {}),
+              ...(createdTo && !Number.isNaN(createdTo.getTime()) ? { lte: createdTo } : {}),
+            },
+          }
+        : {}),
+      ...(filters.country?.trim() || filters.city?.trim()
+        ? {
+            createdBy: {
+              is: {
+                ...(filters.country?.trim()
+                  ? { country: { equals: filters.country.trim(), mode: "insensitive" as const } }
+                  : {}),
+                ...(filters.city?.trim()
+                  ? { city: { equals: filters.city.trim(), mode: "insensitive" as const } }
+                  : {}),
+              },
+            },
+          }
+        : {}),
+    };
     const tags = await this.prisma.tag.findMany({
-      where: {
-        status: "active",
-        id: { notIn: blocks.map((block) => block.targetId) },
-      },
+      where,
       orderBy: [{ usageCount: "desc" }, { name: "asc" }],
       include: { _count: { select: { events: { where: { event: { status: "published", startsAt: { gte: new Date() } } } }, places: { where: { place: { status: "active" } } } } } },
     });
@@ -163,8 +196,8 @@ export class TagsService {
       id: member.id,
       name: member.name,
       username: member.username,
-      city: viewerId === member.id || member.privacySettings?.locationAudience === "everybody" ? member.city : null,
-      country: viewerId === member.id || member.privacySettings?.locationAudience === "everybody" ? member.country : null,
+      city: viewerId === member.id ? member.city : null,
+      country: viewerId === member.id ? member.country : null,
       gender: viewerId === member.id || member.privacySettings?.demographicsAudience === "everybody" ? member.gender : null,
       birthDate: viewerId === member.id || member.privacySettings?.demographicsAudience === "everybody" ? member.birthDate : null,
       profileVerifiedAt: member.profileVerifiedAt,

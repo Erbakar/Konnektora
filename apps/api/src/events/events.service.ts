@@ -16,7 +16,7 @@ import {
   User,
 } from "@prisma/client";
 import { hash } from "bcryptjs";
-import { createHash, randomBytes, randomUUID } from "crypto";
+import { createHash, randomBytes, randomInt, randomUUID } from "crypto";
 import { AuthService } from "../auth/auth.service";
 import { toSlug } from "../common/slug";
 import { MailService } from "../mail/mail.service";
@@ -98,7 +98,7 @@ export class EventsService {
       where.participants = {
         some: {
           userId: userId ?? "",
-          status: { in: ["invited", "accepted", "attended"] },
+          status: { in: ["accepted", "attended"] },
         },
       };
     } else if (query.scope === "following") {
@@ -282,8 +282,7 @@ export class EventsService {
   }
 
   async createEvent(input: CreateEventDto, userId?: string) {
-    const slug = toSlug(input.title);
-    await this.ensureSlugAvailable(slug);
+    const slug = await this.uniqueSlug(input.title);
 
     const event = await this.prisma.event.create({
       data: {
@@ -447,8 +446,8 @@ export class EventsService {
       id: participant.user.id,
       name: participant.user.name,
       username: participant.user.username,
-      city: actor?.id === participant.user.id || participant.user.privacySettings?.locationAudience === "everybody" ? participant.user.city : null,
-      country: actor?.id === participant.user.id || participant.user.privacySettings?.locationAudience === "everybody" ? participant.user.country : null,
+      city: actor?.id === participant.user.id ? participant.user.city : null,
+      country: actor?.id === participant.user.id ? participant.user.country : null,
       gender: actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.gender : null,
       birthDate: actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.birthDate : null,
       profileVerifiedAt: participant.user.profileVerifiedAt,
@@ -593,7 +592,10 @@ export class EventsService {
     input: InviteParticipantDto,
     actor: User,
   ) {
-    await this.ensureCanManageParticipants(eventId, actor, true);
+    const canManage = await this.canManageParticipants(eventId, actor, true);
+    if (!canManage && input.role && input.role !== EventParticipantRole.attendee) {
+      throw new ForbiddenException("Yönetici rolü yalnız etkinlik yöneticileri tarafından atanabilir.");
+    }
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
       select: { id: true, title: true, slug: true },
@@ -609,13 +611,13 @@ export class EventsService {
       where: { eventId_userId: { eventId, userId: invitee.id } },
       update: {
         status: EventParticipantStatus.invited,
-        role: input.role ?? EventParticipantRole.attendee,
+        role: canManage ? input.role ?? EventParticipantRole.attendee : EventParticipantRole.attendee,
       },
       create: {
         eventId,
         userId: invitee.id,
         status: EventParticipantStatus.invited,
-        role: input.role ?? EventParticipantRole.attendee,
+        role: canManage ? input.role ?? EventParticipantRole.attendee : EventParticipantRole.attendee,
       },
       include: {
         user: {
@@ -759,9 +761,7 @@ export class EventsService {
     };
 
     if (input.title) {
-      const slug = toSlug(input.title);
-      await this.ensureSlugAvailable(slug, id);
-      data.slug = slug;
+      data.slug = await this.uniqueSlug(input.title, id);
     }
 
     if (input.tagIds) {
@@ -874,14 +874,14 @@ export class EventsService {
     return "UTC";
   }
 
-  private async ensureSlugAvailable(slug: string, currentId?: string) {
-    const existing = await this.prisma.event.findUnique({ where: { slug } });
-
-    if (existing && existing.id !== currentId) {
-      throw new ConflictException(
-        "Bu etkinlik başlığı için slug zaten kullanılıyor.",
-      );
+  private async uniqueSlug(title: string, currentId?: string) {
+    const base = toSlug(title) || "event";
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const slug = `${base}-${randomInt(100000, 1000000)}`;
+      const existing = await this.prisma.event.findFirst({ where: { slug, id: currentId ? { not: currentId } : undefined }, select: { id: true } });
+      if (!existing) return slug;
     }
+    return `${base}-${Date.now()}`;
   }
 
   private async getEventTagIds(eventId: string) {
@@ -1028,38 +1028,15 @@ export class EventsService {
   }
 
   private async ensureCanManageParticipants(eventId: string, user: User, allowCurator = false) {
-    if (["admin", "super_admin"].includes(user.role) || allowCurator && user.role === "curator") {
-      return;
-    }
+    if (!await this.canManageParticipants(eventId, user, allowCurator)) throw new ForbiddenException("Bu etkinliğin katılımcılarını yönetme yetkiniz yok.");
+  }
 
-    const event = await this.prisma.event.findUnique({
-      where: { id: eventId },
-      select: { createdById: true },
-    });
-
-    if (!event) {
-      throw new NotFoundException("Etkinlik bulunamadı.");
-    }
-
-    if (event.createdById === user.id) {
-      return;
-    }
-
-    const participant = await this.prisma.eventParticipant.findUnique({
-      where: { eventId_userId: { eventId, userId: user.id } },
-      select: { role: true, status: true },
-    });
-
-    if (
-      participant?.status === EventParticipantStatus.accepted &&
-      (participant.role === EventParticipantRole.organizer ||
-        participant.role === EventParticipantRole.manager)
-    ) {
-      return;
-    }
-
-    throw new ForbiddenException(
-      "Bu etkinliğin katılımcılarını yönetme yetkiniz yok.",
-    );
+  private async canManageParticipants(eventId: string, user: User, allowCurator = false) {
+    if (["admin", "super_admin"].includes(user.role) || allowCurator && user.role === "curator") return true;
+    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { createdById: true } });
+    if (!event) throw new NotFoundException("Etkinlik bulunamadı.");
+    if (event.createdById === user.id) return true;
+    const participant = await this.prisma.eventParticipant.findUnique({ where: { eventId_userId: { eventId, userId: user.id } }, select: { role: true, status: true } });
+    return participant?.status === EventParticipantStatus.accepted && (participant.role === EventParticipantRole.organizer || participant.role === EventParticipantRole.manager);
   }
 }

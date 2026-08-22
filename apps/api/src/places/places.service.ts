@@ -13,6 +13,7 @@ import {
   User,
 } from "@prisma/client";
 import { toSlug } from "../common/slug";
+import { randomInt } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   CreatePlaceDto,
@@ -364,8 +365,8 @@ export class PlacesService {
       id: member.user.id,
       name: member.user.name,
       username: member.user.username,
-      city: actor?.id === member.user.id || member.user.privacySettings?.locationAudience === "everybody" ? member.user.city : null,
-      country: actor?.id === member.user.id || member.user.privacySettings?.locationAudience === "everybody" ? member.user.country : null,
+      city: actor?.id === member.user.id ? member.user.city : null,
+      country: actor?.id === member.user.id ? member.user.country : null,
       gender: actor?.id === member.user.id || member.user.privacySettings?.demographicsAudience === "everybody" ? member.user.gender : null,
       birthDate: actor?.id === member.user.id || member.user.privacySettings?.demographicsAudience === "everybody" ? member.user.birthDate : null,
       profileVerifiedAt: member.user.profileVerifiedAt,
@@ -644,17 +645,12 @@ export class PlacesService {
 
   private async uniqueSlug(name: string, currentId?: string) {
     const base = toSlug(name) || "place";
-    let slug = base;
-    let suffix = 2;
-    while (
-      await this.prisma.place.findFirst({
-        where: { slug, id: currentId ? { not: currentId } : undefined },
-        select: { id: true },
-      })
-    ) {
-      slug = `${base}-${suffix++}`;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const slug = `${base}-${randomInt(100000, 1000000)}`;
+      const existing = await this.prisma.place.findFirst({ where: { slug, id: currentId ? { not: currentId } : undefined }, select: { id: true } });
+      if (!existing) return slug;
     }
-    return slug;
+    return `${base}-${Date.now()}`;
   }
 
   private optionalText(value?: string) {

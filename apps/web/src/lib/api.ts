@@ -5962,7 +5962,7 @@ function getMockDiscoveryFeed(params: URLSearchParams): DiscoveryFeed {
 }
 
 function searchMockDiscovery(query: string): DiscoverySearch {
-  const needle = query.trim().toLowerCase();
+  const needle = query.trim().replace(/^@/, "").toLowerCase();
   const matches = (value: unknown) =>
     JSON.stringify(value).toLowerCase().includes(needle);
   const items = [
@@ -7484,8 +7484,9 @@ export function getEvent(slug: string): Promise<Event> {
   return requestJson(`/events/${slug}`, eventSchema, { auth: "user" });
 }
 
-export async function listTags(): Promise<Tag[]> {
-  const result = await requestJson("/tags", z.array(tagSchema));
+export async function listTags(params = new URLSearchParams()): Promise<Tag[]> {
+  const query = params.toString();
+  const result = await requestJson(`/tags${query ? `?${query}` : ""}`, z.array(tagSchema));
   return USE_DEMO_CONTENT && result.length === 0
     ? getStoredTags().filter((tag) => tag.status === "active")
     : result;
@@ -7532,14 +7533,16 @@ export function listProfileMedia(): Promise<ProfileMedia[]> {
   });
 }
 
-export function uploadProfileMedia(file: File): Promise<ProfileMedia> {
+export async function uploadProfileMedia(file: File): Promise<ProfileMedia> {
   const body = new FormData();
   body.append("file", file);
-  return requestJson("/profile/media/upload", profileMediaSchema, {
+  const media = await requestJson("/profile/media/upload", profileMediaSchema, {
     auth: "user",
     method: "POST",
     body,
   });
+  if (media.isProfilePicture) syncSessionAvatar(media.url);
+  return media;
 }
 
 export function getProfileVerification(): Promise<ProfileVerificationStatus> {
@@ -7591,12 +7594,14 @@ export async function getProfileVerificationEvidence(
   return URL.createObjectURL(await response.blob());
 }
 
-export function makeProfilePicture(mediaId: string): Promise<ProfileMedia[]> {
-  return requestJson(
+export async function makeProfilePicture(mediaId: string): Promise<ProfileMedia[]> {
+  const media = await requestJson(
     `/profile/media/${mediaId}/profile-picture`,
     profileMediaListSchema,
     { auth: "user", method: "PATCH" },
   );
+  syncSessionAvatar(media.find((item) => item.isProfilePicture)?.url ?? null);
+  return media;
 }
 
 export function reorderProfileMedia(
@@ -7609,11 +7614,18 @@ export function reorderProfileMedia(
   });
 }
 
-export function deleteProfileMedia(mediaId: string): Promise<ProfileMedia[]> {
-  return requestJson(`/profile/media/${mediaId}`, profileMediaListSchema, {
+export async function deleteProfileMedia(mediaId: string): Promise<ProfileMedia[]> {
+  const media = await requestJson(`/profile/media/${mediaId}`, profileMediaListSchema, {
     auth: "user",
     method: "DELETE",
   });
+  syncSessionAvatar(media.find((item) => item.isProfilePicture)?.url ?? null);
+  return media;
+}
+
+function syncSessionAvatar(avatarUrl: string | null) {
+  const user = getUserSession();
+  if (user) updateUserSession({ ...user, avatarUrl });
 }
 
 export function listContentMedia(

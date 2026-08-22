@@ -21,31 +21,40 @@ export function parseRichText(value: string): RichTextToken[] {
       if (/^[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}$/.test(text))
         return { type: "email", text, href: `mailto:${text}` };
       if (text.includes("|")) {
-        const separator = text.indexOf("|");
-        const label = text.slice(0, separator);
-        const raw = text.slice(separator + 1);
+        const unwrapped = /^(?:“”|"").+(?:“”|"")$/u.test(text) ? text.slice(2, -2) : text;
+        const separator = unwrapped.indexOf("|");
+        const label = unwrapped.slice(0, separator).trim();
+        const raw = unwrapped.slice(separator + 1).trim();
+        if (!/^https?:\/\//i.test(raw) && !/^[^\s]+\.[A-Za-z]{2,}(?:\/\S*)?$/.test(raw)) {
+          const slug = richTagSlug(raw);
+          return { type: "tag", text: label, href: `/tags/${encodeURIComponent(slug)}` };
+        }
         const href = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
         return { type: "url", text: label, href };
       }
       if (/^(?:“”.+“”|"".+"")$/u.test(text)) {
         const label = text.slice(2, -2);
-        const slug = label
-          .trim()
-          .toLocaleLowerCase("tr-TR")
-          .replace(/ğ/g, "g")
-          .replace(/ü/g, "u")
-          .replace(/ş/g, "s")
-          .replace(/ö/g, "o")
-          .replace(/ç/g, "c")
-          .replace(/ı/g, "i")
-          .normalize("NFKD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "");
+        const slug = richTagSlug(label);
         return { type: "tag", text: label, href: `/tags/${encodeURIComponent(slug)}` };
       }
       return { type: "text", text };
     });
+}
+
+function richTagSlug(value: string) {
+  return value
+    .trim()
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ş/g, "s")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .replace(/ı/g, "i")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 export const eventStatusSchema = z.enum([
@@ -864,6 +873,7 @@ export const adminUserSchema = z.object({
   accountType: accountTypeSchema.optional(),
   emailVerified: z.boolean().optional(),
   status: userStatusSchema.optional(),
+  avatarUrl: z.string().nullable().optional(),
 });
 
 export const profileSchema = z.object({
@@ -886,6 +896,7 @@ export const profileSchema = z.object({
   companyType: z.string().max(80).nullable(),
   businessCategory: z.string().max(120).nullable(),
   emailVerified: z.boolean(),
+  status: userStatusSchema.optional(),
   createdAt: z.string().datetime().or(z.date()),
   updatedAt: z.string().datetime().or(z.date()),
 });

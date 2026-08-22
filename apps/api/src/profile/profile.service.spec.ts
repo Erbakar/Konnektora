@@ -22,6 +22,7 @@ describe("ProfileService", () => {
     companyType: null,
     businessCategory: null,
     emailVerified: true,
+    status: "active",
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01")
   };
@@ -121,6 +122,17 @@ describe("ProfileService", () => {
         data: expect.objectContaining({ name: "Ada Byron", username: "ada-byron", city: null })
       })
     );
+  });
+
+  it("activates a pending individual account only after verified phone and basic profile", async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue({ ...currentProfile, status: "pending", phoneVerified: true });
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.update.mockResolvedValue({ ...currentProfile, status: "active" });
+
+    await service.updateProfile("user-1", { name: "Ada Lovelace", username: "ada", country: "Türkiye", birthDate: "1990-01-01T00:00:00.000Z" });
+
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "active" }) }));
   });
 
   it("fails when the profile no longer exists", async () => {

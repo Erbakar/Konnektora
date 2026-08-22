@@ -167,7 +167,7 @@ export function HomePage() {
   });
   const { data: tags = [] } = useQuery({
     queryKey: ["tags", "home"],
-    queryFn: listTags,
+    queryFn: () => listTags(),
   });
   const { data: announcements = [] } = useQuery({
     queryKey: ["announcements", "home"],
@@ -181,6 +181,11 @@ export function HomePage() {
     queryKey: ["discovery-feed", trendScope],
     queryFn: () => getDiscoveryFeed({ scope: trendScope }),
   });
+  const { data: popularEventList } = useQuery({
+    queryKey: ["events", "home", "popular", discovery?.location],
+    queryFn: () => listEvents(new URLSearchParams({ scope: "popular", pageSize: "8", ...(discovery?.location ? { city: discovery.location } : {}) })),
+    enabled: discovery !== undefined,
+  });
   const events = eventList?.items ?? [];
 
   const localEvents = events.filter((event) => event.city).slice(0, 8);
@@ -188,6 +193,7 @@ export function HomePage() {
     .filter((event) => event.format === "online")
     .slice(0, 8);
   const featuredEvents = events.slice(0, 8);
+  const popularEvents = popularEventList?.items ?? [];
 
   return (
     <div className="corp-home">
@@ -366,6 +372,8 @@ export function HomePage() {
           )}
         </div>
       </section>
+
+      {popularEvents.length ? <section className="corp-section"><div className="corp-section-head"><div><h2>{discovery?.location ? `${discovery.location} yakınında popüler etkinlikler` : "Popüler etkinlikler"}</h2><p>Konumuna ve topluluk ilgisine göre öne çıkan buluşmalar.</p></div><Link className="corp-link" to="/events?scope=popular">{c.allEvents}<ArrowRight size={18}/></Link></div><div className="corp-carousel">{popularEvents.map((event) => <HomeEventTile event={event} key={event.id}/>)}</div></section> : null}
 
       <section
         className="corp-section home-story-section"
