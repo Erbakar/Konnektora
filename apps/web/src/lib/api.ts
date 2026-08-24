@@ -9790,14 +9790,24 @@ export async function listPlaces(params?: URLSearchParams): Promise<PlaceList> {
   const result = await requestJson(
     `/places${query ? `?${query}` : ""}`,
     placeListSchema,
+    { auth: "user" },
   );
   return USE_DEMO_CONTENT && result.items.length === 0
     ? listMockPublicPlaces(params ?? new URLSearchParams())
     : result;
 }
 
-export function getPlace(slug: string): Promise<Place> {
-  return requestJson(`/places/${slug}`, placeSchema);
+export async function getPlace(slug: string): Promise<Place> {
+  try {
+    return await requestJson(`/places/${slug}`, placeSchema, { auth: "user" });
+  } catch (error) {
+    // Production shows the curated demo places when the live catalogue is empty.
+    // Their detail routes must resolve from the same source as the list.
+    if (USE_DEMO_CONTENT && error instanceof ApiHttpError && error.status === 404) {
+      return getMockPublicPlace(slug);
+    }
+    throw error;
+  }
 }
 
 export function createPlace(input: PlaceInput): Promise<Place> {
