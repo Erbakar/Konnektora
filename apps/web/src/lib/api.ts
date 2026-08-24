@@ -9787,11 +9787,14 @@ export type PlaceInput = {
 
 export async function listPlaces(params?: URLSearchParams): Promise<PlaceList> {
   const query = params?.toString();
-  const result = await requestJson(
-    `/places${query ? `?${query}` : ""}`,
-    placeListSchema,
-    { auth: "user" },
-  );
+  const path = `/places${query ? `?${query}` : ""}`;
+  let result: PlaceList;
+  try {
+    result = await requestJson(path, placeListSchema, { auth: "user" });
+  } catch (error) {
+    if (!(error instanceof ApiHttpError) || error.status !== 401) throw error;
+    result = await requestJson(path, placeListSchema);
+  }
   return USE_DEMO_CONTENT && result.items.length === 0
     ? listMockPublicPlaces(params ?? new URLSearchParams())
     : result;
@@ -9801,6 +9804,13 @@ export async function getPlace(slug: string): Promise<Place> {
   try {
     return await requestJson(`/places/${slug}`, placeSchema, { auth: "user" });
   } catch (error) {
+    if (error instanceof ApiHttpError && error.status === 401) {
+      try {
+        return await requestJson(`/places/${slug}`, placeSchema);
+      } catch (anonymousError) {
+        error = anonymousError;
+      }
+    }
     // Production shows the curated demo places when the live catalogue is empty.
     // Their detail routes must resolve from the same source as the list.
     if (USE_DEMO_CONTENT && error instanceof ApiHttpError && error.status === 404) {
