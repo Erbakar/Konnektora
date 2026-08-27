@@ -6,6 +6,7 @@ const STORAGE_KEY = "konnektora_language";
 
 const ui = {
   tr: {
+    home: "Anasayfa", menu: "Menü", signUp: "Kayıt ol", logOut: "Çıkış",
     feed: "Akış", events: "Etkinlikler", tags: "İlgi alanları", places: "Mekânlar",
     messages: "Mesajlar", memberId: "Üye kartı", finance: "Finans", search: "Ara",
     create: "Profil oluştur", login: "Giriş yap", explore: "Etkinlikleri keşfet",
@@ -15,9 +16,13 @@ const ui = {
     organizerTools: "Organizatör araçları", adminLogin: "Yönetici girişi", contact: "İletişim",
     help: "Destek merkezi", about: "Hakkımızda", privacy: "Gizlilik", terms: "Koşullar",
     cookies: "Çerezler", networking: "Networking", closedBeta: "Kapalı beta · AB MVP",
+    notifications: "Bildirimler", members: "Üyeler", membersAndLists: "Üyeler ve Listeler",
+    settingsCenter: "Ayarlar Merkezi", myTickets: "Biletlerim", findFriends: "Arkadaşlarımı Bul ve Davet Et",
+    profile: "Profilim", language: "Dil", brandHome: "Konnektora ana sayfa",
     footerCopy: "Global etkinlikler, güvenilir davetli listeleri ve anlamlı bağlantılar için seçkin topluluk platformu."
   },
   en: {
+    home: "Home", menu: "Menu", signUp: "Sign up", logOut: "Log out",
     feed: "Feed", events: "Events", tags: "Tags", places: "Places", messages: "Messages",
     memberId: "Member ID", finance: "Finance", search: "Search", create: "Create",
     login: "Log in", explore: "Explore events", admin: "Admin", menuOpen: "Open menu",
@@ -26,6 +31,9 @@ const ui = {
     organizerTools: "Organizer tools", adminLogin: "Admin login", contact: "Contact",
     help: "Help center", about: "About", privacy: "Privacy", terms: "Terms", cookies: "Cookies",
     networking: "Networking", closedBeta: "Closed beta · EU MVP",
+    notifications: "Notifications", members: "Members", membersAndLists: "Members & Lists",
+    settingsCenter: "Settings center", myTickets: "My tickets", findFriends: "Find & Invite Friends",
+    profile: "My profile", language: "Language", brandHome: "Konnektora home",
     footerCopy: "The curated community platform for global events, trusted guest lists and meaningful connections."
   }
 } as const;

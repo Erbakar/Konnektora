@@ -6,8 +6,46 @@ import { EventCard } from "../components/EventCard";
 import { LocationMap } from "../components/LocationMap";
 import { getDiscoveryFeed, getMyProfile, getUserSession, listEvents, listTags } from "../lib/api";
 import { mockTags } from "../lib/mockData";
+import { useLanguage } from "../lib/i18n";
+
+const pageCopy = {
+  tr: {
+    filters: "Filtreler", filterSearch: "Filtrele & Ara", search: "Arama", searchPlaceholder: "Kurucu, SaaS, yatırımcı...",
+    format: "Format", all: "Tümü", online: "Çevrim içi", offline: "Fiziksel", hybrid: "Hibrit", date: "Tarih",
+    city: "Şehir", cityPlaceholder: "İstanbul", country: "Ülke", countryPlaceholder: "Türkiye", trendTags: "Trend etiketler",
+    clearFilters: "Filtreleri temizle", title: "Etkinlikler", loading: "Yükleniyor…", unavailable: "Veri alınamadı",
+    showMap: "Haritada göster", showList: "Listeyi göster", create: "Etkinlik oluştur", groups: "Etkinlik grupları",
+    future: "Tüm gelecek", next24: "24 saat", tomorrow: "Yarın", week: "Bu hafta", weekend: "Bu hafta sonu",
+    nextWeek: "Gelecek hafta", month: "Bu ay", past: "Geçmiş", allUpcoming: "Tüm etkinlikler",
+    mine: "Etkinliklerim", invited: "Davet edildiklerim", today: (location: string) => `${location} için bugünkü etkinlikler`,
+    forYou: "Sana özel", onlineEvents: "Çevrim içi etkinlikler", popular: (location: string) => `${location} içinde popüler etkinlikler`,
+    following: "Takip ettiklerinin etkinlikleri", locationEvents: (location: string) => `${location} etkinlikleri`, individual: "Bireysel etkinlikler",
+    seeAll: "Tümünü göster", myEmpty: "Katıldığın ve yöneticisi olduğun etkinlikler burada gösterilecek.",
+    loadingEvents: "Etkinlikler yükleniyor…", loadFailed: "Etkinlikler yüklenemedi", retryCopy: "Bağlantını kontrol edip yeniden deneyebilirsin.",
+    retry: "Yeniden dene", noResults: "Bu filtrelerle etkinlik bulunamadı.", previous: "Önceki", next: "Sonraki",
+    page: (page: number, size: number) => `Sayfa ${page} · ${size} kayıt/sayfa`, result: (total: number) => `${total} sonuç`, global: "Global",
+  },
+  en: {
+    filters: "Filters", filterSearch: "Filter & Search", search: "Search", searchPlaceholder: "Founder, SaaS, investor...",
+    format: "Format", all: "All", online: "Online", offline: "In person", hybrid: "Hybrid", date: "Date",
+    city: "City", cityPlaceholder: "London", country: "Country", countryPlaceholder: "United Kingdom", trendTags: "Trending tags",
+    clearFilters: "Clear filters", title: "Events", loading: "Loading…", unavailable: "Data unavailable",
+    showMap: "Show on map", showList: "Show list", create: "Create event", groups: "Event groups",
+    future: "All upcoming", next24: "24 hours", tomorrow: "Tomorrow", week: "This week", weekend: "This weekend",
+    nextWeek: "Next week", month: "This month", past: "Past", allUpcoming: "All events",
+    mine: "My events", invited: "Invited events", today: (location: string) => `Today's events in ${location}`,
+    forYou: "For you", onlineEvents: "Online events", popular: (location: string) => `Popular events in ${location}`,
+    following: "Events from people you follow", locationEvents: (location: string) => `Events in ${location}`, individual: "Community events",
+    seeAll: "See all", myEmpty: "Events you attend or manage will appear here.",
+    loadingEvents: "Loading events…", loadFailed: "Events could not be loaded", retryCopy: "Check your connection and try again.",
+    retry: "Try again", noResults: "No events match these filters.", previous: "Previous", next: "Next",
+    page: (page: number, size: number) => `Page ${page} · ${size} per page`, result: (total: number) => `${total} results`, global: "Global",
+  },
+} as const;
 
 export function EventsPage() {
+  const { language } = useLanguage();
+  const c = pageCopy[language];
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [activePeriod, setActivePeriod] = useState("future");
@@ -24,7 +62,7 @@ export function EventsPage() {
   const currentDiscovery = activePeriod;
   const selectedPage = Number(searchParams.get("page") ?? "1");
   const hasFilters = [...searchParams.keys()].some((key) => key !== "page");
-  const discoveryLocation = profile.data?.city || profile.data?.country || "Global";
+  const discoveryLocation = profile.data?.city || profile.data?.country || c.global;
   const deviceLocation = deviceDiscovery.data?.location?.trim() ?? "";
   const showDeviceLocation = Boolean(user && deviceLocation && profile.data?.city && deviceLocation.toLocaleLowerCase("tr-TR") !== profile.data.city.toLocaleLowerCase("tr-TR"));
 
@@ -41,15 +79,15 @@ export function EventsPage() {
   const today = new Date();
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
   const discoveryDefinitions = [
-    { key: "mine", title: "Etkinliklerim", params: { scope: "mine" }, auth: true },
-    { key: "invited", title: "Davet edildiklerim", params: { scope: "invited" }, auth: true },
-    { key: "today", title: `Today in ${discoveryLocation} events`, params: { dateFrom: today.toISOString().slice(0, 10), dateTo: tomorrow.toISOString().slice(0, 10), ...(profile.data?.city ? { city: profile.data.city } : profile.data?.country ? { country: profile.data.country } : {}) }, auth: false },
-    { key: "for_you", title: "Sana özel", params: { scope: "for_you" }, auth: true },
-    { key: "online", title: "Online etkinlikler", params: { format: "online" }, auth: false },
-    { key: "popular", title: `${discoveryLocation} içinde popüler etkinlikler`, params: { scope: "popular", ...(profile.data?.city ? { city: profile.data.city } : profile.data?.country ? { country: profile.data.country } : {}) }, auth: false },
-    { key: "following", title: "Takip ettiklerinin etkinlikleri", params: { scope: "following" }, auth: true },
-    ...(showDeviceLocation ? [{ key: "device_location", title: `${deviceLocation} etkinlikleri`, params: { city: deviceLocation }, auth: false } as const] : []),
-    { key: "individual", title: "Bireysel etkinlikler", params: { scope: "individual" }, auth: false },
+    { key: "mine", title: c.mine, params: { scope: "mine" }, auth: true },
+    { key: "invited", title: c.invited, params: { scope: "invited" }, auth: true },
+    { key: "today", title: c.today(discoveryLocation), params: { dateFrom: today.toISOString().slice(0, 10), dateTo: tomorrow.toISOString().slice(0, 10), ...(profile.data?.city ? { city: profile.data.city } : profile.data?.country ? { country: profile.data.country } : {}) }, auth: false },
+    { key: "for_you", title: c.forYou, params: { scope: "for_you" }, auth: true },
+    { key: "online", title: c.onlineEvents, params: { format: "online" }, auth: false },
+    { key: "popular", title: c.popular(discoveryLocation), params: { scope: "popular", ...(profile.data?.city ? { city: profile.data.city } : profile.data?.country ? { country: profile.data.country } : {}) }, auth: false },
+    { key: "following", title: c.following, params: { scope: "following" }, auth: true },
+    ...(showDeviceLocation ? [{ key: "device_location", title: c.locationEvents(deviceLocation), params: { city: deviceLocation }, auth: false } as const] : []),
+    { key: "individual", title: c.individual, params: { scope: "individual" }, auth: false },
   ] as const;
   const discoveryQueries = useQueries({ queries: discoveryDefinitions.map((definition) => ({
     queryKey: ["events", "discovery-section", definition.key, definition.params],
@@ -99,68 +137,70 @@ export function EventsPage() {
 
   return (
     <section className="page two-column events-page">
-      <button className="mobile-filter-toggle secondary-action" aria-expanded={filtersOpen} aria-controls="event-filters" onClick={() => setFiltersOpen((open) => !open)} type="button"><ListFilter size={18} /> Filtrele &amp; Ara</button>
+      <button className="mobile-filter-toggle secondary-action" aria-expanded={filtersOpen} aria-controls="event-filters" onClick={() => setFiltersOpen((open) => !open)} type="button"><ListFilter size={18} /> {c.filterSearch}</button>
       <aside className={`filters ${filtersOpen ? "mobile-filters-open" : ""}`} id="event-filters">
-        <h2>Filtreler</h2>
+        <h2>{c.filters}</h2>
         <label>
-          Arama
+          {c.search}
           <input
-            placeholder="Founder, SaaS, investor..."
+            placeholder={c.searchPlaceholder}
             value={selectedQuery}
             onChange={(event) => updateFilter("q", event.target.value)}
           />
         </label>
         <label>
-          Format
+          {c.format}
           <select value={selectedFormat} onChange={(event) => updateFilter("format", event.target.value)}>
-            <option value="">Tümü</option>
-            <option value="online">Online</option>
-            <option value="offline">Fiziksel</option>
-            <option value="hybrid">Hibrit</option>
+            <option value="">{c.all}</option>
+            <option value="online">{c.online}</option>
+            <option value="offline">{c.offline}</option>
+            <option value="hybrid">{c.hybrid}</option>
           </select>
         </label>
         <label>
-          Tarih
+          {c.date}
           <input type="date" value={selectedDateFrom} onChange={(event) => updateFilter("dateFrom", event.target.value)} />
         </label>
         <label>
-          Şehir
-          <input placeholder="İstanbul" value={selectedCity} onChange={(event) => updateFilter("city", event.target.value)} />
+          {c.city}
+          <input placeholder={c.cityPlaceholder} value={selectedCity} onChange={(event) => updateFilter("city", event.target.value)} />
         </label>
-        <div className="event-trendy-tags"><strong>Trend etiketler</strong><div className="event-tag-filter-cloud">{tags.filter((tag) => (tag.eventCount ?? 0) > 0).sort((a, b) => (b.eventCount ?? 0) - (a.eventCount ?? 0)).slice(0, 10).map((tag) => (
+        <div className="event-trendy-tags"><strong>{c.trendTags}</strong><div className="event-tag-filter-cloud">{tags.filter((tag) => (tag.eventCount ?? 0) > 0).sort((a, b) => (b.eventCount ?? 0) - (a.eventCount ?? 0)).slice(0, 10).map((tag) => (
           <button key={tag.id} className={selectedTag === tag.slug ? "active-filter" : ""} onClick={() => setSearchParams({ tag: tag.slug })} type="button"><span>#{tag.name}</span><small>{tag.eventCount ?? 0}</small></button>
         ))}</div></div>
         <label>
-          Ülke
-          <input placeholder="Türkiye" value={selectedCountry} onChange={(event) => updateFilter("country", event.target.value)} />
+          {c.country}
+          <input placeholder={c.countryPlaceholder} value={selectedCountry} onChange={(event) => updateFilter("country", event.target.value)} />
         </label>
-        {hasFilters ? <button className="clear-filters-link" onClick={() => setSearchParams({})} type="button">Filtreleri temizle</button> : null}
+        {hasFilters ? <button className="clear-filters-link" onClick={() => setSearchParams({})} type="button">{c.clearFilters}</button> : null}
       </aside>
       <div className="events-content">
         <div className="section-header events-page-header">
-          <h1>Etkinlikler</h1>
-          <div className="row-actions"><span>{isLoading ? "Yükleniyor…" : isError ? "Veri alınamadı" : `${eventList?.total ?? 0} sonuç`}</span><button className="create-inline-link" onClick={() => setMapOpen((open) => !open)}><MapPinned size={16}/>{mapOpen ? "Listeyi göster" : "Haritada göster"}</button><Link className="create-inline-link events-create-button" to="/events/create"><Plus size={16}/> Etkinlik oluştur</Link></div>
+          <h1>{c.title}</h1>
+          <div className="row-actions"><span>{isLoading ? c.loading : isError ? c.unavailable : c.result(eventList?.total ?? 0)}</span><button className="create-inline-link" onClick={() => setMapOpen((open) => !open)}><MapPinned size={16}/>{mapOpen ? c.showList : c.showMap}</button><Link className="create-inline-link events-create-button" to="/events/create"><Plus size={16}/> {c.create}</Link></div>
         </div>
-        <nav className="discovery-tabs" aria-label="Etkinlik grupları">
-          {([["future", "Tüm gelecek"], ["24h", "24 saat"], ["tomorrow", "Yarın"], ["week", "Bu hafta"], ["weekend", "Bu hafta sonu"], ["next_week", "Gelecek hafta"], ["month", "Bu ay"], ["past", "Geçmiş"]] as const).map(([scope, label]) => (
+        <nav className="discovery-tabs" aria-label={c.groups}>
+          {([["future", c.future], ["24h", c.next24], ["tomorrow", c.tomorrow], ["week", c.week], ["weekend", c.weekend], ["next_week", c.nextWeek], ["month", c.month], ["past", c.past]] as const).map(([scope, label]) => (
             <button key={scope} className={currentDiscovery === scope ? "active" : ""} onClick={() => selectDiscovery(scope)} type="button">{label}</button>
           ))}
         </nav>
-        {isLoading ? <div className="empty-state"><LoaderCircle className="spin" size={34}/><p>Etkinlikler yükleniyor…</p></div> : null}
-        {isError ? <div className="empty-state"><CalendarX size={40}/><h2>Etkinlikler yüklenemedi</h2><p>Bağlantını kontrol edip yeniden deneyebilirsin.</p><button className="secondary-action" onClick={() => void refetch()}><RefreshCw size={17}/>Yeniden dene</button></div> : null}
+        {isLoading ? <div className="empty-state"><LoaderCircle className="spin" size={34}/><p>{c.loadingEvents}</p></div> : null}
+        {isError ? <div className="empty-state"><CalendarX size={40}/><h2>{c.loadFailed}</h2><p>{c.retryCopy}</p><button className="secondary-action" onClick={() => void refetch()}><RefreshCw size={17}/>{c.retry}</button></div> : null}
         {!mapOpen && searchParams.size === 0 ? <div className="event-discovery-sections">
+          {events.length ? <section className="event-discovery-section event-discovery-all"><header><h2>{c.allUpcoming}</h2></header><div className="event-grid">{events.map((event) => <EventCard event={event} key={event.id}/>)}</div></section> : null}
           {discoveryDefinitions.map((definition, index) => {
+            if (definition.auth && !user) return null;
             const items = discoveryQueries[index]?.data?.items ?? [];
             if (!items.length && definition.key !== "mine") return null;
             const allParams = new URLSearchParams(definition.params);
-            return <section className={`event-discovery-section event-discovery-${definition.key}`} key={definition.key}><header><h2>{definition.title}</h2>{items.length ? <Link to={`/events?${allParams.toString()}`}>Tümünü göster</Link> : null}</header>{items.length ? <div className="event-grid">{items.map((event) => <EventCard event={event} key={event.id}/>)}</div> : <p className="empty-state">Katıldığınız ve yöneticisi olduğunuz etkinlikler burada gösterilecek</p>}</section>;
+            return <section className={`event-discovery-section event-discovery-${definition.key}`} key={definition.key}><header><h2>{definition.title}</h2>{items.length ? <Link to={`/events?${allParams.toString()}`}>{c.seeAll}</Link> : null}</header>{items.length ? <div className="event-grid">{items.map((event) => <EventCard event={event} key={event.id}/>)}</div> : <p className="empty-state">{c.myEmpty}</p>}</section>;
           })}
         </div> : mapOpen ? <LocationMap items={events.map((event) => ({ id: event.id, title: event.title, latitude: event.latitude, longitude: event.longitude, location: [event.city, event.country].filter(Boolean).join(", ") || "Online" }))}/> : <div className="event-grid">
           {events.map((event) => (
             <EventCard event={event} key={event.id} />
           ))}
         </div>}
-        {!isLoading && !isError && events.length === 0 ? <p className="empty-state">Bu filtrelerle etkinlik bulunamadı.</p> : null}
+        {!isLoading && !isError && events.length === 0 ? <p className="empty-state">{c.noResults}</p> : null}
         {eventList ? (
           <div className="pagination-row">
             <button
@@ -169,10 +209,10 @@ export function EventsPage() {
               onClick={() => updateFilter("page", String(Math.max(selectedPage - 1, 1)))}
               type="button"
             >
-              Önceki
+              {c.previous}
             </button>
             <span>
-              Sayfa {eventList.page} · {eventList.pageSize} kayıt/sayfa
+              {c.page(eventList.page, eventList.pageSize)}
             </span>
             <button
               className="secondary-action"
@@ -180,7 +220,7 @@ export function EventsPage() {
               onClick={() => updateFilter("page", String(selectedPage + 1))}
               type="button"
             >
-              Sonraki
+              {c.next}
             </button>
           </div>
         ) : null}

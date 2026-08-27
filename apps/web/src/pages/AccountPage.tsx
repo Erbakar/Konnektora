@@ -920,8 +920,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     <section className={`page account-page${eventCreator ? " event-create-only" : ""}`}>
       <div className="section-header">
         <div>
-          <p className="eyebrow">Community</p>
-          <h1>Üye alanı</h1>
+          <p className="eyebrow">Konnektora</p>
+          <h1>{eventCreator ? user ? "Etkinlik oluştur" : "Etkinlik oluşturmak için giriş yap" : "Üye alanı"}</h1>
         </div>
         {user ? (
           <button
@@ -1945,7 +1945,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               noValidate
               onSubmit={handleEventSubmit}
             >
-              <h2>{editingEvent ? "Etkinliği düzenle" : "Etkinlik oluştur"}</h2>
+              <h1>{editingEvent ? "Etkinliği düzenle" : "Etkinlik oluştur"}</h1>
               <div
                 className="event-stepper"
                 aria-label="Etkinlik oluşturma adımları"
@@ -2846,7 +2846,7 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
     onError: () =>
       setNotice({
         tone: "error",
-        message: "Davet eklenemedi. Email adresini kontrol et.",
+        message: "Davet eklenemedi. E-posta adresini kontrol et.",
       }),
   });
   const statusMutation = useMutation({

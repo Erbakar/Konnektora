@@ -308,7 +308,7 @@ export const adminPermissionOptions: Array<{
   { value: "media.manage", label: "Medya Yönetimi" },
   {
     value: "messages.faq.manage",
-    label: "Kullanıcılardan Mesajlar - FAQ mesajları",
+    label: "Kullanıcılardan Mesajlar - SSS mesajları",
   },
   {
     value: "messages.account_freeze.manage",

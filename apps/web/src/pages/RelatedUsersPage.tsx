@@ -137,7 +137,7 @@ export function RelatedUsersPage({
                   <BadgeCheck aria-label="Doğrulanmış profil" size={16} />
                 ) : null}
               </strong>
-              <span>{kind === "tag" ? `${user.sentiment === "like" ? "Beğeniyorum" : user.sentiment === "dislike" ? "Beğenmiyorum" : "Nötrüm"} dedi${/paylaşım|post|yorum/i.test(user.relation) ? " · paylaşım yaptı" : ""}` : user.relation}</span>
+              <span>{kind === "tag" ? `${user.sentiment === "like" ? "Beğeniyorum" : user.sentiment === "dislike" ? "Beğenmiyorum" : "Nötrüm"} dedi${/paylaşım|post|yorum/i.test(user.relation) ? " · paylaşım yaptı" : ""}` : localizeRelation(user.relation)}</span>
               {user.birthDate ? <small>{ageFrom(user.birthDate)} yaşında</small> : null}
               {session?.id !== user.id && user.commonTagCount != null ? <small>{user.commonTagCount} ortak ilgi alanı</small> : null}
               {user.city || user.country ? (
@@ -182,4 +182,18 @@ function ageFrom(value: string) {
   let age = now.getFullYear() - birth.getFullYear();
   if (now.getMonth() < birth.getMonth() || now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate()) age -= 1;
   return Math.max(0, age);
+}
+
+function localizeRelation(relation: string) {
+  const labels: Record<string, string> = {
+    member: "Üye",
+    organizer: "Organizatör",
+    manager: "Yönetici",
+    owner: "Sahip",
+    creator: "Kurucu",
+    attendee: "Katılımcı",
+    invited: "Davetli",
+    follower: "Takipçi",
+  };
+  return labels[relation.trim().toLocaleLowerCase("en-US")] ?? relation;
 }

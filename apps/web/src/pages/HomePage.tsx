@@ -50,7 +50,7 @@ export function HomePage() {
       ? {
           eyebrow: "Seçkin topluluk platformu",
           title: "İlgi alanlarından gerçek hayattaki bağlantılara.",
-          lead: "Konnektora, insanların ilgi alanları, etkinlikler, mekanlar ve ortak tutkular üzerinden birbirlerini keşfetmesini ve gerçek hayatta bağlantı kurmasını sağlayan sosyal keşif platformudur. İnsanlar nelerle ilgileniyor, ne yapmak istiyor ve bunu kimlerle birlikte yapabilir sorusuna odaklanır.",
+          lead: "Konnektora, insanların ilgi alanları, etkinlikler, mekânlar ve ortak tutkular üzerinden birbirlerini keşfetmesini ve gerçek hayatta bağlantı kurmasını sağlayan sosyal keşif platformudur. İnsanlar nelerle ilgileniyor, ne yapmak istiyor ve bunu kimlerle birlikte yapabilir sorusuna odaklanır.",
           explore: "Etkinlikleri keşfet",
           join: "Topluluğa katıl",
           searchPlaceholder: "Her şeyi ara",
@@ -70,7 +70,7 @@ export function HomePage() {
           europe: "Size yakın etkinlikler",
           europeCopy: "Konumuna en yakın buluşmaları keşfet.",
           allEvents: "Tüm etkinlikler",
-          online: "Yaklaşan online etkinlikler",
+          online: "Yaklaşan çevrim içi etkinlikler",
           onlineCopy: "Her yerden katıl, önemli insanlarla buluş.",
           categories: "Popüler kategorileri keşfet",
           categoriesCopy: "Aradığın konuyla başla.",
@@ -207,6 +207,32 @@ export function HomePage() {
     void announcementRevision;
     return !localStorage.getItem(`konnektora_announcement_done_${announcement.id}`) && !sessionStorage.getItem(`konnektora_announcement_later_${announcement.id}`);
   });
+  const announcementCopy = activeAnnouncement ? localizeAnnouncement(activeAnnouncement.title, activeAnnouncement.body, language) : null;
+  const memberAnnouncements = !user
+    ? []
+    : language === "tr"
+      ? user.accountType === "corporate"
+        ? [
+            <><Link to={`/users/id/${user.id}`}>Profiline etiketler ekle</Link>yerek devam et; çalıştığın sanatçı ve markaların <Link to="/tags">etiket sayfalarına</Link> içerik yazmayı unutma.</>,
+            <>Mekânlarını oluştur, ayarlarını kişiselleştir ve <Link to="/contacts">bağlantılarını buraya taşı</Link>.</>,
+            <><Link to="/finance/kyc">Kimliğini güvenle doğrula</Link>, doğrulanmış simgesini kazan ve sunduğumuz hizmetler için <Link to="/business">İşletmeler için</Link> sayfasını incele.</>,
+          ]
+        : [
+            <>Üyesin; şimdi içerideki <Link to="/contacts">arkadaşlarını bul ve diğerlerini davet et</Link>.</>,
+            <>Kendin ile arkadaşlarının profillerine <Link to={`/users/id/${user.id}`}>etiketler ekle</Link>yerek tarzınızı ifade edin; sevdiğiniz mekânları takip edin.</>,
+            <><Link to="/settings">Ayarlarını kişiselleştirerek</Link> tercihlerine göre sosyalleşmeye başla.</>,
+          ]
+      : user.accountType === "corporate"
+        ? [
+            <>Start by <Link to={`/users/id/${user.id}`}>adding tags to your profile</Link>, and contribute to the <Link to="/tags">tag pages</Link> for the artists and brands you work with.</>,
+            <>Create your venues, personalize their settings and <Link to="/contacts">bring your connections here</Link>.</>,
+            <><Link to="/finance/kyc">Verify your identity securely</Link>, earn the verified badge and explore our <Link to="/business">For business</Link> services.</>,
+          ]
+        : [
+            <>You are in; now <Link to="/contacts">find friends already here and invite others</Link>.</>,
+            <>Express your style by <Link to={`/users/id/${user.id}`}>adding tags</Link> to your profile and your friends' profiles, and follow the venues you like.</>,
+            <>Personalize your <Link to="/settings">settings</Link> and start connecting based on your preferences.</>,
+          ];
 
   return (
     <div className="corp-home">
@@ -222,7 +248,7 @@ export function HomePage() {
             <Link className="corp-btn corp-btn-primary" to="/events">
               {c.explore}
             </Link>
-            {user ? <Link className="corp-btn corp-btn-secondary" to="/tags">İlgi Alanlarını Gör</Link> : <a className="corp-btn corp-btn-secondary" href={publicSiteHref("/onboarding")}>{c.join}</a>}
+            {user ? <Link className="corp-btn corp-btn-secondary" to="/tags">{language === "tr" ? "İlgi alanlarını gör" : "View your interests"}</Link> : <a className="corp-btn corp-btn-secondary" href={publicSiteHref("/onboarding")}>{c.join}</a>}
           </div>
           <form className="hero-search" action="/search">
             <Search size={20} />
@@ -239,16 +265,8 @@ export function HomePage() {
       </section>
 
       {user ? (
-        <section className="corp-announcements" aria-label="Announcements">
-          {(user.accountType === "corporate" ? [
-            <><Link to={`/users/id/${user.id}`}>Profiline etiketler ekle</Link>yerek devam et; çalıştığın sanatçı ve markaların <Link to="/tags">etiket sayfalarına</Link> içerik yazmayı unutma.</>,
-            <>Mekânlarını oluştur, ayarlarını kişiselleştir ve <Link to="/contacts">bağlantılarını buraya taşı</Link>.</>,
-            <><Link to="/finance/kyc">Kimliğini güvenle doğrula</Link>, verified ikonunu kazan ve sunduğumuz hizmetler için <Link to="/business">For business</Link> sayfasını incele.</>,
-          ] : [
-            <>Üyesin; şimdi içerideki <Link to="/contacts">arkadaşlarını bul ve diğerlerini davet et</Link>.</>,
-            <>Kendin ile arkadaşlarının profillerine <Link to={`/users/id/${user.id}`}>etiketler ekle</Link>yerek tarzınızı ifade edin; sevdiğiniz mekânları takip edin.</>,
-            <><Link to="/settings">Ayarlarını kişiselleştirerek</Link> tercihlerine göre sosyalleşmeye başla.</>,
-          ]).map((message, index) => (
+        <section className="corp-announcements" aria-label={language === "tr" ? "Üye duyuruları" : "Member announcements"}>
+          {memberAnnouncements.map((message, index) => (
             <article className="corp-announcement" key={index}>
               <span>
                 <Megaphone size={18} />
@@ -261,7 +279,7 @@ export function HomePage() {
         </section>
       ) : null}
 
-      {activeAnnouncement ? <div className="emotion-modal announcement-modal" role="dialog" aria-modal="true" aria-labelledby="active-announcement-title"><div><button aria-label="Kapat" onClick={() => { sessionStorage.setItem(`konnektora_announcement_later_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">×</button><span className="announcement-icon"><Megaphone size={24}/></span><h2 id="active-announcement-title">{activeAnnouncement.title}</h2><p><RichText text={activeAnnouncement.body}/></p><div className="row-actions"><button className="primary-action" onClick={() => { localStorage.setItem(`konnektora_announcement_done_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">Tamam</button><button className="secondary-action" onClick={() => { sessionStorage.setItem(`konnektora_announcement_later_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">Sonra hatırlat</button></div></div></div> : null}
+      {activeAnnouncement && announcementCopy ? <div className="emotion-modal announcement-modal" role="dialog" aria-modal="true" aria-labelledby="active-announcement-title"><div><button aria-label={language === "tr" ? "Kapat" : "Close"} onClick={() => { sessionStorage.setItem(`konnektora_announcement_later_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">×</button><span className="announcement-icon"><Megaphone size={24}/></span><h2 id="active-announcement-title">{announcementCopy.title}</h2><p><RichText text={announcementCopy.body}/></p><div className="row-actions"><button className="primary-action" onClick={() => { localStorage.setItem(`konnektora_announcement_done_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">{language === "tr" ? "Tamam" : "Got it"}</button><button className="secondary-action" onClick={() => { sessionStorage.setItem(`konnektora_announcement_later_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">{language === "tr" ? "Sonra hatırlat" : "Remind me later"}</button></div></div></div> : null}
 
       {discovery ? (
         <section className="corp-section discovery-feed-section">
@@ -278,7 +296,7 @@ export function HomePage() {
             </a>
             <span className="active-community-count">
               <i />
-              {Math.max(discovery.activeUserCount, new Set([...discovery.popularMembers, ...discovery.newMembers].map((member) => member.id)).size)} aktif üye
+              {Math.max(discovery.activeUserCount, new Set([...discovery.popularMembers, ...discovery.newMembers].map((member) => member.id)).size)} {language === "tr" ? "aktif üye" : "active members"}
             </span>
           </div>
 
@@ -364,7 +382,7 @@ export function HomePage() {
             <ArrowRight size={18} />
           </Link>
         </div>
-        <div className="corp-carousel" aria-label="Featured events">
+        <div className="corp-carousel" aria-label={language === "tr" ? "Öne çıkan etkinlikler" : "Featured events"}>
           {(localEvents.length ? localEvents : featuredEvents).map((event) => (
             <HomeEventTile event={event} key={event.id} />
           ))}
@@ -391,7 +409,7 @@ export function HomePage() {
         </div>
       </section>
 
-      {popularEvents.length ? <section className="corp-section"><div className="corp-section-head"><div><h2>{discovery?.location ? `${discovery.location} yakınında popüler etkinlikler` : "Popüler etkinlikler"}</h2><p>Konumuna ve topluluk ilgisine göre öne çıkan buluşmalar.</p></div><Link className="corp-link" to="/events?scope=popular">{c.allEvents}<ArrowRight size={18}/></Link></div><div className="corp-carousel">{popularEvents.map((event) => <HomeEventTile event={event} key={event.id}/>)}</div></section> : null}
+      {popularEvents.length ? <section className="corp-section"><div className="corp-section-head"><div><h2>{language === "tr" ? discovery?.location ? `${discovery.location} yakınında popüler etkinlikler` : "Popüler etkinlikler" : discovery?.location ? `Popular events near ${discovery.location}` : "Popular events"}</h2><p>{language === "tr" ? "Konumuna ve topluluk ilgisine göre öne çıkan buluşmalar." : "Gatherings highlighted for your location and community interests."}</p></div><Link className="corp-link" to="/events?scope=popular">{c.allEvents}<ArrowRight size={18}/></Link></div><div className="corp-carousel">{popularEvents.map((event) => <HomeEventTile event={event} key={event.id}/>)}</div></section> : null}
 
       <section
         className="corp-section home-story-section"
@@ -485,13 +503,13 @@ export function HomePage() {
               <MapPin size={18} />
               <strong>
                 {index === popularCities.length - 1
-                  ? "ve diğerleri"
+                  ? language === "tr" ? "ve diğerleri" : "and more"
                   : city.name}
               </strong>
               <span>
                 {index === popularCities.length - 1
-                  ? "Kendi şehrinde başvur"
-                  : city.country}
+                  ? language === "tr" ? "Kendi şehrinde başvur" : "Apply in your city"
+                  : language === "tr" ? localizeCountry(city.country) : city.country}
               </span>
             </Link>
           ))}
@@ -563,13 +581,39 @@ export function HomePage() {
           <h2>{c.finalTitle}</h2>
           <p>{c.finalCopy}</p>
         </div>
-        <div className="corp-cta-memberships"><button className="corp-btn corp-btn-light" onClick={() => user ? setSignupChoice("individual") : navigateToSignup("individual")} type="button">Bireysel üyelik<ArrowRight size={18}/></button><button className="corp-btn corp-btn-light" onClick={() => user ? setSignupChoice("corporate") : navigateToSignup("corporate")} type="button">Kurumsal üyelik<ArrowRight size={18}/></button></div>
+        <div className="corp-cta-memberships"><button className="corp-btn corp-btn-light" onClick={() => user ? setSignupChoice("individual") : navigateToSignup("individual")} type="button">{language === "tr" ? "Bireysel üyelik" : "Individual membership"}<ArrowRight size={18}/></button><button className="corp-btn corp-btn-light" onClick={() => user ? setSignupChoice("corporate") : navigateToSignup("corporate")} type="button">{language === "tr" ? "Kurumsal üyelik" : "Business membership"}<ArrowRight size={18}/></button></div>
       </section>
-      {signupChoice ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setSignupChoice(null)}><section aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><h2>Zaten üyesiniz</h2><p>Farklı bir üyelik için çıkış yapmak ister misiniz?</p><div className="row-actions"><button aria-label="Kapat" className="ghost-action" onClick={() => setSignupChoice(null)} type="button">Vazgeç</button><button className="primary-action" onClick={() => { const choice = signupChoice; clearUserSession(); navigateToSignup(choice); }} type="button">Çıkış yap</button></div></section></div> : null}
+      {signupChoice ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setSignupChoice(null)}><section aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><h2>{language === "tr" ? "Zaten üyesiniz" : "You are already a member"}</h2><p>{language === "tr" ? "Farklı bir üyelik için çıkış yapmak ister misiniz?" : "Would you like to log out and choose a different membership?"}</p><div className="row-actions"><button aria-label={language === "tr" ? "Kapat" : "Close"} className="ghost-action" onClick={() => setSignupChoice(null)} type="button">{language === "tr" ? "Vazgeç" : "Cancel"}</button><button className="primary-action" onClick={() => { const choice = signupChoice; clearUserSession(); navigateToSignup(choice); }} type="button">{language === "tr" ? "Çıkış yap" : "Log out"}</button></div></section></div> : null}
     </div>
   );
 }
 
 function navigateToSignup(account: "individual" | "corporate") {
   window.location.assign(publicSiteHref(`/onboarding?account=${account}`));
+}
+
+function localizeAnnouncement(title: string, body: string, language: "tr" | "en") {
+  const normalizedTitle = title.toLocaleLowerCase("tr-TR").replaceAll("ı", "i");
+  if (normalizedTitle.includes("ikinci bir duyuru basligi")) {
+    return language === "tr"
+      ? { title: "Bu da ikinci bir duyuru başlığı", body: "<h2>Bu da açıklaması</h2>" }
+      : { title: "A second announcement", body: "<h2>Here is the announcement description.</h2>" };
+  }
+  if (normalizedTitle.includes("bir duyuru basligidir")) {
+    return language === "tr"
+      ? { title: "Bu bir duyuru başlığıdır", body: "<h2>Bu da duyuru açıklaması</h2>" }
+      : { title: "An announcement", body: "<h2>Here is the announcement description.</h2>" };
+  }
+  return { title, body };
+}
+
+function localizeCountry(country: string) {
+  return ({
+    "United Kingdom": "Birleşik Krallık",
+    Germany: "Almanya",
+    Netherlands: "Hollanda",
+    France: "Fransa",
+    "United States": "Amerika Birleşik Devletleri",
+    Turkey: "Türkiye",
+  } as Record<string, string>)[country] ?? country;
 }

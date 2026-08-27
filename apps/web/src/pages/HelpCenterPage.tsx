@@ -89,8 +89,8 @@ export function HelpCenterPage() {
     const category = categories.find((item) => item.slug === categorySlug);
     return (
       <div className="page help-center-page">
-        <Link className="back-link" to="/help/faqs"><ArrowLeft size={16} /> FAQ</Link>
-        <div className="help-page-heading"><span className="eyebrow">FAQ kategorisi</span><h1>{category?.name ?? "Kategori bulunamadı"}</h1><p>{category?.description}</p></div>
+        <Link className="back-link" to="/help/faqs"><ArrowLeft size={16} /> SSS</Link>
+        <div className="help-page-heading"><span className="eyebrow">SSS kategorisi</span><h1>{category?.name ?? "Kategori bulunamadı"}</h1><p>{category?.description}</p></div>
         <div className="help-faq-list">
           {categoryFaqs.map((faq) => <Link key={faq.id} to={`/help/faq/${faq.id}`}><span>{faq.title}</span><ArrowRight size={18} /></Link>)}
           {!categoryFaqs.length ? <div className="help-empty">Bu kategoride aktif içerik bulunmuyor.</div> : null}
@@ -103,7 +103,7 @@ export function HelpCenterPage() {
     return (
       <div className="page help-center-page">
         <Link className="back-link" to="/help"><ArrowLeft size={16} /> Yardım merkezine dön</Link>
-        <div className="help-page-heading"><span className="eyebrow">Arama</span><h1>FAQ Arama Sonuçları</h1><p>“{query}” için {results.length} sonuç bulundu.</p></div>
+        <div className="help-page-heading"><span className="eyebrow">Arama</span><h1>SSS Arama Sonuçları</h1><p>“{query}” için {results.length} sonuç bulundu.</p></div>
         <SearchForm search={search} setSearch={setSearch} submit={submitSearch} />
         <div className="help-faq-list">
           {results.map((faq) => <Link key={faq.id} to={`/help/faq/${faq.id}`}><span><strong>{faq.title}</strong><small>{faq.category?.name}</small></span><ArrowRight size={18} /></Link>)}
@@ -117,10 +117,10 @@ export function HelpCenterPage() {
     return (
       <div className="page help-center-page">
         <Link className="back-link" to="/help"><ArrowLeft size={16} /> Yardım merkezine dön</Link>
-        <div className="help-page-heading"><span className="eyebrow">Bilgi bankası</span><h1>FAQ</h1><p>Konulara göre düzenlenmiş sık sorulan sorular.</p></div>
+        <div className="help-page-heading"><span className="eyebrow">Bilgi bankası</span><h1>Sık Sorulan Sorular</h1><p>Konulara göre düzenlenmiş sık sorulan sorular.</p></div>
         <div className="help-category-grid">
           {categories.map((category) => <Link key={category.slug} to={`/help/faqs/${category.slug}`}><BookOpen size={24} /><h2>{category.name}</h2><p>{category.titles.slice(0, 3).join(", ")}</p><span>{category.titles.length} içerik <ArrowRight size={16} /></span></Link>)}
-          {!categories.length ? <div className="help-empty">Henüz yayınlanmış FAQ kategorisi bulunmuyor.</div> : null}
+          {!categories.length ? <div className="help-empty">Henüz yayınlanmış SSS kategorisi bulunmuyor.</div> : null}
         </div>
       </div>
     );
@@ -135,8 +135,8 @@ export function HelpCenterPage() {
         <SearchForm search={search} setSearch={setSearch} submit={submitSearch} />
       </section>
       <section className="help-entry-grid">
-        <Link to="/help/faqs"><BookOpen size={28} /><div><h2>FAQ ana sayfası</h2><p>Kategorilere göz at ve hızlı yanıtları bul.</p></div><ArrowRight /></Link>
-        <Link to="/help/rules"><ShieldCheck size={28}/><div><h2>Konnektora Rules</h2><p>Topluluk standartlarını ve ihlal puanlarını incele.</p></div><ArrowRight/></Link>
+        <Link to="/help/faqs"><BookOpen size={28} /><div><h2>Sık Sorulan Sorular</h2><p>Kategorilere göz at ve hızlı yanıtları bul.</p></div><ArrowRight /></Link>
+        <Link to="/help/rules"><ShieldCheck size={28}/><div><h2>Konnektora Kuralları</h2><p>Topluluk standartlarını ve ihlal puanlarını incele.</p></div><ArrowRight/></Link>
         <Link to="/contact"><MessageCircle size={28} /><div><h2>Destekle iletişime geç</h2><p>Ekibimize mesaj gönder; en kısa sürede yanıtlayalım.</p></div><ArrowRight /></Link>
       </section>
       <section className="help-popular">

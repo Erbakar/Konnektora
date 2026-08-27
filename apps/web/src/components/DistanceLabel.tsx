@@ -1,5 +1,6 @@
 import { Navigation } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useLanguage } from "../lib/i18n";
 
 let cachedPosition: { latitude: number; longitude: number } | null = null;
 let positionRequest: Promise<{ latitude: number; longitude: number } | null> | null = null;
@@ -23,6 +24,7 @@ function haversine(from: { latitude: number; longitude: number }, to: { latitude
 }
 
 export function DistanceLabel({ latitude, longitude }: { latitude?: number | null; longitude?: number | null }) {
+  const { language } = useLanguage();
   const [distance, setDistance] = useState<number | null>(null);
   const [permissionNeeded, setPermissionNeeded] = useState(false);
   const calculate = () => { if (latitude == null || longitude == null) return; setPermissionNeeded(false); void userPosition().then((position) => { if (position) setDistance(haversine(position, { latitude, longitude })); else setPermissionNeeded(true); }); };
@@ -32,6 +34,6 @@ export function DistanceLabel({ latitude, longitude }: { latitude?: number | nul
     return () => window.removeEventListener("konnektora:location-updated", calculate);
   }, [latitude, longitude]);
   if (latitude == null || longitude == null) return null;
-  if (permissionNeeded) return <button className="distance-permission" onClick={() => { sessionStorage.setItem("konnektora:location-intro", "seen"); calculate(); }} type="button"><Navigation size={15}/>Konum için izin verin</button>;
-  return <span><Navigation size={15}/>{distance == null ? "Konum alınıyor…" : distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(distance < 10 ? 1 : 0)} km`}</span>;
+  if (permissionNeeded) return <button className="distance-permission" onClick={() => { sessionStorage.setItem("konnektora:location-intro", "seen"); calculate(); }} type="button"><Navigation size={15}/>{language === "tr" ? "Konum için izin verin" : "Allow location access"}</button>;
+  return <span><Navigation size={15}/>{distance == null ? language === "tr" ? "Konum alınıyor…" : "Getting location…" : distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(distance < 10 ? 1 : 0)} km`}</span>;
 }

@@ -8016,12 +8016,26 @@ div.form-error::before {
   border-radius: 26px;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
   color: #121a16;
+  display: flex;
+  flex-direction: column;
   height: min(860px, calc(100vh - 48px));
   margin: 0 auto;
   max-width: 430px;
   overflow: hidden;
   position: relative;
   width: min(100%, 430px);
+}
+
+.mobile-app-main {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mobile-app-header h1 {
+  font-size: 16px;
+  line-height: 1.2;
+  margin: 0;
 }
 
 .mobile-statusbar {

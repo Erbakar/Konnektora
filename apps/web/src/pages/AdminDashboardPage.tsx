@@ -242,7 +242,7 @@ const REPORT_TARGET_OPTIONS: Array<{ value: ReportTargetType; label: string }> =
 
 const USER_MESSAGE_TYPE_META: Record<UserMessageType, { label: string; description: string; categories: string[] }> = {
   faq: {
-    label: "FAQ mesajları",
+    label: "SSS mesajları",
     description: "SSS sayfalarından veya yardım akışından gelen kullanıcı soruları.",
     categories: ["Profile", "Account", "Rules", "Tags", "Events", "Places", "Media Files", "Comments", "Private Messages"]
   },
@@ -1827,7 +1827,7 @@ function EmailTokenInfoPanel() {
         <div className="admin-list-item">
           <div className="admin-list-row">
             <div>
-              <strong>Email doğrulama</strong>
+              <strong>E-posta doğrulama</strong>
               <span>verify_email · Kayıt sonrası gönderilir</span>
             </div>
             <span className="status-pill status-accepted">Aktif</span>
@@ -4143,7 +4143,7 @@ function GuestListPanel({ eventId }: { eventId: string }) {
       setInviteNotice({ tone: "success", message: "Davet guest list'e eklendi." });
       void queryClient.invalidateQueries({ queryKey: ["event-participants", eventId] });
     },
-    onError: () => setInviteNotice({ tone: "error", message: "Davet gönderilemedi. Email adresini kontrol et." })
+    onError: () => setInviteNotice({ tone: "error", message: "Davet gönderilemedi. E-posta adresini kontrol et." })
   });
   const participants: EventParticipant[] = participantsQuery.data ?? [];
 

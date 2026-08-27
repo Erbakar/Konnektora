@@ -22,8 +22,8 @@ export function VerifyEmailPage() {
   return (
     <section className="page auth-token-page">
       <MailCheck size={36} />
-      <h1>Email doğrulama</h1>
-      {mutation.isPending ? <p>Email adresin doğrulanıyor...</p> : null}
+      <h1>E-posta doğrulama</h1>
+      {mutation.isPending ? <p>E-posta adresin doğrulanıyor...</p> : null}
       {mutation.data ? (
         <>
           <p>E-posta adresin doğrulandı.</p>

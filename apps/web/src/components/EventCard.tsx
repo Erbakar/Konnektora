@@ -4,14 +4,23 @@ import { Link } from "react-router-dom";
 import { DistanceLabel } from "./DistanceLabel";
 import { resolveMediaUrl } from "../lib/api";
 import { formatEventDateRange } from "../lib/formats";
+import { useLanguage } from "../lib/i18n";
 
 export function EventCard({ event }: { event: Event }) {
+  const { language } = useLanguage();
+  const locale = language === "tr" ? "tr-TR" : "en-GB";
   const place = [event.city, event.country].filter(Boolean).join(", ");
-  const location = event.format === "online" ? "Online" : event.format === "hybrid" ? `Online & ${place || "Mekân açıklanacak"}` : place || "Mekân açıklanacak";
+  const locationFallback = language === "tr" ? "Mekân açıklanacak" : "Venue to be announced";
+  const location = event.format === "online" ? (language === "tr" ? "Çevrim içi" : "Online") : event.format === "hybrid" ? `${language === "tr" ? "Çevrim içi" : "Online"} & ${place || locationFallback}` : place || locationFallback;
+  const visibility = event.visibility === "invite_only"
+    ? language === "tr" ? "Sadece davetli" : "Invite only"
+    : event.visibility === "approval_required"
+      ? language === "tr" ? "Onay gerekli" : "Approval required"
+      : language === "tr" ? "Herkese açık" : "Open to everyone";
   return (
     <article className="event-card">
       <Link className={`event-card-media${event.coverImageUrl ? "" : " event-card-media-fallback"}`} to={`/events/${event.slug}`}>
-        {event.coverImageUrl ? <img alt="" src={resolveMediaUrl(event.coverImageUrl)} /> : <Calendar aria-hidden="true" size={34}/>}<span className="event-card-visibility-badge">{event.visibility === "invite_only" ? "Sadece davet" : event.visibility === "approval_required" ? "Onay gerekli" : "Herkese açık"}</span>
+        {event.coverImageUrl ? <img alt="" src={resolveMediaUrl(event.coverImageUrl)} /> : <Calendar aria-hidden="true" size={34}/>}<span className="event-card-visibility-badge">{visibility}</span>
       </Link>
       <div>
         <h3>
@@ -21,7 +30,7 @@ export function EventCard({ event }: { event: Event }) {
       <div className="event-details">
         <span>
           <Calendar size={16} />
-          {formatEventDateRange(event.startsAt, event.endsAt)}
+          {formatEventDateRange(event.startsAt, event.endsAt, { locale })}
         </span>
         <span>
           <MapPin size={16} />
@@ -29,7 +38,7 @@ export function EventCard({ event }: { event: Event }) {
         </span>
         <span>
           <Users size={16} />
-          {event.attendeeCount ?? 0} katılımcı
+          {event.attendeeCount ?? 0} {language === "tr" ? "katılımcı" : "attendees"}
         </span>
         <DistanceLabel latitude={event.latitude} longitude={event.longitude}/>
       </div>

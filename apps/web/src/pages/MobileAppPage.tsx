@@ -129,6 +129,17 @@ export function MobileAppPage() {
 
     return "İlgi alanları";
   }, [signupKind, signupStep]);
+  const headerTitle = mode === "signup"
+    ? signupTitle
+    : mode === "login"
+      ? "Giriş yap"
+      : mode === "forgot"
+        ? "Parolayı sıfırla"
+        : mode === "tutorials"
+          ? "Konnektora'yı keşfet"
+          : mode === "invite"
+            ? "Arkadaşlarını davet et"
+            : "Konnektora";
 
   function goBack() {
     if (mode === "signup" && signupStep > 0) {
@@ -157,13 +168,14 @@ export function MobileAppPage() {
             <button aria-label="Geri" onClick={goBack} type="button">
               <ChevronLeft size={20} />
             </button>
-            <strong>{mode === "app" ? "Konnektora" : mode === "signup" ? signupTitle : mode}</strong>
+            {mode === "app" ? <strong>{headerTitle}</strong> : <h1>{headerTitle}</h1>}
             <button aria-label="Menü" onClick={() => setMenuOpen(true)} type="button">
               <Menu size={20} />
             </button>
           </header>
         ) : null}
 
+        <main className={`mobile-app-main mobile-app-main-${mode}`}>
         {mode === "intro" ? (
           <IntroScreen
             activeIntro={activeIntro}
@@ -234,6 +246,7 @@ export function MobileAppPage() {
             setMenuOpen={setMenuOpen}
           />
         ) : null}
+        </main>
       </div>
     </div>
   );
@@ -409,7 +422,7 @@ function LoginScreen({
 function ForgotPasswordScreen({ onDone }: { onDone: () => void }) {
   return (
     <section className="mobile-screen-body mobile-flow">
-      <h1>Parolanı mı unuttun?</h1>
+      <h2>Parolanı mı unuttun?</h2>
       <p>Parolanı e-posta adresin veya telefon numaranla yenile.</p>
       <label>E-posta veya telefon<input placeholder="maya@example.com" /></label>
       <CodeScreen body="Gönderdiğimiz 6 haneli kodu gir." />
@@ -448,7 +461,7 @@ function TutorialScreen({
   return (
     <section className="mobile-screen-body mobile-tutorial">
       <div className="mobile-tutorial-icon"><Icon size={44} /></div>
-      <h1>{activeTutorial.title}</h1>
+      <h2>{activeTutorial.title}</h2>
       <p>{activeTutorial.body}</p>
       <div className="mobile-permission-card">
         {tutorialIndex === 0 ? <Bell size={18} /> : tutorialIndex === 1 ? <MapPin size={18} /> : <Camera size={18} />}
@@ -464,12 +477,12 @@ function InviteScreen({ onDone }: { onDone: () => void }) {
   return (
     <section className="mobile-screen-body mobile-flow">
       <div className="mobile-section-title">
-        <h1>3 üye bulundu</h1>
+        <h2>3 üye bulundu</h2>
         <button onClick={onDone} type="button">İleri</button>
       </div>
       {recommendedMembers.map((member) => <MemberCard key={member.name} member={member} />)}
       <div className="mobile-section-title">
-        <h1>Davet et</h1>
+        <h2>Davet et</h2>
         <button type="button">Tümünü davet et</button>
       </div>
       {["Ada Lovelace · ada@example.com", "Mert Demir · +90 555 010 20 30"].map((contact) => (
