@@ -161,7 +161,10 @@ const USE_MOCK_FALLBACK =
   (MOCK_API_SETTING !== "false" &&
     import.meta.env.PROD &&
     (isLocalApiUrl || isNetlifyPreview));
-const USE_DEMO_CONTENT = import.meta.env.PROD;
+// Demo fallback belongs to explicitly mocked/preview environments only.
+// Production demo records are seeded into the API so every visible entity has
+// a real database id and all follow/attendance/payment actions stay valid.
+const USE_DEMO_CONTENT = USE_MOCK_FALLBACK;
 const TOKEN_KEY = "konnektora_admin_token";
 const USER_TOKEN_KEY = "konnektora_user_token";
 const USER_KEY = "konnektora_user";

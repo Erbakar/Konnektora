@@ -136,48 +136,61 @@ async function main() {
   const places = await Promise.all(
     [
       {
-        name: "Istanbul Founder Hub",
-        slug: "istanbul-founder-hub",
-        description: "Kurucular, yatırımcılar ve ürün ekipleri için buluşma ve ortak çalışma alanı.",
-        country: "Turkey",
-        city: "Istanbul",
-        address: "Levent",
-        coverImageUrl: "https://images.unsplash.com/photo-1497366754035-f200968a6e72",
-        followerCount: 248
-      },
-      {
-        name: "Berlin Innovation Loft",
-        slug: "berlin-innovation-loft",
-        description: "Teknoloji toplulukları, atölyeler ve demo geceleri için esnek etkinlik alanı.",
+        name: "Konnektora Hub Berlin",
+        slug: "konnektora-hub-berlin",
+        description: "Community meetup venue",
         country: "Germany",
         city: "Berlin",
-        address: "Kreuzberg",
-        coverImageUrl: "https://images.unsplash.com/photo-1497366811353-6870744d04b2",
-        followerCount: 192
+        address: "Mitte",
+        coverImageUrl: null,
+        followerCount: 42,
+        inviteCount: 8
       },
       {
-        name: "Amsterdam Community House",
-        slug: "amsterdam-community-house",
-        description: "Ürün geliştiren ekiplerin kahvaltı, networking ve mentorluk buluşmaları için topluluk evi.",
+        name: "Galata Product House",
+        slug: "galata-product-house",
+        description: "Ürün ekipleri, bağımsız geliştiriciler ve kurucular için çalışma ve etkinlik alanı.",
+        country: "Türkiye",
+        city: "Istanbul",
+        address: "Galata",
+        coverImageUrl: "https://images.unsplash.com/photo-1497366754035-f200968a6e72",
+        followerCount: 118,
+        inviteCount: 24
+      },
+      {
+        name: "Amsterdam Founder Loft",
+        slug: "amsterdam-founder-loft",
+        description: "Founder breakfast, yatırımcı görüşmeleri ve küçük topluluk buluşmaları için sakin bir merkez.",
         country: "Netherlands",
         city: "Amsterdam",
         address: "De Pijp",
-        coverImageUrl: "https://images.unsplash.com/photo-1524758631624-e2822e304c36",
-        followerCount: 176
+        coverImageUrl: "https://images.unsplash.com/photo-1497366811353-6870744d04b2",
+        followerCount: 86,
+        inviteCount: 16
       },
       {
         name: "London Community Studio",
         slug: "london-community-studio",
-        description: "Demo geceleri, yaratıcı atölyeler ve seçilmiş networking oturumları için stüdyo.",
+        description: "Demo geceleri, yaratıcı atölyeler ve küratörlü networking oturumları için esnek stüdyo.",
         country: "United Kingdom",
         city: "London",
         address: "Shoreditch",
         coverImageUrl: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4",
-        followerCount: 154
+        followerCount: 154,
+        inviteCount: 31
       }
     ].map((place) => prisma.place.upsert({
       where: { slug: place.slug },
-      update: { ...place, status: "active", updatedById: admin.id },
+      update: {
+        name: place.name,
+        description: place.description,
+        country: place.country,
+        city: place.city,
+        address: place.address,
+        coverImageUrl: place.coverImageUrl,
+        status: "active",
+        updatedById: admin.id
+      },
       create: { ...place, status: "active", createdById: admin.id, updatedById: admin.id }
     }))
   );
@@ -464,7 +477,7 @@ async function main() {
     const endsAt = new Date(startsAt.getTime() + 1000 * 60 * 60 * 3);
     const tagIds = event.tagSlugs.map(getTagId);
 
-    await prisma.event.upsert({
+    const seededEvent = await prisma.event.upsert({
       where: { slug: event.slug },
       update: {
         title: event.title,
@@ -486,21 +499,6 @@ async function main() {
         tags: {
           deleteMany: {},
           create: tagIds.map((tagId) => ({ tagId }))
-        },
-        participants: {
-          deleteMany: {},
-          create: [
-            {
-              userId: admin.id,
-              status: "accepted",
-              role: "organizer"
-            },
-            {
-              userId: demoUser.id,
-              status: index % 3 === 0 ? "invited" : "accepted",
-              role: "attendee"
-            }
-          ]
         }
       },
       create: {
@@ -541,6 +539,24 @@ async function main() {
         }
       }
     });
+
+    await Promise.all([
+      prisma.eventParticipant.upsert({
+        where: { eventId_userId: { eventId: seededEvent.id, userId: admin.id } },
+        update: { status: "accepted", role: "organizer" },
+        create: { eventId: seededEvent.id, userId: admin.id, status: "accepted", role: "organizer" }
+      }),
+      prisma.eventParticipant.upsert({
+        where: { eventId_userId: { eventId: seededEvent.id, userId: demoUser.id } },
+        update: {},
+        create: {
+          eventId: seededEvent.id,
+          userId: demoUser.id,
+          status: index % 3 === 0 ? "invited" : "accepted",
+          role: "attendee"
+        }
+      })
+    ]);
   }
 
   for (const tag of tags) {
