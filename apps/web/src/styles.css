@@ -10976,7 +10976,7 @@ div.form-error::before {
   }
 }
 
-@media (max-width: 980px) {
+@media (max-width: 760px) {
   .events-page .event-discovery-all .event-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
