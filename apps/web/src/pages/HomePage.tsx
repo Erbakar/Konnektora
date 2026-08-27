@@ -11,6 +11,7 @@ import {
   TrendingUp,
   UserRoundPlus,
   UserPlus,
+  X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -208,6 +209,12 @@ export function HomePage() {
     return !localStorage.getItem(`konnektora_announcement_done_${announcement.id}`) && !sessionStorage.getItem(`konnektora_announcement_later_${announcement.id}`);
   });
   const announcementCopy = activeAnnouncement ? localizeAnnouncement(activeAnnouncement.title, activeAnnouncement.body, language) : null;
+  const dismissAnnouncement = (mode: "done" | "later") => {
+    if (!activeAnnouncement) return;
+    const storage = mode === "done" ? localStorage : sessionStorage;
+    storage.setItem(`konnektora_announcement_${mode}_${activeAnnouncement.id}`, "1");
+    setAnnouncementRevision((value) => value + 1);
+  };
   const memberAnnouncements = !user
     ? []
     : language === "tr"
@@ -279,7 +286,29 @@ export function HomePage() {
         </section>
       ) : null}
 
-      {activeAnnouncement && announcementCopy ? <div className="emotion-modal announcement-modal" role="dialog" aria-modal="true" aria-labelledby="active-announcement-title"><div><button aria-label={language === "tr" ? "Kapat" : "Close"} onClick={() => { sessionStorage.setItem(`konnektora_announcement_later_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">×</button><span className="announcement-icon"><Megaphone size={24}/></span><h2 id="active-announcement-title">{announcementCopy.title}</h2><p><RichText text={announcementCopy.body}/></p><div className="row-actions"><button className="primary-action" onClick={() => { localStorage.setItem(`konnektora_announcement_done_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">{language === "tr" ? "Tamam" : "Got it"}</button><button className="secondary-action" onClick={() => { sessionStorage.setItem(`konnektora_announcement_later_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">{language === "tr" ? "Sonra hatırlat" : "Remind me later"}</button></div></div></div> : null}
+      {activeAnnouncement && announcementCopy ? (
+        <div className="emotion-modal announcement-modal" onMouseDown={() => dismissAnnouncement("later")} role="presentation">
+          <section aria-describedby="active-announcement-description" aria-labelledby="active-announcement-title" aria-modal="true" className="announcement-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+            <aside className="announcement-visual" aria-hidden="true">
+              <span className="announcement-new-badge">{language === "tr" ? "YENİ" : "NEW"}</span>
+              <img className="announcement-art" src="/media/announcement-community-discovery-v1.webp" alt="" />
+              <strong>Konnektora</strong>
+              <small>{language === "tr" ? "Toplulukta yeni bir gelişme var." : "Something new is happening in the community."}</small>
+            </aside>
+            <div className="announcement-content">
+              <button className="announcement-close" aria-label={language === "tr" ? "Kapat" : "Close"} onClick={() => dismissAnnouncement("later")} type="button"><X size={20}/></button>
+              <p className="announcement-eyebrow"><span />{announcementCopy.eyebrow}</p>
+              <h2 id="active-announcement-title">{announcementCopy.title}</h2>
+              <p className="announcement-description" id="active-announcement-description"><RichText text={announcementCopy.body}/></p>
+              {announcementCopy.highlights?.length ? <div className="announcement-highlights">{announcementCopy.highlights.map((highlight) => <article key={highlight.title}><span><Sparkles size={15}/></span><div><strong>{highlight.title}</strong><small>{highlight.body}</small></div></article>)}</div> : null}
+              <div className="announcement-actions">
+                {announcementCopy.primaryHref ? <Link className="announcement-primary-action" onClick={() => dismissAnnouncement("done")} to={announcementCopy.primaryHref}>{announcementCopy.primaryLabel}<ArrowRight size={18}/></Link> : <button className="announcement-primary-action" onClick={() => dismissAnnouncement("done")} type="button">{announcementCopy.primaryLabel}</button>}
+                <button className="announcement-secondary-action" onClick={() => dismissAnnouncement("later")} type="button">{language === "tr" ? "Sonra hatırlat" : "Remind me later"}</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {discovery ? (
         <section className="corp-section discovery-feed-section">
@@ -593,18 +622,46 @@ function navigateToSignup(account: "individual" | "corporate") {
 }
 
 function localizeAnnouncement(title: string, body: string, language: "tr" | "en") {
-  const normalizedTitle = title.toLocaleLowerCase("tr-TR").replaceAll("ı", "i");
-  if (normalizedTitle.includes("ikinci bir duyuru basligi")) {
+  const normalizedTitle = title
+    .toLocaleLowerCase("tr-TR")
+    .replaceAll("ı", "i")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+  if (normalizedTitle.includes("ikinci bir duyuru basligi") || normalizedTitle.includes("bir duyuru basligidir")) {
     return language === "tr"
-      ? { title: "Bu da ikinci bir duyuru başlığı", body: "<h2>Bu da açıklaması</h2>" }
-      : { title: "A second announcement", body: "<h2>Here is the announcement description.</h2>" };
+      ? {
+          eyebrow: "Keşif deneyimi yenilendi",
+          title: "Şehrindeki doğru etkinlikleri daha kolay keşfet",
+          body: "Etkinlikler sayfasını daha düzenli ve hızlı bir keşif deneyimi sunacak şekilde yeniledik. Sana uygun buluşmaları artık tek bakışta inceleyebilirsin.",
+          primaryLabel: "Etkinlikleri keşfet",
+          primaryHref: "/events",
+          highlights: [
+            { title: "Düzenli akış", body: "Her sayfada 15 seçilmiş etkinlik" },
+            { title: "Akıllı filtreler", body: "Şehir, tarih ve formata göre daralt" },
+            { title: "Gerçek bağlantılar", body: "Toplulukla birlikte katıl" },
+          ],
+        }
+      : {
+          eyebrow: "A better discovery experience",
+          title: "Discover the right events in your city, faster",
+          body: "We redesigned the Events page to make discovery clearer and faster. You can now review the most relevant gatherings at a glance.",
+          primaryLabel: "Explore events",
+          primaryHref: "/events",
+          highlights: [
+            { title: "A clearer feed", body: "15 curated events on every page" },
+            { title: "Smart filters", body: "Narrow by city, date and format" },
+            { title: "Real connections", body: "Join alongside the community" },
+          ],
+        };
   }
-  if (normalizedTitle.includes("bir duyuru basligidir")) {
-    return language === "tr"
-      ? { title: "Bu bir duyuru başlığıdır", body: "<h2>Bu da duyuru açıklaması</h2>" }
-      : { title: "An announcement", body: "<h2>Here is the announcement description.</h2>" };
-  }
-  return { title, body };
+  return {
+    eyebrow: language === "tr" ? "Topluluk duyurusu" : "Community update",
+    title,
+    body,
+    primaryLabel: language === "tr" ? "Anladım" : "Got it",
+    primaryHref: null,
+    highlights: null,
+  };
 }
 
 function localizeCountry(country: string) {
