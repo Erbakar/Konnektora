@@ -243,7 +243,7 @@ export function HomePage() {
           {(user.accountType === "corporate" ? [
             <><Link to={`/users/id/${user.id}`}>Profiline etiketler ekle</Link>yerek devam et; çalıştığın sanatçı ve markaların <Link to="/tags">etiket sayfalarına</Link> içerik yazmayı unutma.</>,
             <>Mekânlarını oluştur, ayarlarını kişiselleştir ve <Link to="/contacts">bağlantılarını buraya taşı</Link>.</>,
-            <><Link to="/finance/kyc">Kimliğini güvenle doğrula</Link>, verified ikonunu kazan ve sunduğumuz hizmetler için <Link to="/for-business">For business</Link> sayfasını incele.</>,
+            <><Link to="/finance/kyc">Kimliğini güvenle doğrula</Link>, verified ikonunu kazan ve sunduğumuz hizmetler için <Link to="/business">For business</Link> sayfasını incele.</>,
           ] : [
             <>Üyesin; şimdi içerideki <Link to="/contacts">arkadaşlarını bul ve diğerlerini davet et</Link>.</>,
             <>Kendin ile arkadaşlarının profillerine <Link to={`/users/id/${user.id}`}>etiketler ekle</Link>yerek tarzınızı ifade edin; sevdiğiniz mekânları takip edin.</>,

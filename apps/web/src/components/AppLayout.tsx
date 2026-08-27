@@ -6,7 +6,6 @@ import { SiteFooter } from "./SiteFooter";
 import { clearUserSession, getUserSession, listConversations, listMyNotifications, resolveMediaUrl } from "../lib/api";
 import { publicSiteHref } from "../lib/domains";
 import { useLanguage } from "../lib/i18n";
-import { LocationPermissionPrompt } from "./LocationPermissionPrompt";
 
 export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -147,7 +146,6 @@ export function AppLayout() {
       </nav>
 
       <main>
-        <LocationPermissionPrompt />
         <Outlet />
       </main>
       <SiteFooter />

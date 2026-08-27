@@ -717,11 +717,11 @@ export function AdminDashboardPage() {
         >
           <label>
             Email
-            <input autoComplete="email" name="email" placeholder="admin@konnektora.local" required type="email" />
+            <input autoComplete="email" name="email" placeholder="admin@company.com" required type="email" />
           </label>
           <label>
             Şifre
-            <input autoComplete="current-password" minLength={8} name="password" placeholder="ChangeMe123!" required type="password" />
+            <input autoComplete="current-password" minLength={8} name="password" placeholder="Şifrenizi girin" required type="password" />
           </label>
           {loginError ? <p className="form-error">{loginError}</p> : null}
           <button className="primary-action" disabled={loginMutation.isPending} type="submit">

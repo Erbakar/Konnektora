@@ -23,6 +23,7 @@ import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
 import { ReportDialog } from "../components/ReportDialog";
 import { formatEventDateRange } from "../lib/formats";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
+import { NotFoundPage } from "./NotFoundPage";
 import {
   confirmEventPayment,
   archiveMyEvent,
@@ -61,6 +62,7 @@ export function EventDetailPage() {
     queryKey: ["event", slug],
     queryFn: () => getEvent(slug),
     enabled: Boolean(slug),
+    retry: false,
   });
   const canManage = Boolean(event && user && (event.createdById === user.id || event.viewerParticipation?.status === "accepted" && ["organizer", "manager"].includes(event.viewerParticipation.role) || ["admin", "super_admin", "curator"].includes(user.role)));
   const ticketTypesQuery = useQuery({
@@ -145,7 +147,7 @@ export function EventDetailPage() {
   }
 
   if (!event) {
-    return <section className="page">Etkinlik bulunamadı.</section>;
+    return <NotFoundPage kind="event" />;
   }
   const eventTagIds = new Set(event.tags.map((tag) => tag.id));
   const eventCutoff = new Date(event.endsAt ?? new Date(new Date(event.startsAt).getTime() + 24 * 60 * 60 * 1000).toISOString()).getTime() + 12 * 60 * 60 * 1000;

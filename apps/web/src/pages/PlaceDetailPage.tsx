@@ -41,6 +41,7 @@ import {
   updatePlaceMember,
   resolveMediaUrl,
 } from "../lib/api";
+import { NotFoundPage } from "./NotFoundPage";
 
 export function PlaceDetailPage() {
   const { slug = "" } = useParams();
@@ -56,6 +57,7 @@ export function PlaceDetailPage() {
     queryKey: ["place", slug],
     queryFn: () => getPlace(slug),
     enabled: Boolean(slug),
+    retry: false,
   });
   const place = placeQuery.data;
   const canViewStats = Boolean(
@@ -143,7 +145,7 @@ export function PlaceDetailPage() {
 
   if (placeQuery.isLoading)
     return <section className="page">Mekân yükleniyor…</section>;
-  if (!place) return <section className="page">Mekân bulunamadı.</section>;
+  if (!place) return <NotFoundPage kind="place" />;
 
   return (
     <article className="page detail-page">

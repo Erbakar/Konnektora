@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import type { PolicyType } from "@konnektora/shared";
 import { getFallbackPolicy, getPolicy } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
@@ -18,10 +18,9 @@ const fallbackTitles: Record<PolicyType, string> = {
   about: "Hakkımızda"
 };
 
-export function PolicyPage() {
-  const { type = "privacy" } = useParams();
+export function PolicyPage({ type = "privacy" }: { type?: PolicyType }) {
   const { language } = useLanguage();
-  const policyType = policyRouteTypes[type] ?? "privacy";
+  const policyType = policyRouteTypes[type] ?? type;
   const policyQuery = useQuery({
     queryKey: ["policy", policyType],
     queryFn: () => getPolicy(policyType),

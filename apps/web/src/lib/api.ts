@@ -330,7 +330,7 @@ type RequestOptions = RequestInit & {
   auth?: AuthMode;
 };
 
-class ApiHttpError extends Error {
+export class ApiHttpError extends Error {
   readonly name = "ApiHttpError";
 
   constructor(

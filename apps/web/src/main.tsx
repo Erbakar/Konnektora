@@ -8,8 +8,10 @@ import {
   RouterProvider,
   useRouteError,
 } from "react-router-dom";
+import { AdminRouteGuard } from "./components/AdminRouteGuard";
 import { AppLayout } from "./components/AppLayout";
 import { ServiceFeedback } from "./components/ServiceFeedback";
+import { ApiHttpError } from "./lib/api";
 import { publicSiteHref } from "./lib/domains";
 import { LanguageProvider } from "./lib/i18n";
 import "./styles.css";
@@ -242,8 +244,22 @@ const SettingsSectionPage = lazy(() =>
 const InteractionStatsPage = lazy(() =>
   import("./pages/InteractionStatsPage").then((module) => ({ default: module.InteractionStatsPage })),
 );
+const NotFoundPage = lazy(() =>
+  import("./pages/NotFoundPage").then((module) => ({ default: module.NotFoundPage })),
+);
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) => {
+        if (error instanceof ApiHttpError && error.status >= 400 && error.status < 500) {
+          return false;
+        }
+        return failureCount < 2;
+      },
+    },
+  },
+});
 
 const router = createBrowserRouter([
   {
@@ -258,6 +274,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       { path: "business", element: <BusinessLandingPage /> },
+      { path: "for-business", element: <Navigate replace to="/business" /> },
       { path: "curators", element: <CuratorsPage /> },
       { path: "events", element: <EventsPage /> },
       { path: "events/:slug", element: <EventDetailPage /> },
@@ -314,14 +331,18 @@ const router = createBrowserRouter([
           { path: "reset-password", element: <ResetPasswordPage /> },
           { path: "accept-invite", element: <AcceptInvitePage /> },
           { path: "admin", element: <AdminDashboardPage /> },
-          { path: "admin/kyc", element: <AdminKycPage /> },
+          { path: "admin/kyc", element: <AdminRouteGuard><AdminKycPage /></AdminRouteGuard> },
           {
             path: "admin/notifications",
-            element: <AdminNotificationOperationsPage />,
+            element: <AdminRouteGuard><AdminNotificationOperationsPage /></AdminRouteGuard>,
           },
         ],
       },
-      { path: ":type", element: <PolicyPage /> },
+      { path: "privacy", element: <PolicyPage type="privacy" /> },
+      { path: "terms", element: <PolicyPage type="terms" /> },
+      { path: "cookies", element: <PolicyPage type="cookies" /> },
+      { path: "about", element: <PolicyPage type="about" /> },
+      { path: "*", element: <NotFoundPage /> },
     ],
   },
 ]);
