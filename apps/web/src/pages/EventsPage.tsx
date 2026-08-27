@@ -74,7 +74,7 @@ export function EventsPage() {
   });
   const eventRequestParams = new URLSearchParams(searchParams);
   eventRequestParams.set("page", String(selectedPage));
-  eventRequestParams.set("pageSize", "16");
+  eventRequestParams.set("pageSize", "15");
   const { data: eventList, isLoading, isError, refetch } = useQuery({
     queryKey: ["events", eventRequestParams.toString()],
     queryFn: () => listEvents(eventRequestParams)
