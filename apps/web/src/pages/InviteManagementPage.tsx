@@ -463,15 +463,19 @@ function EventGuestList({
               {item.status === "requested" || item.status === "invited" ? (
                 <>
                   <button
+                    className="management-action management-action-approve"
                     disabled={pending}
                     onClick={() => onStatus(item.userId, "accepted")}
+                    type="button"
                   >
                     <CheckCircle2 size={16} />
                     Onayla
                   </button>
                   <button
+                    className="management-action management-action-reject"
                     disabled={pending}
                     onClick={() => onStatus(item.userId, "declined")}
+                    type="button"
                   >
                     <XCircle size={16} />
                     Reddet
@@ -480,8 +484,10 @@ function EventGuestList({
               ) : null}
               {item.status === "accepted" ? (
                 <button
+                  className="management-action management-action-checkin"
                   disabled={pending}
                   onClick={() => onCheckIn(item.userId)}
+                  type="button"
                 >
                   <QrCode size={16} />
                   Check-in
@@ -529,19 +535,23 @@ function PlaceMemberList({
               {item.status === "invited" ? (
                 <>
                   <button
+                    className="management-action management-action-approve"
                     disabled={pending}
                     onClick={() =>
                       onUpdate(item.userId, { status: "accepted" })
                     }
+                    type="button"
                   >
                     <CheckCircle2 size={16} />
                     Onayla
                   </button>
                   <button
+                    className="management-action management-action-reject"
                     disabled={pending}
                     onClick={() =>
                       onUpdate(item.userId, { status: "declined" })
                     }
+                    type="button"
                   >
                     <XCircle size={16} />
                     Reddet
@@ -563,8 +573,10 @@ function PlaceMemberList({
                     <option value="organizer">Organizatör</option>
                   </select>
                   <button
+                    className="management-action management-action-checkin"
                     disabled={pending}
                     onClick={() => onCheckIn(item.userId)}
+                    type="button"
                   >
                     <QrCode size={16} />
                     Check-in

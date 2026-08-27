@@ -10965,11 +10965,96 @@ div.form-error::before {
   display: inline-flex;
   gap: 0.3rem;
 }
+
+.management-list .management-action {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 15px;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, color 160ms ease, transform 160ms ease;
+  white-space: nowrap;
+}
+
+.management-list .management-action svg {
+  stroke-width: 2.4;
+}
+
+.management-list .management-action-approve {
+  background: #e9f6ee;
+  border-color: #c9e7d5;
+  color: #17603e;
+}
+
+.management-list .management-action-approve:hover,
+.management-list .management-action-approve:focus-visible {
+  background: #1f714b;
+  border-color: #1f714b;
+  box-shadow: 0 6px 16px rgba(31, 113, 75, 0.18);
+  color: #fff;
+}
+
+.management-list .management-action-reject {
+  background: #fff7f6;
+  border-color: #efd5d1;
+  color: #9a332b;
+}
+
+.management-list .management-action-reject:hover,
+.management-list .management-action-reject:focus-visible {
+  background: #b44137;
+  border-color: #b44137;
+  box-shadow: 0 6px 16px rgba(180, 65, 55, 0.16);
+  color: #fff;
+}
+
+.management-list .management-action-checkin {
+  background: #175b3d;
+  border-color: #175b3d;
+  box-shadow: 0 6px 16px rgba(23, 91, 61, 0.16);
+  color: #fff;
+}
+
+.management-list .management-action-checkin:hover,
+.management-list .management-action-checkin:focus-visible {
+  background: #0f4b31;
+  border-color: #0f4b31;
+  color: #fff;
+}
+
+.management-list .management-action:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.management-list .management-action:focus-visible {
+  outline: 3px solid rgba(45, 138, 91, 0.25);
+  outline-offset: 2px;
+}
+
+.management-list .management-action:disabled {
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+}
+
 @media (max-width: 700px) {
   .management-list article {
     align-items: flex-start;
     flex-direction: column;
     gap: 0.7rem;
+  }
+
+  .management-list .row-actions {
+    align-self: stretch;
+  }
+
+  .management-list .management-action {
+    flex: 1 1 132px;
   }
 }
 .community-grid {
