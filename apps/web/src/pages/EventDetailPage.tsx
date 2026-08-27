@@ -22,7 +22,7 @@ import { EventCard } from "../components/EventCard";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
 import { ReportDialog } from "../components/ReportDialog";
 import { formatEventDateRange } from "../lib/formats";
-import { getServiceErrorMessage } from "../lib/serviceErrors";
+import { getServiceErrorMessage, getServiceErrorPresentation } from "../lib/serviceErrors";
 import { NotFoundPage } from "./NotFoundPage";
 import {
   confirmEventPayment,
@@ -58,7 +58,7 @@ export function EventDetailPage() {
   const [ticketQuantities, setTicketQuantities] = useState<
     Record<string, number>
   >({});
-  const { data: event, isLoading } = useQuery({
+  const { data: event, error: eventError, isError: eventIsError, isLoading, refetch: refetchEvent } = useQuery({
     queryKey: ["event", slug],
     queryFn: () => getEvent(slug),
     enabled: Boolean(slug),
@@ -144,6 +144,26 @@ export function EventDetailPage() {
 
   if (isLoading) {
     return <section className="page">Etkinlik yükleniyor...</section>;
+  }
+
+  if (eventIsError) {
+    const presentation = getServiceErrorPresentation(
+      eventError,
+      "Etkinlik bilgileri şu anda yüklenemedi. Lütfen tekrar dene.",
+    );
+    if (presentation.kind === "not-found") {
+      return <NotFoundPage kind="event" />;
+    }
+    return (
+      <section className="page not-found-page" role="alert">
+        <p className="eyebrow">Etkinlik yüklenemedi</p>
+        <h1>{presentation.title}</h1>
+        <p>{presentation.message}</p>
+        <button className="primary-action" onClick={() => void refetchEvent()} type="button">
+          Tekrar dene
+        </button>
+      </section>
+    );
   }
 
   if (!event) {

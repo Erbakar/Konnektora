@@ -168,6 +168,7 @@ const USE_DEMO_CONTENT = USE_MOCK_FALLBACK;
 const TOKEN_KEY = "konnektora_admin_token";
 const USER_TOKEN_KEY = "konnektora_user_token";
 const USER_KEY = "konnektora_user";
+export const USER_SESSION_CHANGED_EVENT = "konnektora:user-session-changed";
 const USER_INTEREST_TAGS_KEY = "konnektora_user_interest_tags";
 const USER_TAG_SENTIMENTS_KEY = "konnektora_user_tag_sentiments";
 const MOCK_EVENTS_KEY = "konnektora_mock_events";
@@ -394,8 +395,14 @@ export function updateUserSession(user: LoginResponse["user"]) {
 }
 
 export function clearUserSession() {
+  const hadSession = Boolean(
+    localStorage.getItem(USER_TOKEN_KEY) || localStorage.getItem(USER_KEY),
+  );
   localStorage.removeItem(USER_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  if (hadSession) {
+    window.dispatchEvent(new Event(USER_SESSION_CHANGED_EVENT));
+  }
 }
 
 export async function listSocialPosts(
@@ -851,6 +858,9 @@ async function requestJson<T>(
     });
 
     if (!response.ok) {
+      if (response.status === 401 && options.auth === "user") {
+        clearUserSession();
+      }
       throw new ApiHttpError(
         response.status,
         await readApiErrorMessage(response),
@@ -7474,10 +7484,13 @@ export async function listEvents(params?: URLSearchParams): Promise<EventList> {
   let result: EventList;
 
   try {
-    result = await requestJson(
-      `/events${query ? `?${query}` : ""}`,
-      eventListSchema,
-    );
+    const path = `/events${query ? `?${query}` : ""}`;
+    try {
+      result = await requestJson(path, eventListSchema, { auth: "user" });
+    } catch (error) {
+      if (!(error instanceof ApiHttpError) || error.status !== 401) throw error;
+      result = await requestJson(path, eventListSchema);
+    }
   } catch (error) {
     if (USE_DEMO_CONTENT) {
       return demoResult;
@@ -7504,7 +7517,7 @@ export async function listEvents(params?: URLSearchParams): Promise<EventList> {
   };
 }
 
-export function getEvent(slug: string): Promise<Event> {
+export async function getEvent(slug: string): Promise<Event> {
   const demoEvent = USE_DEMO_CONTENT
     ? getStoredEvents().find(
         (event) => event.status === "published" && event.slug === slug,
@@ -7512,10 +7525,15 @@ export function getEvent(slug: string): Promise<Event> {
     : undefined;
 
   if (demoEvent) {
-    return Promise.resolve(demoEvent);
+    return demoEvent;
   }
 
-  return requestJson(`/events/${slug}`, eventSchema, { auth: "user" });
+  try {
+    return await requestJson(`/events/${slug}`, eventSchema, { auth: "user" });
+  } catch (error) {
+    if (!(error instanceof ApiHttpError) || error.status !== 401) throw error;
+    return requestJson(`/events/${slug}`, eventSchema);
+  }
 }
 
 export async function listTags(params = new URLSearchParams()): Promise<Tag[]> {

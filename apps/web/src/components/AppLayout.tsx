@@ -3,13 +3,14 @@ import { Bell, CalendarDays, ChevronDown, Home, LogOut, MapPin, Menu, MessageCir
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
-import { clearUserSession, getUserSession, listConversations, listMyNotifications, resolveMediaUrl } from "../lib/api";
+import { clearUserSession, getUserSession, listConversations, listMyNotifications, resolveMediaUrl, USER_SESSION_CHANGED_EVENT } from "../lib/api";
 import { publicSiteHref } from "../lib/domains";
 import { useLanguage } from "../lib/i18n";
 import { DialogAccessibilityManager } from "./DialogAccessibilityManager";
 
 export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [, setSessionRevision] = useState(0);
   const { language, setLanguage, t } = useLanguage();
   const location = useLocation();
   const storedUser = getUserSession();
@@ -27,6 +28,12 @@ export function AppLayout() {
     refetchInterval: 30_000,
   });
   const unreadNotifications = notificationsQuery.data?.filter((item) => !item.readAt).length ?? 0;
+
+  useEffect(() => {
+    const refreshSession = () => setSessionRevision((revision) => revision + 1);
+    window.addEventListener(USER_SESSION_CHANGED_EVENT, refreshSession);
+    return () => window.removeEventListener(USER_SESSION_CHANGED_EVENT, refreshSession);
+  }, []);
 
   useEffect(() => {
     setMenuOpen(false);
