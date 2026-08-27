@@ -5406,7 +5406,7 @@ div.form-error::before {
 .media-lightbox-next { right: 12px; }
 .media-lightbox span { bottom: 0; color: #fff; position: absolute; }
 
-.event-create-only > .section-header,
+.event-create-only:not(.event-create-unauthenticated) > .section-header,
 .event-create-only > .form-success,
 .event-create-only > .form-error,
 .event-create-only .account-summary,

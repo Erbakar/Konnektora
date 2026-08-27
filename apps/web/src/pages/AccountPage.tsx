@@ -917,7 +917,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   }
 
   return (
-    <section className={`page account-page${eventCreator ? " event-create-only" : ""}`}>
+    <section className={`page account-page${eventCreator ? " event-create-only" : ""}${eventCreator && !user ? " event-create-unauthenticated" : ""}`}>
       <div className="section-header">
         <div>
           <p className="eyebrow">Konnektora</p>
@@ -977,7 +977,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
           onClick={() => resendVerificationMutation.mutate(user.email)}
           type="button"
         >
-          Doğrulama emailini tekrar gönder
+          Doğrulama e-postasını tekrar gönder
         </button>
       ) : null}
 
@@ -1108,7 +1108,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               </>
             ) : null}
             <label>
-              Email
+              E-posta
               <EmailInput name="email" required />
               <span className="form-help">Örnek: ada@ornek.com</span>
             </label>
@@ -2924,7 +2924,7 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
       </div>
       <form className="guest-invite-form" onSubmit={handleInviteSubmit}>
         <label>
-          Email
+          E-posta
           <input
             name="email"
             placeholder="member@example.com"
