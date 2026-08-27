@@ -50,6 +50,30 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = language;
   }, [language]);
 
+  useEffect(() => {
+    const localizeValidation = (event: Event) => {
+      const field = event.target;
+      if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement)) return;
+      field.setCustomValidity("");
+      if (language !== "tr" || field.validity.valid) return;
+      if (field.validity.valueMissing) field.setCustomValidity("Lütfen bu alanı doldurun.");
+      else if (field.validity.typeMismatch) field.setCustomValidity("Lütfen geçerli bir değer girin.");
+      else if (field.validity.tooShort && !(field instanceof HTMLSelectElement)) field.setCustomValidity(`Lütfen en az ${field.minLength} karakter girin.`);
+      else if (field.validity.tooLong && !(field instanceof HTMLSelectElement)) field.setCustomValidity(`Lütfen en fazla ${field.maxLength} karakter girin.`);
+      else if (field.validity.patternMismatch) field.setCustomValidity("Lütfen istenen biçime uygun bir değer girin.");
+    };
+    const clearValidation = (event: Event) => {
+      const field = event.target;
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) field.setCustomValidity("");
+    };
+    document.addEventListener("invalid", localizeValidation, true);
+    document.addEventListener("input", clearValidation, true);
+    return () => {
+      document.removeEventListener("invalid", localizeValidation, true);
+      document.removeEventListener("input", clearValidation, true);
+    };
+  }, [language]);
+
   const value = useMemo(
     () => ({ language, setLanguage, t: (key: TranslationKey) => ui[language][key] }),
     [language]

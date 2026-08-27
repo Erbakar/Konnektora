@@ -26,18 +26,18 @@ type AppTab = "home" | "tags" | "events" | "places" | "messages";
 
 const introSlides = [
   {
-    title: "Find members like you",
-    body: "Discover people around shared tags, comments and events without wasting time.",
+    title: "Sana benzeyen üyeleri bul",
+    body: "Ortak ilgi alanları, yorumlar ve etkinlikler üzerinden yeni insanları keşfet.",
     image: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=900&q=80"
   },
   {
-    title: "Create events and communities",
-    body: "Publish events, manage participants and check people in with QR or NFC.",
+    title: "Etkinlikler ve topluluklar oluştur",
+    body: "Etkinlik yayınla, katılımcıları yönet ve QR veya NFC ile giriş yaptır.",
     image: "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=900&q=80"
   },
   {
-    title: "Swap profiles quickly",
-    body: "Share your QR, scan another member and keep the conversation moving.",
+    title: "Profilleri hızla paylaş",
+    body: "QR kodunu paylaş, başka bir üyeyi tara ve iletişimi sürdür.",
     image: "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=900&q=80"
   }
 ];
@@ -45,25 +45,25 @@ const introSlides = [
 const tutorialSlides = [
   {
     Icon: Tag,
-    title: "Tags",
-    body: "Add tags to your profile, choose an emotion and write comments to express yourself."
+    title: "İlgi alanları",
+    body: "İlgi alanlarını profiline ekle, duygunu seç ve kendini yorumlarla ifade et."
   },
   {
     Icon: CalendarDays,
-    title: "Events",
-    body: "Find relevant events, create your own and manage guest lists with QR check-in."
+    title: "Etkinlikler",
+    body: "Uygun etkinlikleri bul, kendi etkinliğini oluştur ve misafir listesini QR girişle yönet."
   },
   {
     Icon: UserPlus,
-    title: "Find friends",
-    body: "Follow members privately, invite contacts and filter content by the people you follow."
+    title: "Arkadaşlarını bul",
+    body: "Üyeleri takip et, kişilerini davet et ve içerikleri takip ettiklerine göre filtrele."
   }
 ];
 
 const recommendedMembers = [
-  { name: "Maya Collins", meta: "She is 29 y.o. · Based in Dublin.", followers: "2.4k", tags: ["AI", "Design"] },
-  { name: "Jonas Berg", meta: "They are 34 y.o. · Based in Berlin.", followers: "910", tags: ["Startup", "Music"] },
-  { name: "Elif Kaya", meta: "She is 27 y.o. · Based in Istanbul.", followers: "1.7k", tags: ["Product", "Events"] }
+  { name: "Maya Collins", meta: "29 yaşında · Dublin'de", followers: "2.4k", tags: ["AI", "Tasarım"] },
+  { name: "Jonas Berg", meta: "34 yaşında · Berlin'de", followers: "910", tags: ["Girişim", "Müzik"] },
+  { name: "Elif Kaya", meta: "27 yaşında · İstanbul'da", followers: "1.7k", tags: ["Ürün", "Etkinlikler"] }
 ];
 
 const events = [
@@ -84,14 +84,14 @@ const events = [
 const tags = ["AI", "Startup", "Design", "Music", "Travel", "Product", "Coffee", "Berlin", "Dublin", "Istanbul"];
 
 const mobileDrawerLinks: Array<{ label: string; Icon: ElementType }> = [
-  { label: "Notifications", Icon: Bell },
-  { label: "Share your QR", Icon: QrCode },
-  { label: "Scan QR", Icon: Camera },
-  { label: "Users & Following & Guest lists", Icon: Users },
-  { label: "Find my friends & Invite", Icon: UserPlus },
-  { label: "Settings center", Icon: Settings },
-  { label: "FAQ", Icon: Shield },
-  { label: "Write us", Icon: Mail }
+  { label: "Bildirimler", Icon: Bell },
+  { label: "QR kodunu paylaş", Icon: QrCode },
+  { label: "QR tara", Icon: Camera },
+  { label: "Üyeler, takip ve misafir listeleri", Icon: Users },
+  { label: "Arkadaşlarımı bul ve davet et", Icon: UserPlus },
+  { label: "Ayarlar merkezi", Icon: Settings },
+  { label: "Sık sorulan sorular", Icon: Shield },
+  { label: "Bize yazın", Icon: Mail }
 ];
 
 export function MobileAppPage() {
@@ -108,26 +108,26 @@ export function MobileAppPage() {
 
   const signupTitle = useMemo(() => {
     if (signupStep === 0) {
-      return "Sign up";
+      return "Kayıt ol";
     }
 
     if (signupStep === 1) {
-      return signupKind === "individual" ? "Account info" : "Company account";
+      return signupKind === "individual" ? "Hesap bilgileri" : "Şirket hesabı";
     }
 
     if (signupStep === 2) {
-      return "GSM activation";
+      return "Telefon doğrulama";
     }
 
     if (signupStep === 3) {
-      return signupKind === "individual" ? "Personal info" : "Company info";
+      return signupKind === "individual" ? "Kişisel bilgiler" : "Şirket bilgileri";
     }
 
     if (signupStep === 4) {
-      return "Profile photo";
+      return "Profil fotoğrafı";
     }
 
-    return "Tags";
+    return "İlgi alanları";
   }, [signupKind, signupStep]);
 
   function goBack() {
@@ -154,11 +154,11 @@ export function MobileAppPage() {
 
         {mode !== "intro" ? (
           <header className="mobile-app-header">
-            <button aria-label="Back" onClick={goBack} type="button">
+            <button aria-label="Geri" onClick={goBack} type="button">
               <ChevronLeft size={20} />
             </button>
             <strong>{mode === "app" ? "Konnektora" : mode === "signup" ? signupTitle : mode}</strong>
-            <button aria-label="Menu" onClick={() => setMenuOpen(true)} type="button">
+            <button aria-label="Menü" onClick={() => setMenuOpen(true)} type="button">
               <Menu size={20} />
             </button>
           </header>
@@ -267,13 +267,13 @@ function IntroScreen({
         <h1>{activeIntro.title}</h1>
         <p>{activeIntro.body}</p>
         <button className="mobile-primary-btn" onClick={onSignup} type="button">
-          Sign up
+          Kayıt ol
         </button>
         <button className="mobile-secondary-btn" onClick={onLogin} type="button">
-          Already a member? Login
+          Zaten üye misin? Giriş yap
         </button>
         <button className="mobile-text-btn" onClick={onNext} type="button">
-          Next intro
+          Sonraki tanıtım
         </button>
       </div>
     </section>
@@ -297,14 +297,14 @@ function SignupScreen({
         <>
           <img alt="Konnektora" className="mobile-form-logo" src="/brand/konnektora-logo.svg" />
           <label>
-            Account type
+            Hesap türü
             <select value={signupKind} onChange={(event) => setSignupKind(event.target.value as SignupKind)}>
               <option value="individual">Bireysel</option>
               <option value="corporate">Kurumsal</option>
             </select>
           </label>
           <div className="mobile-social-grid">
-            <button type="button">Phone and email</button>
+            <button type="button">Telefon ve e-posta</button>
             <button type="button">Facebook</button>
             <button type="button">Google</button>
           </div>
@@ -315,56 +315,56 @@ function SignupScreen({
         <div className="mobile-form-stack">
           {signupKind === "corporate" ? (
             <>
-              <label>Brand name<input placeholder="Konnektora Events" /></label>
-              <label>Legal title<input placeholder="Konnektora Ltd." /></label>
-              <label>Company type<select><option>Limited / Anonim</option><option>Dernek</option><option>Diğer</option></select></label>
-              <label>Business category<select><option>Etkinlik organizatörü</option><option>Restoran / Bar / Kafe</option><option>Marka</option></select></label>
+              <label>Marka adı<input placeholder="Konnektora Events" /></label>
+              <label>Yasal unvan<input placeholder="Konnektora Ltd." /></label>
+              <label>Şirket türü<select><option>Limited / Anonim</option><option>Dernek</option><option>Diğer</option></select></label>
+              <label>İşletme kategorisi<select><option>Etkinlik organizatörü</option><option>Restoran / Bar / Kafe</option><option>Marka</option></select></label>
             </>
           ) : (
-            <label>Full Name<input placeholder="Maya Collins" /></label>
+            <label>Ad Soyad<input placeholder="Maya Collins" /></label>
           )}
-          <label>Phone number<input placeholder="+90 555 000 00 00" /></label>
-          <label>Email<input placeholder="maya@example.com" type="email" /></label>
-          <label>New password<input placeholder="At least 8 characters" type="password" /></label>
-          <label>New password again<input type="password" /></label>
-          <label className="mobile-checkbox"><input type="checkbox" /> I agree to Terms & Privacy Policy</label>
+          <label>Telefon numarası<input placeholder="+90 555 000 00 00" /></label>
+          <label>E-posta<input placeholder="maya@example.com" type="email" /></label>
+          <label>Yeni parola<input placeholder="En az 8 karakter" type="password" /></label>
+          <label>Yeni parola tekrar<input type="password" /></label>
+          <label className="mobile-checkbox"><input type="checkbox" /> Kullanım Koşulları ve Gizlilik Politikası'nı kabul ediyorum</label>
         </div>
       ) : null}
 
-      {signupStep === 2 ? <CodeScreen body="We have sent a 6-digit code to your phone." /> : null}
+      {signupStep === 2 ? <CodeScreen body="Telefonuna 6 haneli bir kod gönderdik." /> : null}
 
       {signupStep === 3 ? (
         <div className="mobile-form-stack">
-          <label>Username<input placeholder={signupKind === "corporate" ? "konnektora_events" : "maya.collins"} /></label>
-          <label>Country<input placeholder="Türkiye" /></label>
-          <label>City<input placeholder="Istanbul" /></label>
-          {signupKind === "corporate" ? <label>Address<input placeholder="Optional address" /></label> : <label>Date of birth<input type="date" /></label>}
-          <label>Website<input placeholder="https://..." /></label>
+          <label>Kullanıcı adı<input placeholder={signupKind === "corporate" ? "konnektora_events" : "maya.collins"} /></label>
+          <label>Ülke<input placeholder="Türkiye" /></label>
+          <label>Şehir<input placeholder="İstanbul" /></label>
+          {signupKind === "corporate" ? <label>Adres<input placeholder="İsteğe bağlı adres" /></label> : <label>Doğum tarihi<input type="date" /></label>}
+          <label>İnternet sitesi<input placeholder="https://..." /></label>
         </div>
       ) : null}
 
       {signupStep === 4 ? (
         <div className="mobile-upload-card">
           <Camera size={34} />
-          <strong>Upload a profile photo</strong>
-          <p>Drag, crop, zoom, rotate or replace the image before continuing.</p>
+          <strong>Profil fotoğrafı yükle</strong>
+          <p>Devam etmeden önce görseli sürükleyebilir, kırpabilir, yakınlaştırabilir veya değiştirebilirsin.</p>
         </div>
       ) : null}
 
       {signupStep >= 5 ? (
         <div className="mobile-tag-picker">
-          <p>Choose an emotion that these tags evoke in you.</p>
+          <p>Bu ilgi alanlarının sende uyandırdığı duyguyu seç.</p>
           {tags.slice(0, 8).map((tagName) => (
             <button key={tagName} type="button">
               {tagName}
-              <span>Like</span>
+              <span>Beğeniyorum</span>
             </button>
           ))}
         </div>
       ) : null}
 
       <button className="mobile-primary-btn" onClick={onNext} type="button">
-        {signupStep >= 5 ? "Save" : "Next"}
+        {signupStep >= 5 ? "Kaydet" : "İleri"}
       </button>
     </section>
   );
@@ -387,21 +387,21 @@ function LoginScreen({
     return (
       <section className="mobile-screen-body mobile-flow">
         <img alt="Konnektora" className="mobile-form-logo" src="/brand/konnektora-logo.svg" />
-        <button className="mobile-primary-btn" onClick={() => setLoginMethod("phone")} type="button">Sign in with phone number</button>
-        <button className="mobile-secondary-btn" onClick={() => setLoginMethod("email")} type="button">Sign in with email</button>
-        <button className="mobile-oauth-btn" type="button">Sign in with Facebook</button>
-        <button className="mobile-oauth-btn" type="button">Sign in with Google</button>
-        <button className="mobile-text-btn" onClick={onSignup} type="button">New here? Sign Up</button>
+        <button className="mobile-primary-btn" onClick={() => setLoginMethod("phone")} type="button">Telefon numarasıyla giriş yap</button>
+        <button className="mobile-secondary-btn" onClick={() => setLoginMethod("email")} type="button">E-postayla giriş yap</button>
+        <button className="mobile-oauth-btn" type="button">Facebook ile giriş yap</button>
+        <button className="mobile-oauth-btn" type="button">Google ile giriş yap</button>
+        <button className="mobile-text-btn" onClick={onSignup} type="button">Yeni misin? Kayıt ol</button>
       </section>
     );
   }
 
   return (
     <section className="mobile-screen-body mobile-flow">
-      <label>{loginMethod === "email" ? "Email address" : "Phone number"}<input placeholder={loginMethod === "email" ? "maya@example.com" : "+90 555 000 00 00"} /></label>
-      <label>Password<input type="password" /></label>
-      <button className="mobile-text-btn align-left" onClick={onForgot} type="button">Forget password?</button>
-      <button className="mobile-primary-btn" onClick={onLogin} type="button">Log in</button>
+      <label>{loginMethod === "email" ? "E-posta adresi" : "Telefon numarası"}<input placeholder={loginMethod === "email" ? "maya@example.com" : "+90 555 000 00 00"} /></label>
+      <label>Parola<input type="password" /></label>
+      <button className="mobile-text-btn align-left" onClick={onForgot} type="button">Parolanı mı unuttun?</button>
+      <button className="mobile-primary-btn" onClick={onLogin} type="button">Giriş yap</button>
     </section>
   );
 }
@@ -409,13 +409,13 @@ function LoginScreen({
 function ForgotPasswordScreen({ onDone }: { onDone: () => void }) {
   return (
     <section className="mobile-screen-body mobile-flow">
-      <h1>Forgot Your Password?</h1>
-      <p>Reset your password with your email or phone number.</p>
-      <label>Email or phone<input placeholder="maya@example.com" /></label>
-      <CodeScreen body="Enter the 6-digit code we sent you." />
-      <label>New password<input type="password" /></label>
-      <label>New password again<input type="password" /></label>
-      <button className="mobile-primary-btn" onClick={onDone} type="button">Save</button>
+      <h1>Parolanı mı unuttun?</h1>
+      <p>Parolanı e-posta adresin veya telefon numaranla yenile.</p>
+      <label>E-posta veya telefon<input placeholder="maya@example.com" /></label>
+      <CodeScreen body="Gönderdiğimiz 6 haneli kodu gir." />
+      <label>Yeni parola<input type="password" /></label>
+      <label>Yeni parola tekrar<input type="password" /></label>
+      <button className="mobile-primary-btn" onClick={onDone} type="button">Kaydet</button>
     </section>
   );
 }
@@ -425,9 +425,9 @@ function CodeScreen({ body }: { body: string }) {
     <div className="mobile-code-card">
       <p>{body}</p>
       <div className="mobile-code-grid">
-        {Array.from({ length: 6 }).map((_, index) => <input aria-label={`Code ${index + 1}`} key={index} maxLength={1} />)}
+        {Array.from({ length: 6 }).map((_, index) => <input aria-label={`Kod ${index + 1}`} key={index} maxLength={1} />)}
       </div>
-      <span>Didn't receive the code? 118 seconds later resend.</span>
+      <span>Kodu almadın mı? 118 saniye sonra yeniden gönderebilirsin.</span>
     </div>
   );
 }
@@ -452,10 +452,10 @@ function TutorialScreen({
       <p>{activeTutorial.body}</p>
       <div className="mobile-permission-card">
         {tutorialIndex === 0 ? <Bell size={18} /> : tutorialIndex === 1 ? <MapPin size={18} /> : <Camera size={18} />}
-        <span>{tutorialIndex === 0 ? "Allow notifications" : tutorialIndex === 1 ? "Allow location" : "Allow camera and contacts"}</span>
+        <span>{tutorialIndex === 0 ? "Bildirimlere izin ver" : tutorialIndex === 1 ? "Konuma izin ver" : "Kamera ve kişilere izin ver"}</span>
       </div>
-      <button className="mobile-primary-btn" onClick={onNext} type="button">{tutorialIndex === tutorialSlides.length - 1 ? "Find & Invite" : "Next"}</button>
-      <button className="mobile-text-btn" onClick={onSkip} type="button">Skip</button>
+      <button className="mobile-primary-btn" onClick={onNext} type="button">{tutorialIndex === tutorialSlides.length - 1 ? "Bul ve davet et" : "İleri"}</button>
+      <button className="mobile-text-btn" onClick={onSkip} type="button">Atla</button>
     </section>
   );
 }
@@ -464,21 +464,21 @@ function InviteScreen({ onDone }: { onDone: () => void }) {
   return (
     <section className="mobile-screen-body mobile-flow">
       <div className="mobile-section-title">
-        <h1>Found 3 member</h1>
-        <button onClick={onDone} type="button">Next</button>
+        <h1>3 üye bulundu</h1>
+        <button onClick={onDone} type="button">İleri</button>
       </div>
       {recommendedMembers.map((member) => <MemberCard key={member.name} member={member} />)}
       <div className="mobile-section-title">
-        <h1>Invite</h1>
-        <button type="button">Invite all</button>
+        <h1>Davet et</h1>
+        <button type="button">Tümünü davet et</button>
       </div>
       {["Ada Lovelace · ada@example.com", "Mert Demir · +90 555 010 20 30"].map((contact) => (
         <div className="mobile-invite-row" key={contact}>
           <span>{contact}</span>
-          <button type="button">Invite</button>
+          <button type="button">Davet et</button>
         </div>
       ))}
-      <button className="mobile-secondary-btn" onClick={onDone} type="button">Skip</button>
+      <button className="mobile-secondary-btn" onClick={onDone} type="button">Atla</button>
     </section>
   );
 }
@@ -499,16 +499,16 @@ function AppHome({
       <main className="mobile-app-content">
         <div className="mobile-search">
           <Search size={18} />
-          <input placeholder="Search anything" />
-          <span>Clean</span>
+          <input placeholder="Her şeyi ara" />
+          <span>Temizle</span>
         </div>
 
         {appTab === "home" ? (
           <>
             <section className="mobile-feed-hero">
               <div>
-                <span>Popular near you</span>
-                <h1>Meet people through tags and events.</h1>
+                <span>Yakınındaki popüler içerikler</span>
+                <h1>İlgi alanları ve etkinliklerle insanlarla tanış.</h1>
               </div>
               <QrCode size={42} />
             </section>
@@ -522,31 +522,31 @@ function AppHome({
         ) : null}
 
         {appTab === "tags" ? (
-          <MobileSection title="Tags">
+          <MobileSection title="İlgi alanları">
             <div className="mobile-tag-cloud">{tags.map((tagName) => <button key={tagName} type="button">{tagName}</button>)}</div>
           </MobileSection>
         ) : null}
 
         {appTab === "events" ? (
-          <MobileSection title="Events">
+          <MobileSection title="Etkinlikler">
             {events.map((event) => <EventPreviewCard event={event} key={event.title} />)}
           </MobileSection>
         ) : null}
 
         {appTab === "places" ? (
-          <MobileSection title="Places">
+          <MobileSection title="Mekânlar">
             {["Kreuzberg Hub · Berlin", "Temple Bar Studio · Dublin", "Bomonti Hall · Istanbul"].map((place) => (
-              <div className="mobile-place-row" key={place}><MapPin size={18} /><span>{place}</span><button type="button">Follow</button></div>
+              <div className="mobile-place-row" key={place}><MapPin size={18} /><span>{place}</span><button type="button">Takip et</button></div>
             ))}
           </MobileSection>
         ) : null}
 
         {appTab === "messages" ? (
-          <MobileSection title="Messages">
+          <MobileSection title="Mesajlar">
             {["Maya Collins", "Konnektora Admin", "AI Product Night"].map((name, index) => (
               <div className="mobile-message-row" key={name}>
                 <Avatar name={name} />
-                <div><strong>{name}</strong><span>{index === 0 ? "New private message" : "No unread message"}</span></div>
+                <div><strong>{name}</strong><span>{index === 0 ? "Yeni özel mesaj" : "Okunmamış mesaj yok"}</span></div>
               </div>
             ))}
           </MobileSection>
@@ -573,11 +573,11 @@ function MemberCard({ member }: { member: (typeof recommendedMembers)[number] })
       <Avatar name={member.name} />
       <div>
         <strong>{member.name}</strong>
-        <span>{member.followers} followers</span>
+        <span>{member.followers} takipçi</span>
         <p>{member.meta}</p>
         <div>{member.tags.map((tagName) => <small key={tagName}>{tagName}</small>)}</div>
       </div>
-      <button type="button">Follow</button>
+      <button type="button">Takip et</button>
     </article>
   );
 }
@@ -601,15 +601,15 @@ function Avatar({ name }: { name: string }) {
 
 function BottomTabs({ active, setAppTab }: { active: AppTab; setAppTab: (tab: AppTab) => void }) {
   const tabs: Array<{ id: AppTab; label: string; Icon: ElementType }> = [
-    { id: "home", label: "Home", Icon: Home },
-    { id: "tags", label: "Tags", Icon: Tag },
-    { id: "events", label: "Events", Icon: CalendarDays },
-    { id: "places", label: "Places", Icon: Compass },
-    { id: "messages", label: "Messages", Icon: MessageCircle }
+    { id: "home", label: "Ana sayfa", Icon: Home },
+    { id: "tags", label: "İlgi alanları", Icon: Tag },
+    { id: "events", label: "Etkinlikler", Icon: CalendarDays },
+    { id: "places", label: "Mekânlar", Icon: Compass },
+    { id: "messages", label: "Mesajlar", Icon: MessageCircle }
   ];
 
   return (
-    <nav className="mobile-tabbar" aria-label="Bottom navigation">
+    <nav className="mobile-tabbar" aria-label="Alt navigasyon">
       {tabs.map(({ Icon, id, label }) => (
         <button className={active === id ? "active" : ""} key={id} onClick={() => setAppTab(id)} type="button">
           <Icon size={19} />
@@ -630,7 +630,7 @@ function MobileMenu({ onClose, open }: { onClose: () => void; open: boolean }) {
           <Avatar name="Maya Collins" />
           <div>
             <strong>@maya.collins</strong>
-            <span>3 notifications.</span>
+            <span>3 bildirim</span>
           </div>
         </div>
         {mobileDrawerLinks.map(({ Icon: DrawerIcon, label }) => {

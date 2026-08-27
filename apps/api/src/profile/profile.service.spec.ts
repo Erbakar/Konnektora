@@ -124,6 +124,21 @@ describe("ProfileService", () => {
     );
   });
 
+  it("upgrades an individual account without losing its existing profile", async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue(currentProfile);
+    prisma.user.update.mockResolvedValue({ ...currentProfile, accountType: "corporate" });
+
+    await expect(service.upgradeCorporateAccount("user-1", {
+      companyName: " Konnektora Events ", tradeName: " Konnektora Teknoloji Ltd. ", companyType: "Limited", businessCategory: "Etkinlik",
+    })).resolves.toEqual({ ok: true, accountType: "corporate" });
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { accountType: "corporate", companyName: "Konnektora Events", tradeName: "Konnektora Teknoloji Ltd.", companyType: "Limited", businessCategory: "Etkinlik" },
+    });
+  });
+
   it("activates a pending individual account only after verified phone and basic profile", async () => {
     const { service, prisma } = createService();
     prisma.user.findUnique.mockResolvedValue({ ...currentProfile, status: "pending", phoneVerified: true });

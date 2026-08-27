@@ -20,7 +20,7 @@ export function PlaceCard({ place }: { place: Place }) {
     <div><span className="eyebrow">{placeTypeLabels[place.placeType ?? ""] ?? "Mekân"}</span><h3><Link to={`/places/${place.slug}`}>{place.name}</Link></h3></div>
     <div className="event-details">
       <span><MapPin size={16}/>{[place.city, place.country].filter(Boolean).join(", ") || "Konum belirtilmedi"}</span>
-      <span><Users size={16}/>{place.followerCount} üye{place.inviteCount ? ` · ${place.inviteCount} davetli` : ""}{place.followingMemberCount ? ` · ${place.followingMemberCount} following` : ""}</span>
+      <span><Users size={16}/>{place.followerCount} takipçi{place.inviteCount ? ` · ${place.inviteCount} davet` : ""}</span>
       <DistanceLabel latitude={place.latitude} longitude={place.longitude}/>
     </div>
   </article>;

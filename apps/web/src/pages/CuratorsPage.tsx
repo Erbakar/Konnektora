@@ -42,7 +42,7 @@ export function CuratorsPage() {
   }
   if (user?.role === "curator" && dashboard.data)
     return (
-      <main className="page curator-page">
+      <div className="page curator-page">
         <header>
           <span className="eyebrow">Küratör çalışma alanı</span>
           <h1>{dashboard.data.city} topluluğu</h1>
@@ -107,10 +107,10 @@ export function CuratorsPage() {
             ))}
           </section>
         </div>
-      </main>
+      </div>
     );
   return (
-    <main className="curator-recruitment">
+    <div className="curator-recruitment">
       <section>
         <span className="eyebrow">Küratörler aranıyor</span>
         <h1>Şehrindeki Konnektora topluluğuna yön ver.</h1>
@@ -200,6 +200,6 @@ export function CuratorsPage() {
           </form>
         )}
       </section>
-    </main>
+    </div>
   );
 }

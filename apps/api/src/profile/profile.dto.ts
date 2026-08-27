@@ -78,6 +78,20 @@ export class UpdateProfileDto {
   businessCategory?: string;
 }
 
+export class UpgradeCorporateAccountDto {
+  @IsString() @MinLength(2) @MaxLength(160)
+  companyName!: string;
+
+  @IsString() @MinLength(2) @MaxLength(160)
+  tradeName!: string;
+
+  @IsOptional() @IsString() @MaxLength(80)
+  companyType?: string;
+
+  @IsOptional() @IsString() @MaxLength(120)
+  businessCategory?: string;
+}
+
 export class UpdatePrivacySettingsDto {
   @IsIn(["everybody", "following", "network"])
   messageAudience!: "everybody" | "following" | "network";

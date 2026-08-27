@@ -7,10 +7,13 @@ import { UserIdentityLink, userProfilePath } from "../components/UserIdentityLin
 import { ReportDialog } from "../components/ReportDialog";
 import type { DiscoveryFeed, ReportTargetType, SocialPost } from "@konnektora/shared";
 import { archiveMyEvent, archiveMyPlace, createSocialPostComment, deleteSocialPost, followUser, getDiscoveryFeed, getUserSession, inviteEventParticipant, listFollowing, listMyEvents, listSocialPostComments, listSocialPosts, resolveMediaUrl, toggleSocialPostLike, unfollowUser, updateMyEvent, updateMyPlace, updateSocialPost } from "../lib/api";
+import { useLanguage } from "../lib/i18n";
 
 const visibilityLabels = { everybody: "Herkes", following: "Takip ettiklerim", network: "Ağım" } as const;
 
 export function FeedPage() {
+  const { language } = useLanguage();
+  const labels = language === "tr" ? { popular: "Popüler", all: "Tümü", following: "Takip ettiklerim", forYou: "Sana özel", filter: "Filtrele", day: "Son 24 saat", yesterday: "Dün", week: "Geçen hafta", month: "Geçen ay" } : { popular: "Popular", all: "All", following: "Following", forYou: "For you", filter: "Filter", day: "Last 24 hours", yesterday: "Yesterday", week: "Last week", month: "Last month" };
   const client = useQueryClient();
   const user = getUserSession();
   const [tab, setTab] = useState<"popular" | "all" | "following" | "for_you">("all");
@@ -33,19 +36,19 @@ export function FeedPage() {
   const refresh = () => client.invalidateQueries({ queryKey: ["social-feed"] });
   return <div className="page social-feed-page">
     <header className="feed-heading"><div><span className="eyebrow">Konnektora topluluğu</span><h1>Sosyal akış</h1><p>Tag, etkinlik, mekân ve topluluk güncellemelerini tek yerde keşfet.</p></div><div className="feed-tabs" role="tablist">
-      <button className={tab === "popular" ? "active" : ""} onClick={() => setTab("popular")}>Popular</button>
-      <button className={tab === "all" ? "active" : ""} onClick={() => setTab("all")}>All</button>
-      <button className={tab === "following" ? "active" : ""} disabled={!user} onClick={() => setTab("following")}><Users size={16}/> Following</button>
-      <button className={tab === "for_you" ? "active" : ""} disabled={!user} onClick={() => setTab("for_you")}>For you</button>
+      <button className={tab === "popular" ? "active" : ""} onClick={() => setTab("popular")}>{labels.popular}</button>
+      <button className={tab === "all" ? "active" : ""} onClick={() => setTab("all")}>{labels.all}</button>
+      <button className={tab === "following" ? "active" : ""} disabled={!user} onClick={() => setTab("following")}><Users size={16}/> {labels.following}</button>
+      <button className={tab === "for_you" ? "active" : ""} disabled={!user} onClick={() => setTab("for_you")}>{labels.forYou}</button>
     </div></header>
-    <button className="secondary-action feed-filter-toggle" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)} type="button"><ListFilter size={17}/> Filtrele</button>
+    <button className="secondary-action feed-filter-toggle" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)} type="button"><ListFilter size={17}/> {labels.filter}</button>
     <section className={`feed-filter-panel ${filtersOpen ? "open" : ""}`}>
     <div className="feed-tabs" aria-label="Zaman filtresi">
-      <button className={time === "all" ? "active" : ""} onClick={() => setTime("all")}>Tümü</button>
-      <button className={time === "day" ? "active" : ""} onClick={() => setTime("day")}>24 hours</button>
-      <button className={time === "yesterday" ? "active" : ""} onClick={() => setTime("yesterday")}>Yesterday</button>
-      <button className={time === "week" ? "active" : ""} onClick={() => setTime("week")}>Last week</button>
-      <button className={time === "month" ? "active" : ""} onClick={() => setTime("month")}>Last month</button>
+      <button className={time === "all" ? "active" : ""} onClick={() => setTime("all")}>{labels.all}</button>
+      <button className={time === "day" ? "active" : ""} onClick={() => setTime("day")}>{labels.day}</button>
+      <button className={time === "yesterday" ? "active" : ""} onClick={() => setTime("yesterday")}>{labels.yesterday}</button>
+      <button className={time === "week" ? "active" : ""} onClick={() => setTime("week")}>{labels.week}</button>
+      <button className={time === "month" ? "active" : ""} onClick={() => setTime("month")}>{labels.month}</button>
     </div>
     <div className="feed-tabs" aria-label="İçerik türü filtresi">
       {(["all", "posts", "photos", "videos", "events", "places", "tags"] as const).map((value) => <button className={contentType === value ? "active" : ""} key={value} onClick={() => setContentType(value)}>{value === "all" ? "Tüm içerikler" : value === "posts" ? "Post'lar" : value === "photos" ? "Fotoğraflar" : value === "videos" ? "Videolar" : value === "events" ? "Etkinlikler" : value === "places" ? "Mekânlar" : "Tag'ler"}</button>)}

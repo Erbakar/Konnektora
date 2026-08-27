@@ -298,7 +298,7 @@ function ManagementShell({
   children: React.ReactNode;
 }) {
   return (
-    <main className="page invite-management">
+    <div className="page invite-management">
       <Link className="back-link" to={back}>
         ← Detaya dön
       </Link>
@@ -320,7 +320,7 @@ function ManagementShell({
         </button>
       </header>
       {children}
-    </main>
+    </div>
   );
 }
 

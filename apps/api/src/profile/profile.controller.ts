@@ -3,7 +3,7 @@ import { User } from "@prisma/client";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { OnboardingJwtAuthGuard } from "../auth/onboarding-jwt-auth.guard";
-import { CreateUserBlockDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto, UpdateProfileInterestsDto, UpdateTagAffinitiesDto } from "./profile.dto";
+import { CreateUserBlockDto, UpgradeCorporateAccountDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto, UpdateProfileInterestsDto, UpdateTagAffinitiesDto } from "./profile.dto";
 import { ProfileService } from "./profile.service";
 
 @Controller("profile")
@@ -20,6 +20,12 @@ export class ProfileController {
   @UseGuards(OnboardingJwtAuthGuard)
   updateProfile(@CurrentUser() user: User, @Body() body: UpdateProfileDto) {
     return this.profileService.updateProfile(user.id, body);
+  }
+
+  @Post("upgrade-corporate")
+  @UseGuards(JwtAuthGuard)
+  upgradeCorporateAccount(@CurrentUser() user: User, @Body() body: UpgradeCorporateAccountDto) {
+    return this.profileService.upgradeCorporateAccount(user.id, body);
   }
 
   @Get("privacy")

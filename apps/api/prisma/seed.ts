@@ -48,10 +48,12 @@ async function main() {
 
   const demoUser = await prisma.user.upsert({
     where: { email: "user@konnektora.local" },
-    update: {},
+    update: { lastOnlineAt: new Date(), username: "konnektora-demo" },
     create: {
       email: "user@konnektora.local",
       name: "Konnektora User",
+      username: "konnektora-demo",
+      lastOnlineAt: new Date(),
       passwordHash: await hash(demoPassword, 12),
       role: "user"
     }
@@ -85,6 +87,16 @@ async function main() {
       update: { categoryId, title: faq.title, body: faq.body, status: "active" },
       create: { id: faq.id, categoryId, title: faq.title, body: faq.body, status: "active" }
     });
+  }
+
+  const policies = [
+    { type: "privacy", title: "Gizlilik Politikası", body: `<h2>Topladığımız bilgiler</h2><p>Hesap oluşturduğunuzda kimlik, iletişim, profil ve tercih bilgilerinizi; platformu kullandığınızda etkinlik katılımı, mekân üyeliği, mesaj ve güvenlik kayıtlarını işleriz.</p><h2>Kullanım amaçları</h2><p>Verileri hesabınızı çalıştırmak, topluluk özelliklerini sunmak, güvenliği sağlamak, yasal yükümlülükleri yerine getirmek ve açık tercihleriniz doğrultusunda deneyimi kişiselleştirmek için kullanırız.</p><h2>Paylaşım ve saklama</h2><p>Bilgiler yalnız hizmet sağlayıcılar, yetkili iş ortakları ve yasal olarak gerekli mercilerle amaçla sınırlı biçimde paylaşılır. Veriler gerekli olduğu sürece ve yasal saklama süreleri boyunca tutulur.</p><h2>Haklarınız</h2><p>Profil ve gizlilik ayarlarınızı hesabınızdan yönetebilir; erişim, düzeltme, silme veya itiraz talepleriniz için destek merkezi üzerinden bize ulaşabilirsiniz.</p>` },
+    { type: "terms", title: "Kullanım Koşulları", body: `<h2>Hesap ve uygun kullanım</h2><p>Konnektora hesabınızın güvenliğinden siz sorumlusunuz. Yanıltıcı kimlik, taciz, spam, yasa dışı içerik ve başkalarının haklarını ihlal eden davranışlara izin verilmez.</p><h2>Etkinlikler ve ödemeler</h2><p>Organizatörler yayınladıkları etkinlik, mekân, fiyat, iade ve katılım bilgilerinin doğruluğundan sorumludur. Ödeme ve iade koşulları işlem sırasında gösterilen kurallara tabidir.</p><h2>İçerik ve moderasyon</h2><p>İçeriğiniz üzerindeki haklarınız korunur; platformda yayınlayarak hizmetin sunulması için gerekli sınırlı kullanım iznini verirsiniz. Güvenlik veya kural ihlalinde içerik kaldırılabilir ya da hesap kısıtlanabilir.</p><h2>Değişiklikler</h2><p>Koşullar güncellendiğinde yayın tarihi bu sayfada gösterilir. Hizmeti kullanmaya devam etmeniz güncel koşulları kabul ettiğiniz anlamına gelir.</p>` },
+    { type: "cookies", title: "Çerez Politikası", body: `<h2>Zorunlu çerezler</h2><p>Oturum açma, güvenlik, dil seçimi ve temel sayfa işlevleri için zorunlu çerezler ve yerel depolama kullanırız.</p><h2>Tercihler ve ölçüm</h2><p>İzin verdiğiniz ölçüde tercihleri hatırlamak ve ürün performansını anlamak için ek teknolojiler kullanılabilir. Zorunlu olmayan seçenekleri tarayıcı ve izin ayarlarınızdan yönetebilirsiniz.</p><h2>Saklama</h2><p>Oturum verileri oturum süresince, kalıcı tercihler ise belirtilen amaç için gerekli süre boyunca saklanır.</p>` },
+    { type: "about", title: "Konnektora Hakkında", body: `<h2>Anlamlı bağlantılar için</h2><p>Konnektora; ortak ilgi alanları çevresinde insanları, etkinlikleri ve mekânları bir araya getiren topluluk platformudur.</p><h2>Nasıl çalışır?</h2><p>Üyeler profillerini ve ilgi alanlarını oluşturur, uygun toplulukları keşfeder, etkinliklere katılır ve güvenli davet listeleri üzerinden bağlantı kurar.</p><h2>İşletmeler için</h2><p>Organizatörler ve mekânlar etkinlik, katılımcı, giriş, ödeme ve kurumsal doğrulama süreçlerini tek merkezden yönetebilir.</p>` }
+  ];
+  for (const policy of policies) {
+    await prisma.cmsPolicy.upsert({ where: { type: policy.type }, update: { ...policy, status: "active", publishedAt: new Date() }, create: { ...policy, status: "active", publishedAt: new Date() } });
   }
 
   const categories = await Promise.all(

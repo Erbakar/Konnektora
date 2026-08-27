@@ -6,6 +6,7 @@ import { SiteFooter } from "./SiteFooter";
 import { clearUserSession, getUserSession, listConversations, listMyNotifications, resolveMediaUrl } from "../lib/api";
 import { publicSiteHref } from "../lib/domains";
 import { useLanguage } from "../lib/i18n";
+import { DialogAccessibilityManager } from "./DialogAccessibilityManager";
 
 export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -41,6 +42,7 @@ export function AppLayout() {
 
   return (
     <div className={`app-shell${user ? " authenticated-shell" : ""}`}>
+      <DialogAccessibilityManager />
       <header className="corp-topbar">
         <a href={publicSiteHref()} className="brand" aria-label="Konnektora ana sayfa">
           <img alt="Konnektora" src="/brand/konnektora-logo.svg" />
@@ -136,7 +138,7 @@ export function AppLayout() {
 
       <nav className="mobile-tab-bar" aria-label="Mobil ana navigasyon">
         {user ? <>
-        <NavLink to="/feed"><Home size={20}/><span>Feed</span></NavLink>
+        <NavLink to="/feed"><Home size={20}/><span>{t("feed")}</span></NavLink>
         <NavLink to="/tags"><Tag size={20}/><span>Etiketler</span></NavLink>
         <NavLink to="/events"><CalendarDays size={20}/><span>Etkinlikler</span></NavLink>
         <NavLink to="/places"><MapPin size={20}/><span>Mekânlar</span></NavLink>

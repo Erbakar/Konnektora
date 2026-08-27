@@ -167,7 +167,7 @@ export function PlaceDetailPage() {
         </span>
         <span>
           <Users size={16} />
-          <Link to={`/places/${place.slug}/users`}>{place.followerCount} members / {place.followingMemberCount ?? 0} following</Link>
+          <Link to={`/places/${place.slug}/users`}>{place.followerCount} takipçi</Link>
         </span>
         <DistanceLabel latitude={place.latitude} longitude={place.longitude} />
       </div>
@@ -222,7 +222,7 @@ export function PlaceDetailPage() {
           </div>
         </section>
       ) : null}
-      <section className="admin-form event-attendee-preview"><h2>Takipçiler</h2><span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).filter((member) => member.status === "accepted").slice(0, 8).map((member) => <Link key={member.id} title={member.name} to={member.username ? `/users/${member.username}` : `/users/id/${member.id}`}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/places/${place.slug}/users`}><strong>{(relatedUsersQuery.data ?? []).filter((member) => member.status === "accepted").length} members · {(relatedUsersQuery.data ?? []).filter((member) => member.status === "invited").length} invited · {canManage ? `${(relatedUsersQuery.data ?? []).filter((member) => member.status === "pending").length} pending · ` : ""}{place.followingMemberCount ?? 0} following</strong></Link></section>
+      <section className="admin-form event-attendee-preview"><h2>Mekân üyeleri</h2><span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).filter((member) => member.status === "accepted").slice(0, 8).map((member) => <Link key={member.id} title={member.name} to={member.username ? `/users/${member.username}` : `/users/id/${member.id}`}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/places/${place.slug}/users`}><strong>{(relatedUsersQuery.data ?? []).filter((member) => member.status === "accepted").length} üye · {(relatedUsersQuery.data ?? []).filter((member) => member.status === "invited").length} davetli{canManage ? ` · ${(relatedUsersQuery.data ?? []).filter((member) => member.status === "pending").length} bekleyen` : ""}</strong></Link></section>
       <p className="detail-copy">
         <RichText
           text={place.description || "Bu mekân için henüz açıklama eklenmemiş."}
@@ -239,7 +239,7 @@ export function PlaceDetailPage() {
         </section>
       ) : null}
       {place.managers?.length ? <section className="detail-section"><h2>Mekân yöneticileri</h2><div className="manager-avatar-list">{place.managers.map((manager) => <Link key={manager.id} title={`${manager.name} · ${manager.role}`} to={manager.username ? `/users/${manager.username}` : `/users/id/${manager.id}`}>{manager.avatarUrl ? <img alt={manager.name} src={resolveMediaUrl(manager.avatarUrl)}/> : <span>{manager.name.slice(0, 1).toUpperCase()}</span>}</Link>)}</div></section> : null}
-      {place.events?.length ? <section className="detail-section"><div className="section-header"><h2>Mekândaki etkinlikler</h2><Link to={`/events?city=${encodeURIComponent(place.city ?? "")}`}>Tümünü gör</Link></div><nav className="feed-tabs"><button className={placeEventTab === "future" ? "active" : ""} onClick={() => setPlaceEventTab("future")} type="button">All future</button><button className={placeEventTab === "past" ? "active" : ""} onClick={() => setPlaceEventTab("past")} type="button">All past</button></nav><div className="event-grid recommendation-carousel">{place.events.filter((event) => placeEventTab === "future" ? new Date(event.startsAt) >= new Date() : new Date(event.startsAt) < new Date()).slice(0, 8).map((event) => <EventCard event={event} key={event.id}/>)}</div></section> : null}
+      {place.events?.length ? <section className="detail-section"><div className="section-header"><h2>Mekândaki etkinlikler</h2><Link to={`/events?city=${encodeURIComponent(place.city ?? "")}`}>Tümünü gör</Link></div><nav className="feed-tabs"><button className={placeEventTab === "future" ? "active" : ""} onClick={() => setPlaceEventTab("future")} type="button">Gelecek etkinlikler</button><button className={placeEventTab === "past" ? "active" : ""} onClick={() => setPlaceEventTab("past")} type="button">Geçmiş etkinlikler</button></nav><div className="event-grid recommendation-carousel">{place.events.filter((event) => placeEventTab === "future" ? new Date(event.startsAt) >= new Date() : new Date(event.startsAt) < new Date()).slice(0, 8).map((event) => <EventCard event={event} key={event.id}/>)}</div></section> : null}
       {canManage ? (
         <form
           id="place-edit"

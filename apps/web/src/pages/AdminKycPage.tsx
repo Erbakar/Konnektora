@@ -44,7 +44,7 @@ export function AdminKycPage() {
   };
 
   return (
-    <main className="page admin-kyc-page">
+    <div className="page admin-kyc-page">
       <Link className="back-link" to="/admin"><ArrowLeft size={16} /> Admin paneline dön</Link>
       <header>
         <div><span className="eyebrow">Uyumluluk</span><h1>Kurumsal KYC inceleme</h1></div>
@@ -108,6 +108,6 @@ export function AdminKycPage() {
           </section>
         </div>
       )}
-    </main>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
 import { Link } from "react-router-dom";
 import { resolveMediaUrl } from "../lib/api";
-export function userProfilePath(user: { id: string; username?: string | null }) { return user.username ? `/users/${encodeURIComponent(user.username)}` : `/users/id/${encodeURIComponent(user.id)}`; }
+export function userProfilePath(user: { id: string; username?: string | null }) { return user.username && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(user.username) ? `/users/${encodeURIComponent(user.username)}` : `/users/id/${encodeURIComponent(user.id)}`; }
 export function UserIdentityLink({ user, className, avatarClassName, showName = true }: { user: { id: string; name: string; username?: string | null; avatarUrl?: string | null }; className?: string; avatarClassName?: string; showName?: boolean }) { return <Link className={className} to={userProfilePath(user)}><span className={avatarClassName}>{user.avatarUrl ? <img alt="" src={resolveMediaUrl(user.avatarUrl)}/> : user.name.slice(0, 1).toUpperCase()}</span>{showName ? <span>{user.name}</span> : null}</Link>; }

@@ -86,7 +86,7 @@ export function RelatedUsersPage({
   const placeMemberAction = useMutation({ mutationFn: ({ userId, changes }: { userId: string; changes: { role?: string; status?: string } }) => updatePlaceMember(target.data!.id, userId, changes), onSuccess: () => client.invalidateQueries({ queryKey: [kind, target.data?.id, "related-users"] }) });
 
   return (
-    <main className="page related-users-page">
+    <div className="page related-users-page">
       <Link className="back-link" to={back}>
         ← Detaya dön
       </Link>
@@ -110,19 +110,19 @@ export function RelatedUsersPage({
       </header>
       <section className="related-users-tools" aria-label="Kullanıcı filtreleri">
         <label className="search-box"><Search size={17}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Kullanıcı, şehir veya ülke ara"/></label>
-        <details className="related-user-filter-disclosure"><summary>Filtrele</summary><div className="related-user-advanced-filters"><label>Cinsiyet<select value={gender} onChange={(event) => setGender(event.target.value)}><option value="">Tümü</option><option value="female">Kadın</option><option value="male">Erkek</option><option value="unknown">Belirtilmemiş</option></select></label><label>Yaş aralığı<select value={ageRange} onChange={(event) => setAgeRange(event.target.value)}><option value="">Any age</option><option value="18-24">18–24</option><option value="25-34">25–34</option><option value="35-44">35–44</option><option value="45-54">45–54</option><option value="55-64">55–64</option><option value="65-Infinity">65+</option></select></label>{kind === "tag" ? <label>Duygu<select value={sentiment} onChange={(event) => setSentiment(event.target.value)}><option value="">Tümü</option><option value="like">Beğeniyor</option><option value="ok">Nötr</option><option value="dislike">Beğenmiyor</option></select></label> : null}<button onClick={() => { setQuery(""); setGender(""); setSentiment(""); setAgeRange(""); setFilter("all"); }} type="button">Filtreyi sıfırla</button></div></details>
+        <details className="related-user-filter-disclosure"><summary>Filtrele</summary><div className="related-user-advanced-filters"><label>Cinsiyet<select value={gender} onChange={(event) => setGender(event.target.value)}><option value="">Tümü</option><option value="female">Kadın</option><option value="male">Erkek</option><option value="unknown">Belirtilmemiş</option></select></label><label>Yaş aralığı<select value={ageRange} onChange={(event) => setAgeRange(event.target.value)}><option value="">Tüm yaşlar</option><option value="18-24">18–24</option><option value="25-34">25–34</option><option value="35-44">35–44</option><option value="45-54">45–54</option><option value="55-64">55–64</option><option value="65-Infinity">65+</option></select></label>{kind === "tag" ? <label>Duygu<select value={sentiment} onChange={(event) => setSentiment(event.target.value)}><option value="">Tümü</option><option value="like">Beğeniyor</option><option value="ok">Nötr</option><option value="dislike">Beğenmiyor</option></select></label> : null}<button onClick={() => { setQuery(""); setGender(""); setSentiment(""); setAgeRange(""); setFilter("all"); }} type="button">Filtreyi sıfırla</button></div></details>
         <div className="feed-tabs" role="tablist">
           {kind !== "place" ? <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>Tümü ({users.data?.length ?? 0})</button> : null}
-          {kind === "event" ? <button className={filter === "attendees" ? "active" : ""} onClick={() => setFilter("attendees")}>Attendees ({(users.data ?? []).filter((item) => ["accepted", "attended"].includes(item.status ?? "accepted")).length})</button> : null}
-          {kind === "event" && target.data?.canManage ? <button className={filter === "pending" ? "active" : ""} onClick={() => setFilter("pending")}>Pending ({(users.data ?? []).filter((item) => item.status === "requested").length})</button> : null}
-          {kind === "place" ? <button className={filter === "attendees" ? "active" : ""} onClick={() => setFilter("attendees")}>Members ({(users.data ?? []).filter((item) => item.status === "accepted").length})</button> : null}
-          {kind === "place" && target.data?.canManage ? <button className={filter === "pending" ? "active" : ""} onClick={() => setFilter("pending")}>Pending ({(users.data ?? []).filter((item) => item.status === "pending").length})</button> : null}
-          {kind === "event" ? <button className={filter === "invited" ? "active" : ""} onClick={() => setFilter("invited")}>Invited ({(users.data ?? []).filter((item) => ["invited", "requested"].includes(item.status ?? "")).length})</button> : null}
-          <button className={filter === "following" ? "active" : ""} onClick={() => setFilter("following")}>Following ({(users.data ?? []).filter((item) => followingIds.has(item.id)).length})</button>
+          {kind === "event" ? <button className={filter === "attendees" ? "active" : ""} onClick={() => setFilter("attendees")}>Katılımcılar ({(users.data ?? []).filter((item) => ["accepted", "attended"].includes(item.status ?? "accepted")).length})</button> : null}
+          {kind === "event" && target.data?.canManage ? <button className={filter === "pending" ? "active" : ""} onClick={() => setFilter("pending")}>Bekleyenler ({(users.data ?? []).filter((item) => item.status === "requested").length})</button> : null}
+          {kind === "place" ? <button className={filter === "attendees" ? "active" : ""} onClick={() => setFilter("attendees")}>Üyeler ({(users.data ?? []).filter((item) => item.status === "accepted").length})</button> : null}
+          {kind === "place" && target.data?.canManage ? <button className={filter === "pending" ? "active" : ""} onClick={() => setFilter("pending")}>Bekleyenler ({(users.data ?? []).filter((item) => item.status === "pending").length})</button> : null}
+          {kind === "event" ? <button className={filter === "invited" ? "active" : ""} onClick={() => setFilter("invited")}>Davetliler ({(users.data ?? []).filter((item) => ["invited", "requested"].includes(item.status ?? "")).length})</button> : null}
+          <button className={filter === "following" ? "active" : ""} onClick={() => setFilter("following")}>Takip ettiklerim ({(users.data ?? []).filter((item) => followingIds.has(item.id)).length})</button>
           {kind !== "tag" ? <button className={filter === "organizers" ? "active" : ""} onClick={() => setFilter("organizers")}>Yöneticiler</button> : null}
           {kind === "event" ? <button className={filter === "checked-in" ? "active" : ""} onClick={() => setFilter("checked-in")}>Check-in</button> : null}
-          {kind === "place" && target.data?.canManage ? <button className={filter === "declined" ? "active" : ""} onClick={() => setFilter("declined")}>Declined</button> : null}
-          {kind === "place" && target.data?.canManage ? <button className={filter === "banned" ? "active" : ""} onClick={() => setFilter("banned")}>Banned</button> : null}
+          {kind === "place" && target.data?.canManage ? <button className={filter === "declined" ? "active" : ""} onClick={() => setFilter("declined")}>Reddedilenler</button> : null}
+          {kind === "place" && target.data?.canManage ? <button className={filter === "banned" ? "active" : ""} onClick={() => setFilter("banned")}>Yasaklananlar</button> : null}
         </div>
         <button className="secondary-action" aria-label={view === "cards" ? "Liste görünümü" : "Kart görünümü"} onClick={() => setView((value) => value === "cards" ? "list" : "cards")}>{view === "cards" ? <List size={17}/> : <Grid2X2 size={17}/>}</button>
       </section>
@@ -138,8 +138,8 @@ export function RelatedUsersPage({
                 ) : null}
               </strong>
               <span>{kind === "tag" ? `${user.sentiment === "like" ? "Beğeniyorum" : user.sentiment === "dislike" ? "Beğenmiyorum" : "Nötrüm"} dedi${/paylaşım|post|yorum/i.test(user.relation) ? " · paylaşım yaptı" : ""}` : user.relation}</span>
-              {user.birthDate ? <small>{user.gender === "male" ? "He" : user.gender === "female" ? "She" : "They"} is {ageFrom(user.birthDate)} y.o.</small> : null}
-              {session?.id !== user.id && user.commonTagCount != null ? <small>{user.commonTagCount} mutual {user.commonTagCount === 1 ? "thing" : "things"}.</small> : null}
+              {user.birthDate ? <small>{ageFrom(user.birthDate)} yaşında</small> : null}
+              {session?.id !== user.id && user.commonTagCount != null ? <small>{user.commonTagCount} ortak ilgi alanı</small> : null}
               {user.city || user.country ? (
                 <small>
                   <MapPin size={13} />
@@ -154,8 +154,8 @@ export function RelatedUsersPage({
               ) : null}
             </div>
             <div className="row-actions">
-              {session && session.id !== user.id ? <button disabled={toggleFollow.isPending} onClick={() => toggleFollow.mutate(user.id)}>{followingIds.has(user.id) ? "Following" : "Follow"}</button> : null}
-              {session && session.id !== user.id ? <button onClick={() => setGuestTarget({ id: user.id, name: user.name })}><UserPlus size={15}/> Guest list</button> : null}
+              {session && session.id !== user.id ? <button disabled={toggleFollow.isPending} onClick={() => toggleFollow.mutate(user.id)}>{followingIds.has(user.id) ? "Takipte" : "Takip et"}</button> : null}
+              {session && session.id !== user.id ? <button onClick={() => setGuestTarget({ id: user.id, name: user.name })}><UserPlus size={15}/> Misafir listesi</button> : null}
               {session && session.id !== user.id ? <details className="action-menu"><summary aria-label="Kullanıcı aksiyonları"><MoreVertical size={17}/></summary><div><Link to={`/messages?peer=${user.id}`}><Mail size={15}/> Mesaj gönder</Link>{kind === "place" && target.data?.canManage ? <><button disabled={placeMemberAction.isPending} onClick={() => placeMemberAction.mutate({ userId: user.id, changes: { role: /organizer/.test(user.relation) ? "member" : "organizer" } })} type="button">{/organizer/.test(user.relation) ? "Organizatörlükten çıkar" : "Organizatör yap"}</button><button disabled={placeMemberAction.isPending} onClick={() => placeMemberAction.mutate({ userId: user.id, changes: { status: user.status === "banned" ? "accepted" : "banned" } })} type="button">{user.status === "banned" ? "Mekâna affet" : "Mekâna yasakla"}</button></> : null}</div></details> : null}
             </div>
           </article>
@@ -172,7 +172,7 @@ export function RelatedUsersPage({
         <p className="form-error">Kullanıcılar yüklenemedi.</p>
       ) : null}
       {guestTarget ? <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Guest List'e ekle"><div><button aria-label="Kapat" onClick={() => setGuestTarget(null)}>×</button><h2>{guestTarget.name}</h2><div className="admin-list">{managedEvents.data?.map((event) => <button className="admin-list-row" disabled={addGuest.isPending} key={event.id} onClick={() => addGuest.mutate(event.id)}><strong>{event.title}</strong></button>)}</div>{!managedEvents.isLoading && !managedEvents.data?.length ? <p className="form-help">Yönettiğin etkinlik bulunmuyor.</p> : null}{addGuest.isError ? <p className="form-error">Guest list işlemi tamamlanamadı.</p> : null}</div></div> : null}
-    </main>
+    </div>
   );
 }
 

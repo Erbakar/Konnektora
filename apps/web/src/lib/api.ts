@@ -1275,6 +1275,13 @@ function getMockResponse<T>(
     );
   }
 
+  if (pathname === "/profile/upgrade-corporate" && method === "POST") {
+    const session = getUserSession();
+    if (!session) throw new Error("User session required");
+    updateUserSession({ ...session, accountType: "corporate" });
+    return schema.parse({ ok: true, accountType: "corporate" });
+  }
+
   if (pathname === "/profile/media" && method === "GET") {
     return schema.parse(listMockProfileMedia());
   }
@@ -7551,6 +7558,12 @@ export function updateMyProfile(input: ProfileUpdateInput): Promise<Profile> {
     auth: "user",
     method: "PUT",
     body: JSON.stringify(input),
+  });
+}
+
+export function upgradeCorporateAccount(input: { companyName: string; tradeName: string; companyType?: string; businessCategory?: string }): Promise<{ ok: boolean; accountType: "corporate" }> {
+  return requestJson("/profile/upgrade-corporate", z.object({ ok: z.boolean(), accountType: z.literal("corporate") }), {
+    auth: "user", method: "POST", body: JSON.stringify(input),
   });
 }
 

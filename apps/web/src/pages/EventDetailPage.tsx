@@ -180,7 +180,7 @@ export function EventDetailPage() {
           {event.createdById ? <Link to={`/users/id/${event.createdById}`}>{event.organizerName || "Konnektora topluluğu"}</Link> : event.organizerName || "Konnektora topluluğu"}
         </span>
       </div>
-      <button className="detail-more-link" onClick={() => setMoreInfoOpen(true)} type="button">More about the event and place</button>
+      <button className="detail-more-link" onClick={() => setMoreInfoOpen(true)} type="button">Etkinlik ve mekân hakkında daha fazla bilgi</button>
       <div className="tag-row">
         {event.tags.map((tag) => (
           <Link key={tag.id} to={`/tags/${tag.slug}`}>#{tag.name}</Link>
@@ -346,7 +346,7 @@ export function EventDetailPage() {
       <section className="admin-form event-attendee-preview">
         <h2>Katılımcılar</h2>
         <span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).sort((a, b) => Number((followingQuery.data ?? []).some((item) => item.id === b.id)) - Number((followingQuery.data ?? []).some((item) => item.id === a.id))).slice(0, 8).map((participant) => <Link key={participant.id} title={participant.name} to={`/users/id/${participant.id}`}>{participant.avatarUrl ? <img alt="" src={resolveMediaUrl(participant.avatarUrl)}/> : participant.name?.[0] ?? "?"}</Link>)}</span>
-        <Link to={`/events/${event.slug}/users`}><strong>{event.attendeeCount ?? relatedUsersQuery.data?.length ?? 0} attendees · {canManage ? `${participantsQuery.data?.filter((item) => item.status === "requested").length ?? 0} pending · ` : ""}{participantsQuery.data?.filter((item) => item.status === "invited").length ?? 0} invited · {(relatedUsersQuery.data ?? []).filter((participant) => (followingQuery.data ?? []).some((item) => item.id === participant.id)).length} following</strong></Link>
+        <Link to={`/events/${event.slug}/users`}><strong>{event.attendeeCount ?? relatedUsersQuery.data?.length ?? 0} katılımcı{canManage ? ` · ${participantsQuery.data?.filter((item) => item.status === "requested").length ?? 0} bekleyen` : ""} · {participantsQuery.data?.filter((item) => item.status === "invited").length ?? 0} davetli · {(relatedUsersQuery.data ?? []).filter((participant) => (followingQuery.data ?? []).some((item) => item.id === participant.id)).length} takip ettiğin kişi</strong></Link>
       </section>
       <section className="detail-copy" id="more-info">
         <RichText text={!overviewExpanded && event.description.length > 650 ? `${event.description.slice(0, 650).trim()}…` : event.description} />

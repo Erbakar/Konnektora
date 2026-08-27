@@ -326,10 +326,10 @@ export function TagsPage() {
                 {value === "popular"
                   ? "Popüler"
                   : value === "for_you"
-                    ? "For you"
+                    ? "Sana özel"
                     : value === "following"
-                      ? "Following"
-                      : "New"}
+                      ? "Takip ettiklerin"
+                      : "Yeni"}
               </button>
             ),
           )}
@@ -448,8 +448,8 @@ export function TagsPage() {
         ) : null}
       </section>
       <section className="admin-form tag-related-users-preview">
-        <h2>People added to their profile</h2>
-        <div><span className="attendee-avatar-stack">{(relatedUsers.data ?? []).slice(0, 8).map((member) => <Link key={member.id} title={`${member.name} profilini aç`} to={userProfilePath(member)}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/tags/${tag.slug}/users`}><strong>Show all {relatedUsers.data?.length ?? tag.usageCount} users</strong></Link></div>
+        <h2>Profiline ekleyen kişiler</h2>
+        <div><span className="attendee-avatar-stack">{(relatedUsers.data ?? []).slice(0, 8).map((member) => <Link key={member.id} title={`${member.name} profilini aç`} to={userProfilePath(member)}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/tags/${tag.slug}/users`}><strong>{relatedUsers.data?.length ?? tag.usageCount} kullanıcının tümünü göster</strong></Link></div>
       </section>
       {relatedEvents.data?.total ? <Link className="tag-related-events-notice" to={`/events?tag=${encodeURIComponent(tag.slug)}`}>{relatedEvents.data.total} ilişkili devam eden veya gelecek etkinlik bulundu.</Link> : null}
       {user && ["admin", "super_admin", "curator"].includes(user.role) ? <section className="tag-public-stats" id="tag-stats">
@@ -500,13 +500,13 @@ export function TagsPage() {
                 type="button"
               >
                 {value === "all"
-                  ? "All"
+                  ? "Tümü"
                   : value === "popular"
-                    ? "Popular"
+                    ? "Popüler"
                     : value === "following"
-                      ? `Following (${(comments.data ?? []).filter((comment) => comment.author && followingIds.has(comment.author.id)).length})`
+                      ? `Takip ettiklerim (${(comments.data ?? []).filter((comment) => comment.author && followingIds.has(comment.author.id)).length})`
                       : value === "photo"
-                        ? "Photo"
+                        ? "Fotoğraf"
                         : "Video"}
               </button>
             ),

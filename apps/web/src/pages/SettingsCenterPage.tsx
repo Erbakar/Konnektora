@@ -14,7 +14,7 @@ import type {
   SocialProvider,
 } from "@konnektora/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   changePassword,
   clearUserSession,
@@ -39,6 +39,8 @@ import {
   updateNotificationPreferences,
   updatePrivacySettings,
   updateProfileAffinities,
+  updateUserSession,
+  upgradeCorporateAccount,
   uploadProfileMedia,
 } from "../lib/api";
 import { CountryCityFields } from "../components/CountryCityFields";
@@ -91,11 +93,7 @@ const settings = [
 ] as const;
 
 export function SettingsCenterPage() {
-  const user = getUserSession();
-  const visibleSettings = settings.filter(
-    (item) =>
-      item.href !== "/settings/business" || user?.accountType === "corporate",
-  );
+  const visibleSettings = settings;
   return (
     <section className="page settings-center-page">
       <div className="section-header">
@@ -162,8 +160,6 @@ const sections: Record<
 export function SettingsSectionPage({ section }: { section: string }) {
   const item = sections[section] ?? sections.account!;
   const user = getUserSession();
-  if (section === "business" && user?.accountType !== "corporate")
-    return <Navigate replace to="/settings" />;
   return (
     <section className="page settings-section-page">
       <Link className="back-link" to="/settings">
@@ -197,7 +193,7 @@ export function SettingsSectionPage({ section }: { section: string }) {
       ) : section === "privacy" ? (
         <PrivacySettings />
       ) : (
-        <BusinessSettings />
+        <BusinessSettings user={user} />
       )}
     </section>
   );
@@ -892,7 +888,28 @@ function PrivacySettings() {
   );
 }
 
-function BusinessSettings() {
+function BusinessSettings({ user }: { user: NonNullable<ReturnType<typeof getUserSession>> }) {
+  const upgrade = useMutation({
+    mutationFn: (input: { companyName: string; tradeName: string; companyType?: string; businessCategory?: string }) => upgradeCorporateAccount(input),
+    onSuccess: () => {
+      updateUserSession({ ...user, accountType: "corporate" });
+      window.location.assign("/settings/business");
+    },
+  });
+  if (user.accountType !== "corporate") return (
+    <form className="identity-panel settings-form" onSubmit={(event) => {
+      event.preventDefault(); const form = new FormData(event.currentTarget);
+      upgrade.mutate({ companyName: String(form.get("companyName") ?? ""), tradeName: String(form.get("tradeName") ?? ""), companyType: String(form.get("companyType") ?? "") || undefined, businessCategory: String(form.get("businessCategory") ?? "") || undefined });
+    }}>
+      <h2>Kurumsal hesaba geç</h2>
+      <p>Etkinlik, mekân, finans ve kurumsal doğrulama araçlarını aç. Mevcut profilin ve bağlantıların korunur.</p>
+      <label>İşletme adı<input name="companyName" minLength={2} required /></label>
+      <label>Ticari unvan<input name="tradeName" minLength={2} required /></label>
+      <div className="form-grid"><label>Şirket türü<input name="companyType" placeholder="Örn. Limited Şirket" /></label><label>İşletme kategorisi<input name="businessCategory" placeholder="Örn. Etkinlik organizasyonu" /></label></div>
+      <button className="primary-action" disabled={upgrade.isPending}>{upgrade.isPending ? "Geçiş yapılıyor…" : "Kurumsal hesaba geç"}</button>
+      {upgrade.isError ? <p className="form-error">Hesap türü güncellenemedi. Bilgileri kontrol edip tekrar deneyin.</p> : null}
+    </form>
+  );
   return (
     <div className="identity-panel settings-form">
       <h2>Business ve ödeme</h2>

@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { BlockedTargetType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import { CreateUserBlockDto, NotificationPreferenceDto, TagAffinityInputDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto } from "./profile.dto";
+import { CreateUserBlockDto, NotificationPreferenceDto, TagAffinityInputDto, UpgradeCorporateAccountDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto } from "./profile.dto";
 
 const notificationTopics: NotificationPreferenceDto["topic"][] = [
   "tag_request", "private_message", "mention", "comment", "password_changed", "email_changed", "phone_changed",
@@ -102,6 +102,22 @@ export class ProfileService {
       },
       select: profileSelect
     });
+  }
+
+  async upgradeCorporateAccount(userId: string, input: UpgradeCorporateAccountDto) {
+    const current = await this.getProfile(userId);
+    if (current.accountType === "corporate") return { ok: true, accountType: "corporate" as const };
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        accountType: "corporate",
+        companyName: input.companyName.trim(),
+        tradeName: input.tradeName.trim(),
+        companyType: input.companyType?.trim() || null,
+        businessCategory: input.businessCategory?.trim() || null,
+      },
+    });
+    return { ok: true, accountType: "corporate" as const };
   }
 
   async getPrivacySettings(userId: string) {

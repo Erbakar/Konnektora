@@ -42,7 +42,7 @@ export function DiscoveryCard({ item, hideSubtitle = false }: { item: DiscoveryI
         <strong>{item.title}</strong>
         {!hideSubtitle && subtitle ? <span className="discovery-card-subtitle">{subtitle}</span> : null}
         <span className="discovery-card-meta">{meta}</span>
-        {item.kind === "event" && item.attendeeCount != null ? <span className="discovery-card-meta">{item.attendeeCount} attendees</span> : null}
+        {item.kind === "event" && item.attendeeCount != null ? <span className="discovery-card-meta">{item.attendeeCount} katılımcı</span> : null}
         {(item.kind === "event" || item.kind === "place") ? <DistanceLabel latitude={item.latitude} longitude={item.longitude}/> : null}
       </span>
       <span className="discovery-card-arrow" aria-hidden="true"><ArrowUpRight size={17} /></span>

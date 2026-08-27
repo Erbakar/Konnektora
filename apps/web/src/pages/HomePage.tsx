@@ -261,7 +261,7 @@ export function HomePage() {
         </section>
       ) : null}
 
-      {activeAnnouncement ? <div className="emotion-modal announcement-modal" role="dialog" aria-modal="true" aria-label="Duyuru"><div><span className="announcement-icon"><Megaphone size={24}/></span><h2>{activeAnnouncement.title}</h2><p><RichText text={activeAnnouncement.body}/></p><div className="row-actions"><button className="primary-action" onClick={() => { localStorage.setItem(`konnektora_announcement_done_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">Tamam</button><button className="secondary-action" onClick={() => { sessionStorage.setItem(`konnektora_announcement_later_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">Sonra hatırlat</button></div></div></div> : null}
+      {activeAnnouncement ? <div className="emotion-modal announcement-modal" role="dialog" aria-modal="true" aria-labelledby="active-announcement-title"><div><button aria-label="Kapat" onClick={() => { sessionStorage.setItem(`konnektora_announcement_later_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">×</button><span className="announcement-icon"><Megaphone size={24}/></span><h2 id="active-announcement-title">{activeAnnouncement.title}</h2><p><RichText text={activeAnnouncement.body}/></p><div className="row-actions"><button className="primary-action" onClick={() => { localStorage.setItem(`konnektora_announcement_done_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">Tamam</button><button className="secondary-action" onClick={() => { sessionStorage.setItem(`konnektora_announcement_later_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">Sonra hatırlat</button></div></div></div> : null}
 
       {discovery ? (
         <section className="corp-section discovery-feed-section">
@@ -278,7 +278,7 @@ export function HomePage() {
             </a>
             <span className="active-community-count">
               <i />
-              {discovery.activeUserCount} aktif üye
+              {Math.max(discovery.activeUserCount, new Set([...discovery.popularMembers, ...discovery.newMembers].map((member) => member.id)).size)} aktif üye
             </span>
           </div>
 
@@ -565,7 +565,7 @@ export function HomePage() {
         </div>
         <div className="corp-cta-memberships"><button className="corp-btn corp-btn-light" onClick={() => user ? setSignupChoice("individual") : navigateToSignup("individual")} type="button">Bireysel üyelik<ArrowRight size={18}/></button><button className="corp-btn corp-btn-light" onClick={() => user ? setSignupChoice("corporate") : navigateToSignup("corporate")} type="button">Kurumsal üyelik<ArrowRight size={18}/></button></div>
       </section>
-      {signupChoice ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setSignupChoice(null)}><section aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><h2>Zaten üyesiniz</h2><p>Farklı bir üyelik için çıkış yapmak ister misiniz?</p><div className="row-actions"><button className="ghost-action" onClick={() => setSignupChoice(null)} type="button">Vazgeç</button><button className="primary-action" onClick={() => { const choice = signupChoice; clearUserSession(); navigateToSignup(choice); }} type="button">Çıkış yap</button></div></section></div> : null}
+      {signupChoice ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setSignupChoice(null)}><section aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><h2>Zaten üyesiniz</h2><p>Farklı bir üyelik için çıkış yapmak ister misiniz?</p><div className="row-actions"><button aria-label="Kapat" className="ghost-action" onClick={() => setSignupChoice(null)} type="button">Vazgeç</button><button className="primary-action" onClick={() => { const choice = signupChoice; clearUserSession(); navigateToSignup(choice); }} type="button">Çıkış yap</button></div></section></div> : null}
     </div>
   );
 }

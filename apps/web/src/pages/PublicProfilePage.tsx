@@ -47,6 +47,10 @@ function ageFrom(value: string | Date) {
   return Math.max(0, age);
 }
 
+function publicUsername(username: string | null | undefined) {
+  return username && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(username) ? username : null;
+}
+
 export function PublicProfilePage() {
   const { username = "", userId = "" } = useParams();
   const user = getUserSession();
@@ -158,7 +162,7 @@ export function PublicProfilePage() {
             {profile.name}
             {profile.verified ? <BadgeCheck aria-label="Doğrulanmış profil" className="verified-badge" size={25} /> : null}
           </h1>
-          <strong>@{profile.username}</strong>
+          {publicUsername(profile.username) ? <strong>@{publicUsername(profile.username)}</strong> : <strong>{profile.name}</strong>}
           <div className="profile-metrics">
             <button data-tooltip="Kimin kimi takip ettiğini kimse göremez." onClick={() => setPrivacyNotice(true)} title="Kimin kimi takip ettiğini kimse göremez." type="button">
               <b>{profile.followerCount}</b> takipçi
@@ -203,7 +207,7 @@ export function PublicProfilePage() {
           {profile.relationship.isSelf ? <details className="action-menu profile-actions-menu"><summary aria-label="Profil ayarları"><MoreVertical size={20}/></summary><div><Link to={`/stats/user/${profile.id}`}>Interaction statistics about you</Link><Link to="/settings"><Settings size={18}/> Ayarlar</Link><button onClick={() => setShareOpen(true)} type="button"><Share2 size={18}/> Paylaş</button></div></details> : null}
         </div>
         <div className="profile-sidebar-facts" aria-label="Profil bilgileri">
-          {profile.accountType === "individual" && profile.birthDate ? <span>{profile.gender === "male" ? "He" : profile.gender === "female" ? "She" : "They"} is {ageFrom(profile.birthDate)} y.o.</span> : null}
+          {profile.accountType === "individual" && profile.birthDate ? <span>{ageFrom(profile.birthDate)} yaşında</span> : null}
           {profile.city || profile.country ? <span><MapPin size={15}/> {[profile.city, profile.country].filter(Boolean).join(", ")}</span> : null}
           {profile.accountType === "corporate" ? <>{profile.companyName ? <span><strong>İşletme:</strong> {profile.companyName}</span> : null}{profile.tradeName ? <span><strong>Ticari unvan:</strong> {profile.tradeName}</span> : null}{profile.companyType ? <span><strong>Şirket türü:</strong> {profile.companyType}</span> : null}{profile.businessCategory ? <span><strong>Kategori:</strong> {profile.businessCategory}</span> : null}{profile.address || profile.district ? <span><strong>Adres:</strong> {[profile.address, profile.district, profile.city, profile.country].filter(Boolean).join(", ")}</span> : null}</> : null}
           {profile.website ? <a href={profile.website} rel="noreferrer" target="_blank"><Globe2 size={16}/> {profile.website}</a> : null}
