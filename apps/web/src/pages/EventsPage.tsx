@@ -97,13 +97,15 @@ export function EventsPage() {
   const discoveryQueries = useQueries({ queries: discoveryDefinitions.map((definition) => ({
     queryKey: ["events", "discovery-section", definition.key, definition.params],
     queryFn: () => listEvents(new URLSearchParams({ ...definition.params, pageSize: "100" })),
-    enabled: searchParams.size === 0 && (!definition.auth || Boolean(user)),
+    enabled: !hasFilters && selectedPage === 1 && (!definition.auth || Boolean(user)),
   })) });
 
   function updateFilter(key: string, value: string) {
     const nextParams = new URLSearchParams(searchParams);
 
-    if (value) {
+    if (key === "page" && value === "1") {
+      nextParams.delete("page");
+    } else if (value) {
       nextParams.set(key, value);
     } else {
       nextParams.delete(key);
@@ -191,16 +193,16 @@ export function EventsPage() {
         </nav>
         {isLoading ? <div className="empty-state"><LoaderCircle className="spin" size={34}/><p>{c.loadingEvents}</p></div> : null}
         {isError ? <div className="empty-state"><CalendarX size={40}/><h2>{c.loadFailed}</h2><p>{c.retryCopy}</p><button className="secondary-action" onClick={() => void refetch()}><RefreshCw size={17}/>{c.retry}</button></div> : null}
-        {!mapOpen && searchParams.size === 0 ? <div className="event-discovery-sections">
+        {!mapOpen && !hasFilters ? <div className="event-discovery-sections">
           {events.length ? <section className="event-discovery-section event-discovery-all"><header><h2>{c.allUpcoming}</h2></header><div className="event-grid">{events.map((event) => <EventCard event={event} key={event.id}/>)}</div></section> : null}
-          {discoveryDefinitions.map((definition, index) => {
+          {selectedPage === 1 ? discoveryDefinitions.map((definition, index) => {
             if (definition.auth && !user) return null;
             const items = discoveryQueries[index]?.data?.items ?? [];
             if (!items.length && definition.key !== "mine") return null;
             const allParams = new URLSearchParams(definition.params);
             return <section className={`event-discovery-section event-discovery-${definition.key}`} key={definition.key}><header><h2>{definition.title}</h2>{items.length ? <Link to={`/events?${allParams.toString()}`}>{c.seeAll}</Link> : null}</header>{items.length ? <div className="event-grid">{items.map((event) => <EventCard event={event} key={event.id}/>)}</div> : <p className="empty-state">{c.myEmpty}</p>}</section>;
-          })}
-        </div> : mapOpen ? <LocationMap items={events.map((event) => ({ id: event.id, title: event.title, latitude: event.latitude, longitude: event.longitude, location: [event.city, event.country].filter(Boolean).join(", ") || "Online" }))}/> : <div className="event-grid">
+          }) : null}
+        </div> : mapOpen ? <LocationMap items={events.map((event) => ({ id: event.id, title: event.title, latitude: event.latitude, longitude: event.longitude, location: [event.city, event.country].filter(Boolean).join(", ") || "Online" }))}/> : <div className="event-grid events-results-grid">
           {events.map((event) => (
             <EventCard event={event} key={event.id} />
           ))}

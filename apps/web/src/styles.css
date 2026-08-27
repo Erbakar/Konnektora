@@ -5320,7 +5320,8 @@ div.form-error::before {
   scroll-snap-align: start;
 }
 
-.events-page .event-discovery-all .event-grid {
+.events-page .event-discovery-all .event-grid,
+.events-page .events-results-grid {
   grid-auto-columns: auto;
   grid-auto-flow: row;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -10977,13 +10978,15 @@ div.form-error::before {
 }
 
 @media (max-width: 760px) {
-  .events-page .event-discovery-all .event-grid {
+  .events-page .event-discovery-all .event-grid,
+  .events-page .events-results-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 640px) {
-  .events-page .event-discovery-all .event-grid {
+  .events-page .event-discovery-all .event-grid,
+  .events-page .events-results-grid {
     grid-template-columns: 1fr;
   }
 
