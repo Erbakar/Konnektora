@@ -6027,6 +6027,33 @@ div.form-error::before {
   scroll-snap-type: x proximity;
 }
 .recommendation-carousel > * { scroll-snap-align: start; }
+
+.event-recommendations .recommendation-carousel {
+  grid-auto-columns: auto;
+  grid-auto-flow: row;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: visible;
+  padding-bottom: 0;
+  scroll-snap-type: none;
+}
+
+.event-recommendations .recommendation-carousel > * {
+  min-width: 0;
+  scroll-snap-align: none;
+}
+
+@media (max-width: 900px) {
+  .event-recommendations .recommendation-carousel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .event-recommendations .recommendation-carousel {
+    grid-template-columns: 1fr;
+  }
+}
+
 .corp-cta-memberships { display: flex; flex-wrap: wrap; gap: 10px; }
 
 .comment-filter-tabs {
