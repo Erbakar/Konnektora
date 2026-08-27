@@ -14,6 +14,8 @@ export function ShareDialog({
   url: string;
 }) {
   const [qrImage, setQrImage] = useState("");
+  const [qrOpen, setQrOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!open) return;
     void QRCode.toDataURL(url, { width: 240, margin: 1 }).then(setQrImage);
@@ -36,17 +38,15 @@ export function ShareDialog({
           Paylaş
         </h2>
         <p>Bağlantıyı istediğin kanaldan topluluğunla paylaş.</p>
-        {qrImage ? <div className="share-dialog-qr"><QrCode size={18}/><img alt={`${title} QR kodu`} height="180" src={qrImage} width="180"/><small>Afiş ve basılı materyaller için doğrudan içerik bağlantısı</small></div> : null}
         <div className="share-dialog-actions">
           <button
             className="secondary-action"
-            onClick={() =>
-              void navigator.clipboard.writeText(url).then(onClose)
-            }
+            onClick={() => void navigator.clipboard.writeText(url).then(() => setCopied(true))}
           >
             <Copy size={17} />
-            Bağlantıyı kopyala
+            {copied ? "URL kopyalandı!" : "Bağlantıyı kopyala"}
           </button>
+          <button className="secondary-action" disabled={!qrImage} onClick={() => setQrOpen(true)}><QrCode size={17}/>QR kodu</button>
           <a
             className="secondary-action"
             href={`mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(message)}`}
@@ -72,6 +72,7 @@ export function ShareDialog({
             </button>
           ) : null}
         </div>
+        {qrOpen && qrImage ? <div className="share-qr-backdrop" onClick={() => setQrOpen(false)} role="presentation"><section aria-label="QR kodu" aria-modal="true" onClick={(event) => event.stopPropagation()} role="dialog"><img alt={`${title} QR kodu`} height="300" src={qrImage} width="300"/><strong>Ekrana dokunarak paylaşıma dön</strong></section></div> : null}
       </div>
     </div>
   );
@@ -84,6 +85,7 @@ export function NotificationDialog({
   pending,
   onConfirm,
   title,
+  calendar,
 }: {
   open: boolean;
   onClose: () => void;
@@ -91,7 +93,9 @@ export function NotificationDialog({
   pending: boolean;
   onConfirm: () => void;
   title: string;
+  calendar?: { title: string; startsAt: string; endsAt?: string | null; location?: string; description?: string };
 }) {
+  const [addToCalendar, setAddToCalendar] = useState(false);
   if (!open) return null;
   return (
     <div
@@ -112,6 +116,7 @@ export function NotificationDialog({
           <strong>{title}</strong> için yeni içerik ve önemli güncellemeler
           hakkında bildirim {enabled ? "almayı durduracaksın" : "alacaksın"}.
         </p>
+        {!enabled && calendar ? <label className="calendar-notification-option"><input checked={addToCalendar} onChange={(event) => setAddToCalendar(event.target.checked)} type="checkbox"/> Bu etkinliği varsayılan takvimime de eklemek istiyorum.</label> : null}
         <div className="row-actions">
           <button className="ghost-action" onClick={onClose}>
             Vazgeç
@@ -119,7 +124,7 @@ export function NotificationDialog({
           <button
             className="primary-action"
             disabled={pending}
-            onClick={onConfirm}
+            onClick={() => { if (!enabled && addToCalendar && calendar) downloadCalendarEvent(calendar); onConfirm(); }}
           >
             {pending
               ? "Kaydediliyor…"
@@ -131,4 +136,17 @@ export function NotificationDialog({
       </div>
     </div>
   );
+}
+
+function downloadCalendarEvent(event: { title: string; startsAt: string; endsAt?: string | null; location?: string; description?: string }) {
+  const format = (value: string) => new Date(value).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const escape = (value = "") => value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+  const start = format(event.startsAt);
+  const end = format(event.endsAt ?? new Date(new Date(event.startsAt).getTime() + 60 * 60 * 1000).toISOString());
+  const content = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Konnektora//TR", "BEGIN:VEVENT", `UID:${crypto.randomUUID()}@konnektora.com`, `DTSTAMP:${format(new Date().toISOString())}`, `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:${escape(event.title)}`, `DESCRIPTION:${escape(event.description)}`, `LOCATION:${escape(event.location)}`, "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([content], { type: "text/calendar;charset=utf-8" }));
+  link.download = `${event.title.toLocaleLowerCase("tr-TR").replace(/[^a-z0-9çğıöşü]+/gi, "-").replace(/^-|-$/g, "") || "etkinlik"}.ics`;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }

@@ -13,12 +13,14 @@ import {
   UserPlus,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { HomeEventTile } from "../components/HomeEventTile";
 import { DiscoveryCard } from "../components/DiscoveryCard";
 import { RichText } from "../components/RichText";
 import {
   getDiscoveryFeed,
+  clearUserSession,
+  getUserSession,
   listAnnouncements,
   listEvents,
   listPlaces,
@@ -39,13 +41,16 @@ const popularCities = [
 
 export function HomePage() {
   const { language } = useLanguage();
+  const user = getUserSession();
+  const [signupChoice, setSignupChoice] = useState<"individual" | "corporate" | null>(null);
+  const [announcementRevision, setAnnouncementRevision] = useState(0);
   const [trendScope, setTrendScope] = useState<"local" | "global">("local");
   const c =
     language === "tr"
       ? {
           eyebrow: "Seçkin topluluk platformu",
-          title: "Niyetin güvenilir bağlantılara dönüştüğü yer.",
-          lead: "Startup demolarından yatırımcı buluşmalarına Konnektora; kurucuların, profesyonellerin ve topluluk yöneticilerinin etkinlik keşfetmesini, davetli listelerini yönetmesini ve kapalı bir platformda anlamlı ağlar kurmasını sağlar.",
+          title: "İlgi alanlarından gerçek hayattaki bağlantılara.",
+          lead: "Konnektora, insanların ilgi alanları, etkinlikler, mekanlar ve ortak tutkular üzerinden birbirlerini keşfetmesini ve gerçek hayatta bağlantı kurmasını sağlayan sosyal keşif platformudur. İnsanlar nelerle ilgileniyor, ne yapmak istiyor ve bunu kimlerle birlikte yapabilir sorusuna odaklanır.",
           explore: "Etkinlikleri keşfet",
           join: "Topluluğa katıl",
           searchPlaceholder: "Her şeyi ara",
@@ -180,7 +185,11 @@ export function HomePage() {
   const { data: discovery } = useQuery({
     queryKey: ["discovery-feed", trendScope],
     queryFn: () => getDiscoveryFeed({ scope: trendScope }),
+    placeholderData: (previous) => previous,
   });
+  useEffect(() => {
+    if (trendScope === "local" && discovery && !discovery.trendingTags.length) setTrendScope("global");
+  }, [discovery, trendScope]);
   const { data: popularEventList } = useQuery({
     queryKey: ["events", "home", "popular", discovery?.location],
     queryFn: () => listEvents(new URLSearchParams({ scope: "popular", pageSize: "8", ...(discovery?.location ? { city: discovery.location } : {}) })),
@@ -194,6 +203,10 @@ export function HomePage() {
     .slice(0, 8);
   const featuredEvents = events.slice(0, 8);
   const popularEvents = popularEventList?.items ?? [];
+  const activeAnnouncement = announcements.find((announcement) => {
+    void announcementRevision;
+    return !localStorage.getItem(`konnektora_announcement_done_${announcement.id}`) && !sessionStorage.getItem(`konnektora_announcement_later_${announcement.id}`);
+  });
 
   return (
     <div className="corp-home">
@@ -209,9 +222,7 @@ export function HomePage() {
             <Link className="corp-btn corp-btn-primary" to="/events">
               {c.explore}
             </Link>
-            <a className="corp-btn corp-btn-secondary" href={publicSiteHref("/onboarding")}>
-              {c.join}
-            </a>
+            {user ? <Link className="corp-btn corp-btn-secondary" to="/tags">İlgi Alanlarını Gör</Link> : <a className="corp-btn corp-btn-secondary" href={publicSiteHref("/onboarding")}>{c.join}</a>}
           </div>
           <form className="hero-search" action="/search">
             <Search size={20} />
@@ -227,23 +238,30 @@ export function HomePage() {
         </div>
       </section>
 
-      {announcements.length ? (
+      {user ? (
         <section className="corp-announcements" aria-label="Announcements">
-          {announcements.slice(0, 3).map((announcement) => (
-            <article className="corp-announcement" key={announcement.id}>
+          {(user.accountType === "corporate" ? [
+            <><Link to={`/users/id/${user.id}`}>Profiline etiketler ekle</Link>yerek devam et; çalıştığın sanatçı ve markaların <Link to="/tags">etiket sayfalarına</Link> içerik yazmayı unutma.</>,
+            <>Mekânlarını oluştur, ayarlarını kişiselleştir ve <Link to="/contacts">bağlantılarını buraya taşı</Link>.</>,
+            <><Link to="/finance/kyc">Kimliğini güvenle doğrula</Link>, verified ikonunu kazan ve sunduğumuz hizmetler için <Link to="/for-business">For business</Link> sayfasını incele.</>,
+          ] : [
+            <>Üyesin; şimdi içerideki <Link to="/contacts">arkadaşlarını bul ve diğerlerini davet et</Link>.</>,
+            <>Kendin ile arkadaşlarının profillerine <Link to={`/users/id/${user.id}`}>etiketler ekle</Link>yerek tarzınızı ifade edin; sevdiğiniz mekânları takip edin.</>,
+            <><Link to="/settings">Ayarlarını kişiselleştirerek</Link> tercihlerine göre sosyalleşmeye başla.</>,
+          ]).map((message, index) => (
+            <article className="corp-announcement" key={index}>
               <span>
                 <Megaphone size={18} />
               </span>
               <div>
-                <strong>{announcement.title}</strong>
-                <p>
-                  <RichText text={announcement.body} />
-                </p>
+                <p>{message}</p>
               </div>
             </article>
           ))}
         </section>
       ) : null}
+
+      {activeAnnouncement ? <div className="emotion-modal announcement-modal" role="dialog" aria-modal="true" aria-label="Duyuru"><div><span className="announcement-icon"><Megaphone size={24}/></span><h2>{activeAnnouncement.title}</h2><p><RichText text={activeAnnouncement.body}/></p><div className="row-actions"><button className="primary-action" onClick={() => { localStorage.setItem(`konnektora_announcement_done_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">Tamam</button><button className="secondary-action" onClick={() => { sessionStorage.setItem(`konnektora_announcement_later_${activeAnnouncement.id}`, "1"); setAnnouncementRevision((value) => value + 1); }} type="button">Sonra hatırlat</button></div></div></div> : null}
 
       {discovery ? (
         <section className="corp-section discovery-feed-section">
@@ -390,12 +408,12 @@ export function HomePage() {
           </h2>
           <p>
             {language === "tr"
-              ? "Yakınındaki etkinliklerden güvenli davetli listelerine kadar topluluğun bütün yolculuğunu tek yerde gör."
+              ? "Sen diğer profil sayfaları arasında gezinirken diğer kullanıcılarla uyumunu yapay zekâ desteğiyle görüp, AI'dan beraber katılabileceğin etkinlikler hakkında dahi akıl alabilirsin. Üstelik mesajlaşma ücretsiz."
               : "See the full community journey, from nearby events to trusted guest lists, in one place."}
           </p>
-          <a className="corp-btn corp-btn-primary" href={publicSiteHref("/onboarding")}>
+          {!user ? <a className="corp-btn corp-btn-primary" href={publicSiteHref("/onboarding")}>
             {c.joinCommunity}
-          </a>
+          </a> : null}
         </div>
         <div className="home-story-media">
           <video
@@ -500,25 +518,26 @@ export function HomePage() {
             <UserPlus size={28} />
             <strong>{language === "tr" ? "Doğru insanları bul" : "Find the right people"}</strong>
             <p>{language === "tr" ? "İlgi alanlarını profiline ekleyerek kendini ifade et; ortak ilgi alanlarını ve AI destekli uyumunu gör, davetler ve onay akışlarıyla bağlantı kur." : c.findPeopleCopy}</p>
+            <Link className="corp-link" to="/tags">{language === "tr" ? "Etiketler" : "Tags"}</Link>
           </article>
           <article>
             <Sparkles size={28} />
             <strong>{c.host}</strong>
             <p>{language === "tr" ? "Etkinlik oluştur, davetli listelerini yönet, check-in sırasında listeleri gör ve topluluğunu güvenle büyüt." : c.hostCopy}</p>
-            <a className="corp-link" href={publicSiteHref("/admin")}>
+            <Link className="corp-link" to="/business">
               {c.organizer}
-            </a>
+            </Link>
           </article>
         </div>
       </section>
 
       <section className="corp-proof">
         <div className="corp-proof-copy">
-          <p className="corp-eyebrow">{c.communityFirst}</p>
-          <h2>{c.connections}</h2>
-          <p>{c.connectionsCopy}</p>
-          <Link className="corp-btn corp-btn-primary" to="/events">
-            {c.joinCommunity}
+          <p className="corp-eyebrow">{language === "tr" ? "Önce topluluk" : c.communityFirst}</p>
+          <h2>{language === "tr" ? "Markalarınızı Konnektora'ya taşıyın." : c.connections}</h2>
+          <p>{language === "tr" ? "Kurumsal üyelik, mekân ve etkinlik oluşturmak ve bağlantılarınızı buraya taşımak için sunduğumuz araçlar ücretsiz. Kişiselleştirebileceğiniz özel davetli listelerini check-in sırasında görmek ya da işinizi büyütmek için ihtiyaç duyduğunuz gelişmiş istatistikler ile AI içgörüleri için daha fazlasını keşfedin." : c.connectionsCopy}</p>
+          <Link className="corp-btn corp-btn-primary" to="/business">
+            {language === "tr" ? "Daha fazla" : "Learn more"}
           </Link>
         </div>
         <div className="corp-proof-stats">
@@ -534,7 +553,7 @@ export function HomePage() {
             <strong>
               <Globe2 size={28} />
             </strong>
-            <span>{c.global}</span>
+            <span>{language === "tr" ? "çoklu dil ile varsayılan olarak global" : c.global}</span>
           </div>
         </div>
       </section>
@@ -544,11 +563,13 @@ export function HomePage() {
           <h2>{c.finalTitle}</h2>
           <p>{c.finalCopy}</p>
         </div>
-        <Link className="corp-btn corp-btn-light" to="/events">
-          {c.openFeed}
-          <ArrowRight size={18} />
-        </Link>
+        <div className="corp-cta-memberships"><button className="corp-btn corp-btn-light" onClick={() => user ? setSignupChoice("individual") : navigateToSignup("individual")} type="button">Bireysel üyelik<ArrowRight size={18}/></button><button className="corp-btn corp-btn-light" onClick={() => user ? setSignupChoice("corporate") : navigateToSignup("corporate")} type="button">Kurumsal üyelik<ArrowRight size={18}/></button></div>
       </section>
+      {signupChoice ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setSignupChoice(null)}><section aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><h2>Zaten üyesiniz</h2><p>Farklı bir üyelik için çıkış yapmak ister misiniz?</p><div className="row-actions"><button className="ghost-action" onClick={() => setSignupChoice(null)} type="button">Vazgeç</button><button className="primary-action" onClick={() => { const choice = signupChoice; clearUserSession(); navigateToSignup(choice); }} type="button">Çıkış yap</button></div></section></div> : null}
     </div>
   );
+}
+
+function navigateToSignup(account: "individual" | "corporate") {
+  window.location.assign(publicSiteHref(`/onboarding?account=${account}`));
 }

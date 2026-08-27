@@ -3,11 +3,7 @@ import { Calendar, MapPin, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DistanceLabel } from "./DistanceLabel";
 import { resolveMediaUrl } from "../lib/api";
-
-const formatter = new Intl.DateTimeFormat("tr-TR", {
-  dateStyle: "medium",
-  timeStyle: "short"
-});
+import { formatEventDateRange } from "../lib/formats";
 
 export function EventCard({ event }: { event: Event }) {
   const place = [event.city, event.country].filter(Boolean).join(", ");
@@ -25,7 +21,7 @@ export function EventCard({ event }: { event: Event }) {
       <div className="event-details">
         <span>
           <Calendar size={16} />
-          {formatter.format(new Date(event.startsAt))}
+          {formatEventDateRange(event.startsAt, event.endsAt)}
         </span>
         <span>
           <MapPin size={16} />

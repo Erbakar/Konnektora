@@ -1,12 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Nfc, QrCode, RefreshCw } from "lucide-react";
+import { Nfc, QrCode, RefreshCw } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  completeOnboarding,
   getMemberPass,
-  getOnboardingStatus,
   getUserSession,
   listMemberScans,
   rotateMemberPass,
@@ -17,11 +15,6 @@ export function IdentityPage() {
   const user = getUserSession();
   const queryClient = useQueryClient();
   const [qrImage, setQrImage] = useState("");
-  const onboarding = useQuery({
-    queryKey: ["onboarding", user?.id],
-    queryFn: getOnboardingStatus,
-    enabled: Boolean(user),
-  });
   const memberPass = useQuery({
     queryKey: ["member-pass", user?.id],
     queryFn: getMemberPass,
@@ -39,11 +32,6 @@ export function IdentityPage() {
         margin: 1,
       }).then(setQrImage);
   }, [memberPass.data]);
-  const completeMutation = useMutation({
-    mutationFn: completeOnboarding,
-    onSuccess: (data) =>
-      queryClient.setQueryData(["onboarding", user?.id], data),
-  });
   const rotateMutation = useMutation({
     mutationFn: rotateMemberPass,
     onSuccess: (data) =>
@@ -66,64 +54,13 @@ export function IdentityPage() {
       <header className="identity-hero">
         <div>
           <span className="eyebrow">Konnektora Kimlik</span>
-          <h1>Onboarding ve üye kartın</h1>
+          <h1>Üye kartın</h1>
           <p>
-            Profilini tamamla, QR veya NFC ile tanıştığın kişileri hızlıca takip
-            et.
+            QR veya NFC ile tanıştığın kişinin profilini iki cihazda da aç.
           </p>
-        </div>
-        <div className="identity-progress">
-          <strong>%{onboarding.data?.progress ?? 0}</strong>
-          <span>profil tamamlandı</span>
         </div>
       </header>
       <div className="identity-grid">
-        <section className="identity-panel">
-          <div className="section-header compact">
-            <h2>Başlangıç adımları</h2>
-            <span>
-              {onboarding.data?.steps.filter((step) => step.completed).length ??
-                0}
-              /5
-            </span>
-          </div>
-          <div className="onboarding-steps">
-            {onboarding.data?.steps.map((step, index) => (
-              <Link
-                className={
-                  step.completed
-                    ? "onboarding-step is-complete"
-                    : "onboarding-step"
-                }
-                key={step.key}
-                to={step.path}
-              >
-                <span>{step.completed ? <Check size={18} /> : index + 1}</span>
-                <strong>{step.title}</strong>
-                <small>{step.completed ? "Tamamlandı" : "Devam et"}</small>
-              </Link>
-            ))}
-          </div>
-          {!onboarding.data?.completed ? (
-            <button
-              className="primary-action"
-              disabled={
-                completeMutation.isPending ||
-                onboarding.data?.steps
-                  .slice(0, 4)
-                  .some((step) => !step.completed)
-              }
-              onClick={() => completeMutation.mutate()}
-              type="button"
-            >
-              Onboarding'i tamamla
-            </button>
-          ) : (
-            <p className="success-note">
-              <Check size={18} /> Onboarding tamamlandı.
-            </p>
-          )}
-        </section>
         <section className="identity-panel member-pass-panel">
           <div className="section-header compact">
             <h2>Üye QR kartın</h2>

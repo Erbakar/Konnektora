@@ -9,6 +9,7 @@ import {
   EventParticipantRole,
   EventParticipantStatus,
   EventStatus,
+  EventVisibility,
   OwnedTicketStatus,
   PaymentStatus,
   Prisma,
@@ -95,12 +96,16 @@ export class EventsService {
     }
 
     if (query.scope === "mine") {
-      where.participants = {
-        some: {
-          userId: userId ?? "",
-          status: { in: ["accepted", "attended"] },
-        },
-      };
+      where.OR = [
+        { createdById: userId ?? "" },
+        { participants: { some: { userId: userId ?? "", status: { in: ["accepted", "attended"] } } } },
+        { ticketOrders: { some: { buyerId: userId ?? "", status: "paid" } } },
+      ];
+    } else if (query.scope === "invited") {
+      where.participants = { some: { userId: userId ?? "", status: "invited" } };
+    } else if (query.scope === "individual") {
+      where.createdBy = { accountType: "individual" };
+      where.participants = { none: { role: { in: ["organizer", "manager"] }, user: { accountType: "corporate" } } };
     } else if (query.scope === "following") {
       where.createdBy = { followers: { some: { followerId: userId ?? "" } } };
     } else if (query.scope === "for_you") {
@@ -282,6 +287,7 @@ export class EventsService {
   }
 
   async createEvent(input: CreateEventDto, userId?: string) {
+    await this.validateTicketPlatforms(input.ticketTypes, userId);
     const slug = await this.uniqueSlug(input.title);
 
     const event = await this.prisma.event.create({
@@ -317,8 +323,11 @@ export class EventsService {
                 name: ticket.name,
                 description: ticket.description,
                 capacity: ticket.capacity ?? 1,
+                perUserLimit: ticket.perUserLimit ?? null,
                 price: ticket.price,
                 currency: ticket.currency,
+                salesPlatform: ticket.salesPlatform ?? "door",
+                externalSalesUrl: ticket.salesPlatform === "external" ? ticket.externalSalesUrl ?? null : null,
                 saleStartsAt: ticket.saleStartsAt
                   ? new Date(ticket.saleStartsAt)
                   : null,
@@ -722,6 +731,7 @@ export class EventsService {
     input: Partial<CreateEventDto>,
     userId?: string,
   ) {
+    await this.validateTicketPlatforms(input.ticketTypes, userId);
     const previousTagIds = await this.getEventTagIds(id);
     const data: Prisma.EventUpdateInput = {
       title: input.title,
@@ -777,6 +787,8 @@ export class EventsService {
       include: { tags: { include: { tag: true } } },
     });
 
+    if (input.ticketTypes) await this.syncTicketTypes(id, input.ticketTypes);
+
     await this.refreshTagUsageCounts([
       ...previousTagIds,
       ...(input.tagIds ?? []),
@@ -785,13 +797,63 @@ export class EventsService {
     return this.mapEvent(event);
   }
 
+  private async syncTicketTypes(eventId: string, ticketTypes: NonNullable<CreateEventDto["ticketTypes"]>) {
+    const existing = await this.prisma.eventTicketType.findMany({ where: { eventId }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] });
+    for (const [index, ticket] of ticketTypes.entries()) {
+      const current = existing[index];
+      const capacity = ticket.capacity ?? 1;
+      if (current && capacity < current.soldCount) throw new BadRequestException(`${ticket.name} kontenjanı satılmış bilet sayısından düşük olamaz.`);
+      const data = {
+        name: ticket.name,
+        description: ticket.description ?? null,
+        capacity,
+        perUserLimit: ticket.perUserLimit ?? null,
+        price: ticket.price,
+        currency: ticket.currency,
+        salesPlatform: ticket.salesPlatform ?? "door",
+        externalSalesUrl: ticket.salesPlatform === "external" ? ticket.externalSalesUrl ?? null : null,
+        saleStartsAt: ticket.saleStartsAt ? new Date(ticket.saleStartsAt) : null,
+        saleEndsAt: ticket.saleEndsAt ? new Date(ticket.saleEndsAt) : null,
+        gateOpensAt: ticket.gateOpensAt ? new Date(ticket.gateOpensAt) : null,
+        gateClosesAt: ticket.gateClosesAt ? new Date(ticket.gateClosesAt) : null,
+        status: ticket.status === "inactive" ? "inactive" as const : "active" as const,
+        sortOrder: index,
+      };
+      if (current) await this.prisma.eventTicketType.update({ where: { id: current.id }, data });
+      else await this.prisma.eventTicketType.create({ data: { eventId, ...data } });
+    }
+    if (existing.length > ticketTypes.length) await this.prisma.eventTicketType.updateMany({ where: { id: { in: existing.slice(ticketTypes.length).map((item) => item.id) } }, data: { status: "inactive" } });
+  }
+
+  private async validateTicketPlatforms(ticketTypes?: CreateEventDto["ticketTypes"], userId?: string) {
+    if (!ticketTypes?.length) return;
+    for (const ticket of ticketTypes) {
+      if (ticket.salesPlatform !== "external") continue;
+      try { new URL(ticket.externalSalesUrl ?? ""); }
+      catch { throw new BadRequestException(`${ticket.name} için geçerli bir dış satış URL'si girin.`); }
+    }
+    if (!ticketTypes.some((ticket) => ticket.salesPlatform === "konnektora")) return;
+    const owner = userId ? await this.prisma.user.findUnique({ where: { id: userId }, select: { accountType: true, role: true } }) : null;
+    if (!owner || owner.accountType !== "corporate" && !["admin", "super_admin"].includes(owner.role)) throw new BadRequestException('Sadece kurumsal üyeler "Konnektora online satış" ayarını tercih edebilir.');
+  }
+
   async updateManagedEvent(
     id: string,
     input: Partial<CreateEventDto>,
     user: User,
   ) {
     await this.ensureCanManageParticipants(id, user);
-    return this.updateEvent(id, input, user.id);
+    const previous = input.visibility
+      ? await this.prisma.event.findUnique({ where: { id }, select: { visibility: true } })
+      : null;
+    const event = await this.updateEvent(id, input, user.id);
+    if (previous?.visibility === EventVisibility.approval_required && input.visibility === EventVisibility.open) {
+      await this.prisma.eventParticipant.updateMany({
+        where: { eventId: id, status: EventParticipantStatus.requested },
+        data: { status: EventParticipantStatus.accepted },
+      });
+    }
+    return event;
   }
 
   async archiveEvent(id: string, userId?: string) {

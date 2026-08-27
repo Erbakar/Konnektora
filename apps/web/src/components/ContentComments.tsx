@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, CalendarCheck, Edit3, Heart, ImagePlus, LoaderCircle, Mail, MessageCircle, Reply, Send, Share2, Trash2, UserPlus } from "lucide-react";
+import { Ban, CalendarCheck, Edit3, Heart, LoaderCircle, Mail, MessageCircle, MoreVertical, Reply, Send, Share2, Trash2, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -22,6 +22,7 @@ import { RichText } from "./RichText";
 import { EmbeddedMedia } from "./EmbeddedMedia";
 import { userProfilePath } from "./UserIdentityLink";
 import { ReportDialog } from "./ReportDialog";
+import { ComposerTips } from "./ComposerTips";
 
 export function ContentComments({
   targetType,
@@ -52,8 +53,9 @@ export function ContentComments({
   }, [comments.data]);
   const create = useMutation({
     mutationFn: async () => {
-      const comment = await createContentComment(targetType, targetId, body.trim());
-      if (targetType !== "tag_comment") await Promise.all(media.map((file) => uploadContentMedia(targetType, targetId, file)));
+      const comment = await createContentComment(targetType, targetId, body.trim() || "Medya paylaşımı");
+      const mediaType = targetType === "event" ? "event_comment" : targetType === "place" ? "place_comment" : "tag_comment";
+      await Promise.all(media.map((file) => uploadContentMedia(mediaType, comment.id, file)));
       return comment;
     },
     onSuccess: () => {
@@ -70,8 +72,8 @@ export function ContentComments({
       || (filter === "organizer" && comment.authorId === organizerId)
       || (filter === "following" && Boolean(comment.authorId && followingIds.has(comment.authorId)))
       || filter === "popular"
-      || (filter === "photos" && /https?:\/\/\S+\.(?:png|jpe?g|webp|gif)/i.test(comment.body))
-      || (filter === "videos" && /https?:\/\/\S+\.(?:mp4|webm|mov)|youtu(?:\.be|be\.com)|vimeo/i.test(comment.body)))
+      || (filter === "photos" && (comment.media?.some((item) => item.type === "image") || /https?:\/\/\S+\.(?:png|jpe?g|webp|gif)/i.test(comment.body)))
+      || (filter === "videos" && (comment.media?.some((item) => item.type === "video") || /https?:\/\/\S+\.(?:mp4|webm|mov)|youtu(?:\.be|be\.com)|vimeo/i.test(comment.body))))
     .sort((a, b) => filter === "popular" ? b.likeCount - a.likeCount : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   return (
     <section className="admin-form content-comments">
@@ -107,11 +109,12 @@ export function ContentComments({
                 <RichText text={comment.body} />
               </span>
               <EmbeddedMedia text={comment.body}/>
+              {comment.media?.length ? <div className="comment-media-grid">{comment.media.map((item) => item.type === "video" ? <video controls key={item.id} src={resolveMediaUrl(item.url)}/> : <img alt="" key={item.id} src={resolveMediaUrl(item.url)}/>)}</div> : null}
               <small>
                 {new Date(comment.createdAt).toLocaleString("tr-TR")}
               </small>
               <CommentActions canManage={canManage} comment={comment} currentUserId={user?.id} following={Boolean(comment.authorId && followingIds.has(comment.authorId))} targetType={targetType} onChanged={() => void client.invalidateQueries({ queryKey: ["content-comments", targetType, targetId] })}/>
-              {comment.replies?.length ? <div className="comment-replies">{comment.replies.map((reply) => <article key={reply.id}><strong>{reply.author?.name ?? "Silinmiş kullanıcı"}</strong><RichText text={reply.body}/><EmbeddedMedia text={reply.body}/><CommentActions canManage={canManage} comment={reply} currentUserId={user?.id} following={Boolean(reply.authorId && followingIds.has(reply.authorId))} targetType={targetType} onChanged={() => void client.invalidateQueries({ queryKey: ["content-comments", targetType, targetId] })}/></article>)}</div> : null}
+              {comment.replies?.length ? <div className="comment-replies">{comment.replies.map((reply) => <article key={reply.id}><strong>{reply.author?.username ? `@${reply.author.username}` : reply.author?.name ?? "Silinmiş kullanıcı"}</strong><RichText text={reply.body}/><EmbeddedMedia text={reply.body}/>{reply.media?.length ? <div className="comment-media-grid">{reply.media.map((item) => item.type === "video" ? <video controls key={item.id} src={resolveMediaUrl(item.url)}/> : <img alt="" key={item.id} src={resolveMediaUrl(item.url)}/>)}</div> : null}<CommentActions canManage={canManage} comment={reply} currentUserId={user?.id} following={Boolean(reply.authorId && followingIds.has(reply.authorId))} targetType={targetType} onChanged={() => void client.invalidateQueries({ queryKey: ["content-comments", targetType, targetId] })}/></article>)}</div> : null}
             </div>
           </article>
         ))}
@@ -120,7 +123,7 @@ export function ContentComments({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            if (body.trim()) create.mutate();
+            if (body.trim() || media.length) create.mutate();
           }}
         >
           <textarea
@@ -129,11 +132,12 @@ export function ContentComments({
             value={body}
             onChange={(event) => setBody(event.target.value)}
           />
-          <button className="primary-action" disabled={!body.trim() || create.isPending}>
+          <button className="primary-action" disabled={(!body.trim() && !media.length) || create.isPending}>
             <Send size={17} />
             {targetType === "tag_comment" ? "Yayınla" : "Gönder"}
           </button>
-          {targetType !== "tag_comment" ? <label className="comment-media-picker"><ImagePlus size={17}/><span>Fotoğraf/video ekle</span><input accept="image/*,video/*" hidden multiple onChange={(event) => setMedia([...(event.target.files ?? [])].slice(0, 9))} type="file"/></label> : null}
+          <label className="comment-media-picker"><span>Resim/video ekle</span><input accept="image/*,video/mp4,video/webm" hidden multiple onChange={(event) => setMedia([...(event.target.files ?? [])].slice(0, 9))} type="file"/></label>
+          <ComposerTips/>
           {media.length ? <span className="comment-media-count">{media.filter((file) => file.type.startsWith("image/")).length} resim, {media.filter((file) => file.type.startsWith("video/")).length} video seçildi {create.isPending ? <LoaderCircle className="spin" size={15}/> : null}</span> : null}
         </form>
       ) : <p className="form-help"><Link to="/login">Giriş yaparak</Link> yorum yazabilirsin.</p>}
@@ -159,15 +163,18 @@ function CommentActions({ comment, currentUserId, following, targetType, canMana
   }, onSuccess: () => { setBanned((value) => !value); onChanged(); } });
   if (!currentUserId) return null;
   const reportTargetType = comment.parentId ? "comment_reply" : targetType === "event" ? "event_comment" : targetType === "place" ? "place_comment" : "tag_comment";
+  const canDelete = comment.authorId === currentUserId || canManage;
   return <><div className="comment-actions">
     <button disabled={like.isPending} onClick={() => like.mutate()} type="button"><Heart size={14}/>{comment.likeCount || "Beğen"}</button>
     <button onClick={() => { const body = window.prompt("Yanıtını yaz"); if (body?.trim()) reply.mutate(body.trim()); }} type="button"><Reply size={14}/>{comment.replies?.length ?? 0} yorum</button>
-    {comment.authorId && comment.authorId !== currentUserId ? <button disabled={follow.isPending} onClick={() => follow.mutate()} type="button"><UserPlus size={14}/>{following ? "Takibi bırak" : "Takip et"}</button> : null}
-    {comment.authorId && comment.authorId !== currentUserId ? <Link aria-label="Mesaj gönder" title="Mesaj gönder" to={`/messages?peer=${comment.authorId}`}><Mail size={14}/></Link> : null}
-    <button onClick={() => void sharePost(comment.id)} type="button"><Share2 size={14}/>Paylaş</button>
-    {canManage && targetType === "event" && comment.authorId && comment.authorId !== currentUserId ? <><button disabled={ban.isPending} onClick={() => ban.mutate()} type="button"><Ban size={14}/>{banned ? "Etkinliğe affet" : "Etkinliğe yasakla"}</button><button disabled={guest.isPending} onClick={() => guest.mutate()} type="button"><CalendarCheck size={14}/>Guest List'e ekle</button></> : null}
-    {comment.authorId === currentUserId ? <button onClick={() => { const body = window.prompt("Yorumu düzenle", comment.body); if (body?.trim() && body.trim() !== comment.body) edit.mutate(body.trim()); }} type="button"><Edit3 size={14}/>Düzenle</button> : <button onClick={() => setReportOpen(true)} type="button">Rapor et</button>}
-    {comment.authorId === currentUserId ? <button disabled={remove.isPending} onClick={() => window.confirm("Yorum silinsin mi?") && remove.mutate()} type="button"><Trash2 size={14}/>Sil</button> : null}
+    {!comment.parentId ? <button onClick={() => void sharePost(comment.id)} type="button"><Share2 size={14}/>Paylaş</button> : null}
+    <details className="action-menu comment-action-menu"><summary aria-label="Yorum aksiyonları"><MoreVertical size={16}/></summary><div>
+      {comment.authorId && comment.authorId !== currentUserId ? <Link to={`/messages?peer=${comment.authorId}`}><Mail size={14}/>Mesaj gönder</Link> : null}
+      {comment.authorId && comment.authorId !== currentUserId ? <button disabled={follow.isPending} onClick={() => follow.mutate()} type="button"><UserPlus size={14}/>{following ? "Takibi bırak" : "Takip et"}</button> : null}
+      {canManage && targetType === "event" && comment.authorId && comment.authorId !== currentUserId ? <><button disabled={ban.isPending} onClick={() => ban.mutate()} type="button"><Ban size={14}/>{banned ? "Etkinliğe affet" : "Etkinliğe yasakla"}</button><button disabled={guest.isPending} onClick={() => guest.mutate()} type="button"><CalendarCheck size={14}/>Guest List'e ekle</button></> : null}
+      {comment.authorId === currentUserId ? <button onClick={() => { const body = window.prompt("Yorumu düzenle", comment.body); if (body?.trim() && body.trim() !== comment.body) edit.mutate(body.trim()); }} type="button"><Edit3 size={14}/>Düzenle</button> : <button onClick={() => setReportOpen(true)} type="button">Rapor et</button>}
+      {canDelete ? <button disabled={remove.isPending} onClick={() => window.confirm("Yorum silinsin mi?") && remove.mutate()} type="button"><Trash2 size={14}/>Sil</button> : null}
+    </div></details>
   </div><ReportDialog onClose={() => setReportOpen(false)} open={reportOpen} targetId={comment.id} targetType={reportTargetType}/></>;
 }
 

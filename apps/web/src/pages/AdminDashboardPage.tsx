@@ -1658,7 +1658,9 @@ function CmsAdminPanel({
                 Hedef
                 <select name="target" defaultValue="all">
                   <option value="all">Herkes</option>
-                  <option value="members">Üyeler</option>
+                  <option value="individual_members">Bireysel üyeler</option>
+                  <option value="corporate_members">Kurumsal üyeler</option>
+                  <option value="members">Üye herkes</option>
                   <option value="admins">Adminler</option>
                 </select>
               </label>

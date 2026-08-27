@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { DistanceLabel } from "./DistanceLabel";
 import { useLanguage } from "../lib/i18n";
 import { resolveMediaUrl } from "../lib/api";
+import { formatEventDateRange } from "../lib/formats";
 
 const turkishEventTitles: Record<string, string> = {
   "global-startup-demo-night": "Global Startup Demo Gecesi",
@@ -26,11 +27,8 @@ const turkishEventTitles: Record<string, string> = {
 
 export function HomeEventTile({ event }: { event: Event }) {
   const { language } = useLanguage();
-  const formatter = new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-US", {
-    weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
-  });
   const visibilityLabel: Record<Event["visibility"], string> = language === "tr"
-    ? { open: "Açık", approval_required: "Onay gerekli", invite_only: "Sadece davetli" }
+    ? { open: "Herkese açık", approval_required: "Onay gerekli", invite_only: "Sadece davetli" }
     : { open: "Open", approval_required: "Approval", invite_only: "Invite only" };
   const place = [event.city, event.country].filter(Boolean).join(", ");
   const location = event.format === "online"
@@ -50,7 +48,7 @@ export function HomeEventTile({ event }: { event: Event }) {
         <h3>{title}</h3>
         <p className="home-event-tile-meta">
           <CalendarDays size={15} />
-          {formatter.format(new Date(event.startsAt))}
+          {formatEventDateRange(event.startsAt, event.endsAt, { locale: language === "tr" ? "tr-TR" : "en-US" })}
         </p>
         <p className="home-event-tile-location"><MapPin size={15} />{location}</p>
         <p className="home-event-tile-location"><Users size={15} />{event.attendeeCount ?? 0} {language === "tr" ? "katılımcı" : "attendees"}</p>

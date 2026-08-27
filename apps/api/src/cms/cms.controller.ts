@@ -1,5 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { User } from "@prisma/client";
 import { AdminGuard } from "../auth/admin.guard";
+import { CurrentUser } from "../auth/current-user.decorator";
+import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 import { RequirePermissions } from "../auth/permissions";
 import { CmsService } from "./cms.service";
 import {
@@ -22,8 +25,9 @@ export class CmsController {
   }
 
   @Get("announcements")
-  listPublicAnnouncements() {
-    return this.cmsService.listPublicAnnouncements();
+  @UseGuards(OptionalJwtAuthGuard)
+  listPublicAnnouncements(@CurrentUser() user?: User) {
+    return this.cmsService.listPublicAnnouncements(user);
   }
 
   @Get("policies/:type")

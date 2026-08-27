@@ -11,6 +11,7 @@ const memberSelect = {
   followerCount: true,
   gender: true,
   birthDate: true,
+  createdAt: true,
   privacySettings: { select: { demographicsAudience: true } },
   interestTags: { select: { tagId: true } }
 } as const;
@@ -54,6 +55,25 @@ export class SocialService {
     return follows.map((follow) => this.toMemberCard(follow.following, ownTags, true));
   }
 
+  async newMembers(userId: string) {
+    const [ownTags, follows, ownBlocks, blockedBy] = await Promise.all([
+      this.prisma.userInterestTag.findMany({ where: { userId }, select: { tagId: true } }),
+      this.prisma.userFollow.findMany({ where: { followerId: userId }, select: { followingId: true } }),
+      this.prisma.userBlock.findMany({ where: { userId, targetType: "user" }, select: { targetId: true } }),
+      this.prisma.userBlock.findMany({ where: { targetType: "user", targetId: userId }, select: { userId: true } }),
+    ]);
+    const followingIds = new Set(follows.map((item) => item.followingId));
+    const excludedIds = [...ownBlocks.map((item) => item.targetId), ...blockedBy.map((item) => item.userId)];
+    const members = await this.prisma.user.findMany({
+      where: { status: "active", role: "user", ...(excludedIds.length ? { id: { notIn: excludedIds } } : {}) },
+      select: memberSelect,
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    const ownTagIds = new Set(ownTags.map((item) => item.tagId));
+    return members.map((member) => this.toMemberCard(member, ownTagIds, followingIds.has(member.id)));
+  }
+
   async follow(userId: string, targetUserId: string) {
     if (userId === targetUserId) throw new BadRequestException("Kullanıcı kendisini takip edemez.");
     const [target, existing, blocked] = await Promise.all([
@@ -93,7 +113,7 @@ export class SocialService {
     return { ok: true as const, following: false };
   }
 
-  private toMemberCard(user: { id: string; name: string; username: string | null; accountType: string; city: string | null; country: string | null; followerCount: number; gender?: string | null; birthDate?: Date | null; privacySettings?: { demographicsAudience: string } | null; interestTags: { tagId: string }[] }, ownTags: Set<string>, following: boolean) {
+  private toMemberCard(user: { id: string; name: string; username: string | null; accountType: string; city: string | null; country: string | null; followerCount: number; gender?: string | null; birthDate?: Date | null; createdAt?: Date; privacySettings?: { demographicsAudience: string } | null; interestTags: { tagId: string }[] }, ownTags: Set<string>, following: boolean) {
     return {
       id: user.id,
       name: user.name,
@@ -105,7 +125,8 @@ export class SocialService {
       commonTagCount: user.interestTags.filter((item) => ownTags.has(item.tagId)).length,
       following,
       gender: user.privacySettings?.demographicsAudience === "everybody" ? user.gender ?? null : null,
-      birthDate: user.privacySettings?.demographicsAudience === "everybody" ? user.birthDate ?? null : null
+      birthDate: user.privacySettings?.demographicsAudience === "everybody" ? user.birthDate ?? null : null,
+      createdAt: user.createdAt,
     };
   }
 }

@@ -19,6 +19,11 @@ export class SocialController {
     return this.socialService.listFollowing(user.id);
   }
 
+  @Get("new-members")
+  newMembers(@CurrentUser() user: User) {
+    return this.socialService.newMembers(user.id);
+  }
+
   @Post("following/:targetUserId")
   follow(@CurrentUser() user: User, @Param("targetUserId") targetUserId: string) {
     return this.socialService.follow(user.id, targetUserId);

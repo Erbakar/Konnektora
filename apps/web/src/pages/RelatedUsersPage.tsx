@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, CheckCircle2, Grid2X2, List, Mail, MapPin, Search, UserPlus, Users } from "lucide-react";
+import { BadgeCheck, CheckCircle2, Grid2X2, List, Mail, MapPin, MoreVertical, Search, UserPlus, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { UserIdentityLink } from "../components/UserIdentityLink";
@@ -15,6 +15,7 @@ import {
   listFollowing,
   listMyEvents,
   unfollowUser,
+  updatePlaceMember,
 } from "../lib/api";
 import { getUserSession } from "../lib/api";
 
@@ -27,7 +28,7 @@ export function RelatedUsersPage({
   const session = getUserSession();
   const client = useQueryClient();
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "attendees" | "invited" | "following" | "organizers" | "checked-in">("all");
+  const [filter, setFilter] = useState<"all" | "attendees" | "pending" | "invited" | "following" | "organizers" | "checked-in" | "declined" | "banned">(kind === "place" ? "attendees" : "all");
   const [view, setView] = useState<"cards" | "list">("cards");
   const [gender, setGender] = useState("");
   const [sentiment, setSentiment] = useState("");
@@ -38,15 +39,15 @@ export function RelatedUsersPage({
     queryFn: async () => {
       if (kind === "event") {
         const event = await getEvent(slug);
-        return { id: event.id, title: event.title };
+        return { id: event.id, title: event.title, canManage: Boolean(session && (event.createdById === session.id || ["admin", "super_admin", "curator"].includes(session.role))) };
       }
       if (kind === "tag") {
         const tag = (await listTags()).find((item) => item.slug === slug);
         if (!tag) throw new Error("Etiket bulunamadı.");
-        return { id: tag.id, title: `#${tag.name}` };
+        return { id: tag.id, title: `#${tag.name}`, canManage: false };
       }
       const place = await getPlace(slug);
-      return { id: place.id, title: place.name };
+      return { id: place.id, title: place.name, canManage: Boolean(session && (place.createdById === session.id || place.viewerMembership?.status === "accepted" && ["manager", "organizer"].includes(place.viewerMembership.role) || ["admin", "super_admin", "curator"].includes(session.role))) };
     },
     enabled: Boolean(slug),
   });
@@ -70,7 +71,7 @@ export function RelatedUsersPage({
     const matchesQuery = !term || `${user.name} ${user.username ?? ""} ${user.city ?? ""} ${user.country ?? ""}`.toLocaleLowerCase("tr-TR").includes(term);
     const relation = user.relation.toLocaleLowerCase("tr-TR");
     const age = user.birthDate ? ageFrom(user.birthDate) : null;
-    const matchesFilter = filter === "all" || filter === "attendees" && ["accepted", "attended"].includes(user.status ?? "accepted") || filter === "invited" && ["invited", "requested"].includes(user.status ?? "") || filter === "following" && followingIds.has(user.id) || filter === "checked-in" && user.checkedIn || filter === "organizers" && /creator|owner|organizer|manager|sahip|yönetici/.test(relation);
+    const matchesFilter = filter === "all" || filter === "attendees" && ["accepted", "attended"].includes(user.status ?? "accepted") || filter === "pending" && user.status === (kind === "place" ? "pending" : "requested") || filter === "invited" && user.status === "invited" || filter === "following" && followingIds.has(user.id) || filter === "checked-in" && user.checkedIn || filter === "organizers" && /creator|owner|organizer|manager|sahip|yönetici/.test(relation) || filter === "declined" && user.status === "declined" || filter === "banned" && user.status === "banned";
     const matchesGender = !gender || user.gender === gender;
     const matchesSentiment = !sentiment || user.sentiment === sentiment;
     const [minimumAge, maximumAge] = ageRange ? ageRange.split("-").map(Number) : [];
@@ -82,6 +83,7 @@ export function RelatedUsersPage({
     onSuccess: () => client.invalidateQueries({ queryKey: ["following"] }),
   });
   const addGuest = useMutation({ mutationFn: (eventId: string) => inviteEventParticipant(eventId, { userId: guestTarget!.id, role: "attendee" }, "user"), onSuccess: () => setGuestTarget(null) });
+  const placeMemberAction = useMutation({ mutationFn: ({ userId, changes }: { userId: string; changes: { role?: string; status?: string } }) => updatePlaceMember(target.data!.id, userId, changes), onSuccess: () => client.invalidateQueries({ queryKey: [kind, target.data?.id, "related-users"] }) });
 
   return (
     <main className="page related-users-page">
@@ -99,9 +101,7 @@ export function RelatedUsersPage({
             ilgili kullanıcılar
           </p>
           <h1>{title ?? "Yükleniyor…"}</h1>
-          <p>
-            Organizatörleri, yöneticileri ve onaylı topluluk üyelerini keşfet.
-          </p>
+          <p>{kind === "tag" ? "Kimlerin bu etiketi profiline yapıştırdığını keşfet." : kind === "place" ? "Bu mekânı takip eden topluluk üyelerini keşfet." : "Katılımcıları, davetlileri ve etkinlik ekibini keşfet."}</p>
         </div>
         <span>
           <Users size={18} />
@@ -110,14 +110,19 @@ export function RelatedUsersPage({
       </header>
       <section className="related-users-tools" aria-label="Kullanıcı filtreleri">
         <label className="search-box"><Search size={17}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Kullanıcı, şehir veya ülke ara"/></label>
-        <div className="related-user-advanced-filters"><label>Cinsiyet<select value={gender} onChange={(event) => setGender(event.target.value)}><option value="">Tümü</option><option value="female">Kadın</option><option value="male">Erkek</option><option value="unknown">Belirtilmemiş</option></select></label><label>Yaş aralığı<select value={ageRange} onChange={(event) => setAgeRange(event.target.value)}><option value="">Any age</option><option value="18-24">18–24</option><option value="25-34">25–34</option><option value="35-44">35–44</option><option value="45-54">45–54</option><option value="55-64">55–64</option><option value="65-Infinity">65+</option></select></label>{kind === "tag" ? <label>Duygu<select value={sentiment} onChange={(event) => setSentiment(event.target.value)}><option value="">Tümü</option><option value="like">Beğeniyor</option><option value="ok">Nötr</option><option value="dislike">Beğenmiyor</option></select></label> : null}<button onClick={() => { setQuery(""); setGender(""); setSentiment(""); setAgeRange(""); setFilter("all"); }} type="button">Filtreyi sıfırla</button></div>
+        <details className="related-user-filter-disclosure"><summary>Filtrele</summary><div className="related-user-advanced-filters"><label>Cinsiyet<select value={gender} onChange={(event) => setGender(event.target.value)}><option value="">Tümü</option><option value="female">Kadın</option><option value="male">Erkek</option><option value="unknown">Belirtilmemiş</option></select></label><label>Yaş aralığı<select value={ageRange} onChange={(event) => setAgeRange(event.target.value)}><option value="">Any age</option><option value="18-24">18–24</option><option value="25-34">25–34</option><option value="35-44">35–44</option><option value="45-54">45–54</option><option value="55-64">55–64</option><option value="65-Infinity">65+</option></select></label>{kind === "tag" ? <label>Duygu<select value={sentiment} onChange={(event) => setSentiment(event.target.value)}><option value="">Tümü</option><option value="like">Beğeniyor</option><option value="ok">Nötr</option><option value="dislike">Beğenmiyor</option></select></label> : null}<button onClick={() => { setQuery(""); setGender(""); setSentiment(""); setAgeRange(""); setFilter("all"); }} type="button">Filtreyi sıfırla</button></div></details>
         <div className="feed-tabs" role="tablist">
-          <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>Tümü ({users.data?.length ?? 0})</button>
+          {kind !== "place" ? <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>Tümü ({users.data?.length ?? 0})</button> : null}
           {kind === "event" ? <button className={filter === "attendees" ? "active" : ""} onClick={() => setFilter("attendees")}>Attendees ({(users.data ?? []).filter((item) => ["accepted", "attended"].includes(item.status ?? "accepted")).length})</button> : null}
+          {kind === "event" && target.data?.canManage ? <button className={filter === "pending" ? "active" : ""} onClick={() => setFilter("pending")}>Pending ({(users.data ?? []).filter((item) => item.status === "requested").length})</button> : null}
+          {kind === "place" ? <button className={filter === "attendees" ? "active" : ""} onClick={() => setFilter("attendees")}>Members ({(users.data ?? []).filter((item) => item.status === "accepted").length})</button> : null}
+          {kind === "place" && target.data?.canManage ? <button className={filter === "pending" ? "active" : ""} onClick={() => setFilter("pending")}>Pending ({(users.data ?? []).filter((item) => item.status === "pending").length})</button> : null}
           {kind === "event" ? <button className={filter === "invited" ? "active" : ""} onClick={() => setFilter("invited")}>Invited ({(users.data ?? []).filter((item) => ["invited", "requested"].includes(item.status ?? "")).length})</button> : null}
           <button className={filter === "following" ? "active" : ""} onClick={() => setFilter("following")}>Following ({(users.data ?? []).filter((item) => followingIds.has(item.id)).length})</button>
-          <button className={filter === "organizers" ? "active" : ""} onClick={() => setFilter("organizers")}>Yöneticiler</button>
-          <button className={filter === "checked-in" ? "active" : ""} onClick={() => setFilter("checked-in")}>Check-in</button>
+          {kind !== "tag" ? <button className={filter === "organizers" ? "active" : ""} onClick={() => setFilter("organizers")}>Yöneticiler</button> : null}
+          {kind === "event" ? <button className={filter === "checked-in" ? "active" : ""} onClick={() => setFilter("checked-in")}>Check-in</button> : null}
+          {kind === "place" && target.data?.canManage ? <button className={filter === "declined" ? "active" : ""} onClick={() => setFilter("declined")}>Declined</button> : null}
+          {kind === "place" && target.data?.canManage ? <button className={filter === "banned" ? "active" : ""} onClick={() => setFilter("banned")}>Banned</button> : null}
         </div>
         <button className="secondary-action" aria-label={view === "cards" ? "Liste görünümü" : "Kart görünümü"} onClick={() => setView((value) => value === "cards" ? "list" : "cards")}>{view === "cards" ? <List size={17}/> : <Grid2X2 size={17}/>}</button>
       </section>
@@ -132,10 +137,9 @@ export function RelatedUsersPage({
                   <BadgeCheck aria-label="Doğrulanmış profil" size={16} />
                 ) : null}
               </strong>
-              <span>{user.relation}</span>
+              <span>{kind === "tag" ? `${user.sentiment === "like" ? "Beğeniyorum" : user.sentiment === "dislike" ? "Beğenmiyorum" : "Nötrüm"} dedi${/paylaşım|post|yorum/i.test(user.relation) ? " · paylaşım yaptı" : ""}` : user.relation}</span>
               {user.birthDate ? <small>{user.gender === "male" ? "He" : user.gender === "female" ? "She" : "They"} is {ageFrom(user.birthDate)} y.o.</small> : null}
-              {user.commonTagCount != null ? <small>{user.commonTagCount} mutual {user.commonTagCount === 1 ? "thing" : "things"}.</small> : null}
-              {user.sentiment ? <small>{user.sentiment === "like" ? "❤️ Beğeniyor" : user.sentiment === "dislike" ? "👎 Beğenmiyor" : "➖ Nötr"}</small> : null}
+              {session?.id !== user.id && user.commonTagCount != null ? <small>{user.commonTagCount} mutual {user.commonTagCount === 1 ? "thing" : "things"}.</small> : null}
               {user.city || user.country ? (
                 <small>
                   <MapPin size={13} />
@@ -152,8 +156,7 @@ export function RelatedUsersPage({
             <div className="row-actions">
               {session && session.id !== user.id ? <button disabled={toggleFollow.isPending} onClick={() => toggleFollow.mutate(user.id)}>{followingIds.has(user.id) ? "Following" : "Follow"}</button> : null}
               {session && session.id !== user.id ? <button onClick={() => setGuestTarget({ id: user.id, name: user.name })}><UserPlus size={15}/> Guest list</button> : null}
-              {session && session.id !== user.id ? <Link aria-label="Mesaj gönder" to={`/messages?peer=${user.id}`}><Mail size={15}/></Link> : null}
-              <Link className="secondary-action" to={user.username ? `/users/${user.username}` : `/users/id/${user.id}`}>Profili gör</Link>
+              {session && session.id !== user.id ? <details className="action-menu"><summary aria-label="Kullanıcı aksiyonları"><MoreVertical size={17}/></summary><div><Link to={`/messages?peer=${user.id}`}><Mail size={15}/> Mesaj gönder</Link>{kind === "place" && target.data?.canManage ? <><button disabled={placeMemberAction.isPending} onClick={() => placeMemberAction.mutate({ userId: user.id, changes: { role: /organizer/.test(user.relation) ? "member" : "organizer" } })} type="button">{/organizer/.test(user.relation) ? "Organizatörlükten çıkar" : "Organizatör yap"}</button><button disabled={placeMemberAction.isPending} onClick={() => placeMemberAction.mutate({ userId: user.id, changes: { status: user.status === "banned" ? "accepted" : "banned" } })} type="button">{user.status === "banned" ? "Mekâna affet" : "Mekâna yasakla"}</button></> : null}</div></details> : null}
             </div>
           </article>
         ))}

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { DiscoveryCard } from "../components/DiscoveryCard";
 import { searchDiscovery } from "../lib/api";
 
@@ -16,6 +16,6 @@ export function SearchPage() {
     </form>
     {query.length >= 2 ? <div className="section-header"><h2>“{query}” sonuçları</h2><span>{results.data?.total ?? 0} sonuç</span></div> : <p className="empty-state">Aramak için en az iki karakter yaz.</p>}
     <div className="discovery-results">{results.data?.items.map((item) => <DiscoveryCard item={item} key={`${item.kind}-${item.id}`} />)}</div>
-    {!results.isLoading && query.length >= 2 && !results.data?.items.length ? <p className="empty-state">Eşleşen bir sonuç bulunamadı.</p> : null}
+    {!results.isLoading && query.length >= 2 && !results.data?.items.length ? <div className="empty-state"><p>Eşleşen bir sonuç bulunamadı; ama dilerseniz böyle bir etiket oluşturabilirsiniz.</p><Link className="primary-action" to={`/tags?create=${encodeURIComponent(query)}`}>“{query}” etiketini oluştur</Link></div> : null}
   </section>;
 }

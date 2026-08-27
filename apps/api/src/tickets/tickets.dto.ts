@@ -16,7 +16,10 @@ export class ManageTicketTypeDto {
   @IsOptional() @IsString() @MaxLength(500) description?: string;
   @Type(() => Number) @IsInt() @Min(1) capacity!: number;
   @Type(() => Number) @IsNumber() @Min(0) price!: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(20) perUserLimit?: number;
   @IsString() @MaxLength(8) currency!: string;
+  @IsOptional() @IsIn(["door", "konnektora", "external"]) salesPlatform?: "door" | "konnektora" | "external";
+  @IsOptional() @IsString() @MaxLength(500) externalSalesUrl?: string;
   @IsOptional() @IsDateString() saleStartsAt?: string; @IsOptional() @IsDateString() saleEndsAt?: string;
   @IsOptional() @IsDateString() gateOpensAt?: string; @IsOptional() @IsDateString() gateClosesAt?: string;
   @IsOptional() @IsIn(["active", "inactive"]) status?: "active" | "inactive";

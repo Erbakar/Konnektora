@@ -149,7 +149,7 @@ describe("ProfileService", () => {
     await expect(service.getPrivacySettings("user-1")).resolves.toEqual({
       userId: "user-1",
       messageAudience: "everybody",
-      directoryDiscoverable: false,
+      directoryDiscoverable: true,
       eventAudience: "everybody",
       eventInviteAudience: "everybody",
       placeAudience: "everybody",
@@ -158,7 +158,9 @@ describe("ProfileService", () => {
       demographicsAudience: "everybody",
       locationAudience: "everybody",
       websiteAudience: "everybody",
-      businessAudience: "everybody"
+      businessAudience: "everybody",
+      addressAudience: "everybody",
+      tradeNameAudience: "everybody"
     });
   });
 

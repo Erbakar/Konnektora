@@ -30,17 +30,22 @@ export class ContentService {
   }
 
   async createContentMedia(targetType: ReportTargetType, targetId: string, user: User, url: string, type: "image" | "video") {
-    if (targetType !== ReportTargetType.event && targetType !== ReportTargetType.place) {
+    const commentTypes = new Set<ReportTargetType>([ReportTargetType.tag_comment, ReportTargetType.event_comment, ReportTargetType.place_comment, ReportTargetType.comment_reply]);
+    if (targetType !== ReportTargetType.event && targetType !== ReportTargetType.place && !commentTypes.has(targetType)) {
       throw new BadRequestException("Bu içerik türüne medya yüklenemez.");
     }
     if (targetType === ReportTargetType.event) {
       const event = await this.prisma.event.findUnique({ where: { id: targetId }, select: { createdById: true } });
       if (!event) throw new NotFoundException("Etkinlik bulunamadı.");
       if (event.createdById !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu etkinliğe medya yükleme yetkiniz yok.");
-    } else {
+    } else if (targetType === ReportTargetType.place) {
       const place = await this.prisma.place.findUnique({ where: { id: targetId }, select: { createdById: true } });
       if (!place) throw new NotFoundException("Mekân bulunamadı.");
       if (place.createdById !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu mekâna medya yükleme yetkiniz yok.");
+    } else {
+      const comment = await this.prisma.contentComment.findUnique({ where: { id: targetId }, select: { authorId: true, status: true } });
+      if (!comment || comment.status !== "active") throw new NotFoundException("Yorum bulunamadı.");
+      if (comment.authorId !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu yoruma medya yükleme yetkiniz yok.");
     }
     const count = await this.prisma.mediaFile.count({ where: { contentType: targetType, contentId: targetId, status: "active" } });
     if (count >= 20) throw new BadRequestException("Bir içerikte en fazla 20 medya bulunabilir.");
@@ -151,7 +156,11 @@ export class ContentService {
         }
       }
     });
-    const present = (comment: any): any => ({ ...comment, author: comment.author ? { ...comment.author, avatarUrl: comment.author.uploadedMedia?.[0]?.url ?? null, uploadedMedia: undefined } : null, replies: comment.replies?.map(present) });
+    const commentIds = comments.flatMap((comment) => [comment.id, ...comment.replies.map((reply) => reply.id)]);
+    const media = commentIds.length ? await this.prisma.mediaFile.findMany({ where: { contentId: { in: commentIds }, contentType: { in: ["tag_comment", "event_comment", "place_comment", "comment_reply"] }, status: "active" }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }) : [];
+    const mediaByComment = new Map<string, typeof media>();
+    for (const item of media) mediaByComment.set(item.contentId, [...(mediaByComment.get(item.contentId) ?? []), item]);
+    const present = (comment: any): any => ({ ...comment, media: mediaByComment.get(comment.id) ?? [], author: comment.author ? { ...comment.author, avatarUrl: comment.author.uploadedMedia?.[0]?.url ?? null, uploadedMedia: undefined } : null, replies: comment.replies?.map(present) });
     return comments.map(present);
   }
 

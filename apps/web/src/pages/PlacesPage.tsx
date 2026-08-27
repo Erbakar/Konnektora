@@ -1,14 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, ListFilter, LoaderCircle, MapPin, MapPinned, Plus, RefreshCw, Users } from "lucide-react";
+import { Building2, ListFilter, LoaderCircle, MapPinned, Plus, RefreshCw } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { createPlace, getUserSession, invitePlaceMember, listMemberSuggestions, listPlaces, listTags, resolveMediaUrl, uploadContentMedia, type PlaceInput } from "../lib/api";
-import { RichText } from "../components/RichText";
-import { DistanceLabel } from "../components/DistanceLabel";
+import { useSearchParams } from "react-router-dom";
+import { createPlace, getUserSession, invitePlaceMember, listMemberSuggestions, listPlaces, listTags, uploadContentMedia, type PlaceInput } from "../lib/api";
 import { LocationMap } from "../components/LocationMap";
 import { LocationPicker } from "../components/LocationPicker";
 import { TagPicker } from "../components/TagPicker";
 import { CountryCityFields } from "../components/CountryCityFields";
+import { PlaceCard } from "../components/PlaceCard";
 
 export function PlacesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -92,7 +91,7 @@ export function PlacesPage() {
             <div className="form-grid">
               <label>Ad<input name="name" required minLength={2} maxLength={160} /></label>
               <label>Mekân türü<select name="placeType"><option value="food_drink">🍽️ Food &amp; Drink</option><option value="nightlife_music">🎵 Nightlife &amp; Music</option><option value="events_venues">🎭 Events &amp; Venues</option><option value="arts_culture">🎨 Arts &amp; Culture</option><option value="sports_activities">🏃 Sports &amp; Activities</option><option value="cafes">☕ Cafés</option><option value="outdoors">🌳 Outdoors</option><option value="games_hobbies">🎮 Games &amp; Hobbies</option><option value="work_networking">💼 Work &amp; Networking</option><option value="wellness">🧘 Wellness</option><option value="shopping">🛍️ Shopping</option><option value="hotels_hostels">🏨 Hotels / Hostels</option><option value="other">Others</option></select></label>
-              <label>Katılım tipi<select name="visibility"><option value="open">Open</option><option value="approval_required">Approval</option><option value="invite_only">Secret</option></select></label>
+              <label>Katılım tipi<select name="visibility"><option value="open">Herkese açık</option><option value="approval_required">Onay gerekli</option><option value="invite_only">Sadece davetli</option></select></label>
               <TagPicker label="Mekân etiketleri" tags={tagsQuery.data ?? []}/>
               <div className="location-fields-group"><CountryCityFields/><LocationPicker addressName="address" /></div>
               <label>Fotoğraf ve videolar<input accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" multiple name="placeMedia" type="file" /></label>
@@ -106,16 +105,7 @@ export function PlacesPage() {
         {placesQuery.isLoading ? <div className="empty-state"><LoaderCircle className="spin" size={34}/><p>Mekânlar yükleniyor…</p></div> : null}
         {placesQuery.isError ? <div className="empty-state"><Building2 size={40}/><h2>Mekânlar yüklenemedi</h2><p>Bağlantını kontrol edip yeniden deneyebilirsin.</p><button className="secondary-action" onClick={() => void placesQuery.refetch()}><RefreshCw size={17}/>Yeniden dene</button></div> : null}
         {mapOpen ? <LocationMap items={(placeList?.items ?? []).map((place) => ({ id: place.id, title: place.name, latitude: place.latitude, longitude: place.longitude, location: [place.city, place.country].filter(Boolean).join(", ") || "Konum belirtilmedi" }))}/> : <div className="event-grid place-grid">
-          {placeList?.items.map((place) => (
-            <article className="event-card place-card" key={place.id}>
-              {place.coverImageUrl ? <Link className="event-card-media" to={`/places/${place.slug}`}><img alt="" src={resolveMediaUrl(place.coverImageUrl)} /></Link> : null}
-              <div><span className="eyebrow">{({ food_drink: "🍽️ Food & Drink", nightlife_music: "🎵 Nightlife & Music", events_venues: "🎭 Events & Venues", arts_culture: "🎨 Arts & Culture", sports_activities: "🏃 Sports & Activities", cafes: "☕ Cafés", outdoors: "🌳 Outdoors", games_hobbies: "🎮 Games & Hobbies", work_networking: "💼 Work & Networking", wellness: "🧘 Wellness", shopping: "🛍️ Shopping", hotels_hostels: "🏨 Hotels / Hostels", other: "Others" } as Record<string, string>)[place.placeType ?? ""] ?? "Mekân"} · {place.visibility === "invite_only" ? "Secret" : place.visibility === "approval_required" ? "Approval" : "Open"}</span><h2><Link to={`/places/${place.slug}`}>{place.name}</Link></h2></div>
-              <p><RichText text={place.description || "Konnektora topluluk mekânı"} /></p>
-              {place.tags?.length ? <div className="tag-row">{place.tags.map((tag) => <Link key={tag.id} to={`/tags/${tag.slug}`}>#{tag.name}</Link>)}</div> : null}
-              <div className="event-card-meta"><span><MapPin size={15} />{[place.city, place.country].filter(Boolean).join(", ") || "Konum belirtilmedi"}</span><span><Users size={15} />{place.followerCount} members / {place.followingMemberCount ?? 0} following</span></div>
-              <div className="event-card-meta"><DistanceLabel latitude={place.latitude} longitude={place.longitude}/></div>
-            </article>
-          ))}
+          {placeList?.items.map((place) => <PlaceCard key={place.id} place={place}/>) }
         </div>}
         {!placesQuery.isLoading && !placesQuery.isError && !placeList?.items.length ? <div className="empty-state"><Building2 size={40}/><h2>{selectedScope === "mine" ? "Mekânlarım" : searchParams.size ? "Bu filtrelerle mekân bulunamadı" : "Henüz mekân eklenmedi"}</h2><p>{selectedScope === "mine" ? "Üyesi ve yöneticisi olduğunuz mekanlar burada gösterilecek" : searchParams.size ? "Filtreleri değiştirerek yeniden deneyebilirsin." : "Topluluk mekânları oluşturulduğunda burada listelenecek."}</p>{user && !searchParams.size ? <button className="primary-action" onClick={() => setCreateOpen(true)}><Plus size={18}/>İlk mekânı oluştur</button> : null}</div> : null}
         {placeList ? <div className="pagination-row">

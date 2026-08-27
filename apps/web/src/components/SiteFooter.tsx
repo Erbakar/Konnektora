@@ -19,10 +19,6 @@ export function SiteFooter() {
         <div className="site-footer-brand">
           <img alt="Konnektora" src="/brand/konnektora-logo.svg" />
           <p>{t("footerCopy")}</p>
-          <div className="site-footer-mobile-actions">
-            <Link to="/events">{language === "tr" ? "Etkinlikleri keşfet" : "Explore events"}</Link>
-            <a href={publicSiteHref("/onboarding")}>{language === "tr" ? "Topluluğa katıl" : "Join the community"}</a>
-          </div>
         </div>
         <nav className="site-footer-columns" aria-label={language === "tr" ? "Alt bilgi bağlantıları" : "Footer links"}>
           <div className={`site-footer-section${openSection === "konnektora" ? " is-open" : ""}`}>

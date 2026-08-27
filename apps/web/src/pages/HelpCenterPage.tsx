@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, BookOpen, LifeBuoy, MessageCircle, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, LifeBuoy, MessageCircle, Search, ShieldCheck } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { listPublicFaqs } from "../lib/api";
+import { listPublicFaqs, listReportRules } from "../lib/api";
 
 function normalize(value: string) {
   return value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/\p{Diacritic}/gu, "");
@@ -16,6 +16,7 @@ export function HelpCenterPage() {
   const query = searchParams.get("q")?.trim() ?? "";
   const [search, setSearch] = useState(query);
   const faqsQuery = useQuery({ queryKey: ["public-faqs"], queryFn: listPublicFaqs });
+  const rulesQuery = useQuery({ queryKey: ["public-report-rules"], queryFn: () => listReportRules(), enabled: location.pathname.endsWith("/rules") });
   const faqs = faqsQuery.data ?? [];
   const categories = useMemo(() => {
     const grouped = new Map<string, { name: string; slug: string; description: string | null; titles: string[] }>();
@@ -55,6 +56,14 @@ export function HelpCenterPage() {
     event.preventDefault();
     const value = search.trim();
     if (value) navigate(`/help/search?q=${encodeURIComponent(value)}`);
+  }
+
+  if (location.pathname.endsWith("/rules")) {
+    const activeRules = (rulesQuery.data ?? []).filter((rule) => rule.status === "active").sort((a, b) => a.title.localeCompare(b.title, "tr"));
+    const groupedRules = new Map<string, typeof activeRules>();
+    activeRules.forEach((rule) => groupedRules.set(rule.targetType, [...(groupedRules.get(rule.targetType) ?? []), rule]));
+    const groups = [...groupedRules.entries()];
+    return <main className="page help-center-page"><Link className="back-link" to="/help"><ArrowLeft size={16}/> Yardım merkezine dön</Link><div className="help-page-heading"><span className="eyebrow">Topluluk standartları</span><h1>Konnektora Kuralları</h1><p>İçerik türüne göre aktif kurallar ve ihlal puanları.</p></div>{rulesQuery.isLoading ? <p role="status">Kurallar yükleniyor…</p> : null}{rulesQuery.isError ? <p className="form-error">Kurallar şu anda yüklenemiyor.</p> : null}<div className="help-rules-groups">{groups.map(([targetType, rules]) => <section className="admin-form" key={targetType}><h2>{({ tag: "İlgi alanları", event: "Etkinlikler", place: "Mekânlar", user: "Profiller", comment: "Postlar ve yorumlar", message: "Özel mesajlar", media: "Medya" } as Record<string, string>)[targetType] ?? targetType}</h2>{rules?.map((rule) => <details className="help-rule-card" key={rule.id}><summary><strong>{rule.title}</strong><span>{rule.violationScore} ihlal puanı</span></summary>{rule.description ? <p>{rule.description}</p> : <p>Açıklama eklenmemiş.</p>}</details>)}</section>)}</div>{!rulesQuery.isLoading && !groups.length ? <div className="help-empty">Aktif Konnektora kuralı bulunmuyor.</div> : null}</main>;
   }
 
   if (faqsQuery.isLoading) return <main className="page help-center-page"><p role="status">Yardım içerikleri yükleniyor…</p></main>;
@@ -127,6 +136,7 @@ export function HelpCenterPage() {
       </section>
       <section className="help-entry-grid">
         <Link to="/help/faqs"><BookOpen size={28} /><div><h2>FAQ ana sayfası</h2><p>Kategorilere göz at ve hızlı yanıtları bul.</p></div><ArrowRight /></Link>
+        <Link to="/help/rules"><ShieldCheck size={28}/><div><h2>Konnektora Rules</h2><p>Topluluk standartlarını ve ihlal puanlarını incele.</p></div><ArrowRight/></Link>
         <Link to="/contact"><MessageCircle size={28} /><div><h2>Destekle iletişime geç</h2><p>Ekibimize mesaj gönder; en kısa sürede yanıtlayalım.</p></div><ArrowRight /></Link>
       </section>
       <section className="help-popular">

@@ -7,7 +7,7 @@ import { createHash, randomBytes, randomInt } from "crypto";
 import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { SmsService } from "../sms/sms.service";
-import { AcceptInviteDto, AvailabilityQueryDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, SocialAuthDto, TokenDto } from "./auth.dto";
+import { AcceptInviteDto, AvailabilityQueryDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, PasswordResetRequestDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, SocialAuthDto, TokenDto } from "./auth.dto";
 
 const EMAIL_TOKEN_TTL_MS = {
   verify_email: 1000 * 60 * 60 * 24,
@@ -298,21 +298,26 @@ export class AuthService {
     return this.createLoginResponse(user);
   }
 
-  async requestPasswordReset(input: EmailDto) {
-    const user = await this.prisma.user.findUnique({
-      where: { email: input.email.toLowerCase().trim() },
-    });
+  async requestPasswordReset(input: PasswordResetRequestDto) {
+    const channel = input.channel ?? "email";
+    const user = channel === "phone"
+      ? await this.prisma.user.findFirst({ where: { phone: input.phone?.trim() } })
+      : await this.prisma.user.findUnique({ where: { email: input.email!.toLowerCase().trim() } });
 
     if (!user || ["disabled", "suspended", "banned", "deleted"].includes(user.status)) {
       return { ok: true };
     }
 
     const token = await this.createEmailToken(user.id, "password_reset");
-    await this.mailService.sendPasswordResetEmail({
-      to: user.email,
-      name: user.name,
-      token,
-    });
+    if (channel === "phone" && user.phone) {
+      await this.smsService.sendPasswordResetLink(user.phone, token);
+    } else {
+      await this.mailService.sendPasswordResetEmail({
+        to: user.email,
+        name: user.name,
+        token,
+      });
+    }
     return { ok: true };
   }
 

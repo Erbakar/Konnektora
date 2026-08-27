@@ -7,7 +7,6 @@ import {
   Flag,
   Hash,
   Heart,
-  ImagePlus,
   LoaderCircle,
   Mail,
   MapPin,
@@ -30,6 +29,7 @@ import { ContentComments } from "../components/ContentComments";
 import { userProfilePath } from "../components/UserIdentityLink";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
 import { ReportDialog } from "../components/ReportDialog";
+import { ComposerTips } from "../components/ComposerTips";
 import { EmbeddedMedia } from "../components/EmbeddedMedia";
 import type { ReportTargetType, TagSentiment } from "@konnektora/shared";
 import {
@@ -44,6 +44,7 @@ import {
   inviteEventParticipant,
   likeTagComment,
   listFollowing,
+  listEvents,
   listMyEvents,
   listTagComments,
   listTagRelatedUsers,
@@ -65,7 +66,7 @@ export function TagsPage() {
   const navigate = useNavigate();
   const user = getUserSession();
   const client = useQueryClient();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => searchParams.get("create") ?? "");
   const [directoryFilters, setDirectoryFilters] = useState({
     createdFrom: "",
     createdTo: "",
@@ -121,6 +122,7 @@ export function TagsPage() {
     enabled: Boolean(tag && user && ["admin", "super_admin", "curator"].includes(user.role)),
   });
   const relatedUsers = useQuery({ queryKey: ["tag", tag?.id, "related-users"], queryFn: () => listTagRelatedUsers(tag!.id), enabled: Boolean(tag) });
+  const relatedEvents = useQuery({ queryKey: ["tag", tag?.id, "future-events"], queryFn: () => listEvents(new URLSearchParams({ tag: tag!.slug, dateFrom: new Date().toISOString().slice(0, 10), pageSize: "1" })), enabled: Boolean(tag) });
   const following = useQuery({
     queryKey: ["following", user?.id],
     queryFn: listFollowing,
@@ -362,7 +364,6 @@ export function TagsPage() {
               >
                 <Hash size={16} />
                 <strong>{item.name}</strong>
-                <small>{item.usageCount}</small>
               </Link>
             ))}
           </div>
@@ -420,13 +421,14 @@ export function TagsPage() {
             Paylaş
           </button>
           <details className="detail-action-menu"><summary aria-label="Etiket işlemleri"><MoreVertical size={20}/></summary><div>
-            {user && ["admin", "super_admin", "curator"].includes(user.role) ? <a href="#tag-stats"><Eye size={17}/>Etkileşim istatistikleri</a> : null}
+            {user && ["admin", "super_admin", "curator"].includes(user.role) ? <Link to={`/stats/tag/${tag.id}`}><Eye size={17}/>Etkileşim istatistikleri</Link> : null}
             {user ? <button onClick={() => setReportTarget({ type: "tag", id: tag.id })}><Flag size={17}/>Etiketi rapor et</button> : null}
           </div></details>
         </div>
       </div>
       <section className="admin-form tag-sentiment-panel">
         <h2>Profilime ekle</h2>
+        <p className="form-help">Bu başlığın size ne düşündürdüğünü ve ne hissettirdiğini seçin.</p>
         <div className="row-actions tag-sentiment-actions">
           {(["like", "ok", "dislike"] as TagSentiment[]).map((value) => (
             <button
@@ -449,6 +451,7 @@ export function TagsPage() {
         <h2>People added to their profile</h2>
         <div><span className="attendee-avatar-stack">{(relatedUsers.data ?? []).slice(0, 8).map((member) => <Link key={member.id} title={`${member.name} profilini aç`} to={userProfilePath(member)}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/tags/${tag.slug}/users`}><strong>Show all {relatedUsers.data?.length ?? tag.usageCount} users</strong></Link></div>
       </section>
+      {relatedEvents.data?.total ? <Link className="tag-related-events-notice" to={`/events?tag=${encodeURIComponent(tag.slug)}`}>{relatedEvents.data.total} ilişkili devam eden veya gelecek etkinlik bulundu.</Link> : null}
       {user && ["admin", "super_admin", "curator"].includes(user.role) ? <section className="tag-public-stats" id="tag-stats">
         {[
           { Icon: Users, value: stats.data?.followers ?? 0, label: "takipçi" },
@@ -519,16 +522,15 @@ export function TagsPage() {
               const input = event.currentTarget.elements.namedItem(
                 "body",
               ) as HTMLTextAreaElement;
-              if (input.value.trim())
+              if (input.value.trim() || selectedTagMedia.length)
                 post.mutate(
-                  { body: input.value.trim(), files: selectedTagMedia },
+                  { body: input.value.trim() || "Medya paylaşımı", files: selectedTagMedia },
                   { onSuccess: () => event.currentTarget.reset() },
                 );
             }}
           >
             <textarea
               name="body"
-              required
               minLength={1}
               maxLength={2000}
               placeholder={(comments.data?.length ?? 0) === 0 ? `#${tag.name} hakkında ilk yorumu yazan sen ol…` : `#${tag.name} hakkında bir şey yaz…`}
@@ -538,8 +540,7 @@ export function TagsPage() {
                 Yayınla
               </button>
               <label className="secondary-action">
-                <ImagePlus size={17} />
-                Fotoğraf/video
+                Resim/video ekle
                 <input
                   accept="image/*,video/mp4,video/webm"
                   hidden
@@ -549,6 +550,7 @@ export function TagsPage() {
                   onChange={(event) => setSelectedTagMedia([...(event.target.files ?? [])].slice(0, 9))}
                 />
               </label>
+              <ComposerTips/>
               {selectedTagMedia.length ? <span className="comment-media-count">{selectedTagMedia.filter((file) => file.type.startsWith("image/")).length} resim, {selectedTagMedia.filter((file) => file.type.startsWith("video/")).length} video seçildi {post.isPending ? <LoaderCircle className="spin" size={15}/> : null}</span> : null}
             </div>
           </form>

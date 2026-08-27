@@ -6,6 +6,7 @@ let positionRequest: Promise<{ latitude: number; longitude: number } | null> | n
 
 function userPosition() {
   if (cachedPosition) return Promise.resolve(cachedPosition);
+  if (sessionStorage.getItem("konnektora:location-intro") !== "seen") return Promise.resolve(null);
   if (!positionRequest) positionRequest = new Promise((resolve) => {
     if (!navigator.geolocation) return resolve(null);
     navigator.geolocation.getCurrentPosition(({ coords }) => { cachedPosition = { latitude: coords.latitude, longitude: coords.longitude }; resolve(cachedPosition); }, () => { positionRequest = null; resolve(null); }, { maximumAge: 300_000, timeout: 5000 });
@@ -25,8 +26,12 @@ export function DistanceLabel({ latitude, longitude }: { latitude?: number | nul
   const [distance, setDistance] = useState<number | null>(null);
   const [permissionNeeded, setPermissionNeeded] = useState(false);
   const calculate = () => { if (latitude == null || longitude == null) return; setPermissionNeeded(false); void userPosition().then((position) => { if (position) setDistance(haversine(position, { latitude, longitude })); else setPermissionNeeded(true); }); };
-  useEffect(calculate, [latitude, longitude]);
+  useEffect(() => {
+    calculate();
+    window.addEventListener("konnektora:location-updated", calculate);
+    return () => window.removeEventListener("konnektora:location-updated", calculate);
+  }, [latitude, longitude]);
   if (latitude == null || longitude == null) return null;
-  if (permissionNeeded) return <button className="distance-permission" onClick={calculate} type="button"><Navigation size={15}/>Konum için izin verin</button>;
+  if (permissionNeeded) return <button className="distance-permission" onClick={() => { sessionStorage.setItem("konnektora:location-intro", "seen"); calculate(); }} type="button"><Navigation size={15}/>Konum için izin verin</button>;
   return <span><Navigation size={15}/>{distance == null ? "Konum alınıyor…" : distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(distance < 10 ? 1 : 0)} km`}</span>;
 }

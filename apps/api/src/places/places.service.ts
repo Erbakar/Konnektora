@@ -266,6 +266,9 @@ export class PlacesService {
           : undefined,
       },
     });
+    if (current.visibility === "approval_required" && input.visibility === "open") {
+      await this.prisma.placeMember.updateMany({ where: { placeId: id, status: "pending" }, data: { status: "accepted" } });
+    }
     return this.getBySlug(updated.slug, actor.id);
   }
 
@@ -281,10 +284,10 @@ export class PlacesService {
   }
 
   async follow(placeId: string, userId: string) {
-    await this.ensureActive(placeId);
-    const existing = await this.prisma.placeFollow.findUnique({
+    const place = await this.ensureActive(placeId);
+    const [existing, existingMember] = await Promise.all([this.prisma.placeFollow.findUnique({
       where: { placeId_userId: { placeId, userId } },
-    });
+    }), this.prisma.placeMember.findUnique({ where: { placeId_userId: { placeId, userId } } })]);
     if (!existing) {
       try {
         await this.prisma.$transaction([
@@ -293,6 +296,7 @@ export class PlacesService {
             where: { id: placeId },
             data: { followerCount: { increment: 1 } },
           }),
+          ...(!existingMember && place.visibility !== "invite_only" ? [this.prisma.placeMember.create({ data: { placeId, userId, role: "member", status: place.visibility === "approval_required" ? "pending" : "accepted" } })] : []),
         ]);
       } catch (error) {
         if (
@@ -335,11 +339,13 @@ export class PlacesService {
   async listRelatedUsers(placeId: string, actor?: User) {
     const place = await this.prisma.place.findFirst({
       where: { id: placeId, status: "active" },
-      select: { id: true },
+      select: { id: true, createdById: true },
     });
     if (!place) throw new NotFoundException("Mekân bulunamadı.");
+    const manager = actor ? await this.prisma.placeMember.findFirst({ where: { placeId, userId: actor.id, status: PlaceMemberStatus.accepted, role: { in: [PlaceMemberRole.manager, PlaceMemberRole.organizer] } }, select: { userId: true } }) : null;
+    const canManage = Boolean(actor && (place.createdById === actor.id || manager || ["admin", "super_admin", "curator"].includes(actor.role)));
     const [members, viewerInterests] = await Promise.all([this.prisma.placeMember.findMany({
-      where: { placeId, status: PlaceMemberStatus.accepted },
+      where: { placeId, ...(canManage ? {} : { status: PlaceMemberStatus.accepted }) },
       orderBy: [{ role: "desc" }, { createdAt: "asc" }],
       take: 100,
       include: {
@@ -373,7 +379,9 @@ export class PlacesService {
       avatarUrl: member.user.uploadedMedia?.[0]?.url ?? null,
       commonTagCount: (member.user.interestTags ?? []).filter((item) => viewerTagIds.has(item.tagId)).length,
       relation: member.role,
+      status: member.status,
       checkedIn: Boolean(member.checkedInAt),
+      checkedInAt: member.checkedInAt,
     }));
   }
 
@@ -535,9 +543,10 @@ export class PlacesService {
   private async ensureActive(id: string) {
     const place = await this.prisma.place.findFirst({
       where: { id, status: "active" },
-      select: { id: true },
+      select: { id: true, visibility: true },
     });
     if (!place) throw new NotFoundException("Mekân bulunamadı.");
+    return place;
   }
 
   private async ensureCanManage(id: string, actor: User) {
@@ -624,7 +633,7 @@ export class PlacesService {
             : true,
         },
       },
-      ...(includeEvents ? { events: { where: { status: EventStatus.published, startsAt: { gte: new Date() } }, orderBy: { startsAt: "asc" as const }, take: 6, include: { tags: { include: { tag: true } }, participants: { where: { status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] } }, select: { id: true } } } } } : {}),
+      ...(includeEvents ? { events: { where: { status: EventStatus.published }, orderBy: { startsAt: "desc" as const }, take: 20, include: { tags: { include: { tag: true } }, participants: { where: { status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] } }, select: { id: true } } } } } : {}),
     } as const;
   }
 

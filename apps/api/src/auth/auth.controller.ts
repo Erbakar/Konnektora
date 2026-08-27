@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
 import { User } from "@prisma/client";
-import { AcceptInviteDto, AvailabilityQueryDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, SocialAuthDto, TokenDto } from "./auth.dto";
+import { AcceptInviteDto, AvailabilityQueryDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, PasswordResetRequestDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, SocialAuthDto, TokenDto } from "./auth.dto";
 import { CurrentUser } from "./current-user.decorator";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { OnboardingJwtAuthGuard } from "./onboarding-jwt-auth.guard";
@@ -59,7 +59,7 @@ export class AuthController {
   }
 
   @Post("auth/password/forgot")
-  requestPasswordReset(@Body() body: EmailDto) {
+  requestPasswordReset(@Body() body: PasswordResetRequestDto) {
     return this.authService.requestPasswordReset(body);
   }
 

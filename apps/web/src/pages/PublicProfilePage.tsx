@@ -14,7 +14,7 @@ import {
   UserCheck,
   UserPlus,
 } from "lucide-react";
-import { type CSSProperties, type FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { DiscoveryCard } from "../components/DiscoveryCard";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
@@ -35,6 +35,9 @@ import {
   setContentNotification,
   unfollowUser,
   resolveMediaUrl,
+  getProfileAffinities,
+  listTags,
+  updateProfileAffinities,
 } from "../lib/api";
 
 function ageFrom(value: string | Date) {
@@ -55,6 +58,10 @@ export function PublicProfilePage() {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [guestOpen, setGuestOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
+  const [tagDialogOpen, setTagDialogOpen] = useState(false);
+  const [selectedTagId, setSelectedTagId] = useState("");
+  const [selectedSentiment, setSelectedSentiment] = useState<"like" | "ok" | "dislike">("like");
   const [profileEventTab, setProfileEventTab] = useState<"future" | "past" | "organizer">("future");
   const [profilePlaceTab, setProfilePlaceTab] = useState<"all" | "organizer">("all");
   const profileQuery = useQuery({
@@ -71,10 +78,13 @@ export function PublicProfilePage() {
   const notification = useQuery({ queryKey: ["content-notification", "user", profile?.id], queryFn: () => getContentNotification("user", profile!.id), enabled: Boolean(user && profile && !profile.relationship.isSelf) });
   const managedEvents = useQuery({ queryKey: ["my-events", user?.id, "profile-guest-list"], queryFn: listMyEvents, enabled: Boolean(user && guestOpen) });
   const namedGuestLists = useQuery({ queryKey: ["guest-lists", user?.id], queryFn: listGuestLists, enabled: Boolean(user && guestOpen) });
+  const allTags = useQuery({ queryKey: ["tags", "profile-dialog"], queryFn: () => listTags(), enabled: tagDialogOpen });
+  const ownAffinities = useQuery({ queryKey: ["profile-affinities", user?.id, "profile-dialog"], queryFn: getProfileAffinities, enabled: Boolean(user && profile?.relationship.isSelf && tagDialogOpen) });
   const notificationMutation = useMutation({ mutationFn: () => setContentNotification("user", profile!.id, !notification.data?.enabled), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["content-notification", "user", profile?.id] }); setNotificationOpen(false); } });
   const guestMutation = useMutation({ mutationFn: (eventId: string) => inviteEventParticipant(eventId, { userId: profile!.id, role: "attendee" }, "user"), onSuccess: () => setGuestOpen(false) });
   const namedGuestMutation = useMutation({ mutationFn: (listId: string) => addGuestListMember(listId, profile!.id), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["guest-lists", user?.id] }); setGuestOpen(false); } });
   const createNamedGuestList = useMutation({ mutationFn: (name: string) => createGuestList(name), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["guest-lists", user?.id] }) });
+  const addTagMutation = useMutation({ mutationFn: () => updateProfileAffinities([...(ownAffinities.data ?? []).filter((item) => item.tag.id !== selectedTagId).map((item) => ({ tagId: item.tag.id, sentiment: item.sentiment })), { tagId: selectedTagId, sentiment: selectedSentiment }]), onSuccess: async () => { setSelectedTagId(""); await Promise.all([queryClient.invalidateQueries({ queryKey: ["public-profile"] }), queryClient.invalidateQueries({ queryKey: ["profile-affinities"] })]); } });
   const followMutation = useMutation({
     mutationFn: () =>
       profile?.relationship.following
@@ -127,7 +137,7 @@ export function PublicProfilePage() {
   return (
     <section className="page public-profile-page">
       <header className="public-profile-hero">
-        <div className="public-profile-avatar">
+        <button aria-label="Medya galerisini aç" className="public-profile-avatar" onClick={() => setGalleryIndex(0)} type="button">
           {profilePhoto ? (
             <img
               alt={`${profile.name} profil fotoğrafı`}
@@ -136,7 +146,8 @@ export function PublicProfilePage() {
           ) : (
             profile.name.slice(0, 1).toUpperCase()
           )}
-        </div>
+        </button>
+        {profile.media.length > 1 ? <div className="profile-media-thumbnails">{profile.media.filter((item) => item.id !== profilePhoto?.id).slice(0, 3).map((media, index, shown) => <button key={media.id} onClick={() => setGalleryIndex(profile.media.findIndex((item) => item.id === media.id))} type="button">{media.type === "video" ? <video muted src={resolveMediaUrl(media.url)}/> : <img alt="" src={resolveMediaUrl(media.url)}/>} {index === shown.length - 1 && profile.media.length - 1 > shown.length ? <span>+{profile.media.length - 1 - shown.length}</span> : null}</button>)}</div> : null}
         <div className="public-profile-heading">
           <span className="eyebrow">
             {profile.accountType === "corporate"
@@ -148,12 +159,8 @@ export function PublicProfilePage() {
             {profile.verified ? <BadgeCheck aria-label="Doğrulanmış profil" className="verified-badge" size={25} /> : null}
           </h1>
           <strong>@{profile.username}</strong>
-          <p>
-            {[profile.city, profile.country].filter(Boolean).join(", ") ||
-              "Konum paylaşılmadı"}
-          </p>
           <div className="profile-metrics">
-            <button onClick={() => setPrivacyNotice(true)} type="button">
+            <button data-tooltip="Kimin kimi takip ettiğini kimse göremez." onClick={() => setPrivacyNotice(true)} title="Kimin kimi takip ettiğini kimse göremez." type="button">
               <b>{profile.followerCount}</b> takipçi
             </button>
             {profile.relationship.isSelf ? <Link to="/community?scope=following">
@@ -185,14 +192,15 @@ export function PublicProfilePage() {
                 )}
                 {profile.relationship.following ? "Takipte" : "Takip et"}
               </button>
-              <details className="action-menu profile-actions-menu"><summary aria-label="Profil aksiyonları"><MoreVertical size={20}/></summary><div>{profile.relationship.canMessage ? <Link to={`/messages?peer=${profile.id}`}><Mail size={18}/> Mesaj gönder</Link> : null}<button onClick={() => setNotificationOpen(true)} type="button">{notification.data?.enabled ? "Bildirimleri kapat" : "Set a notification"}</button><button onClick={() => setGuestOpen(true)} type="button"><UserPlus size={18}/> Add to guest list</button>{profile.stats ? <a href="#profile-stats">Interaction statistics about you</a> : null}<button onClick={() => setShareOpen(true)} type="button"><Share2 size={18}/> Paylaş</button><button onClick={() => setReportOpen((open) => !open)} type="button"><Flag size={18}/> Kullanıcıyı raporla</button><button className="danger" disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()} type="button"><Ban size={18}/> Kullanıcıyı engelle</button></div></details>
+              {profile.relationship.canMessage ? <Link className="secondary-action" to={`/messages?peer=${profile.id}`}><Mail size={18}/> Mesaj</Link> : null}
+              <details className="action-menu profile-actions-menu"><summary aria-label="Profil aksiyonları"><MoreVertical size={20}/></summary><div>{profile.relationship.canMessage ? <Link to={`/messages?peer=${profile.id}`}><Mail size={18}/> Mesaj gönder</Link> : null}<button onClick={() => setNotificationOpen(true)} type="button">{notification.data?.enabled ? "Bildirimleri kapat" : "Set a notification"}</button><button onClick={() => setGuestOpen(true)} type="button"><UserPlus size={18}/> Add to guest list</button>{profile.stats ? <Link to={`/stats/user/${profile.id}`}>Interaction statistics about you</Link> : null}<button onClick={() => setShareOpen(true)} type="button"><Share2 size={18}/> Paylaş</button><button onClick={() => setReportOpen((open) => !open)} type="button"><Flag size={18}/> Kullanıcıyı raporla</button><button className="danger" disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()} type="button"><Ban size={18}/> Kullanıcıyı engelle</button></div></details>
             </>
           ) : (
             <Link className="primary-action" to="/login">
               Takip etmek için giriş yap
             </Link>
           )}
-          {profile.relationship.isSelf ? <details className="action-menu profile-actions-menu"><summary aria-label="Profil ayarları"><MoreVertical size={20}/></summary><div><a href="#profile-stats">Interaction statistics about you</a><Link to="/settings"><Settings size={18}/> Ayarlar</Link><button onClick={() => setShareOpen(true)} type="button"><Share2 size={18}/> Paylaş</button></div></details> : null}
+          {profile.relationship.isSelf ? <details className="action-menu profile-actions-menu"><summary aria-label="Profil ayarları"><MoreVertical size={20}/></summary><div><Link to={`/stats/user/${profile.id}`}>Interaction statistics about you</Link><Link to="/settings"><Settings size={18}/> Ayarlar</Link><button onClick={() => setShareOpen(true)} type="button"><Share2 size={18}/> Paylaş</button></div></details> : null}
         </div>
         <div className="profile-sidebar-facts" aria-label="Profil bilgileri">
           {profile.accountType === "individual" && profile.birthDate ? <span>{profile.gender === "male" ? "He" : profile.gender === "female" ? "She" : "They"} is {ageFrom(profile.birthDate)} y.o.</span> : null}
@@ -201,9 +209,10 @@ export function PublicProfilePage() {
           {profile.website ? <a href={profile.website} rel="noreferrer" target="_blank"><Globe2 size={16}/> {profile.website}</a> : null}
         </div>
       </header>
-      {privacyNotice ? <div className="profile-privacy-toast" role="status"><span>Sadece takip ettiklerinizi görebilirsiniz.</span><button onClick={() => setPrivacyNotice(false)} type="button">Kapat</button></div> : null}
+      {privacyNotice ? <div className="profile-privacy-toast" role="status"><span>Kimin kimi takip ettiğini kimse göremez.</span><button onClick={() => setPrivacyNotice(false)} type="button">Kapat</button></div> : null}
       <NotificationDialog open={notificationOpen} onClose={() => setNotificationOpen(false)} enabled={Boolean(notification.data?.enabled)} pending={notificationMutation.isPending} onConfirm={() => notificationMutation.mutate()} title={profile.name}/>
       <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} title={profile.name} url={window.location.href}/>
+      {galleryIndex != null && profile.media[galleryIndex] ? <div className="dialog-backdrop profile-gallery-dialog" role="presentation" onMouseDown={() => setGalleryIndex(null)}><section aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><div className="section-header"><strong>{galleryIndex + 1} / {profile.media.length}</strong><button onClick={() => setGalleryIndex(null)} type="button">Kapat</button></div>{profile.media[galleryIndex].type === "video" ? <video autoPlay controls src={resolveMediaUrl(profile.media[galleryIndex].url)}/> : <img alt={`${profile.name} profil medyası`} src={resolveMediaUrl(profile.media[galleryIndex].url)}/>}<div className="gallery-navigation"><button disabled={galleryIndex === 0} onClick={() => setGalleryIndex((value) => Math.max(0, (value ?? 0) - 1))} type="button">Önceki</button><button disabled={galleryIndex === profile.media.length - 1} onClick={() => setGalleryIndex((value) => Math.min(profile.media.length - 1, (value ?? 0) + 1))} type="button">Sonraki</button></div></section></div> : null}
       {guestOpen ? <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Guest List'e ekle"><div><button aria-label="Kapat" onClick={() => setGuestOpen(false)}>×</button><h2>{profile.name}</h2><p>Kullanıcıyı isimlendirilmiş bir listeye veya doğrudan etkinliğe ekle.</p><form className="inline-create-guest-list" onSubmit={(event) => { event.preventDefault(); const input = event.currentTarget.elements.namedItem("listName") as HTMLInputElement; if (input.value.trim()) { createNamedGuestList.mutate(input.value.trim()); input.value = ""; } }}><input name="listName" placeholder="Yeni liste adı"/><button className="secondary-action" disabled={createNamedGuestList.isPending}>Liste oluştur</button></form><h3>Guest listeler</h3><div className="admin-list">{namedGuestLists.data?.map((list) => <button className="admin-list-row" disabled={namedGuestMutation.isPending || list.members.some((member) => member.userId === profile.id)} key={list.id} onClick={() => namedGuestMutation.mutate(list.id)}><strong>{list.name}</strong><span>{list.members.length} kişi{list.members.some((member) => member.userId === profile.id) ? " · Zaten listede" : ""}</span></button>)}</div><h3>Etkinlikler</h3><div className="admin-list">{managedEvents.data?.map((event) => <button className="admin-list-row" disabled={guestMutation.isPending} key={event.id} onClick={() => guestMutation.mutate(event.id)}><strong>{event.title}</strong><span>{new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date(event.startsAt))}</span></button>)}</div>{guestMutation.isError || namedGuestMutation.isError ? <p className="form-error">Kullanıcı guest listesine eklenemedi.</p> : null}</div></div> : null}
       {!profile.relationship.isSelf && profile.commonInterestCount > 0 ? (
         <button className="mutualism-bar" onClick={() => setMutualOpen(true)} type="button"><strong>{profile.commonInterestCount} ortak ilgi alanınız var</strong><span>Mutualizm analizini gör →</span></button>
@@ -254,25 +263,10 @@ export function PublicProfilePage() {
           </button>
         </form>
       ) : null}
-      {profile.media.length ? (
-        <section className="profile-gallery" aria-label="Profil fotoğrafları">
-          {profile.media.map((media) =>
-            media.type === "image" ? (
-              <img
-                alt={`${profile.name} profil medyası`}
-                key={media.id}
-                src={resolveMediaUrl(media.url)}
-              />
-            ) : (
-              <video controls key={media.id} src={resolveMediaUrl(media.url)} />
-            ),
-          )}
-        </section>
-      ) : null}
       <section className="identity-panel" id="interests">
         <div className="section-header compact">
           <h2>İlgi alanları</h2>
-          {profile.relationship.isSelf ? <Link to="/settings/profile">+ Profile etiket ekle</Link> : <span>{profile.interests.length} etiket</span>}
+          {profile.relationship.isSelf ? <button className="text-action" onClick={() => setTagDialogOpen(true)} type="button">+ Add a tag to yourself</button> : <span>{profile.interests.length} etiket</span>}
         </div>
         <div className="profile-interest-list">
           {profile.interests.map((interest) => (
@@ -285,11 +279,9 @@ export function PublicProfilePage() {
               key={interest.tag.id}
               to={`/tags/${interest.tag.slug}?authorId=${profile.id}`}
             >
-              <span><b className={`interest-sentiment interest-sentiment-${interest.sentiment}`}>{interest.sentiment === "like" ? "♡" : interest.sentiment === "dislike" ? "⌄" : "−"}</b> #{interest.tag.name}</span>
+              <span><b className={`interest-sentiment interest-sentiment-${interest.sentiment}`}>{interest.sentiment === "like" ? "♡" : interest.sentiment === "dislike" ? "⌄" : "−"}</b> {interest.tag.name}</span>
               <small>
-                {interest.common
-                  ? "Ortak ilgi"
-                  : interest.sentiment === "like"
+                {interest.sentiment === "like"
                     ? "Beğeniyor"
                     : interest.sentiment === "dislike"
                       ? "Beğenmiyor"
@@ -302,7 +294,7 @@ export function PublicProfilePage() {
           ) : null}
         </div>
       </section>
-      {profile.stats ? <section className="identity-panel" id="profile-stats"><h2>Profil etkileşim istatistikleri</h2><div className="compact-metrics interaction-chart-grid">{Object.entries(profile.stats).map(([label, value]) => <article key={label} style={{ "--metric-value": value } as CSSProperties}><strong>{value}</strong><span>{({ followers: "Takipçi", following: "Takip", interests: "İlgi alanı", events: "Etkinlik", places: "Mekân", media: "Medya", profileViews: "Profil görüntülenmesi", comments: "Yazılan post/yorum", messages: "Gönderilen mesaj", averageEventsPerMonth: "Aylık ortalama etkinlik" } as Record<string, string>)[label] ?? label}</span></article>)}</div></section> : null}
+      {tagDialogOpen ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setTagDialogOpen(false)}><form aria-modal="true" className="content-dialog add-profile-tag-dialog" onMouseDown={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); if (selectedTagId) addTagMutation.mutate(); }} role="dialog"><div className="section-header"><div><p className="eyebrow">Add a Tag to Profile</p><h2>Step 1: Select or write a tag</h2></div><button onClick={() => setTagDialogOpen(false)} type="button">Kapat</button></div><p>Sevdiğiniz kahve, müzik grubu, film; hatta sevmediğiniz alerjinize kadar her şey birer etiket olabilir.</p><label>Etiket<select required value={selectedTagId} onChange={(event) => setSelectedTagId(event.target.value)}><option value="">Enter an existing or new tag…</option>{allTags.data?.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}</select></label>{selectedTagId ? <fieldset><legend>Step 2: Choose a felt emotion for this tag</legend>{([['like', 'Beğeniyorum'], ['ok', 'Nötr'], ['dislike', 'Beğenmiyorum']] as const).map(([value, label]) => <label key={value}><input checked={selectedSentiment === value} onChange={() => setSelectedSentiment(value)} type="radio"/> {label}</label>)}</fieldset> : null}<button className="primary-action" disabled={!selectedTagId || addTagMutation.isPending}>Add to profile</button>{addTagMutation.isSuccess ? <p className="form-success">Etiket eklendi. Başka bir etiket seçebilirsiniz.</p> : null}{addTagMutation.isError ? <p className="form-error">Etiket profile eklenemedi.</p> : null}</form></div> : null}
       <section className="profile-content-section">
         <div className="section-header">
           <h2>

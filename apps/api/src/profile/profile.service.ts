@@ -55,6 +55,11 @@ export class ProfileService {
     if (input.phone !== undefined && (input.phone.trim() || null) !== current.phone) {
       throw new BadRequestException("Telefon numarası doğrulama akışıyla değiştirilmelidir.");
     }
+    const email = input.email?.trim().toLowerCase();
+    if (email && email !== current.email) {
+      const owner = await this.prisma.user.findFirst({ where: { email, id: { not: userId } }, select: { id: true } });
+      if (owner) throw new ConflictException("Bu e-posta adresi zaten kullanılıyor.");
+    }
 
     if (username) {
       const owner = await this.prisma.user.findFirst({ where: { username, id: { not: userId } }, select: { id: true } });
@@ -78,6 +83,8 @@ export class ProfileService {
       where: { id: userId },
       data: {
         name: input.name.trim(),
+        email: email ?? current.email,
+        ...(email && email !== current.email ? { emailVerified: false } : {}),
         username,
         phone: current.phone,
         country: this.optionalText(input.country, current.country),
@@ -102,7 +109,7 @@ export class ProfileService {
     return settings ?? {
       userId,
       messageAudience: "everybody" as const,
-      directoryDiscoverable: false,
+      directoryDiscoverable: true,
       eventAudience: "everybody" as const,
       eventInviteAudience: "everybody" as const,
       placeAudience: "everybody" as const,
@@ -111,7 +118,9 @@ export class ProfileService {
       demographicsAudience: "everybody" as const,
       locationAudience: "everybody" as const,
       websiteAudience: "everybody" as const,
-      businessAudience: "everybody" as const
+      businessAudience: "everybody" as const,
+      addressAudience: "everybody" as const,
+      tradeNameAudience: "everybody" as const
     };
   }
 

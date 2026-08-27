@@ -187,8 +187,8 @@ export function CuratorsPage() {
               />
             </label>
             <label>
-              Özgeçmiş bağlantısı
-              <input name="cvUrl" type="url" placeholder="https://…" />
+              Özgeçmiş bağlantısı (Linkedin, Instagram profiliniz vb. linki)
+              <input name="cvUrl" inputMode="url" placeholder="https://…" />
             </label>
             <button className="primary-action" disabled={apply.isPending}>
               <Send size={17} />

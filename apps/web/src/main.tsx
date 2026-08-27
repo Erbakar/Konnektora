@@ -239,6 +239,9 @@ const SettingsCenterPage = lazy(() =>
 const SettingsSectionPage = lazy(() =>
   import("./pages/SettingsCenterPage").then((module) => ({ default: module.SettingsSectionPage })),
 );
+const InteractionStatsPage = lazy(() =>
+  import("./pages/InteractionStatsPage").then((module) => ({ default: module.InteractionStatsPage })),
+);
 
 const queryClient = new QueryClient();
 
@@ -274,10 +277,12 @@ const router = createBrowserRouter([
       { path: "tags", element: <TagsPage /> },
       { path: "tags/:slug", element: <TagsPage /> },
       { path: "tags/:slug/users", element: <RelatedUsersPage kind="tag" /> },
+      { path: "stats/:targetType/:targetId", element: <InteractionStatsPage /> },
       { path: "contact", element: <ContactPage /> },
       { path: "help", element: <HelpCenterPage /> },
       { path: "help/faqs", element: <HelpCenterPage /> },
       { path: "help/faqs/:categorySlug", element: <HelpCenterPage /> },
+      { path: "help/rules", element: <HelpCenterPage /> },
       { path: "help/faq/:faqId", element: <HelpCenterPage /> },
       { path: "help/search", element: <HelpCenterPage /> },
       {

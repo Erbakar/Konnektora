@@ -121,6 +121,7 @@ export const privacyAudienceSchema = z.enum([
   "everybody",
   "following",
   "network",
+  "nobody",
 ]);
 export const privacySettingsSchema = z.object({
   userId: z.string().uuid(),
@@ -135,6 +136,8 @@ export const privacySettingsSchema = z.object({
   locationAudience: privacyAudienceSchema,
   websiteAudience: privacyAudienceSchema,
   businessAudience: privacyAudienceSchema,
+  addressAudience: privacyAudienceSchema,
+  tradeNameAudience: privacyAudienceSchema,
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional(),
 });
@@ -187,6 +190,7 @@ export const memberCardSchema = z.object({
   following: z.boolean(),
   gender: z.string().nullable().optional(),
   birthDate: z.string().datetime().or(z.date()).nullable().optional(),
+  createdAt: z.string().datetime().or(z.date()).optional(),
 });
 export const memberCardsSchema = z.array(memberCardSchema);
 export const socialProviderSchema = z.enum(["google", "facebook"]);
@@ -467,7 +471,7 @@ export const announcementSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(3).max(160),
   body: z.string().min(3),
-  target: z.enum(["all", "members", "admins"]),
+  target: z.enum(["all", "members", "individual_members", "corporate_members", "admins"]),
   targetLastLoginFrom: z.string().datetime().or(z.date()).nullable().optional(),
   targetLastLoginTo: z.string().datetime().or(z.date()).nullable().optional(),
   targetJoinedFrom: z.string().datetime().or(z.date()).nullable().optional(),
@@ -685,7 +689,10 @@ export const eventSchema = z.object({
         description: z.string().optional(),
         price: z.number().nonnegative(),
         currency: z.string(),
+        salesPlatform: z.enum(["door", "konnektora", "external"]).optional(),
+        externalSalesUrl: z.string().url().optional(),
         capacity: z.number().int().positive().optional(),
+        perUserLimit: z.number().int().positive().optional(),
         saleStartsAt: z.string().optional(),
         saleEndsAt: z.string().optional(),
         gateOpensAt: z.string().optional(),
@@ -869,6 +876,7 @@ export const adminUserSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
   name: z.string(),
+  username: z.string().nullable().optional(),
   role: userRoleSchema,
   accountType: accountTypeSchema.optional(),
   emailVerified: z.boolean().optional(),

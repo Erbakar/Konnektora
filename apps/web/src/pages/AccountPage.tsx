@@ -10,8 +10,8 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { type FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { type FormEvent, useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type {
   AccountType,
   Event,
@@ -143,14 +143,23 @@ function profileTimezone(city?: string | null, country?: string | null) {
   return timezoneOptions.some((item) => item.value === local) ? local : "UTC";
 }
 
+function toDateTimeLocal(value: string | Date) {
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
 export function AccountPage({ initialMode = "register", eventCreator = false }: { initialMode?: "login" | "register"; eventCreator?: boolean }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [user, setUser] = useState(() => getUserSession());
   const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [registrationAccountType, setRegistrationAccountType] =
     useState<AccountType>("individual");
   const [passwordResetPath, setPasswordResetPath] = useState("");
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [resetChannel, setResetChannel] = useState<"email" | "phone">("email");
   const [showFrozenConfirmation, setShowFrozenConfirmation] = useState(
     () => window.sessionStorage.getItem("konnektora_account_frozen") === "1",
   );
@@ -164,6 +173,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   const [eventStartsAt, setEventStartsAt] = useState("");
   const [eventStep, setEventStep] = useState(1);
   const [eventTicketCount, setEventTicketCount] = useState(1);
+  const [ticketSalesPlatforms, setTicketSalesPlatforms] = useState<Array<"door" | "konnektora" | "external">>(["door"]);
   const [lineupRows, setLineupRows] = useState<
     Array<{ id: string; type: "heading" | "subheading" | "session" }>
   >(() => [{ id: crypto.randomUUID(), type: "session" }]);
@@ -181,6 +191,16 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     queryFn: listMyEvents,
     enabled: Boolean(user),
   });
+  const editingEventId = eventCreator ? searchParams.get("edit") : null;
+  const editingEvent = myEventsQuery.data?.find((item) => item.id === editingEventId);
+  useEffect(() => {
+    if (!editingEvent) return;
+    setEventFormat(editingEvent.format);
+    setEventStartsAt(toDateTimeLocal(editingEvent.startsAt));
+    setLineupRows((editingEvent.lineup?.length ? editingEvent.lineup : [{ type: "session" as const }]).map((item) => ({ id: crypto.randomUUID(), type: item.type === "heading" || item.type === "subheading" ? item.type : "session" })));
+    setEventTicketCount(Math.max(1, editingEvent.ticketTypes?.length ?? 0));
+    setTicketSalesPlatforms(editingEvent.ticketTypes?.map((ticket) => ticket.salesPlatform ?? "door") ?? ["door"]);
+  }, [editingEvent]);
   const myPlacesQuery = useQuery({ queryKey: ["my-places", user?.id], queryFn: listMyPlaces, enabled: Boolean(user) });
   const interestsQuery = useQuery({
     queryKey: ["profile-interests", user?.id],
@@ -306,9 +326,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     mutationFn: requestPasswordReset,
     onSuccess: (response) => {
       setPasswordResetPath(response.token ? `/reset-password?token=${encodeURIComponent(response.token)}` : "");
+      setForgotPasswordOpen(false);
       setNotice({
         tone: "success",
-        message: "Şifre sıfırlama linki email adresine gönderildi.",
+        message: resetChannel === "phone" ? "Şifre sıfırlama bağlantısı GSM numaranıza gönderildi." : "Şifre sıfırlama bağlantısı e-posta adresinize gönderildi.",
       });
     },
     onError: (error) =>
@@ -369,7 +390,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       },
     ) => {
       const { managerUsernames = [], mediaFiles = [], ...eventInput } = input;
-      const created = await createUserEvent(eventInput);
+      const created = editingEvent ? await updateMyEvent(editingEvent.id, eventInput) : await createUserEvent(eventInput);
       await Promise.allSettled([
         ...managerUsernames.map((username) =>
           inviteEventParticipant(
@@ -387,7 +408,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     onSuccess: (created) => {
       setNotice({
         tone: "success",
-        message: "Etkinlik yayınlandı ve public listede görünür.",
+        message: editingEvent ? "Etkinlik güncellendi." : "Etkinlik yayınlandı ve public listede görünür.",
       });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
       void queryClient.invalidateQueries({ queryKey: ["my-events", user?.id] });
@@ -649,7 +670,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     if (
       !startsAt ||
       Number.isNaN(new Date(startsAt).getTime()) ||
-      new Date(startsAt).getTime() < Date.now() ||
+      (!editingEvent && new Date(startsAt).getTime() < Date.now()) ||
       (endsAt && new Date(endsAt) <= new Date(startsAt))
     ) {
       setNotice({
@@ -710,7 +731,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
             description: value("ticketDescription") || undefined,
             price: Number(value("ticketPrice") || 0),
             currency: value("ticketCurrency") || "TRY",
+            salesPlatform: (value("ticketSalesPlatform") || "door") as "door" | "konnektora" | "external",
+            externalSalesUrl: value("ticketExternalSalesUrl") || undefined,
             capacity: Number(value("ticketCapacity") || 0) || undefined,
+            perUserLimit: Number(value("ticketPerUserLimit") || 0) || undefined,
             saleStartsAt: value("ticketSaleStartsAt")
               ? new Date(value("ticketSaleStartsAt")).toISOString()
               : undefined,
@@ -723,6 +747,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
             gateClosesAt: value("ticketGateClosesAt")
               ? new Date(value("ticketGateClosesAt")).toISOString()
               : undefined,
+            status: value("ticketStatus") || "active",
           };
         })
         .filter((item) => item.name),
@@ -870,6 +895,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       locationAudience: audience("locationAudience"),
       websiteAudience: audience("websiteAudience"),
       businessAudience: audience("businessAudience"),
+      addressAudience: privacyQuery.data?.addressAudience ?? "everybody",
+      tradeNameAudience: privacyQuery.data?.tradeNameAudience ?? "everybody",
     });
   }
 
@@ -1146,13 +1173,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 <button
                   className="ghost-action"
                   disabled={forgotPasswordMutation.isPending}
-                  onClick={() => {
-                    const emailInput = document.querySelector<HTMLInputElement>(
-                      'input[name="email"]',
-                    );
-                    if (emailInput?.value)
-                      forgotPasswordMutation.mutate(emailInput.value);
-                  }}
+                  onClick={() => setForgotPasswordOpen(true)}
                   type="button"
                 >
                   Şifremi unuttum
@@ -1172,6 +1193,12 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               }}
             />
           </form>
+          {forgotPasswordOpen ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setForgotPasswordOpen(false)}><form aria-modal="true" className="content-dialog password-reset-dialog" onMouseDown={(event) => event.stopPropagation()} onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            if (resetChannel === "phone") forgotPasswordMutation.mutate({ channel: "phone", phone: normalizePhone(String(form.get("resetPhone") || "")) });
+            else forgotPasswordMutation.mutate({ channel: "email", email: normalizeEmail(String(form.get("resetEmail") || "")) });
+          }} role="dialog"><div className="section-header"><div><p className="eyebrow">Hesap kurtarma</p><h2>Şifrenizi nasıl sıfırlayalım?</h2></div><button onClick={() => setForgotPasswordOpen(false)} type="button">Kapat</button></div><div className="reset-channel-options"><label><input checked={resetChannel === "email"} name="resetChannel" onChange={() => setResetChannel("email")} type="radio"/> E-posta</label><label><input checked={resetChannel === "phone"} name="resetChannel" onChange={() => setResetChannel("phone")} type="radio"/> GSM</label></div>{resetChannel === "email" ? <label>E-posta adresi<EmailInput autoComplete="email" name="resetEmail" required/></label> : <label>GSM numarası<PhoneInput autoComplete="tel" name="resetPhone" required/></label>}<button className="primary-action" disabled={forgotPasswordMutation.isPending}>{forgotPasswordMutation.isPending ? "Gönderiliyor…" : "Sıfırlama bağlantısı gönder"}</button>{forgotPasswordMutation.isError ? <ServiceFeedback error={forgotPasswordMutation.error} fallback="Şifre sıfırlama isteği gönderilemedi."/> : null}</form></div> : null}
         </div>
       ) : (
         <div className="account-grid">
@@ -1914,10 +1941,11 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
             </section>
             <form
               className="admin-form event-create-form"
+              key={editingEvent?.id ?? "new-event"}
               noValidate
               onSubmit={handleEventSubmit}
             >
-              <h2>Etkinlik oluştur</h2>
+              <h2>{editingEvent ? "Etkinliği düzenle" : "Etkinlik oluştur"}</h2>
               <div
                 className="event-stepper"
                 aria-label="Etkinlik oluşturma adımları"
@@ -1939,6 +1967,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 <label>
                   Başlık
                   <input
+                    defaultValue={editingEvent?.title}
                     name="title"
                     placeholder="Community Breakfast"
                     required
@@ -1948,6 +1977,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 <label>
                   Açıklama
                   <textarea
+                    defaultValue={editingEvent?.description}
                     name="description"
                     required
                     minLength={10}
@@ -1978,7 +2008,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   <label className="event-start-field">
                     Başlangıç
                     <input
-                      min={new Date().toISOString().slice(0, 16)}
+                      min={editingEvent ? undefined : new Date().toISOString().slice(0, 16)}
                       name="startsAt"
                       required
                       type="datetime-local"
@@ -2005,6 +2035,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   <label>
                     Bitiş
                     <input
+                      defaultValue={editingEvent?.endsAt ? toDateTimeLocal(editingEvent.endsAt) : ""}
                       min={eventStartsAt || new Date().toISOString().slice(0, 16)}
                       name="endsAt"
                       onFocus={(event) => { if (!event.currentTarget.value && eventStartsAt) event.currentTarget.value = eventStartsAt; }}
@@ -2028,16 +2059,16 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   </label>
                   <label>
                     Katılım tipi
-                    <select name="visibility" defaultValue="open">
-                      <option value="open">Open</option>
+                    <select name="visibility" defaultValue={editingEvent?.visibility ?? "open"}>
+                      <option value="open">Herkese açık</option>
                       <option value="approval_required">
-                        Approval required
+                        Onay gerekli
                       </option>
-                      <option value="invite_only">Invite only</option>
+                      <option value="invite_only">Sadece davetli</option>
                     </select>
                   </label>
                 </div>
-                <TagPicker label="Etkinlik etiketleri" recommendedIds={interestTagIds} tags={tags}/>
+                <TagPicker initialIds={editingEvent?.tags.map((tag) => tag.id)} label="Etkinlik etiketleri" recommendedIds={interestTagIds} tags={tags}/>
                 <div className="event-step-actions">
                   <button
                     className="primary-action"
@@ -2054,16 +2085,17 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   <div className="form-grid">
                     <label>
                       Mekân adı
-                      <input name="locationName" />
+                      <input defaultValue={editingEvent?.locationName ?? ""} name="locationName" />
                     </label>
                     <label>Var olan mekânlarımdan seç<select name="placeId" defaultValue=""><option value="">Mekân seçilmedi</option>{myPlacesQuery.data?.map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}</select></label>
-                    <div className="location-fields-group"><CountryCityFields defaultCity={profileQuery.data?.city} defaultCountry={profileQuery.data?.country}/><LocationPicker addressName="locationAddress" /></div>
+                    <div className="location-fields-group"><CountryCityFields defaultCity={editingEvent?.city ?? profileQuery.data?.city} defaultCountry={editingEvent?.country ?? profileQuery.data?.country}/><LocationPicker addressName="locationAddress" defaultAddress={editingEvent?.locationAddress ?? ""} defaultLatitude={editingEvent?.latitude} defaultLongitude={editingEvent?.longitude}/></div>
                   </div>
                 ) : null}
                 {eventFormat !== "offline" ? (
                   <label>
                     Canlı yayın URL'si
                     <input
+                      defaultValue={editingEvent?.liveUrl ?? ""}
                       name="liveUrl"
                       required
                       type="url"
@@ -2179,6 +2211,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         <label>
                           Başlık
                           <input
+                            defaultValue={editingEvent?.lineup?.[index]?.title ?? ""}
                             name="lineupTitle"
                             placeholder={
                               row.type === "heading"
@@ -2194,8 +2227,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                             Başlangıç
                             <input
                               name="lineupStartsAt"
-                              defaultValue={eventStartsAt}
-                              onFocus={(event) => { if (!event.currentTarget.value && eventStartsAt) event.currentTarget.value = eventStartsAt; }}
+                              defaultValue={editingEvent?.lineup?.[index]?.startsAt ? toDateTimeLocal(editingEvent.lineup[index]!.startsAt!) : ""}
                               type="datetime-local"
                             />
                           </label>
@@ -2203,7 +2235,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                           <input name="lineupStartsAt" type="hidden" value="" />
                         )}
                       </div>
-                      <button
+                      <div className="lineup-row-actions"><button disabled={index === 0} onClick={() => setLineupRows((rows) => { const next = [...rows]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; return next; })} type="button">Yukarı</button><button disabled={index === lineupRows.length - 1} onClick={() => setLineupRows((rows) => { const next = [...rows]; [next[index], next[index + 1]] = [next[index + 1]!, next[index]!]; return next; })} type="button">Aşağı</button><button
                         className="ghost-action lineup-remove"
                         disabled={lineupRows.length === 1}
                         onClick={() =>
@@ -2215,7 +2247,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       >
                         <Trash2 size={16} />
                         Satırı kaldır
-                      </button>
+                      </button></div>
                     </fieldset>
                   ))}
                 </div>
@@ -2284,15 +2316,16 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     <div className="form-grid">
                       <label>
                         Bilet adı
-                        <input name="ticketName" />
+                        <input defaultValue={editingEvent?.ticketTypes?.[index]?.name ?? ""} name="ticketName" />
                       </label>
                       <label>
                         Açıklama
-                        <input name="ticketDescription" />
+                        <input defaultValue={editingEvent?.ticketTypes?.[index]?.description ?? ""} name="ticketDescription" />
                       </label>
                       <label>
                         Fiyat
                         <input
+                          defaultValue={editingEvent?.ticketTypes?.[index]?.price ?? ""}
                           min="0"
                           name="ticketPrice"
                           step="0.01"
@@ -2301,7 +2334,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       </label>
                       <label>
                         Para birimi
-                        <select name="ticketCurrency">
+                        <select defaultValue={editingEvent?.ticketTypes?.[index]?.currency ?? "TRY"} name="ticketCurrency">
                           {[
                             "TRY",
                             "USD",
@@ -2327,9 +2360,26 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         </select>
                       </label>
                       <label>
-                        Kontenjan
-                        <input min="1" name="ticketCapacity" type="number" />
+                        Satış platformu
+                        <select name="ticketSalesPlatform" value={ticketSalesPlatforms[index] ?? "door"} onChange={(event) => { const next = event.currentTarget.value as "door" | "konnektora" | "external"; if (next === "konnektora" && user?.accountType !== "corporate" && !["admin", "super_admin"].includes(user?.role ?? "user")) { window.alert('Sadece kurumsal üyeler "Konnektora online satış" ayarını tercih edebilir.'); return; } setTicketSalesPlatforms((items) => { const copy = [...items]; copy[index] = next; return copy; }); }}>
+                          <option value="door">Kapıda ödeme</option>
+                          <option value="konnektora">Konnektora online satış</option>
+                          <option value="external">Diğer platform</option>
+                        </select>
                       </label>
+                      {ticketSalesPlatforms[index] === "external" ? <label>
+                        Dış satış URL'si
+                        <input defaultValue={editingEvent?.ticketTypes?.[index]?.externalSalesUrl ?? ""} name="ticketExternalSalesUrl" placeholder="https://" required type="url" />
+                      </label> : <input name="ticketExternalSalesUrl" type="hidden" value=""/>}
+                      <label>
+                        Kontenjan
+                        <input defaultValue={editingEvent?.ticketTypes?.[index]?.capacity ?? ""} min="1" name="ticketCapacity" type="number" />
+                      </label>
+                      <label>
+                        Kişi başına maksimum bilet
+                        <input defaultValue={editingEvent?.ticketTypes?.[index]?.perUserLimit ?? ""} max="20" min="1" name="ticketPerUserLimit" type="number" />
+                      </label>
+                      {editingEvent ? <label>Bilet durumu<select defaultValue={editingEvent.ticketTypes?.[index]?.status ?? "active"} name="ticketStatus" onChange={(event) => { const previous = editingEvent.ticketTypes?.[index]?.status ?? "active"; if (event.currentTarget.value !== previous && !window.confirm(event.currentTarget.value === "inactive" ? "Bu bilet pasif yapılsın mı? Yeni satışlarda listelenmeyecek, mevcut biletler iptal edilmeyecek." : "Bu bilet yeniden aktif yapılsın mı? Satış koşulları uygunsa tekrar listelenecek.")) event.currentTarget.value = previous; }}><option value="active">Aktif</option><option value="inactive">Pasif</option></select></label> : <input name="ticketStatus" type="hidden" value="active"/>}
                       <label>
                         Satış başlangıcı
                         <input
@@ -2378,7 +2428,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   type="submit"
                 >
                   <Plus size={18} />
-                  Etkinlik yayınla
+                  {editingEvent ? "Değişiklikleri kaydet" : "Etkinlik yayınla"}
                 </button>
                 <div className="event-step-actions">
                   <button onClick={() => setEventStep(5)} type="button">

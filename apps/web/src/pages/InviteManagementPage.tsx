@@ -11,7 +11,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { QrCheckInScanner } from "../components/QrCheckInScanner";
 import {
   checkInEventParticipant,
@@ -41,6 +41,7 @@ type InviteMethod = "following" | "guest_lists" | "old_attendees" | "username" |
 
 export function EventInviteManagementPage() {
   const { slug = "" } = useParams();
+  const checkInMode = useLocation().hash === "#check-in";
   const user = getUserSession();
   const [inviteMethod, setInviteMethod] = useState<InviteMethod>("following");
   const client = useQueryClient();
@@ -118,6 +119,7 @@ export function EventInviteManagementPage() {
       shareUrl={`${window.location.origin}/events/${event.data.slug}`}
       kind="Etkinlik"
     >
+      <div hidden={checkInMode}>
       <InviteMethodPicker active={inviteMethod} includeOldEvents={canManage} includeGuestLists={canUseGuestLists} onChange={setInviteMethod}/>
       {["username", "email", "phone"].includes(inviteMethod) ? <InviteForm
         method={inviteMethod as "username" | "email" | "phone"}
@@ -138,7 +140,8 @@ export function EventInviteManagementPage() {
       {inviteMethod === "old_attendees" ? <InviteSource title="Eski etkinlik katılımcıları">{previousAttendees.map((participant) => <button disabled={invite.isPending} key={participant.userId} onClick={() => invite.mutate({ userId: participant.userId, role: "attendee" })} type="button"><Users size={16}/>{participant.user?.name ?? participant.userId}</button>)}</InviteSource> : null}
       {inviteMethod === "phonebook" ? <InviteSource title="Telefon rehberi"><Link className="secondary-action" to="/contacts?source=phone">Telefon rehberini tara</Link></InviteSource> : null}
       {inviteMethod === "gmail" ? <InviteSource title="Gmail"><Link className="secondary-action" to="/contacts?source=google">Google Contacts ile tara</Link></InviteSource> : null}
-      {canManage ? <><QrCheckInScanner
+      </div>
+      {checkInMode && canManage ? <><QrCheckInScanner
         label="Etkinlik QR check-in"
         pending={scan.isPending}
         onScan={(payload) => scan.mutateAsync(payload).then(() => undefined)}
@@ -162,12 +165,14 @@ export function EventInviteManagementPage() {
             checkedInAt: item.checkedInAt!,
           }))}
       /></> : null}
+      {checkInMode && !canManage ? <PermissionState/> : null}
     </ManagementShell>
   );
 }
 
 export function PlaceInviteManagementPage() {
   const { slug = "" } = useParams();
+  const checkInMode = useLocation().hash === "#check-in";
   const user = getUserSession();
   const [inviteMethod, setInviteMethod] = useState<InviteMethod>("following");
   const client = useQueryClient();
@@ -176,6 +181,7 @@ export function PlaceInviteManagementPage() {
     queryFn: () => getPlace(slug),
     enabled: Boolean(slug && user),
   });
+  const canManage = Boolean(place.data && user && (place.data.createdById === user.id || place.data.viewerMembership?.status === "accepted" && ["manager", "organizer"].includes(place.data.viewerMembership.role) || ["admin", "super_admin", "curator"].includes(user.role)));
   const members = useQuery({
     queryKey: ["place-members", place.data?.id],
     queryFn: () => listPlaceMembers(place.data!.id),
@@ -228,6 +234,7 @@ export function PlaceInviteManagementPage() {
       shareUrl={`${window.location.origin}/places/${place.data.slug}`}
       kind="Mekân"
     >
+      <div hidden={checkInMode}>
       <InviteMethodPicker active={inviteMethod} includeGuestLists onChange={setInviteMethod}/>
       {["username", "email", "phone"].includes(inviteMethod) ? <InviteForm
         method={inviteMethod as "username" | "email" | "phone"}
@@ -246,7 +253,8 @@ export function PlaceInviteManagementPage() {
       {inviteMethod === "guest_lists" ? <InviteSource title="Guest listeler"><Link className="secondary-action" to="/community">Topluluk ve guest listelerden seç</Link></InviteSource> : null}
       {inviteMethod === "phonebook" ? <InviteSource title="Telefon rehberi"><Link className="secondary-action" to="/contacts?source=phone">Telefon rehberini tara</Link></InviteSource> : null}
       {inviteMethod === "gmail" ? <InviteSource title="Gmail"><Link className="secondary-action" to="/contacts?source=google">Google Contacts ile tara</Link></InviteSource> : null}
-      <QrCheckInScanner
+      </div>
+      {checkInMode && canManage ? <><QrCheckInScanner
         label="Mekân üye kartı check-in"
         pending={scan.isPending}
         onScan={(payload) => scan.mutateAsync(payload).then(() => undefined)}
@@ -270,6 +278,8 @@ export function PlaceInviteManagementPage() {
             checkedInAt: item.checkedInAt!,
           }))}
       />
+      </> : null}
+      {checkInMode && !canManage ? <PermissionState/> : null}
     </ManagementShell>
   );
 }
@@ -431,14 +441,13 @@ function EventGuestList({
   onStatus: (id: string, status: string) => void;
   onCheckIn: (id: string) => void;
 }) {
+  const [visibleCount, setVisibleCount] = useState(10);
+  const ordered = [...items].sort((a, b) => (a.user?.name.split(" ").at(-1) ?? "").localeCompare(b.user?.name.split(" ").at(-1) ?? "", "tr"));
   return (
     <section className="admin-form">
-      <h2>
-        <Users size={20} />
-        Misafir listesi <small>{items.length}</small>
-      </h2>
+      <div className="section-header compact"><h2><Users size={20}/>Misafir listesi <small>{items.length}</small></h2><button className="create-inline-link" onClick={() => exportGuestList("Etkinlik misafir listesi", ordered.map((item) => ({ name: item.user?.name ?? item.userId, email: item.user?.email ?? "", status: item.status, role: item.role })))} type="button">Export</button></div>
       <div className="management-list">
-        {items.map((item) => (
+        {ordered.slice(0, visibleCount).map((item) => (
           <article key={item.userId}>
             <div>
               <strong>{item.user?.name ?? item.userId}</strong>
@@ -482,6 +491,7 @@ function EventGuestList({
           </article>
         ))}
       </div>
+      {visibleCount < ordered.length ? <button className="secondary-action" onClick={() => setVisibleCount((count) => count + 10)} type="button">More</button> : null}
     </section>
   );
 }
@@ -497,14 +507,13 @@ function PlaceMemberList({
   onUpdate: (id: string, input: { status?: string; role?: string }) => void;
   onCheckIn: (id: string) => void;
 }) {
+  const [visibleCount, setVisibleCount] = useState(10);
+  const ordered = [...items].sort((a, b) => (a.user?.name.split(" ").at(-1) ?? "").localeCompare(b.user?.name.split(" ").at(-1) ?? "", "tr"));
   return (
     <section className="admin-form">
-      <h2>
-        <Users size={20} />
-        Üye listesi <small>{items.length}</small>
-      </h2>
+      <div className="section-header compact"><h2><Users size={20}/>Üye listesi <small>{items.length}</small></h2><button className="create-inline-link" onClick={() => exportGuestList("Mekân üye listesi", ordered.map((item) => ({ name: item.user?.name ?? item.userId, email: item.user?.email ?? "", status: item.status, role: item.role })))} type="button">Export</button></div>
       <div className="management-list">
-        {items.map((item) => (
+        {ordered.slice(0, visibleCount).map((item) => (
           <article key={item.userId}>
             <div>
               <strong>{item.user?.name ?? item.userId}</strong>
@@ -566,6 +575,7 @@ function PlaceMemberList({
           </article>
         ))}
       </div>
+      {visibleCount < ordered.length ? <button className="secondary-action" onClick={() => setVisibleCount((count) => count + 10)} type="button">More</button> : null}
     </section>
   );
 }
@@ -575,6 +585,8 @@ function CheckInHistory({
 }: {
   items: Array<{ id: string; name: string; checkedInAt: string | Date }>;
 }) {
+  const [visibleCount, setVisibleCount] = useState(10);
+  const ordered = [...items].sort((a, b) => new Date(b.checkedInAt).getTime() - new Date(a.checkedInAt).getTime());
   return (
     <section className="admin-form">
       <h2>
@@ -582,12 +594,7 @@ function CheckInHistory({
         Check-in geçmişi <small>{items.length}</small>
       </h2>
       <div className="management-list">
-        {items
-          .sort(
-            (a, b) =>
-              new Date(b.checkedInAt).getTime() -
-              new Date(a.checkedInAt).getTime(),
-          )
+        {ordered.slice(0, visibleCount)
           .map((item) => (
             <article key={item.id}>
               <div>
@@ -600,11 +607,20 @@ function CheckInHistory({
             </article>
           ))}
       </div>
+      {visibleCount < ordered.length ? <button className="secondary-action" onClick={() => setVisibleCount((count) => count + 10)} type="button">More</button> : null}
       {!items.length ? (
         <p className="form-help">Henüz check-in kaydı yok.</p>
       ) : null}
     </section>
   );
+}
+
+function exportGuestList(title: string, rows: Array<{ name: string; email: string; status: string; role: string }>) {
+  const escape = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
+  const popup = window.open("", "_blank", "noopener,noreferrer");
+  if (!popup) return;
+  popup.document.write(`<html><head><title>${escape(title)}</title><style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial,sans-serif;color:#17231d}h1{font-size:22px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccd7d0;padding:8px;text-align:left}th{background:#eef4f0}</style></head><body><h1>${escape(title)}</h1><table><thead><tr><th>Soyad / Ad</th><th>E-posta</th><th>Rol</th><th>Durum</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escape(row.name)}</td><td>${escape(row.email)}</td><td>${escape(row.role)}</td><td>${escape(row.status)}</td></tr>`).join("")}</tbody></table><script>window.onload=()=>window.print()</script></body></html>`);
+  popup.document.close();
 }
 
 function LoginState() {

@@ -49,6 +49,22 @@ export class SmsService {
     if (!response.ok) throw new ServiceUnavailableException("SMS gönderilemedi.");
   }
 
+  async sendPasswordResetLink(phone: string, token: string) {
+    const webhookUrl = this.config.get<string>("SMS_WEBHOOK_URL");
+    const resetUrl = `${this.config.get<string>("PUBLIC_APP_URL") ?? "https://konnektora.com"}/reset-password?token=${encodeURIComponent(token)}`;
+    if (!webhookUrl) {
+      if (this.config.get<string>("NODE_ENV") === "production") throw new ServiceUnavailableException("SMS servisi yapılandırılmamış.");
+      this.logger.log(`[sms:dev] Password reset -> ${phone}: ${resetUrl}`);
+      return;
+    }
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(this.config.get<string>("SMS_API_KEY") ? { Authorization: `Bearer ${this.config.get<string>("SMS_API_KEY")}` } : {}) },
+      body: JSON.stringify({ to: phone, message: `Konnektora şifrenizi yenileyin: ${resetUrl}` }),
+    });
+    if (!response.ok) throw new ServiceUnavailableException("SMS gönderilemedi.");
+  }
+
   async sendEventReminder(phone: string, eventTitle: string, startsAt: Date, eventSlug: string) {
     const message = `${eventTitle} yarın ${startsAt.toLocaleString("tr-TR")} tarihinde başlıyor. ${this.config.get<string>("PUBLIC_APP_URL") ?? "https://konnektora.com"}/events/${eventSlug}`;
     const webhookUrl = this.config.get<string>("SMS_WEBHOOK_URL");

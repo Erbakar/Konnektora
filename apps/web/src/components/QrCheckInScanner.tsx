@@ -1,6 +1,6 @@
 import type { IScannerControls } from "@zxing/browser";
-import { Camera, Keyboard, QrCode, X } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { Camera, Radio, QrCode, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
 
 export function QrCheckInScanner({
@@ -53,9 +53,23 @@ export function QrCheckInScanner({
     } catch {
       setCameraOpen(false);
       setNotice(
-        "Kamera başlatılamadı. HTTPS ve kamera iznini kontrol et veya manuel girişi kullan.",
+        "Kamera başlatılamadı. HTTPS ve kamera iznini kontrol edin.",
       );
     }
+  }
+
+  async function startNfc() {
+    const Reader = (window as unknown as { NDEFReader?: new () => { scan: () => Promise<void>; addEventListener: (name: string, listener: (event: { message: { records: Array<{ data?: DataView; recordType: string }> } }) => void) => void } }).NDEFReader;
+    if (!Reader) { setNotice("Bu cihaz veya tarayıcı NFC okumayı desteklemiyor."); return; }
+    try {
+      const reader = new Reader();
+      await reader.scan();
+      setNotice("NFC kartını cihazın arkasına yaklaştırın.");
+      reader.addEventListener("reading", (event) => {
+        const record = event.message.records.find((item) => item.recordType === "text" || item.recordType === "url");
+        if (record?.data) void submit(new TextDecoder().decode(record.data));
+      });
+    } catch { setNotice("NFC okuma başlatılamadı. Cihaz iznini kontrol edin."); }
   }
 
   return (
@@ -65,14 +79,7 @@ export function QrCheckInScanner({
           <QrCode size={20} />
           {label}
         </h2>
-        <button
-          className="secondary-action"
-          onClick={() => void startCamera()}
-          type="button"
-        >
-          <Camera size={17} />
-          Kamerayı aç
-        </button>
+        <div className="row-actions"><button className="secondary-action" onClick={() => void startCamera()} type="button"><Camera size={17}/>Kamerayı aç</button><button className="secondary-action" onClick={() => void startNfc()} type="button"><Radio size={17}/>NFC tara</button></div>
       </div>
       {cameraOpen ? (
         <div className="qr-camera-shell">
@@ -95,31 +102,6 @@ export function QrCheckInScanner({
           </button>
         </div>
       ) : null}
-      <form
-        className="identity-scan-form"
-        onSubmit={(event: FormEvent<HTMLFormElement>) => {
-          event.preventDefault();
-          const form = event.currentTarget;
-          void submit(String(new FormData(form).get("payload") ?? "")).then(
-            () => form.reset(),
-          );
-        }}
-      >
-        <label>
-          <Keyboard size={16} />
-          QR içeriğini manuel gir
-          <textarea
-            name="payload"
-            placeholder="QR kodunu tara veya içeriğini yapıştır"
-            required
-            rows={2}
-          />
-        </label>
-        <button className="primary-action" disabled={pending}>
-          <QrCode size={17} />
-          {pending ? "Doğrulanıyor…" : "Check-in yap"}
-        </button>
-      </form>
       {notice ? (
         <p
           className={

@@ -1,11 +1,16 @@
 import { Type } from "class-transformer";
-import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsOptional, IsString, IsUrl, IsUUID, Matches, MaxLength, MinLength, ValidateNested } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsOptional, IsString, IsUrl, IsUUID, Matches, MaxLength, MinLength, ValidateNested } from "class-validator";
 
 export class UpdateProfileDto {
   @IsString()
   @MinLength(2)
   @MaxLength(160)
   name!: string;
+
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(160)
+  email?: string;
 
   @IsOptional()
   @IsString()
@@ -80,28 +85,32 @@ export class UpdatePrivacySettingsDto {
   @IsBoolean()
   directoryDiscoverable!: boolean;
 
-  @IsIn(["everybody", "following", "network"])
-  eventAudience!: "everybody" | "following" | "network";
+  @IsIn(["everybody", "following", "network", "nobody"])
+  eventAudience!: "everybody" | "following" | "network" | "nobody";
 
   @IsIn(["everybody", "following", "network"])
   eventInviteAudience!: "everybody" | "following" | "network";
 
-  @IsIn(["everybody", "following", "network"])
-  placeAudience!: "everybody" | "following" | "network";
+  @IsIn(["everybody", "following", "network", "nobody"])
+  placeAudience!: "everybody" | "following" | "network" | "nobody";
 
   @IsIn(["everybody", "following", "network"])
   placeInviteAudience!: "everybody" | "following" | "network";
 
-  @IsOptional() @IsIn(["everybody", "following", "network"])
-  profileNameAudience?: "everybody" | "following" | "network";
-  @IsOptional() @IsIn(["everybody", "following", "network"])
-  demographicsAudience?: "everybody" | "following" | "network";
-  @IsOptional() @IsIn(["everybody", "following", "network"])
-  locationAudience?: "everybody" | "following" | "network";
-  @IsOptional() @IsIn(["everybody", "following", "network"])
-  websiteAudience?: "everybody" | "following" | "network";
-  @IsOptional() @IsIn(["everybody", "following", "network"])
-  businessAudience?: "everybody" | "following" | "network";
+  @IsOptional() @IsIn(["everybody", "following", "network", "nobody"])
+  profileNameAudience?: "everybody" | "following" | "network" | "nobody";
+  @IsOptional() @IsIn(["everybody", "following", "network", "nobody"])
+  demographicsAudience?: "everybody" | "following" | "network" | "nobody";
+  @IsOptional() @IsIn(["everybody", "following", "network", "nobody"])
+  locationAudience?: "everybody" | "following" | "network" | "nobody";
+  @IsOptional() @IsIn(["everybody", "following", "network", "nobody"])
+  websiteAudience?: "everybody" | "following" | "network" | "nobody";
+  @IsOptional() @IsIn(["everybody", "following", "network", "nobody"])
+  businessAudience?: "everybody" | "following" | "network" | "nobody";
+  @IsOptional() @IsIn(["everybody", "following", "network", "nobody"])
+  addressAudience?: "everybody" | "following" | "network" | "nobody";
+  @IsOptional() @IsIn(["everybody", "following", "network", "nobody"])
+  tradeNameAudience?: "everybody" | "following" | "network" | "nobody";
 }
 
 export class NotificationPreferenceDto {

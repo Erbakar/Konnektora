@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { User } from "@prisma/client";
 import { toSlug } from "../common/slug";
 import { PrismaService } from "../prisma/prisma.service";
 import {
@@ -23,12 +24,21 @@ export class CmsService {
     });
   }
 
-  listPublicAnnouncements() {
+  listPublicAnnouncements(user?: User) {
     const now = new Date();
+    const targets = user
+      ? [
+          "all",
+          "members",
+          user.accountType === "corporate" ? "corporate_members" : "individual_members",
+          ...(["admin", "super_admin"].includes(user.role) ? ["admins"] : []),
+        ]
+      : ["all"];
 
     return this.prisma.announcement.findMany({
       where: {
         status: "active",
+        target: { in: targets },
         publishAt: { lte: now },
         OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
       },

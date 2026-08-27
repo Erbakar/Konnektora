@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { EventCard } from "../components/EventCard";
 import { LocationMap } from "../components/LocationMap";
-import { getMyProfile, getUserSession, listEvents, listTags } from "../lib/api";
+import { getDiscoveryFeed, getMyProfile, getUserSession, listEvents, listTags } from "../lib/api";
 import { mockTags } from "../lib/mockData";
 
 export function EventsPage() {
@@ -14,6 +14,7 @@ export function EventsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const user = getUserSession();
   const profile = useQuery({ queryKey: ["my-profile", user?.id, "event-discovery-location"], queryFn: getMyProfile, enabled: Boolean(user) });
+  const deviceDiscovery = useQuery({ queryKey: ["discovery-feed", "event-device-location"], queryFn: () => getDiscoveryFeed({ scope: "local" }) });
   const selectedTag = searchParams.get("tag");
   const selectedFormat = searchParams.get("format") ?? "";
   const selectedQuery = searchParams.get("q") ?? "";
@@ -24,6 +25,8 @@ export function EventsPage() {
   const selectedPage = Number(searchParams.get("page") ?? "1");
   const hasFilters = [...searchParams.keys()].some((key) => key !== "page");
   const discoveryLocation = profile.data?.city || profile.data?.country || "Global";
+  const deviceLocation = deviceDiscovery.data?.location?.trim() ?? "";
+  const showDeviceLocation = Boolean(user && deviceLocation && profile.data?.city && deviceLocation.toLocaleLowerCase("tr-TR") !== profile.data.city.toLocaleLowerCase("tr-TR"));
 
   const { data: tags = [] } = useQuery({
     queryKey: ["tags"],
@@ -39,15 +42,18 @@ export function EventsPage() {
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
   const discoveryDefinitions = [
     { key: "mine", title: "Etkinliklerim", params: { scope: "mine" }, auth: true },
+    { key: "invited", title: "Davet edildiklerim", params: { scope: "invited" }, auth: true },
     { key: "today", title: `Today in ${discoveryLocation} events`, params: { dateFrom: today.toISOString().slice(0, 10), dateTo: tomorrow.toISOString().slice(0, 10), ...(profile.data?.city ? { city: profile.data.city } : profile.data?.country ? { country: profile.data.country } : {}) }, auth: false },
     { key: "for_you", title: "Sana özel", params: { scope: "for_you" }, auth: true },
     { key: "online", title: "Online etkinlikler", params: { format: "online" }, auth: false },
     { key: "popular", title: `${discoveryLocation} içinde popüler etkinlikler`, params: { scope: "popular", ...(profile.data?.city ? { city: profile.data.city } : profile.data?.country ? { country: profile.data.country } : {}) }, auth: false },
     { key: "following", title: "Takip ettiklerinin etkinlikleri", params: { scope: "following" }, auth: true },
+    ...(showDeviceLocation ? [{ key: "device_location", title: `${deviceLocation} etkinlikleri`, params: { city: deviceLocation }, auth: false } as const] : []),
+    { key: "individual", title: "Bireysel etkinlikler", params: { scope: "individual" }, auth: false },
   ] as const;
   const discoveryQueries = useQueries({ queries: discoveryDefinitions.map((definition) => ({
     queryKey: ["events", "discovery-section", definition.key, definition.params],
-    queryFn: () => listEvents(new URLSearchParams({ ...definition.params, pageSize: definition.key === "mine" ? "3" : "6" })),
+    queryFn: () => listEvents(new URLSearchParams({ ...definition.params, pageSize: "100" })),
     enabled: searchParams.size === 0 && (!definition.auth || Boolean(user)),
   })) });
 
@@ -121,7 +127,7 @@ export function EventsPage() {
           Şehir
           <input placeholder="İstanbul" value={selectedCity} onChange={(event) => updateFilter("city", event.target.value)} />
         </label>
-        <div className="event-trendy-tags"><strong>Trend etiketler</strong><div className="event-tag-filter-cloud">{tags.map((tag) => (
+        <div className="event-trendy-tags"><strong>Trend etiketler</strong><div className="event-tag-filter-cloud">{tags.filter((tag) => (tag.eventCount ?? 0) > 0).sort((a, b) => (b.eventCount ?? 0) - (a.eventCount ?? 0)).slice(0, 10).map((tag) => (
           <button key={tag.id} className={selectedTag === tag.slug ? "active-filter" : ""} onClick={() => setSearchParams({ tag: tag.slug })} type="button"><span>#{tag.name}</span><small>{tag.eventCount ?? 0}</small></button>
         ))}</div></div>
         <label>

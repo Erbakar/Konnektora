@@ -10,7 +10,8 @@ import { CountryCityFields } from "../components/CountryCityFields";
 import { checkAvailability, completeOnboarding, confirmPhoneVerification, followUser, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, resolveMediaUrl, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, updateUserSession, uploadProfileMedia } from "../lib/api";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
 
-const steps = ["Hesap", "Telefon", "Temel bilgiler", "Profil fotoğrafı", "İlgi alanları", "Topluluk"];
+const individualSteps = ["Hesap", "Telefon", "Temel bilgiler", "Profil fotoğrafı", "İlgi alanları", "Topluluk"];
+const corporateSteps = ["Hesap", "Telefon", "Firma bilgileri", "Profil fotoğrafı", "İlgi alanları"];
 const statusStep: Record<string, number> = {
   phone: 1,
   personal_info: 2,
@@ -50,6 +51,8 @@ export function OnboardingPage() {
     queryFn: getMyProfile,
     enabled: Boolean(session),
   });
+  const isCorporate = (profile.data?.accountType ?? session?.accountType ?? accountType) === "corporate";
+  const steps = isCorporate ? corporateSteps : individualSteps;
   const media = useQuery({
     queryKey: ["profile-media", session?.id],
     queryFn: listProfileMedia,
@@ -137,6 +140,10 @@ export function OnboardingPage() {
       void queryClient.invalidateQueries({ queryKey: ["onboarding"] });
     },
   });
+  const finish = useMutation({
+    mutationFn: completeOnboarding,
+    onSuccess: () => navigate("/feed"),
+  });
   const affinitySave = useMutation({
     mutationFn: () =>
       updateProfileAffinities(
@@ -147,7 +154,8 @@ export function OnboardingPage() {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["onboarding"] });
-      setStep(5);
+      if (isCorporate) finish.mutate();
+      else setStep(5);
     },
   });
   const follow = useMutation({
@@ -156,10 +164,6 @@ export function OnboardingPage() {
       void queryClient.invalidateQueries({
         queryKey: ["member-suggestions"],
       }),
-  });
-  const finish = useMutation({
-    mutationFn: completeOnboarding,
-    onSuccess: () => navigate("/feed"),
   });
   const selectedCount = Object.keys(sentiments).length;
   const currentTag = useMemo(() => tags.data?.find((tag) => tag.id === emotionTagId), [emotionTagId, tags.data]);
@@ -379,10 +383,11 @@ export function OnboardingPage() {
                 birthDate,
                 gender: (String(form.get("gender")) as "male" | "female") || undefined,
                 website: normalizeWebsite(String(form.get("website"))),
+                ...(profile.data.accountType === "corporate" ? { district: String(form.get("district") || "") } : {}),
               });
             }}
           >
-            <h2>Temel bilgiler</h2>
+            <h2>{profile.data.accountType === "corporate" ? "Firma bilgileri" : "Temel bilgiler"}</h2>
             <label>
               Kullanıcı adı
               <input defaultValue={profile.data.username ?? ""} name="username" onChange={(event) => {
@@ -393,6 +398,10 @@ export function OnboardingPage() {
               {availabilityText ? <span className={availabilityText.includes("uygun") ? "form-success" : "form-error"}>{availabilityText}</span> : null}
             </label>
             <CountryCityFields defaultCity={profile.data.city} defaultCountry={profile.data.country} requiredCountry />
+            {profile.data.accountType === "corporate" ? <label>
+              Firmanın ilçesi
+              <input defaultValue={profile.data.district ?? ""} name="district" placeholder="İsteğe bağlı" />
+            </label> : null}
             {profile.data.accountType === "individual" ? <><label>
               Doğum tarihi
               <input defaultValue={profile.data.birthDate ? String(profile.data.birthDate).slice(0, 10) : ""} name="birthDate" required type="date" />

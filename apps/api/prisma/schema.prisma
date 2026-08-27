@@ -67,6 +67,7 @@ enum EventParticipantRole {
 
 enum PlaceMemberStatus {
   invited
+  pending
   accepted
   declined
   banned
@@ -174,6 +175,7 @@ enum PrivacyAudience {
   everybody
   following
   network
+  nobody
 }
 
 enum NotificationTopic {
@@ -569,7 +571,7 @@ model ContentNotificationSubscription {
 model PrivacySettings {
   userId                String          @id @map("user_id")
   messageAudience       PrivacyAudience @default(everybody) @map("message_audience")
-  directoryDiscoverable Boolean         @default(false) @map("directory_discoverable")
+  directoryDiscoverable Boolean         @default(true) @map("directory_discoverable")
   eventAudience         PrivacyAudience @default(everybody) @map("event_audience")
   eventInviteAudience   PrivacyAudience @default(everybody) @map("event_invite_audience")
   placeAudience         PrivacyAudience @default(everybody) @map("place_audience")
@@ -579,6 +581,8 @@ model PrivacySettings {
   locationAudience      PrivacyAudience @default(everybody) @map("location_audience")
   websiteAudience       PrivacyAudience @default(everybody) @map("website_audience")
   businessAudience      PrivacyAudience @default(everybody) @map("business_audience")
+  addressAudience       PrivacyAudience @default(everybody) @map("address_audience")
+  tradeNameAudience     PrivacyAudience @default(everybody) @map("trade_name_audience")
   createdAt             DateTime        @default(now()) @map("created_at")
   updatedAt             DateTime        @updatedAt @map("updated_at")
 
@@ -781,9 +785,12 @@ model EventTicketType {
   name         String
   description  String?
   capacity     Int
+  perUserLimit Int?               @map("per_user_limit")
   soldCount    Int                @default(0) @map("sold_count")
   price        Decimal            @default(0) @db.Decimal(10, 2)
   currency     String             @default("TRY")
+  salesPlatform String            @default("door") @map("sales_platform")
+  externalSalesUrl String?        @map("external_sales_url")
   saleStartsAt DateTime?          @map("sale_starts_at")
   saleEndsAt   DateTime?          @map("sale_ends_at")
   gateOpensAt  DateTime?          @map("gate_opens_at")

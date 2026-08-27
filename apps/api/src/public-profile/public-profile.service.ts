@@ -21,7 +21,7 @@ export class PublicProfileService {
       select: {
         id: true, name: true, username: true, accountType: true, website: true, city: true, country: true, district: true, address: true, gender: true, birthDate: true, companyName: true, tradeName: true, companyType: true, businessCategory: true,
         followerCount: true, followingCount: true, createdAt: true, profileVerifiedAt: true,
-        privacySettings: { select: { messageAudience: true, eventAudience: true, placeAudience: true, profileNameAudience: true, demographicsAudience: true, locationAudience: true, websiteAudience: true, businessAudience: true } },
+        privacySettings: { select: { messageAudience: true, eventAudience: true, placeAudience: true, profileNameAudience: true, demographicsAudience: true, locationAudience: true, websiteAudience: true, businessAudience: true, addressAudience: true, tradeNameAudience: true } },
         interestTags: { where: { tag: { status: "active" } }, include: { tag: true }, orderBy: { createdAt: "desc" } }
       }
     });
@@ -31,7 +31,7 @@ export class PublicProfileService {
       if (blocked) throw new ForbiddenException("Bu kullanıcı profili görüntülenemiyor.");
     }
     const relationship = await this.relationship(profile.id, viewerId);
-    const privacy = profile.privacySettings ?? { messageAudience: "everybody" as const, eventAudience: "everybody" as const, placeAudience: "everybody" as const, profileNameAudience: "everybody" as const, demographicsAudience: "everybody" as const, locationAudience: "everybody" as const, websiteAudience: "everybody" as const, businessAudience: "everybody" as const };
+    const privacy = profile.privacySettings ?? { messageAudience: "everybody" as const, eventAudience: "everybody" as const, placeAudience: "everybody" as const, profileNameAudience: "everybody" as const, demographicsAudience: "everybody" as const, locationAudience: "everybody" as const, websiteAudience: "everybody" as const, businessAudience: "everybody" as const, addressAudience: "everybody" as const, tradeNameAudience: "everybody" as const };
     const canViewStats = viewerId === profile.id || ["admin", "super_admin", "curator"].includes(viewerRole ?? "");
     const [media, ownInterests, events, places, profileViews, authoredComments, sentMessages] = await Promise.all([
       this.prisma.mediaFile.findMany({ where: { contentType: "user", contentId: profile.id, status: "active" }, select: { id: true, url: true, type: true, sortOrder: true, isProfilePicture: true }, orderBy: { sortOrder: "asc" }, take: 50 }),
@@ -50,14 +50,14 @@ export class PublicProfileService {
       id: profile.id, name: this.canView(privacy.profileNameAudience ?? "everybody", relationship) ? profile.name : profile.username ?? "Konnektora üyesi", username: profile.username ?? profile.id,
       accountType: profile.accountType === "corporate" ? "corporate" as const : "individual" as const,
       website: this.canView(privacy.websiteAudience ?? "everybody", relationship) ? profile.website : null,
-      city: viewerId === profile.id ? profile.city : null,
-      country: viewerId === profile.id ? profile.country : null,
-      district: viewerId === profile.id ? profile.district : null,
-      address: viewerId === profile.id ? profile.address : null,
+      city: this.canView(privacy.locationAudience ?? "everybody", relationship) ? profile.city : null,
+      country: this.canView(privacy.locationAudience ?? "everybody", relationship) ? profile.country : null,
+      district: this.canView(privacy.addressAudience ?? "everybody", relationship) ? profile.district : null,
+      address: this.canView(privacy.addressAudience ?? "everybody", relationship) ? profile.address : null,
       gender: this.canView(privacy.demographicsAudience ?? "everybody", relationship) ? profile.gender : null,
       birthDate: this.canView(privacy.demographicsAudience ?? "everybody", relationship) ? profile.birthDate : null,
       companyName: this.canView(privacy.businessAudience ?? "everybody", relationship) ? profile.companyName : null,
-      tradeName: this.canView(privacy.businessAudience ?? "everybody", relationship) ? profile.tradeName : null,
+      tradeName: this.canView(privacy.tradeNameAudience ?? "everybody", relationship) ? profile.tradeName : null,
       companyType: this.canView(privacy.businessAudience ?? "everybody", relationship) ? profile.companyType : null,
       businessCategory: this.canView(privacy.businessAudience ?? "everybody", relationship) ? profile.businessCategory : null,
       followerCount: profile.followerCount, followingCount: profile.followingCount, memberSince: profile.createdAt, verified: Boolean(profile.profileVerifiedAt),

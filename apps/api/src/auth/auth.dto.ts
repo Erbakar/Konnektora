@@ -66,6 +66,21 @@ export class EmailDto {
   email!: string;
 }
 
+export class PasswordResetRequestDto {
+  @IsOptional()
+  @IsIn(["email", "phone"])
+  channel?: "email" | "phone";
+
+  @ValidateIf((value: PasswordResetRequestDto) => (value.channel ?? "email") === "email")
+  @IsEmail()
+  email?: string;
+
+  @ValidateIf((value: PasswordResetRequestDto) => value.channel === "phone")
+  @IsString()
+  @Matches(/^\+[1-9]\d{7,14}$/, { message: "Telefon numarası E.164 formatında olmalıdır." })
+  phone?: string;
+}
+
 export class TokenDto {
   @IsString()
   token!: string;

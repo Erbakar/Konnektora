@@ -257,6 +257,7 @@ type MockUser = {
 
 export type ProfileUpdateInput = {
   name: string;
+  email?: string;
   username?: string;
   phone?: string;
   country?: string;
@@ -1185,12 +1186,9 @@ function getMockResponse<T>(
   }
 
   if (pathname === "/auth/password/forgot" && method === "POST") {
-    return schema.parse(
-      createMockEmailToken(
-        parseBody<{ email: string }>(options).email,
-        "password_reset",
-      ),
-    );
+    const input = parseBody<{ channel?: "email" | "phone"; email?: string; phone?: string }>(options);
+    const email = input.email ?? (input.phone ? getAllMockUsers().find((user) => user.phone === input.phone)?.email : undefined);
+    return schema.parse(email ? createMockEmailToken(email, "password_reset") : { ok: true });
   }
 
   if (pathname === "/auth/password/reset" && method === "POST") {
@@ -1425,6 +1423,10 @@ function getMockResponse<T>(
 
   if (pathname === "/social/suggestions" && method === "GET") {
     return schema.parse(listMockMemberSuggestions());
+  }
+
+  if (pathname === "/social/new-members" && method === "GET") {
+    return schema.parse(listMockNewMembers());
   }
 
   if (pathname === "/social/following" && method === "GET") {
@@ -4821,9 +4823,19 @@ function listMockAnnouncements(): Announcement[] {
 
 function listMockPublicAnnouncements(): Announcement[] {
   const now = Date.now();
+  const user = getUserSession();
+  const targets: Announcement["target"][] = user
+    ? [
+        "all",
+        "members",
+        user.accountType === "corporate" ? "corporate_members" : "individual_members",
+        ...(["admin", "super_admin"].includes(user.role) ? (["admins"] as const) : []),
+      ]
+    : ["all"];
 
   return listMockAnnouncements().filter(
     (announcement) =>
+      targets.includes(announcement.target) &&
       announcement.status === "active" &&
       new Date(announcement.publishAt).getTime() <= now &&
       (!announcement.expiresAt ||
@@ -6340,16 +6352,18 @@ function getMockPrivacySettings(): PrivacySettings {
     settings[session.id] ?? {
       userId: session.id,
       messageAudience: "everybody",
-      directoryDiscoverable: false,
+      directoryDiscoverable: true,
       eventAudience: "everybody",
       eventInviteAudience: "everybody",
       placeAudience: "everybody",
-    placeInviteAudience: "everybody",
-    profileNameAudience: "everybody",
-    demographicsAudience: "everybody",
-    locationAudience: "everybody",
-    websiteAudience: "everybody",
-    businessAudience: "everybody",
+      placeInviteAudience: "everybody",
+      profileNameAudience: "everybody",
+      demographicsAudience: "everybody",
+      locationAudience: "everybody",
+      websiteAudience: "everybody",
+      businessAudience: "everybody",
+      addressAudience: "everybody",
+      tradeNameAudience: "everybody",
     }
   );
 }
@@ -6550,6 +6564,7 @@ function toMockMemberCard(user: MockUser, following: boolean): MemberCard {
       ownTags.has(tagId),
     ).length,
     following,
+    createdAt: user.createdAt,
   };
 }
 
@@ -6584,6 +6599,15 @@ function listMockFollowing() {
   return getAllMockUsers()
     .filter((user) => followed.has(user.id))
     .map((user) => toMockMemberCard(user, true));
+}
+
+function listMockNewMembers() {
+  const followed = new Set(mockFollowIds());
+  return getAllMockUsers()
+    .filter((user) => user.status !== "banned")
+    .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")))
+    .slice(0, 200)
+    .map((user) => toMockMemberCard(user, followed.has(user.id)));
 }
 
 function followMockUser(targetUserId: string) {
@@ -7345,7 +7369,7 @@ function parseCmsStatus(
 }
 
 function parseAnnouncementTarget(value?: string): Announcement["target"] {
-  return value === "members" || value === "admins" ? value : "all";
+  return value === "members" || value === "individual_members" || value === "corporate_members" || value === "admins" ? value : "all";
 }
 
 function parsePolicyType(value?: string): PolicyType {
@@ -7639,7 +7663,7 @@ export function listContentMedia(
 }
 
 export function uploadContentMedia(
-  targetType: "event" | "place",
+  targetType: "event" | "place" | "tag_comment" | "event_comment" | "place_comment" | "comment_reply",
   targetId: string,
   file: File,
 ): Promise<ProfileMedia> {
@@ -7801,6 +7825,10 @@ export function listMemberSuggestions(): Promise<MemberCard[]> {
 
 export function listFollowing(): Promise<MemberCard[]> {
   return requestJson("/social/following", memberCardsSchema, { auth: "user" });
+}
+
+export function listNewMembers(): Promise<MemberCard[]> {
+  return requestJson("/social/new-members", memberCardsSchema, { auth: "user" });
 }
 
 export function followUser(
@@ -8418,6 +8446,7 @@ export type ContentThreadComment = {
   createdAt: string;
   updatedAt: string;
   author?: { id: string; name: string; username?: string | null; avatarUrl?: string | null } | null;
+  media?: Array<{ id: string; url: string; type: string }>;
   replies?: ContentThreadComment[];
 };
 
@@ -8441,6 +8470,7 @@ const contentThreadCommentSchema: z.ZodType<ContentThreadComment> = z.lazy(() =>
       })
       .nullable()
       .optional(),
+    media: z.array(z.object({ id: z.string(), url: z.string(), type: z.string() })).optional(),
     replies: z.array(contentThreadCommentSchema).optional(),
   }),
 );
@@ -8602,14 +8632,14 @@ export function confirmEmail(token: string): Promise<LoginResponse> {
 }
 
 export function requestPasswordReset(
-  email: string,
+  input: { channel: "email"; email: string } | { channel: "phone"; phone: string },
 ): Promise<{ ok: boolean; token?: string }> {
   return requestJson(
     "/auth/password/forgot",
     z.object({ ok: z.boolean(), token: z.string().optional() }),
     {
       method: "POST",
-      body: JSON.stringify({ email }),
+      body: JSON.stringify(input),
     },
   );
 }
@@ -9035,7 +9065,7 @@ export function deleteAdminFaq(id: string): Promise<{ ok: true }> {
 }
 
 export async function listAnnouncements(): Promise<Announcement[]> {
-  const result = await requestJson("/announcements", announcementListSchema);
+  const result = await requestJson("/announcements", announcementListSchema, { auth: "user" });
   return USE_DEMO_CONTENT && result.length === 0
     ? listMockPublicAnnouncements()
     : result;
@@ -9193,6 +9223,7 @@ export type AdminEventInput = {
     price: number;
     currency: string;
     capacity?: number;
+    perUserLimit?: number;
     saleStartsAt?: string;
     saleEndsAt?: string;
     gateOpensAt?: string;
@@ -9200,7 +9231,9 @@ export type AdminEventInput = {
     status?: string;
   }>;
   price?: number;
-  currency?: string;
+    currency?: string;
+    salesPlatform?: "door" | "konnektora" | "external";
+    externalSalesUrl?: string;
   capacity?: number;
   coverImageUrl?: string;
   status?: string;
@@ -9351,10 +9384,13 @@ export type TicketTypeRecord = {
   name: string;
   description: string | null;
   capacity: number;
+  perUserLimit: number | null;
   soldCount: number;
   remaining: number;
   price: number;
   currency: string;
+  salesPlatform: "door" | "konnektora" | "external";
+  externalSalesUrl: string | null;
   saleStartsAt: string | null;
   saleEndsAt: string | null;
   gateOpensAt: string | null;
@@ -9395,10 +9431,13 @@ const ticketTypeRecordsSchema = z.array(
     name: z.string(),
     description: z.string().nullable(),
     capacity: z.number(),
+    perUserLimit: z.number().nullable(),
     soldCount: z.number(),
     remaining: z.number(),
     price: z.number(),
     currency: z.string(),
+    salesPlatform: z.enum(["door", "konnektora", "external"]),
+    externalSalesUrl: z.string().nullable(),
     saleStartsAt: z.coerce.string().nullable(),
     saleEndsAt: z.coerce.string().nullable(),
     gateOpensAt: z.coerce.string().nullable(),
@@ -9804,19 +9843,20 @@ export async function getPlace(slug: string): Promise<Place> {
   try {
     return await requestJson(`/places/${slug}`, placeSchema, { auth: "user" });
   } catch (error) {
+    let finalError = error;
     if (error instanceof ApiHttpError && error.status === 401) {
       try {
         return await requestJson(`/places/${slug}`, placeSchema);
       } catch (anonymousError) {
-        error = anonymousError;
+        finalError = anonymousError;
       }
     }
     // Production shows the curated demo places when the live catalogue is empty.
     // Their detail routes must resolve from the same source as the list.
-    if (USE_DEMO_CONTENT && error instanceof ApiHttpError && error.status === 404) {
+    if (USE_DEMO_CONTENT && finalError instanceof ApiHttpError && finalError.status === 404) {
       return getMockPublicPlace(slug);
     }
-    throw error;
+    throw finalError;
   }
 }
 

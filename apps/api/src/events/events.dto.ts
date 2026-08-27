@@ -28,8 +28,8 @@ import { Type } from "class-transformer";
 
 export class EventQueryDto {
   @IsOptional()
-  @IsIn(["popular", "following", "for_you", "mine"])
-  scope?: "popular" | "following" | "for_you" | "mine";
+  @IsIn(["popular", "following", "for_you", "mine", "invited", "individual"])
+  scope?: "popular" | "following" | "for_you" | "mine" | "invited" | "individual";
 
   @IsOptional()
   @IsString()
@@ -201,7 +201,10 @@ export class CreateEventDto {
     description?: string;
     price: number;
     currency: string;
+    salesPlatform?: "door" | "konnektora" | "external";
+    externalSalesUrl?: string;
     capacity?: number;
+    perUserLimit?: number;
     saleStartsAt?: string;
     saleEndsAt?: string;
     gateOpensAt?: string;
