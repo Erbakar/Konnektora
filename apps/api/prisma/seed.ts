@@ -245,9 +245,9 @@ async function main() {
     {
       title: "Global Startup Demo Night",
       slug: "global-startup-demo-night",
-      summary: "Early-stage startup ekiplerinin ürünlerini kapalı community içinde sunduğu demo gecesi.",
+      summary: "Erken aşama girişim ekiplerinin ürünlerini kapalı topluluk içinde sunduğu tanıtım gecesi.",
       description:
-        "Founder'lar beş dakikalık demo sunumları yapar, katılımcılar ürün geri bildirimi verir ve yatırımcılarla kontrollü networking alanında buluşur. Etkinlik open tipindedir ve Konnektora içinde attend akışıyla yönetilir.",
+        "Kurucular beş dakikalık ürün sunumları yapar, katılımcılar geri bildirim verir ve yatırımcılarla kontrollü tanışma alanında buluşur. Etkinlik herkese açıktır ve katılım Konnektora üzerinden yönetilir.",
       startsInDays: 4,
       format: "hybrid",
       visibility: "open",
@@ -260,9 +260,9 @@ async function main() {
     {
       title: "AI Product Builders Breakfast",
       slug: "ai-product-builders-breakfast",
-      summary: "AI ürün geliştiren founder ve product ekipleri için sabah buluşması.",
+      summary: "Yapay zekâ ürünü geliştiren kurucu ve ürün ekipleri için sabah buluşması.",
       description:
-        "Kapalı community üyeleri ürün discovery, kullanıcı görüşmeleri ve go-to-market kararlarını tartışır. Katılım approval required olarak ayarlanmıştır; organizer katılım taleplerini guest list üzerinden onaylar.",
+        "Kapalı topluluk üyeleri ürün keşfi, kullanıcı görüşmeleri ve pazara çıkış kararlarını tartışır. Katılım onay gerektirir; organizatör talepleri misafir listesi üzerinden değerlendirir.",
       startsInDays: 8,
       format: "offline",
       visibility: "approval_required",
@@ -275,9 +275,9 @@ async function main() {
     {
       title: "SaaS Growth Office Hours",
       slug: "saas-growth-office-hours",
-      summary: "SaaS founder'ları için growth, pricing ve retention odaklı kapalı oturum.",
+      summary: "SaaS kurucuları için büyüme, fiyatlandırma ve müşteri devamlılığı odaklı kapalı oturum.",
       description:
-        "Katılımcılar kendi metriklerini getirir, küçük gruplarda problem çözme oturumlarına katılır ve deneyimli operator'lardan geri bildirim alır. Invite-only yapı, hassas metriklerin güvenli paylaşımı için tercih edilir.",
+        "Katılımcılar kendi metriklerini getirir, küçük gruplarda problem çözme oturumlarına katılır ve deneyimli yöneticilerden geri bildirim alır. Yalnız davetlilere açık yapı, hassas metriklerin güvenli paylaşımı için tercih edilir.",
       startsInDays: 12,
       format: "online",
       visibility: "invite_only",
@@ -292,7 +292,7 @@ async function main() {
       slug: "climate-tech-founder-roundtable",
       summary: "Climate tech girişimleri için yatırım, regülasyon ve pilot müşteri gündemi.",
       description:
-        "Global founder'lar climate tech pazarındaki finansman dinamiklerini, kurumsal pilot süreçlerini ve community desteklerini konuşur. Session sonunda katılımcılar takip listelerine eklenebilir.",
+        "Uluslararası kurucular iklim teknolojileri pazarındaki finansman dinamiklerini, kurumsal pilot süreçlerini ve topluluk desteklerini konuşur. Oturum sonunda katılımcılar takip listelerine eklenebilir.",
       startsInDays: 17,
       format: "hybrid",
       visibility: "approval_required",
@@ -305,9 +305,9 @@ async function main() {
     {
       title: "Founders & Operators Mixer",
       slug: "founders-operators-mixer",
-      summary: "Founder, operator ve community liderleri için hızlı tanışma etkinliği.",
+      summary: "Kurucu, yönetici ve topluluk liderleri için hızlı tanışma etkinliği.",
       description:
-        "Konnektora matching mantığına uygun olarak katılımcılar ilgi alanı tag'lerine göre küçük gruplara ayrılır. Etkinlik boyunca invite ve follow aksiyonları öne çıkar.",
+        "Katılımcılar Konnektora eşleşme mantığıyla ilgi alanlarına göre küçük gruplara ayrılır. Etkinlik boyunca davet ve takip özellikleri öne çıkar.",
       startsInDays: 5,
       format: "offline",
       visibility: "open",
@@ -320,9 +320,9 @@ async function main() {
     {
       title: "Remote Builders Social",
       slug: "remote-builders-social",
-      summary: "Remote çalışan builder'ların şehir bağımsız tanışma ve ortak çalışma buluşması.",
+      summary: "Uzaktan çalışan üreticilerin şehir bağımsız tanışma ve ortak çalışma buluşması.",
       description:
-        "Online başlayan etkinlik, katılımcıların çalışma alanları ve proje hedeflerine göre breakout odalarına ayrılmasıyla devam eder. Internal attendance listesi etkinlik sonrası takip için kullanılır.",
+        "Çevrim içi başlayan etkinlik, katılımcıların çalışma alanları ve proje hedeflerine göre küçük odalara ayrılmasıyla devam eder. Katılım listesi etkinlik sonrası iletişim için kullanılır.",
       startsInDays: 9,
       format: "online",
       visibility: "open",
@@ -335,9 +335,9 @@ async function main() {
     {
       title: "Investor Coffee Chats",
       slug: "investor-coffee-chats",
-      summary: "Yatırımcılar ve founder'lar arasında kontrollü bire bir tanışma saatleri.",
+      summary: "Yatırımcılar ve kurucular arasında kontrollü bire bir tanışma saatleri.",
       description:
-        "Katılımcılar kısa profilleriyle başvurur; organizer uygun eşleşmeleri onaylar ve guest list üzerinden invited/accepted durumlarını yönetir.",
+        "Katılımcılar kısa profilleriyle başvurur; organizatör uygun eşleşmeleri onaylar ve misafir listesi üzerinden davet ve kabul durumlarını yönetir.",
       startsInDays: 15,
       format: "hybrid",
       visibility: "approval_required",
@@ -350,9 +350,9 @@ async function main() {
     {
       title: "Community Leaders Dinner",
       slug: "community-leaders-dinner",
-      summary: "Global topluluk yöneticileri için invite-only akşam yemeği.",
+      summary: "Uluslararası topluluk yöneticileri için yalnız davetlilere açık akşam yemeği.",
       description:
-        "Kapalı community moderasyon deneyimleri, event kalite standardı ve offline buluşma güvenliği konuşulur. Katılım yalnızca organizer davetiyle mümkündür.",
+        "Kapalı topluluk moderasyonu, etkinlik kalite standardı ve yüz yüze buluşma güvenliği konuşulur. Katılım yalnızca organizatör davetiyle mümkündür.",
       startsInDays: 22,
       format: "offline",
       visibility: "invite_only",
@@ -365,9 +365,9 @@ async function main() {
     {
       title: "Seed Funding Readiness Clinic",
       slug: "seed-funding-readiness-clinic",
-      summary: "Seed turuna hazırlanan startup'lar için pitch, metrik ve data room kliniği.",
+      summary: "Tohum yatırım turuna hazırlanan girişimler için sunum, metrik ve veri odası kliniği.",
       description:
-        "Founder'lar yatırım hazırlıklarını uzmanlarla gözden geçirir. Event detail sayfasındaki guest list, yatırımcı ve founder rollerini takip etmek için kullanılır.",
+        "Kurucular yatırım hazırlıklarını uzmanlarla gözden geçirir. Etkinlik detayındaki misafir listesi, yatırımcı ve kurucu rollerini takip etmek için kullanılır.",
       startsInDays: 6,
       format: "online",
       visibility: "approval_required",
@@ -380,9 +380,9 @@ async function main() {
     {
       title: "Angel Investor AMA",
       slug: "angel-investor-ama",
-      summary: "Angel yatırımcılarla soru-cevap ve deal değerlendirme oturumu.",
+      summary: "Melek yatırımcılarla soru-cevap ve yatırım değerlendirme oturumu.",
       description:
-        "Katılımcılar sorularını önceden gönderir, organizer soruları gruplar ve canlı oturumda cevapları yönetir. Attend listesi sonradan follow-up için saklanır.",
+        "Katılımcılar sorularını önceden gönderir, organizatör soruları gruplar ve canlı oturumda cevapları yönetir. Katılım listesi daha sonra iletişim kurmak için saklanır.",
       startsInDays: 11,
       format: "online",
       visibility: "open",
@@ -395,9 +395,9 @@ async function main() {
     {
       title: "VC Reverse Pitch",
       slug: "vc-reverse-pitch",
-      summary: "VC fonlarının thesis ve yatırım kriterlerini founder'lara anlattığı etkinlik.",
+      summary: "Girişim sermayesi fonlarının tez ve yatırım kriterlerini kuruculara anlattığı etkinlik.",
       description:
-        "Bu formatta yatırımcılar sahneye çıkar ve founder'lar hangi fonla görüşmek istediklerini seçer. Guest list rolleri organizer, investor ve attendee olarak ayrıştırılır.",
+        "Bu formatta yatırımcılar sahneye çıkar ve kurucular hangi fonla görüşmek istediklerini seçer. Misafir listesi rolleri organizatör, yatırımcı ve katılımcı olarak ayrıştırılır.",
       startsInDays: 19,
       format: "hybrid",
       visibility: "approval_required",
@@ -410,9 +410,9 @@ async function main() {
     {
       title: "Impact Capital Roundtable",
       slug: "impact-capital-roundtable",
-      summary: "Impact yatırımcıları ve sosyal girişim founder'ları için yuvarlak masa.",
+      summary: "Etki yatırımcıları ve sosyal girişim kurucuları için yuvarlak masa.",
       description:
-        "Katılımcılar etki ölçümü, yatırım yapısı ve global expansion konularını tartışır. Invite-only yapı, nitelikli ve dengeli katılımcı kompozisyonu sağlar.",
+        "Katılımcılar etki ölçümü, yatırım yapısı ve uluslararası büyüme konularını tartışır. Yalnız davetlilere açık yapı, nitelikli ve dengeli bir katılımcı grubu sağlar.",
       startsInDays: 27,
       format: "offline",
       visibility: "invite_only",
@@ -425,9 +425,9 @@ async function main() {
     {
       title: "Solo Founder Accountability Sprint",
       slug: "solo-founder-accountability-sprint",
-      summary: "Solo founder'lar için haftalık hedef, ilerleme ve destek oturumu.",
+      summary: "Tek başına çalışan kurucular için haftalık hedef, ilerleme ve destek oturumu.",
       description:
-        "Founder'lar haftalık hedeflerini paylaşır, diğer katılımcılarla eşleşir ve ilerleme takibi yapar. Konnektora internal attend listesi düzenli katılımı takip eder.",
+        "Kurucular haftalık hedeflerini paylaşır, diğer katılımcılarla eşleşir ve ilerleme takibi yapar. Konnektora katılım listesi düzenli katılımı takip eder.",
       startsInDays: 3,
       format: "online",
       visibility: "open",
@@ -440,9 +440,9 @@ async function main() {
     {
       title: "Founder Mental Load Circle",
       slug: "founder-mental-load-circle",
-      summary: "Founder'ların yalnızlık, stres ve karar yükünü konuştuğu kapalı circle.",
+      summary: "Kurucuların yalnızlık, stres ve karar yükünü konuştuğu kapalı destek grubu.",
       description:
-        "Güvenli bir ortamda deneyim paylaşımı yapılır. Invite-only görünürlük ve küçük guest list, oturum kalitesini korumak için kullanılır.",
+        "Güvenli bir ortamda deneyim paylaşımı yapılır. Yalnız davetlilere açık görünürlük ve küçük misafir listesi, oturum kalitesini korumak için kullanılır.",
       startsInDays: 13,
       format: "online",
       visibility: "invite_only",
@@ -455,9 +455,9 @@ async function main() {
     {
       title: "Co-Founder Matching Lab",
       slug: "co-founder-matching-lab",
-      summary: "Yeni proje kurmak isteyen founder adayları için kontrollü eşleşme lab'i.",
+      summary: "Yeni proje kurmak isteyen kurucu adayları için kontrollü eşleşme atölyesi.",
       description:
-        "Katılımcılar yetkinlik, ilgi ve çalışma tarzına göre eşleştirilir. Organizer, approval_required akışında uygun profilleri kabul eder.",
+        "Katılımcılar yetkinlik, ilgi ve çalışma tarzına göre eşleştirilir. Organizatör, onay gerektiren akışta uygun profilleri kabul eder.",
       startsInDays: 20,
       format: "hybrid",
       visibility: "approval_required",
@@ -470,9 +470,9 @@ async function main() {
     {
       title: "Founder Story Night",
       slug: "founder-story-night",
-      summary: "Founder'ların başarısızlık, pivot ve büyüme hikayelerini paylaştığı gece.",
+      summary: "Kurucuların başarısızlık, yön değişikliği ve büyüme hikayelerini paylaştığı gece.",
       description:
-        "Kısa sahne anlatımları ve sonrasında küçük grup konuşmaları yapılır. Similar events ve tag bağlantıları yeni keşifler için kullanılır.",
+        "Kısa sahne anlatımları ve sonrasında küçük grup konuşmaları yapılır. Benzer etkinlik ve ilgi alanı bağlantıları yeni keşifler için kullanılır.",
       startsInDays: 29,
       format: "offline",
       visibility: "open",
@@ -503,7 +503,7 @@ async function main() {
         visibility: event.visibility,
         city: event.city,
         country: event.country,
-        language: "en",
+        language: "tr",
         organizerName: event.organizerName,
         externalRegistrationUrl: null,
         coverImageUrl: event.coverImageUrl,
@@ -526,7 +526,7 @@ async function main() {
         visibility: event.visibility,
         city: event.city,
         country: event.country,
-        language: "en",
+        language: "tr",
         organizerName: event.organizerName,
         externalRegistrationUrl: null,
         coverImageUrl: event.coverImageUrl,

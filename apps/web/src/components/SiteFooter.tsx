@@ -28,7 +28,7 @@ export function SiteFooter() {
             <strong className="site-footer-section-title">Konnektora</strong>
             <div className="site-footer-section-links" id="footer-konnektora-links">
               <a href={publicSiteHref("/store")}>{language === "tr" ? "Mağaza" : "Store"}</a>
-              <Link to="/business">For business</Link>
+              <Link to="/business">{language === "tr" ? "İşletmeler için" : "For business"}</Link>
             </div>
           </div>
           <div className={`site-footer-section${openSection === "discover" ? " is-open" : ""}`}>

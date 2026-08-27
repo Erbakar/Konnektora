@@ -163,7 +163,7 @@ export function EventDetailPage() {
       ) : null}
       <ContentMediaGallery targetId={event.id} targetType="event" />
       <p className="eyebrow">
-        {event.format.toUpperCase()} EVENT – {event.visibility === "open" ? "HERKESE AÇIK" : event.visibility === "approval_required" ? "ONAY GEREKLİ" : "SADECE DAVETLİ"}
+        {event.format === "online" ? "ÇEVRİM İÇİ" : event.format === "hybrid" ? "HİBRİT" : "YÜZ YÜZE"} ETKİNLİK – {event.visibility === "open" ? "HERKESE AÇIK" : event.visibility === "approval_required" ? "ONAY GEREKLİ" : "SADECE DAVETLİ"}
       </p>
       <h1>{event.title}</h1>
       <div className="detail-meta">
