@@ -23,7 +23,7 @@ const pageCopy = {
     seeAll: "Tümünü göster", myEmpty: "Katıldığın ve yöneticisi olduğun etkinlikler burada gösterilecek.",
     loadingEvents: "Etkinlikler yükleniyor…", loadFailed: "Etkinlikler yüklenemedi", retryCopy: "Bağlantını kontrol edip yeniden deneyebilirsin.",
     retry: "Yeniden dene", noResults: "Bu filtrelerle etkinlik bulunamadı.", previous: "Önceki", next: "Sonraki",
-    page: (page: number, size: number) => `Sayfa ${page} · ${size} kayıt/sayfa`, result: (total: number) => `${total} sonuç`, global: "Global",
+    page: (page: number, size: number) => `Sayfa ${page} · ${size} kayıt/sayfa`, goToPage: (page: number) => `${page}. sayfaya git`, result: (total: number) => `${total} sonuç`, global: "Global",
   },
   en: {
     filters: "Filters", filterSearch: "Filter & Search", search: "Search", searchPlaceholder: "Founder, SaaS, investor...",
@@ -39,7 +39,7 @@ const pageCopy = {
     seeAll: "See all", myEmpty: "Events you attend or manage will appear here.",
     loadingEvents: "Loading events…", loadFailed: "Events could not be loaded", retryCopy: "Check your connection and try again.",
     retry: "Try again", noResults: "No events match these filters.", previous: "Previous", next: "Next",
-    page: (page: number, size: number) => `Page ${page} · ${size} per page`, result: (total: number) => `${total} results`, global: "Global",
+    page: (page: number, size: number) => `Page ${page} · ${size} per page`, goToPage: (page: number) => `Go to page ${page}`, result: (total: number) => `${total} results`, global: "Global",
   },
 } as const;
 
@@ -60,7 +60,8 @@ export function EventsPage() {
   const selectedCity = searchParams.get("city") ?? "";
   const selectedCountry = searchParams.get("country") ?? "";
   const currentDiscovery = activePeriod;
-  const selectedPage = Number(searchParams.get("page") ?? "1");
+  const requestedPage = Number(searchParams.get("page") ?? "1");
+  const selectedPage = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const hasFilters = [...searchParams.keys()].some((key) => key !== "page");
   const discoveryLocation = profile.data?.city || profile.data?.country || c.global;
   const deviceLocation = deviceDiscovery.data?.location?.trim() ?? "";
@@ -71,11 +72,15 @@ export function EventsPage() {
     queryFn: () => listTags(),
     placeholderData: mockTags
   });
+  const eventRequestParams = new URLSearchParams(searchParams);
+  eventRequestParams.set("page", String(selectedPage));
+  eventRequestParams.set("pageSize", "16");
   const { data: eventList, isLoading, isError, refetch } = useQuery({
-    queryKey: ["events", searchParams.toString()],
-    queryFn: () => listEvents(searchParams)
+    queryKey: ["events", eventRequestParams.toString()],
+    queryFn: () => listEvents(eventRequestParams)
   });
   const events = eventList?.items ?? [];
+  const totalPages = eventList ? Math.max(1, Math.ceil(eventList.total / eventList.pageSize)) : 1;
   const today = new Date();
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
   const discoveryDefinitions = [
@@ -202,7 +207,7 @@ export function EventsPage() {
         </div>}
         {!isLoading && !isError && events.length === 0 ? <p className="empty-state">{c.noResults}</p> : null}
         {eventList ? (
-          <div className="pagination-row">
+          <nav className="pagination-row" aria-label={c.page(eventList.page, eventList.pageSize)}>
             <button
               className="secondary-action"
               disabled={selectedPage <= 1}
@@ -211,9 +216,21 @@ export function EventsPage() {
             >
               {c.previous}
             </button>
-            <span>
-              {c.page(eventList.page, eventList.pageSize)}
-            </span>
+            <div className="pagination-pages">
+              {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+                <button
+                  aria-current={page === eventList.page ? "page" : undefined}
+                  aria-label={c.goToPage(page)}
+                  className={page === eventList.page ? "active" : ""}
+                  key={page}
+                  onClick={() => updateFilter("page", String(page))}
+                  type="button"
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+            <span>{c.page(eventList.page, eventList.pageSize)}</span>
             <button
               className="secondary-action"
               disabled={!eventList.hasNextPage}
@@ -222,7 +239,7 @@ export function EventsPage() {
             >
               {c.next}
             </button>
-          </div>
+          </nav>
         ) : null}
       </div>
     </section>

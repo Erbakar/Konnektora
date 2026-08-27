@@ -1984,6 +1984,31 @@ select:focus-visible {
   font-size: 14px;
 }
 
+.pagination-pages {
+  display: flex;
+  gap: 6px;
+}
+
+.pagination-pages button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #ccd6ca;
+  border-radius: 8px;
+  color: #22543d;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 40px;
+}
+
+.pagination-pages button.active {
+  background: #22543d;
+  border-color: #22543d;
+  color: #fff;
+}
+
 .filters button:hover,
 .filters .active-filter {
   background: #e7eee5;
@@ -5293,6 +5318,15 @@ div.form-error::before {
 
 .event-discovery-section .event-grid > * {
   scroll-snap-align: start;
+}
+
+.events-page .event-discovery-all .event-grid {
+  grid-auto-columns: auto;
+  grid-auto-flow: row;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: visible;
+  padding: 2px 0 8px;
+  scroll-snap-type: none;
 }
 
 .event-discovery-sections > section > header {
@@ -10939,5 +10973,28 @@ div.form-error::before {
   }
   .corp-menu-toggle {
     display: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .events-page .event-discovery-all .event-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .events-page .event-discovery-all .event-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pagination-row {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .pagination-row span {
+    order: 3;
+    text-align: center;
+    width: 100%;
   }
 }
