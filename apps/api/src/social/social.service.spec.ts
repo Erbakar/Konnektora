@@ -62,4 +62,48 @@ describe("SocialService", () => {
     const suggestions = await service.suggestions("user-1");
     expect(suggestions.map((item) => item.id)).toEqual(["user-3", "user-2"]);
   });
+
+  it("lists the latest 200 active members while excluding blocks and preserving relationship context", async () => {
+    const { service, prisma } = createService();
+    prisma.userInterestTag.findMany.mockResolvedValue([{ tagId: "tag-a" }]);
+    prisma.userFollow.findMany.mockResolvedValue([{ followingId: "user-2" }]);
+    prisma.userBlock.findMany
+      .mockResolvedValueOnce([{ targetId: "blocked-user" }])
+      .mockResolvedValueOnce([{ userId: "blocked-by-user" }]);
+    prisma.user.findMany.mockResolvedValue([
+      {
+        id: "user-2",
+        name: "Ada",
+        username: "ada",
+        accountType: "individual",
+        city: "İstanbul",
+        country: "Türkiye",
+        followerCount: 88,
+        gender: "female",
+        birthDate: new Date("1992-03-14T00:00:00.000Z"),
+        createdAt: new Date("2026-08-28T02:00:00.000Z"),
+        privacySettings: { demographicsAudience: "everybody" },
+        interestTags: [{ tagId: "tag-a" }],
+      },
+    ]);
+
+    await expect(service.newMembers("viewer-1")).resolves.toEqual([
+      expect.objectContaining({
+        id: "user-2",
+        username: "ada",
+        following: true,
+        commonTagCount: 1,
+        gender: "female",
+      }),
+    ]);
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        status: "active",
+        role: "user",
+        id: { notIn: ["blocked-user", "blocked-by-user"] },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    }));
+  });
 });

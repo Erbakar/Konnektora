@@ -28,8 +28,8 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 
 ## Otomatik kontroller
 
-- API testleri: **33 suite / 243 test geçti**.
-- Web etkileşim testleri: **1 suite / 8 test geçti**. Konum penceresi, etkinlik sayfalama, etkinlik/mekân kartları, çift dilli duyuru, rapor, paylaşım/QR ve bildirim-takvim davranışları doğrudan kullanıcı etkileşimiyle doğrulandı.
+- API testleri: **33 suite / 244 test geçti**. Sosyal servis için yeni üyeler sırası, 200 kayıt sınırı, engel hariç tutma, takip ve ortak ilgi bağlamı testi ayrıca eklendi.
+- Web etkileşim testleri: **3 suite / 19 test geçti**. Önceki akışlara ek olarak topluluk/yeni üyeler, etiket-etkinlik-mekân ilgili kullanıcı ekranları, yönetim aksiyonları, FRD ile eşleşen etkinlik bilgi penceresi, dört analitik ekranı ve Mutualizm davranışları doğrudan kullanıcı etkileşimiyle doğrulandı.
 - Shared, API ve web TypeScript kontrolleri: geçti.
 - API ve web lint: geçti.
 - Shared, API ve web production build: geçti.
