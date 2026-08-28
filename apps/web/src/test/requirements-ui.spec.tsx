@@ -149,6 +149,42 @@ describe("157 maddelik listenin kritik web davranışları", () => {
     await waitFor(() => expect(container.querySelectorAll(".event-discovery-all .event-card")).toHaveLength(15));
   });
 
+  it("Etkinliklerim ile bekleyen davetleri ayrı ve doğru sıradaki widgetlarda gösterir", async () => {
+    apiMocks.getUserSession.mockReturnValue({
+      id: "member-1", name: "Ada", username: "ada", role: "user", status: "active", onboardingCompleted: true,
+    });
+    apiMocks.getMyProfile.mockResolvedValue({ city: "İstanbul", country: "Türkiye" });
+    const managedEvent = { ...mockEvents[0]!, id: "managed-event", slug: "yonettigim-etkinlik", title: "Yönettiğim Etkinlik" };
+    const invitedEvent = { ...mockEvents[1]!, id: "invited-event", slug: "davet-edildigim-etkinlik", title: "Davet Edildiğim Etkinlik" };
+    const individualEvent = { ...mockEvents[2]!, id: "individual-event", slug: "bireysel-etkinlik", title: "Bireysel Üye Etkinliği" };
+    apiMocks.listEvents.mockImplementation(async (params: URLSearchParams) => {
+      if (params.get("pageSize") !== "50") return listPage([], 1, 0);
+      const item = params.get("scope") === "mine"
+        ? managedEvent
+        : params.get("scope") === "invited"
+          ? invitedEvent
+          : params.get("scope") === "individual"
+            ? individualEvent
+            : null;
+      return { items: item ? [item] : [], page: 1, pageSize: 50, total: item ? 1 : 0, hasNextPage: false };
+    });
+
+    const { container } = render(providers(<EventsPage />, ["/events"]));
+
+    expect(await screen.findByRole("link", { name: managedEvent.title })).toBeVisible();
+    expect(await screen.findByRole("link", { name: invitedEvent.title })).toBeVisible();
+    expect(await screen.findByRole("link", { name: individualEvent.title })).toBeVisible();
+    const sections = [...container.querySelectorAll<HTMLElement>(".event-discovery-section")];
+    const mineIndex = sections.findIndex((section) => section.classList.contains("event-discovery-mine"));
+    const invitedIndex = sections.findIndex((section) => section.classList.contains("event-discovery-invited"));
+    const individualIndex = sections.findIndex((section) => section.classList.contains("event-discovery-individual"));
+    expect(mineIndex).toBeGreaterThanOrEqual(0);
+    expect(invitedIndex).toBe(mineIndex + 1);
+    expect(individualIndex).toBe(sections.length - 1);
+    expect(apiMocks.listEvents.mock.calls.some(([params]) => params.get("scope") === "mine")).toBe(true);
+    expect(apiMocks.listEvents.mock.calls.some(([params]) => params.get("scope") === "invited")).toBe(true);
+  });
+
   it("keşif widget'ında tüm sayfaları sağa kaydırılabilir kartlarda birleştirir, farklı cihaz şehrini ve gerçek trend sırasını gösterir", async () => {
     apiMocks.getUserSession.mockReturnValue({
       id: "member-1", name: "Ada", role: "user", status: "active", onboardingCompleted: true,

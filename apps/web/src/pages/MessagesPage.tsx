@@ -643,10 +643,10 @@ function MessageThread({
         <button
           className="message-media-action"
           type="button"
-          title={t("Resim/video ekle", "Add image/video")}
+          title={t("Fotoğraf/video ekle", "Add photo/video")}
           onClick={() => fileRef.current?.click()}
         >
-          <span>{t("Resim/video ekle", "Add image/video")}</span>
+          <span>{t("Fotoğraf/video ekle", "Add photo/video")}</span>
         </button>
         <ComposerTips />
       </form>

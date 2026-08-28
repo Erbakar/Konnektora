@@ -333,7 +333,7 @@ export function ContentComments({
             {targetType === "tag_comment" ? language === "tr" ? "Yayınla" : "Publish" : language === "tr" ? "Gönder" : "Send"}
           </button>
           <label className="comment-media-picker">
-            <span>{language === "tr" ? "Resim/video ekle" : "Add image/video"}</span>
+            <span>{language === "tr" ? "Fotoğraf/video ekle" : "Add photo/video"}</span>
             <input
               accept="image/*,video/mp4,video/webm"
               hidden

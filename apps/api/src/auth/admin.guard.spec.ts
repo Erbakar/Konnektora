@@ -78,4 +78,20 @@ describe("AdminGuard", () => {
 
     await expect(guard.canActivate(createContext(request))).rejects.toBeInstanceOf(UnauthorizedException);
   });
+
+  it("lets a granular inbox admin pass the shared message detail guard", async () => {
+    const { guard, prisma } = createGuard(["messages.manage"]);
+    const request = { headers: { authorization: "Bearer token" } };
+
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ id: "admin-1", role: "admin", status: "active" })
+      .mockResolvedValueOnce({
+        id: "admin-1",
+        role: "admin",
+        status: "active",
+        adminRoleGroup: { permissions: ["messages.faq.manage"] }
+      });
+
+    await expect(guard.canActivate(createContext(request))).resolves.toBe(true);
+  });
 });
