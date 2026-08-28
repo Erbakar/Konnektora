@@ -40,9 +40,11 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 - Güncel etkinlik ve mekân kartı bağlantıları detay sayfalarını açtı.
 - Canlı `/api/health/ready`, `/api/events` ve `/api/places` istekleri 28 Ağustos 2026 tarihinde HTTP 200 döndürdü.
 - `09fbd3b` sürümü için GitHub CI `33136284661` başarıyla tamamlandı ve Railway deployment `6aa86435-e45f-4650-818f-cbada2cbbed2` başarılı oldu.
+- `dfa50a3` doğrulama sürümü için GitHub CI `33136932847` başarıyla tamamlandı ve Railway deployment `3ebc40cc-4034-4c67-b8e4-3efa45b04276` başarılı oldu. Canlı açık/oturumlu smoke paketleri yeniden geçti.
 - Canlı herkese açık kabul testi sağlık, 15 kayıtlık etkinlik sayfası, dinamik etkinlik detayı, ikinci sayfa, mekân listesi/detayı, çift dilli duyurular ve SSS uçlarını doğruladı.
 - Canlı oturumlu kabul testi admin kullanıcı/CMS/içerik/activity-log, etkinlik katılımcı-davet-bilet-istatistik-pasaport, mekân üye-davet-istatistik ve üye profil/etkinlik/bilet/finans akışlarını doğruladı. Uygun paketi olmayan test üyesinde Guest List'in `403` dönmesi beklenen yetki davranışı olarak ayrıca doğrulandı.
 - Canlı tarayıcıda konum tanıtımı izin vermeden “Şimdi değil” ile kapatıldı. `/events` sayfalaması gerçek düğme tıklamasıyla 2. sayfaya geçti; tek kart 279 px genişlikte kaldı ve 1. sayfaya dönüşte 15 kart üç kolona geri döndü. 390 px mobil görünümde yatay taşma olmadı.
+- Canlı etkinlik bilgi penceresi açılıp kapandı. İlgili etkinlikler masaüstünde 3 sütun (8 kartta 3+3+2), 390 px mobilde tek sütun gösterildi; yatay taşma ve tarayıcı konsol hatası bulunmadı.
 
 ## Açık dış bağımlılıklar ve tamamlanan canlı kapılar
 
