@@ -392,13 +392,17 @@ function CommentActions({
   const [reportOpen, setReportOpen] = useState(false);
   const [guestOpen, setGuestOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const like = useMutation({
     mutationFn: () => toggleContentCommentLike(comment.id),
     onSuccess: onChanged,
   });
   const remove = useMutation({
     mutationFn: () => deleteContentComment(comment.id),
-    onSuccess: onChanged,
+    onSuccess: () => {
+      setDeleteOpen(false);
+      onChanged();
+    },
   });
   const edit = useMutation({
     mutationFn: (body: string) => updateContentComment(comment.id, body),
@@ -553,9 +557,7 @@ function CommentActions({
             {canDelete ? (
               <button
                 disabled={remove.isPending}
-                onClick={() =>
-                  window.confirm(language === "tr" ? "Yorum silinsin mi?" : "Delete this comment?") && remove.mutate()
-                }
+                onClick={() => setDeleteOpen(true)}
                 type="button"
               >
                 <Trash2 size={14} />
@@ -610,6 +612,18 @@ function CommentActions({
               <p className="form-help">{language === "tr" ? "Henüz misafir listesi oluşturmadınız." : "You have not created a Guest List yet."}</p>
             ) : null}
           </div>
+        </div>
+      ) : null}
+      {deleteOpen ? (
+        <div className="emotion-modal" role="presentation" onMouseDown={() => setDeleteOpen(false)}>
+          <section aria-labelledby={`delete-comment-title-${comment.id}`} aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+            <h2 id={`delete-comment-title-${comment.id}`}>{language === "tr" ? "Yorumu sil" : "Delete comment"}</h2>
+            <p>{language === "tr" ? "Bu yorum kalıcı olarak silinecek. Devam etmek istiyor musunuz?" : "This comment will be permanently deleted. Do you want to continue?"}</p>
+            <div className="dialog-actions">
+              <button disabled={remove.isPending} onClick={() => setDeleteOpen(false)} type="button">{language === "tr" ? "Vazgeç" : "Cancel"}</button>
+              <button className="danger-action" disabled={remove.isPending} onClick={() => remove.mutate()} type="button">{language === "tr" ? "Yorumu sil" : "Delete comment"}</button>
+            </div>
+          </section>
         </div>
       ) : null}
       <ReportDialog

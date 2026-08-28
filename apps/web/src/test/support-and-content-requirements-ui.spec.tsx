@@ -13,6 +13,7 @@ import { HelpCenterPage } from "../pages/HelpCenterPage";
 const apiMocks = vi.hoisted(() => ({
   createContentComment: vi.fn(),
   createUserMessage: vi.fn(),
+  deleteContentComment: vi.fn(),
   getUserSession: vi.fn(),
   listContentComments: vi.fn(),
   listContentMedia: vi.fn(),
@@ -66,6 +67,7 @@ beforeEach(() => {
   apiMocks.createContentComment.mockResolvedValue({
     id: "post-1", targetId: "place-1", body: "", likeCount: 0, createdAt: "2026-08-28T00:00:00.000Z",
   });
+  apiMocks.deleteContentComment.mockResolvedValue({});
   apiMocks.uploadContentMedia.mockResolvedValue({ id: "media-1" });
 });
 
@@ -221,6 +223,12 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
     await userEvent.click(within(postActions).getByRole("button", { name: "Misafir listesine ekle" }));
     const guestDialog = await screen.findByRole("dialog", { name: "Misafir listesine ekle" });
     expect(await within(guestDialog).findByRole("button", { name: /VIP/ })).toHaveTextContent("0 kişi");
+
+    await userEvent.click(within(postActions).getByRole("button", { name: "Sil" }));
+    const deleteDialog = screen.getByRole("dialog", { name: "Yorumu sil" });
+    expect(within(deleteDialog).getByText(/kalıcı olarak silinecek/)).toBeVisible();
+    await userEvent.click(within(deleteDialog).getByRole("button", { name: "Yorumu sil" }));
+    await waitFor(() => expect(apiMocks.deleteContentComment).toHaveBeenCalledWith("post-actions"));
 
     const reply = post.querySelector<HTMLElement>(".comment-reply")!;
     expect(within(reply).queryByRole("button", { name: "Paylaş" })).not.toBeInTheDocument();
