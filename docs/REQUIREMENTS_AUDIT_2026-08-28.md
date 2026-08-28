@@ -28,8 +28,8 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 
 ## Otomatik kontroller
 
-- API testleri: **35 suite / 249 test geçti**. Sosyal servis, içerik paylaşımı, özel mesaj medya gruplaması, admin izinleri, check-in, davet, bilet, etkinlik ve mekân davranışları kapsandı.
-- Web etkileşim testleri: **12 dosya / 57 test geçti**. Etkinlik düzenleme/program/bilet platformlarına ek olarak post paylaşım lightbox'ı, beşli medya galerisinin `4 + 1` görünümü ve modal dolaşımı, medya-only mesaj kolajı, destek/kural ekranları, admin düğmeleri ve etkinlik listesi sırası doğrulandı.
+- API testleri: **35 suite / 250 test geçti**. Sosyal servis, içerik paylaşımı, özel mesaj medya gruplaması, admin izinleri, check-in, davet, bilet, etkinlik ve mekân davranışlarına engellenen profilin güvenli biçimde geri açılması/engeli kaldırma davranışı eklendi.
+- Web etkileşim testleri: **13 dosya / 66 test geçti**. Önceki kapsama ek olarak profil ilgi kartı ikon/stili, çoklu profil etiketi ve akıllı öneriler, profil engelle/engeli kaldır, yanıt avatar/hizası, yönetici post aksiyonları ve admin CMS/rol/özel mesaj/kural/activity-log davranışları doğrudan doğrulandı.
 - Check-in pasaportunda erişilebilir Guest List adlarının A–Z sıralanmaması yeni UI testinde yakalandı ve düzeltildi. Etkinlik/mekân listelerinde 10’ar kayıt, arama, bilet/gate, geçmiş, QR/NFC yöntemi, pasaport, “zaten içeride” kilidi, kabul/ret ve taranan kullanıcı sonuç ekranları regresyon kapsamına alındı.
 - Shared, API ve web TypeScript kontrolleri: geçti.
 - API ve web lint: geçti.
@@ -62,6 +62,8 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 - Son 360° taramada 21 masaüstü ve 12 mobil açık rota; ana içerik, başlık, hata metni ve yatay taşma açısından kontrol edildi. Açılmayan rota, “etkinlik/mekân bulunamadı” hatası veya sayfa taşması bulunmadı. Etkinlik sayfalaması 15 kart/3 sütun, ikinci sayfadaki tek kartın sabit genişliği ve birinci sayfaya dönüş düzeni korundu.
 - Mobil detay galerisinin tek sütuna düşerek başlığı aşağı itmesi bu taramada yakalandı. `53f5414` sürümü iki sütunlu kompakt galeriye çevrildi; 12 web test dosyasındaki 57 test, tip/lint/build, GitHub CI `33142640911` ve Railway deployment `921b9d98-ff7a-40fe-89a5-83ad5caf8b4f` başarılı oldu. Canlı 390 px görünümde dört önizleme `167 px + 167 px`, iki satır ve yatay taşma `0` olarak yeniden ölçüldü.
 - Son canlı açık smoke paketi sağlık, etkinlik sayfaları/detayları ve mekân sayfaları/detaylarını; oturumlu smoke paketi admin, CMS, moderasyon, activity log, etkinlik/mekân davet-check-in-istatistik, profil, bilet ve finans uçlarını başarıyla doğruladı.
+- Son kaynak-listesi yeniden denetiminde önceki genel dosya referanslarının örttüğü gerçek boşluklar bulundu: profil ilgi kartlarının yeşil ortak görünümü ve farklı duygu karakterleri kaldırıldı; yorum yanıtlarına avatar/profil/tarih/medya hizası eklendi; profilden engeli geri kaldırma akışı tamamlandı; üçüncü etiket sonrası profil sinyalli öneriler eklendi; admin 125–137 ve post aksiyonları kesin UI regresyonlarına bağlandı. `8a13dfa` sürümünde tüm kapılar 35/250 API ve 13/66 web testiyle geçti.
+- `8a13dfa` sürümü Railway deployment `b050798c-a67f-4025-85a3-95b0e3b1a0ab` ile canlıya alındı. Herkese açık sağlık/etkinlik/mekân/duyuru/SSS uçları ile oturumlu admin, etkinlik, mekân, profil, bilet ve finans smoke kontrolleri yeniden geçti; paketsiz test üyesinin Guest List isteğinde beklenen `403` yetki sonucu korundu.
 
 ## Açık dış bağımlılıklar ve tamamlanan canlı kapılar
 
