@@ -3,15 +3,21 @@ import { useEffect, useState } from "react";
 import { useLanguage } from "../lib/i18n";
 
 function youtubeId(value: string) {
-  const match = value.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/i);
+  const match = value.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([\w-]{6,})/i);
   return match?.[1];
+}
+
+function embeddedUrls(text: string) {
+  return (text.match(/https?:\/\/[^\s]+/g) ?? []).map((url) =>
+    url.replace(/[),.!?;:]+$/g, ""),
+  );
 }
 
 export function EmbeddedMedia({ text }: { text: string }) {
   const { language } = useLanguage();
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const [playing, setPlaying] = useState(false);
-  const urls = text.match(/https?:\/\/[^\s]+/g) ?? [];
+  const urls = embeddedUrls(text);
   const youtube = urls.map((url) => ({ url, id: youtubeId(url) })).find((item) => item.id);
   const soundcloud = urls.find((url) => /soundcloud\.com\//i.test(url));
   const sourceUrl = youtube?.url ?? soundcloud;

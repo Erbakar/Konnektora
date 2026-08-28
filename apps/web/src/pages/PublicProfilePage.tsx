@@ -655,12 +655,14 @@ export function PublicProfilePage() {
           </div>
         </div>
       ) : null}
-      {!profile.relationship.isSelf && (profile.mutualism?.total ?? profile.commonInterestCount) > 0 ? (
+      {!profile.relationship.isSelf && profile.mutualism ? (
         <Link
           className="mutualism-bar"
           to={userId ? `/users/id/${profile.id}/mutualism` : `/users/${profile.username}/mutualism`}
         >
-          <strong>{t(`${profile.mutualism?.total ?? profile.commonInterestCount} ortak noktanız var`, `You have ${profile.mutualism?.total ?? profile.commonInterestCount} things in common`)}</strong>
+          <strong>{profile.mutualism.total > 0
+            ? t(`${profile.mutualism.total} ortak noktanız var`, `You have ${profile.mutualism.total} things in common`)
+            : t("Eşleşen sonuç bulunamadı.", "No matching shared signal was found.")}</strong>
           <span>{t("Mutualizm analizini gör →", "View mutualism analysis →")}</span>
         </Link>
       ) : null}

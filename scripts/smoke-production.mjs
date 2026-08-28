@@ -1,5 +1,6 @@
 const baseUrl = (process.env.SMOKE_BASE_URL ?? "").replace(/\/$/, "");
 if (!baseUrl) throw new Error("SMOKE_BASE_URL zorunludur.");
+const webUrl = (process.env.SMOKE_WEB_URL ?? new URL(baseUrl).origin).replace(/\/$/, "");
 
 async function get(path) {
   const response = await fetch(`${baseUrl}${path}`, { headers: { "user-agent": "konnektora-smoke/2.0" } });
@@ -16,6 +17,14 @@ async function check(path, validate) {
 
 await check("/health/live", (data) => data.ok === true);
 await check("/health/ready", (data) => data.ok === true && data.database === "ready");
+
+const webResponse = await fetch(webUrl, { headers: { "user-agent": "konnektora-smoke/2.0" } });
+if (!webResponse.ok) throw new Error(`web: HTTP ${webResponse.status}`);
+const csp = webResponse.headers.get("content-security-policy") ?? "";
+for (const origin of ["https://www.youtube-nocookie.com", "https://w.soundcloud.com", "https://www.youtube.com", "https://soundcloud.com"]) {
+  if (!csp.includes(origin)) throw new Error(`CSP medya kaynağını içermiyor: ${origin}`);
+}
+process.stdout.write("OK web embedded-media CSP\n");
 
 const events = await check(
   "/events?page=1&pageSize=15",

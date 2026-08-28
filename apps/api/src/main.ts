@@ -9,6 +9,7 @@ import { existsSync } from "fs";
 import helmet from "helmet";
 import { resolve } from "path";
 import { AppModule } from "./app.module";
+import { contentSecurityPolicyDirectives } from "./config/content-security-policy";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -22,10 +23,7 @@ async function bootstrap() {
   app.use(helmet({
     crossOriginResourcePolicy: false,
     contentSecurityPolicy: {
-      directives: {
-        imgSrc: ["'self'", "data:", "blob:", "https:"],
-        mediaSrc: ["'self'", "data:", "blob:", "https:"]
-      }
+      directives: contentSecurityPolicyDirectives,
     }
   }));
   app.use((request: Request, response: Response, next: NextFunction) => {

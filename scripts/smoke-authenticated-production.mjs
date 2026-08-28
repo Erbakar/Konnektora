@@ -34,6 +34,12 @@ async function request(path, token, allowedStatuses = [200]) {
   return { status: response.status, data };
 }
 
+function requireKeys(label, value, keys) {
+  for (const key of keys) {
+    if (!Object.hasOwn(value ?? {}, key)) throw new Error(`${label}: ${key} ölçümü eksik.`);
+  }
+}
+
 const publicEvents = await fetch(`${baseUrl}/events?page=1&pageSize=15`).then((response) => response.json());
 const managedEvent = publicEvents.items?.find((event) => event.createdById) ?? publicEvents.items?.[0];
 if (!managedEvent?.createdById) throw new Error("Smoke testi için yönetici etkinliği bulunamadı.");
@@ -74,7 +80,20 @@ for (const recommendation of inviteRecommendations.data) {
 }
 await request(`/events/${managedEvent.id}/ticket-types`, adminToken);
 await request(`/events/${managedEvent.id}/related-users`, adminToken);
-await request(`/event-stats/${managedEvent.id}`, adminToken);
+const eventStats = await request(`/event-stats/${managedEvent.id}`, adminToken);
+requireKeys("Etkinlik analitiği", eventStats.data, [
+  "views", "detailViews", "invited", "accepted", "attended", "socialConnections",
+  "ticketsSold", "ticketsRemaining", "ticketRevenue", "platformCommission", "organizerRevenue",
+  "rsvpRate", "attendanceRate", "cancellationRate", "performanceScore",
+]);
+const statsTagId = managedEvent.tags?.[0]?.id;
+if (statsTagId) {
+  const tagStats = await request(`/tags/${statsTagId}/stats`, adminToken);
+  requireKeys("Etiket analitiği", tagStats.data, [
+    "views", "likes", "ok", "dislikes", "popularityRank", "viewsLast24h", "viewsLast7d",
+    "viewsLast30d", "viewsLast12m", "averageRsvpRate", "attendanceRate", "opportunityScore",
+  ]);
+}
 
 const passportUser = participants.data?.find(
   (participant) => participant.userId !== managedEvent.createdById && ["accepted", "attended"].includes(participant.status),
@@ -107,10 +126,15 @@ if (!Number.isInteger(place.followingMemberCount) || place.followingMemberCount 
 for (const path of [
   `/places/${place.id}/invitations/sent`,
   `/places/${place.id}/related-users`,
-  `/place-stats/${place.id}`,
 ]) {
   await request(path, adminToken);
 }
+const placeStats = await request(`/place-stats/${place.id}`, adminToken);
+requireKeys("Mekân analitiği", placeStats.data, [
+  "views", "detailViews", "members", "checkedIn", "uniqueVisitors", "events", "repeatVisitorRate",
+  "ticketsSold", "ticketRevenue", "ticketOccupancyRate", "averageEventRating", "socialConnections",
+  "socialConnectionRate", "performanceScore",
+]);
 const passportMember = placeMembers.data?.find((member) => member.userId !== place.createdById && member.status === "accepted")?.userId;
 if (passportMember) {
   const passport = await request(`/places/${place.id}/check-in/passport/${passportMember}`, adminToken);

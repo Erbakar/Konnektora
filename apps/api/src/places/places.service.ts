@@ -314,6 +314,7 @@ export class PlacesService {
       visitorsLast6m,
       visitorsLast12m,
       socialConnections,
+      socialConnectionRate: totalVisitors > 0 ? Math.min(100, Math.round(socialConnections / totalVisitors * 100)) : 0,
       averageConnectionsPerVisitor: totalVisitors > 0 ? Math.round(socialConnections / totalVisitors * 10) / 10 : 0,
       ...placePrefixMetrics("source", Object.fromEntries(viewSources.map((item) => [item.source || "direct", item._count._all]))),
       ...placePrefixMetrics("shareChannel", Object.fromEntries(sharesByChannel.map((item) => [item.channel, item._count._all]))),

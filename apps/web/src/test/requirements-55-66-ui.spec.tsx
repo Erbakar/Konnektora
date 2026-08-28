@@ -355,6 +355,33 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     await waitFor(() => expect(apiMocks.removeBlock).toHaveBeenCalledWith("user", "person-1"));
   });
 
+  it("başka profilde ortak sinyal sıfır olsa da Mutualizm analizine erişimi gösterir", async () => {
+    apiMocks.getUserSession.mockReturnValue({
+      id: "viewer-1", name: "Deniz", username: "deniz", role: "user", status: "active", accountType: "individual",
+    });
+    apiMocks.getPublicProfile.mockResolvedValue({
+      id: "person-1", name: "Ada Yılmaz", username: "ada", accountType: "individual", verified: false,
+      followerCount: 0, followingCount: 0, city: null, country: null, media: [], interests: [], events: [], places: [],
+      relationship: { isSelf: false, following: false, canMessage: true, blockedByViewer: false },
+      mutualism: {
+        total: 0, hiddenCount: 0, sameSentimentTags: [], events: [], places: [], people: [],
+        sharedReactionCount: 0, sharedCommentTargetCount: 0,
+        scores: { overall: 0, friendship: 0, networking: 0, eventPartner: 0, travel: 0, business: 0 },
+        explanation: "Henüz doğrulanmış ortak bir sinyal bulunamadı.", actions: [],
+      },
+    });
+
+    render(providers(
+      <Routes><Route path="/users/:username" element={<PublicProfilePage />} /></Routes>,
+      "/users/ada",
+    ));
+
+    expect(await screen.findByRole("link", { name: /Eşleşen sonuç bulunamadı/ })).toHaveAttribute(
+      "href",
+      "/users/ada/mutualism",
+    );
+  });
+
   it("üçüncü etiket eklemesinden sonra profil sinyallerine göre seçilebilir akıllı öneriler gösterir", async () => {
     const session = { id: "person-1", name: "Ada Yılmaz", username: "ada", role: "user", status: "active", accountType: "individual" };
     apiMocks.getUserSession.mockReturnValue(session);
