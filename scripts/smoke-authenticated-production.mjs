@@ -73,18 +73,35 @@ const passportUser = participants.data?.find(
 if (passportUser) {
   const passport = await request(`/events/${managedEvent.id}/check-in/passport/${passportUser}`, adminToken);
   if (!passport.data?.user?.id) throw new Error("Etkinlik pasaportu kullanıcı verisi içermiyor.");
+  if (passport.data.targetType !== "event") throw new Error("Etkinlik pasaportu hedef türü hatalı.");
+  for (const key of ["invitedBy", "guestLists", "tickets"]) {
+    if (!Array.isArray(passport.data[key])) throw new Error(`Etkinlik pasaportu ${key} listesini içermiyor.`);
+  }
+  if (!Array.isArray(passport.data.user.media)) throw new Error("Etkinlik pasaportu kullanıcı medya listesini içermiyor.");
+  if (typeof passport.data.alreadyInside !== "boolean") throw new Error("Etkinlik pasaportu içeride durumunu içermiyor.");
 }
 
 const places = await fetch(`${baseUrl}/places?page=1&pageSize=12`).then((response) => response.json());
 const place = places.items?.[0];
 if (!place?.id) throw new Error("Smoke testi için mekân bulunamadı.");
+const placeMembers = await request(`/places/${place.id}/members`, adminToken);
 for (const path of [
-  `/places/${place.id}/members`,
   `/places/${place.id}/invitations/sent`,
   `/places/${place.id}/related-users`,
   `/place-stats/${place.id}`,
 ]) {
   await request(path, adminToken);
+}
+const passportMember = placeMembers.data?.find((member) => member.userId !== place.createdById && member.status === "accepted")?.userId;
+if (passportMember) {
+  const passport = await request(`/places/${place.id}/check-in/passport/${passportMember}`, adminToken);
+  if (!passport.data?.user?.id) throw new Error("Mekân pasaportu kullanıcı verisi içermiyor.");
+  if (passport.data.targetType !== "place") throw new Error("Mekân pasaportu hedef türü hatalı.");
+  for (const key of ["invitedBy", "guestLists", "tickets"]) {
+    if (!Array.isArray(passport.data[key])) throw new Error(`Mekân pasaportu ${key} listesini içermiyor.`);
+  }
+  if (!Array.isArray(passport.data.user.media)) throw new Error("Mekân pasaportu kullanıcı medya listesini içermiyor.");
+  if (typeof passport.data.alreadyInside !== "boolean") throw new Error("Mekân pasaportu içeride durumunu içermiyor.");
 }
 
 for (const path of [
