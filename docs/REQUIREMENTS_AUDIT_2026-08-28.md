@@ -50,6 +50,8 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 - Canlı etkinlik bilgi penceresi açılıp kapandı. İlgili etkinlikler masaüstünde 3 sütun (8 kartta 3+3+2), 390 px mobilde tek sütun gösterildi; yatay taşma ve tarayıcı konsol hatası bulunmadı.
 - 81–91 grubu için hesap ayarları, kurumsal onboarding, tamamlanmamış hesap yönlendirmesi, çok sayfalı etkinlik widget'ı, cihaz şehri widget'ı, trend etiket sırası, etiket-etkinlik bağlantısı ve gizli koordinat alanlarını kapsayan UI testleri eklendi. Tam paket 34 API suite/246 test ve 8 web dosyası/39 test olarak geçti; bu grubun deploy ve canlı doğrulaması sıradaki kapıdır.
 - İlk 81–91 deployment'ının canlı tarayıcı kontrolünde etkinlik keşif widget'larının API üst sınırı olan 50 yerine 100 kayıt istediği ve bu nedenle 400 alarak görünmediği tespit edildi. Sorgu 50 kayıtlık sayfalara düzeltildi; 101 kartı üç sayfada birleştiren regresyon testi eklendi. Bu düzeltmenin yeni CI/deploy/canlı kontrolü tamamlanmadan 86 kapatılmayacaktır.
+- Düzeltme commit'i `e9a9909` için GitHub CI `33139567262` başarıyla tamamlandı; Railway deployment `dfbca288-1979-4a71-a19c-f20e875fb03e` başarılı oldu. Açık ve oturumlu canlı smoke paketleri yeniden geçti.
+- Canlı `/events` tarayıcı kontrolünde ana liste 15 kart/3 kolon kaldı; keşif widget'ları 6/16/16 kartla geri geldi, 270 px kart genişliği ve yatay kaydırma doğrulandı. 390×844 görünümde ana liste tek kolon, widget kaydırılabilir ve sayfa yatay taşmasızdı. Canlı `/tags/networking` sayfasındaki 4 ilişkili etkinlik bağlantısı doğru `/events?tag=networking` hedefine gitti.
 
 ## Açık dış bağımlılıklar ve tamamlanan canlı kapılar
 
