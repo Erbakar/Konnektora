@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,6 +23,7 @@ const apiMocks = vi.hoisted(() => ({
   listEventTicketTypes: vi.fn(),
   listEvents: vi.fn(),
   listFollowing: vi.fn(),
+  purchaseEventTickets: vi.fn(),
   recordContentView: vi.fn(),
 }));
 
@@ -75,6 +76,7 @@ beforeEach(() => {
   apiMocks.listEventTicketTypes.mockResolvedValue([]);
   apiMocks.listEvents.mockResolvedValue({ items: [], page: 1, pageSize: 20, total: 0, hasNextPage: false });
   apiMocks.listFollowing.mockResolvedValue([]);
+  apiMocks.purchaseEventTickets.mockResolvedValue({ id: "ticket-1" });
   apiMocks.recordContentView.mockResolvedValue(undefined);
 });
 
@@ -145,6 +147,72 @@ describe("FRD referanslı ekran davranışları", () => {
     await userEvent.click(screen.getByRole("button", { name: "Check-in kontrolü" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Bitmiş bir etkinlik için check-in kontrolü yapamazsınız.");
     expect(screen.getByRole("alert")).toHaveTextContent("Etkinlik Düzenle");
+  });
+
+  it("onaylı etkinlikte yöneticinin bekleyen sayısını doğru sekmeye bağlar, uzun açıklamayı açar ve program maddesini etikete dönüştürür", async () => {
+    const description = `${"Uzun etkinlik açıklaması ve kuralları. ".repeat(22)}SON BÖLÜM`;
+    const event = {
+      ...mockEvents[0]!,
+      createdById: "viewer-1",
+      visibility: "approval_required" as const,
+      description,
+      tags: [{ id: "tag-ada", name: "Ada Quartet", slug: "ada-quartet" }],
+      lineup: [{ type: "session" as const, title: "Ada Quartet" }],
+    };
+    apiMocks.getUserSession.mockReturnValue({ id: "viewer-1", username: "kadir", role: "user" });
+    apiMocks.getEvent.mockResolvedValue(event);
+    apiMocks.listEventParticipants.mockResolvedValue([
+      { id: "participant-1", status: "requested" },
+      { id: "participant-2", status: "requested" },
+      { id: "participant-3", status: "invited" },
+    ]);
+
+    render(providers(
+      <Routes><Route path="/events/:slug" element={<EventDetailPage />} /></Routes>,
+      `/events/${event.slug}`,
+    ));
+
+    expect(await screen.findByRole("link", { name: "2 bekleyen" })).toHaveAttribute("href", `/events/${event.slug}/users?filter=pending`);
+    expect(screen.queryByText(/SON BÖLÜM/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Devamını göster" }));
+    expect(screen.getByText(/SON BÖLÜM/)).toBeVisible();
+    expect(screen.getAllByRole("link", { name: "#Ada Quartet" }).at(-1)).toHaveAttribute("href", "/tags/ada-quartet");
+  });
+
+  it("sıfır fiyatlı bileti ödeme adımı olmadan satın alır", async () => {
+    const event = { ...mockEvents[0]!, price: 0 };
+    const freeTicket = {
+      id: "free-ticket",
+      name: "Ücretsiz Katılım",
+      description: "Topluluk bileti",
+      price: 0,
+      currency: "TRY",
+      remaining: 20,
+      status: "active",
+      salesPlatform: "konnektora",
+      perUserLimit: 2,
+      saleStartsAt: null,
+      saleEndsAt: null,
+    };
+    apiMocks.getUserSession.mockReturnValue({ id: "viewer-2", username: "ada", role: "user" });
+    apiMocks.getEvent.mockResolvedValue(event);
+    apiMocks.listEventTicketTypes.mockResolvedValue([freeTicket]);
+
+    render(providers(
+      <Routes><Route path="/events/:slug" element={<EventDetailPage />} /></Routes>,
+      `/events/${event.slug}`,
+    ));
+
+    const viewTickets = await screen.findAllByRole("button", { name: "Biletleri gör" });
+    await userEvent.click(viewTickets.at(-1)!);
+    const dialog = screen.getByRole("dialog", { name: "Biletler" });
+    expect(within(dialog).getByText("Ücretsiz", { exact: false, selector: "span" })).toBeVisible();
+    await userEvent.click(within(dialog).getByRole("button", { name: "+" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Satın al" }));
+
+    await waitFor(() => expect(apiMocks.purchaseEventTickets).toHaveBeenCalled());
+    expect(apiMocks.purchaseEventTickets.mock.calls[0]?.[0]).toBe("free-ticket");
+    expect(apiMocks.purchaseEventTickets.mock.calls[0]?.[1]).toBe(1);
   });
 
   it("etkinlik analizinde FRD performans, keşif, huni, demografi ve gelir gruplarını gösterir", async () => {

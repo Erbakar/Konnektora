@@ -18,7 +18,7 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 | 1–46 | Kod + test doğrulandı; SMS canlı doğrulaması bekliyor | Navigasyon, topluluk, tag kullanıcıları, standart post aksiyonları, detay kartları, medya/profil, istatistikler, mutualism, detay açılma, katılım, şifre sıfırlama, embed, sabit slug, davet ve kullanıcı aksiyonları incelendi. Ana ve detay rotaları tarayıcıda açıldı. Telefonla şifre sıfırlamanın gerçek gönderimi için production SMS sağlayıcısı gerekiyor. |
 | 47 | Canlı/cihaz doğrulaması bekliyor | QR/NFC üye taraması iki kullanıcıya da hedef profil bildirimini gönderiyor; iki fiziksel cihazla son kabul testi gerekiyor. |
 | 48–54 | Canlı/cihaz doğrulaması bekliyor | Kamera/NFC tarama, pasaport önizleme, kabul/ret, hedef cihaza sonuç, bilet iadesi ve yakın öneriler kod/test ile doğrulandı. Gerçek kamera, NFC ve iki cihaz testi gerekiyor. |
-| 55–66 | Kod + test doğrulandı | Düzenleme formunun dolması, opsiyonel program zamanı, sıralama, ücretsiz bilet, pending sayımı, tooltip, arama-tag oluşturma, show-more, program tagleri, küratör URL’si ve rapor kapsamı incelendi. |
+| 55–66 | Kod + API + UI testi doğrulandı; deploy bekliyor | Düzenleme formunun dolması, opsiyonel program zamanı, dikey ekleme aksiyonları, düğmeyle sıralama, ücretsiz bilet, yalnız onaylı etkinlikte pending sayımı, bağlı masaüstü/mobil tooltip, arama-tag oluşturma, show-more, program etiketleri, küratör URL doğrulaması ve rapor kapsamı doğrudan davranış testleriyle doğrulandı. |
 | 67 | **Bloke** | Google Contacts kodu ve çoklu e-posta/telefon seçimi mevcut. Canlı web paketinde `VITE_GOOGLE_CLIENT_ID` yok; API tarafında da eş OAuth kimliği production ortamına eklenmeli ve Google People API/izin ekranı yapılandırılmalı. |
 | 68–100 | Kod + test doğrulandı; SMS canlı doğrulaması bekliyor | Yerel popülerlik fallback’i, harita/adres, mekân oluşturma, bilet sınırı/platformu, mobil bilet sheet’i, aktif/pasif bilet, gizlilik, onboarding, discovery widget’ları, tag-event ilişkisi, ilgili kullanıcılar, harita, etiket sırası, mekân etkinlikleri, takip/yorum ve davet yönetimi incelendi. Telefon numarasına gerçek davet gönderimi için production SMS sağlayıcısı gerekiyor. |
 | 101–107 | Canlı/cihaz doğrulaması bekliyor | Mekân kamera/NFC, 10’lu listeler, arama, yatay A4 yazdırma/PDF akışı, pasaport ve hedef cihaz sonucu kod/test ile doğrulandı. Gerçek kamera, NFC ve iki cihaz testi gerekiyor. |
@@ -28,13 +28,14 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 
 ## Otomatik kontroller
 
-- API testleri: **33 suite / 244 test geçti**. Sosyal servis için yeni üyeler sırası, 200 kayıt sınırı, engel hariç tutma, takip ve ortak ilgi bağlamı testi ayrıca eklendi.
-- Web etkileşim testleri: **4 suite / 25 test geçti**. Önceki akışlara ek olarak topluluk/yeni üyeler, etiket-etkinlik-mekân ilgili kullanıcı ekranları, yönetim aksiyonları, FRD ile eşleşen etkinlik bilgi penceresi, dört analitik ekranı, Mutualizm ve etkinlik/mekân check-in yönetimi doğrudan kullanıcı etkileşimiyle doğrulandı.
+- API testleri: **34 suite / 246 test geçti**. Sosyal servis için yeni üyeler sırası, 200 kayıt sınırı, engel hariç tutma, takip ve ortak ilgi bağlamına ek olarak küratör özgeçmiş URL doğrulaması kapsandı.
+- Web etkileşim testleri: **5 suite / 31 test geçti**. Önceki akışlara ek olarak etkinlik düzenleme/program, ücretsiz bilet, pending bağlantısı, uzun açıklama, program etiketi, takipçi tooltip'i, boş arama ve küratör başvurusu doğrudan kullanıcı etkileşimiyle doğrulandı.
 - Check-in pasaportunda erişilebilir Guest List adlarının A–Z sıralanmaması yeni UI testinde yakalandı ve düzeltildi. Etkinlik/mekân listelerinde 10’ar kayıt, arama, bilet/gate, geçmiş, QR/NFC yöntemi, pasaport, “zaten içeride” kilidi, kabul/ret ve taranan kullanıcı sonuç ekranları regresyon kapsamına alındı.
 - Shared, API ve web TypeScript kontrolleri: geçti.
 - API ve web lint: geçti.
 - Shared, API ve web production build: geçti.
 - Prisma şema doğrulaması: geçti.
+- Bağımlılık güvenlik denetimi: **0 açık**. 28 Ağustos 2026 tarihli yüksek seviye duyurular için güvenli yama sürümleri kilit dosyaya işlendi ve tüm kontroller yeniden geçti.
 - Web paketleri rota ve sağlayıcı bazında bölündü; önceki yaklaşık 604 KB ana paket kaldırıldı. Güncel ana uygulama paketi yaklaşık **46 KB** (gzip yaklaşık **14 KB**); QR ve PDF kütüphaneleri yalnız ilgili işlem açıldığında yüklenir.
 - Yerel ana rotalar TR ve EN olarak tarandı; kaçak arayüz dili bulunmadı. İngilizce görünümde kalan Türkçe satırlar yalnız demo içerikleridir.
 - `/events` 15 kart/sayfa, masaüstü üç kolon ve ikinci sayfadaki tek kartın sabit genişliği tarayıcıda doğrulandı.

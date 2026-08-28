@@ -31,7 +31,8 @@ export function CuratorsPage() {
   const apply = useMutation({ mutationFn: submitCuratorApplication });
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     apply.mutate(
       {
         name: String(form.get("name")),
@@ -41,7 +42,7 @@ export function CuratorsPage() {
         motivation: String(form.get("motivation")),
         cvUrl: String(form.get("cvUrl") || "") || undefined,
       },
-      { onSuccess: () => event.currentTarget.reset() },
+      { onSuccess: () => formElement.reset() },
     );
   }
   if (user?.role === "curator" && dashboard.data)
@@ -188,7 +189,7 @@ export function CuratorsPage() {
             </label>
             <label>
               {t("Özgeçmiş bağlantısı (LinkedIn, Instagram profiliniz vb. linki)", "CV link (LinkedIn, Instagram profile or similar)")}
-              <input name="cvUrl" inputMode="url" placeholder="https://…" />
+              <input name="cvUrl" inputMode="url" placeholder="https://…" type="url" />
             </label>
             <button className="primary-action" disabled={apply.isPending}>
               <Send size={17} />

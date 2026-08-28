@@ -3242,7 +3242,8 @@ select:focus-visible {
   position: relative;
 }
 .profile-metrics [data-tooltip]:hover::after,
-.profile-metrics [data-tooltip]:focus-visible::after {
+.profile-metrics [data-tooltip]:focus-visible::after,
+.profile-metrics [data-tooltip].tooltip-open::after {
   position: absolute;
   z-index: 5;
   top: calc(100% + 8px);
@@ -3257,6 +3258,15 @@ select:focus-visible {
   content: attr(data-tooltip);
   font-size: 12px;
   font-weight: 600;
+}
+@media (hover: none) {
+  .profile-metrics [data-tooltip]:hover::after {
+    content: none;
+  }
+  .profile-metrics [data-tooltip].tooltip-open::after,
+  .profile-metrics [data-tooltip]:focus-visible::after {
+    content: attr(data-tooltip);
+  }
 }
 .announcement-modal {
   backdrop-filter: blur(8px);

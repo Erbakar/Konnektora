@@ -315,8 +315,11 @@ export function PublicProfilePage() {
           )}
           <div className="profile-metrics">
             <button
+              aria-expanded={privacyNotice}
+              className={privacyNotice ? "tooltip-open" : undefined}
               data-tooltip={t("Kimin kimi takip ettiğini kimse göremez.", "Nobody can see who follows whom.")}
-              onClick={() => setPrivacyNotice(true)}
+              onBlur={() => setPrivacyNotice(false)}
+              onClick={() => setPrivacyNotice((open) => !open)}
               title={t("Kimin kimi takip ettiğini kimse göremez.", "Nobody can see who follows whom.")}
               type="button"
             >
@@ -483,14 +486,6 @@ export function PublicProfilePage() {
           ) : null}
         </div>
       </header>
-      {privacyNotice ? (
-        <div className="profile-privacy-toast" role="status">
-          <span>{t("Kimin kimi takip ettiğini kimse göremez.", "Nobody can see who follows whom.")}</span>
-          <button onClick={() => setPrivacyNotice(false)} type="button">
-            {t("Kapat", "Close")}
-          </button>
-        </div>
-      ) : null}
       <NotificationDialog
         open={notificationOpen}
         onClose={() => setNotificationOpen(false)}
