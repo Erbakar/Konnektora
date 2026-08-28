@@ -113,6 +113,8 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
       { id: "rule-z", targetType: "event", title: "Zarar verme", description: "Güvenliği ihlal eder.", violationScore: 40, status: "active" },
       { id: "rule-passive", targetType: "event", title: "Pasif kural", description: "Gösterilmemeli.", violationScore: 10, status: "passive" },
       { id: "rule-a", targetType: "event", title: "Ayrımcılık", description: "Ayrımcı içerik yasaktır.", violationScore: 30, status: "active" },
+      { id: "rule-post", targetType: "post", title: "Spam", description: "Tekrarlayan içerik yasaktır.", violationScore: 10, status: "active" },
+      { id: "rule-message", targetType: "private_message", title: "Taciz", description: "Taciz yasaktır.", violationScore: 50, status: "active" },
     ]);
     render(providers(
       <Routes><Route path="/help/*" element={<HelpCenterPage />} /></Routes>,
@@ -123,6 +125,8 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
     const group = (await screen.findByRole("heading", { name: "Etkinlikler" })).closest("section")!;
     expect(within(group).getAllByRole("group").map((rule) => rule.querySelector("strong")?.textContent)).toEqual(["Ayrımcılık", "Zarar verme"]);
     expect(screen.queryByText("Pasif kural")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Postlar" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Özel mesajlar" })).toBeVisible();
     const rule = within(group).getByText("Ayrımcılık").closest("details")!;
     expect(within(rule).getByText("30 ihlal puanı")).toBeVisible();
     await userEvent.click(within(rule).getByText("Ayrımcılık"));
