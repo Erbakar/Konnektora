@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,6 +19,7 @@ const apiMocks = vi.hoisted(() => ({
   getTagStats: vi.fn(),
   getUserSession: vi.fn(),
   listEventRelatedUsers: vi.fn(),
+  listEventParticipants: vi.fn(),
   listEventTicketTypes: vi.fn(),
   listEvents: vi.fn(),
   listFollowing: vi.fn(),
@@ -70,6 +71,7 @@ beforeEach(() => {
   apiMocks.getUserSession.mockReturnValue(null);
   apiMocks.getContentNotification.mockResolvedValue({ enabled: false });
   apiMocks.listEventRelatedUsers.mockResolvedValue([]);
+  apiMocks.listEventParticipants.mockResolvedValue([]);
   apiMocks.listEventTicketTypes.mockResolvedValue([]);
   apiMocks.listEvents.mockResolvedValue({ items: [], page: 1, pageSize: 20, total: 0, hasNextPage: false });
   apiMocks.listFollowing.mockResolvedValue([]);
@@ -119,6 +121,30 @@ describe("FRD referanslı ekran davranışları", () => {
     expect(screen.getByRole("link", { name: event.liveUrl })).toHaveAttribute("target", "_blank");
     await userEvent.click(screen.getByRole("button", { name: "Kapat" }));
     expect(screen.queryByRole("dialog", { name: event.title })).not.toBeInTheDocument();
+  });
+
+  it("süresi dolmuş etkinlikte check-in kontrolünü açmayıp düzenleme yönlendirmeli uyarı verir", async () => {
+    const expiredEvent = {
+      ...mockEvents[0]!,
+      createdById: "viewer-1",
+      startsAt: "2026-01-10T18:00:00.000Z",
+      endsAt: "2026-01-10T22:00:00.000Z",
+    };
+    apiMocks.getUserSession.mockReturnValue({ id: "viewer-1", username: "kadir", role: "admin" });
+    apiMocks.getEvent.mockResolvedValue(expiredEvent);
+
+    render(providers(
+      <Routes><Route path="/events/:slug" element={<EventDetailPage />} /></Routes>,
+      `/events/${expiredEvent.slug}`,
+    ));
+
+    expect(await screen.findByRole("heading", { name: expiredEvent.title })).toBeVisible();
+    const actions = document.querySelector('summary[aria-label="Etkinlik işlemleri"]');
+    expect(actions).toBeInTheDocument();
+    fireEvent.click(actions!);
+    await userEvent.click(screen.getByRole("button", { name: "Check-in kontrolü" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Bitmiş bir etkinlik için check-in kontrolü yapamazsınız.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Etkinlik Düzenle");
   });
 
   it("etkinlik analizinde FRD performans, keşif, huni, demografi ve gelir gruplarını gösterir", async () => {

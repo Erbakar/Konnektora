@@ -2081,7 +2081,10 @@ function CheckInPassportDialog({
           <div>
             <dt>Guest list</dt>
             <dd>
-              {passport.guestLists.map((list) => list.name).join(", ") || "—"}
+              {[...passport.guestLists]
+                .sort((a, b) => a.name.localeCompare(b.name, tr ? "tr" : "en"))
+                .map((list) => list.name)
+                .join(", ") || "—"}
             </dd>
           </div>
         </dl>

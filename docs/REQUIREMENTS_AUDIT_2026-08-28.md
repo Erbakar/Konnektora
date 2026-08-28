@@ -29,7 +29,8 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 ## Otomatik kontroller
 
 - API testleri: **33 suite / 244 test geçti**. Sosyal servis için yeni üyeler sırası, 200 kayıt sınırı, engel hariç tutma, takip ve ortak ilgi bağlamı testi ayrıca eklendi.
-- Web etkileşim testleri: **3 suite / 19 test geçti**. Önceki akışlara ek olarak topluluk/yeni üyeler, etiket-etkinlik-mekân ilgili kullanıcı ekranları, yönetim aksiyonları, FRD ile eşleşen etkinlik bilgi penceresi, dört analitik ekranı ve Mutualizm davranışları doğrudan kullanıcı etkileşimiyle doğrulandı.
+- Web etkileşim testleri: **4 suite / 25 test geçti**. Önceki akışlara ek olarak topluluk/yeni üyeler, etiket-etkinlik-mekân ilgili kullanıcı ekranları, yönetim aksiyonları, FRD ile eşleşen etkinlik bilgi penceresi, dört analitik ekranı, Mutualizm ve etkinlik/mekân check-in yönetimi doğrudan kullanıcı etkileşimiyle doğrulandı.
+- Check-in pasaportunda erişilebilir Guest List adlarının A–Z sıralanmaması yeni UI testinde yakalandı ve düzeltildi. Etkinlik/mekân listelerinde 10’ar kayıt, arama, bilet/gate, geçmiş, QR/NFC yöntemi, pasaport, “zaten içeride” kilidi, kabul/ret ve taranan kullanıcı sonuç ekranları regresyon kapsamına alındı.
 - Shared, API ve web TypeScript kontrolleri: geçti.
 - API ve web lint: geçti.
 - Shared, API ve web production build: geçti.
