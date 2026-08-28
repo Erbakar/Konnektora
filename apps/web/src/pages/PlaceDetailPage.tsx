@@ -161,9 +161,7 @@ export function PlaceDetailPage() {
     const eventFinished = new Date(event.endsAt ?? event.startsAt).getTime() < Date.now();
     return placeEventTab === "future" ? !eventFinished : eventFinished;
   }).slice(0, 8);
-  const invitedPreviewCount = canManage
-    ? (relatedUsersQuery.data ?? []).filter((member) => member.status === "invited").length
-    : (relatedUsersQuery.data ?? []).filter((member) => member.status === "invited").length;
+  const invitedPreviewCount = place.inviteCount ?? (relatedUsersQuery.data ?? []).filter((member) => member.status === "invited").length;
 
   return (
     <article className="page detail-page">

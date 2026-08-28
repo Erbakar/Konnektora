@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { LanguageProvider } from "../lib/i18n";
 import { LocationPicker } from "../components/LocationPicker";
+import { LocationMap } from "../components/LocationMap";
 import { PlacesPage } from "../pages/PlacesPage";
 
 const apiMocks = vi.hoisted(() => ({
@@ -16,10 +17,11 @@ const apiMocks = vi.hoisted(() => ({
   listTags: vi.fn(),
 }));
 const mapMocks = vi.hoisted(() => {
-  const map = { on: vi.fn(), remove: vi.fn(), setView: vi.fn() };
+  const map = { fitBounds: vi.fn(), on: vi.fn(), remove: vi.fn(), setView: vi.fn() };
   map.setView.mockReturnValue(map);
-  const marker = { addTo: vi.fn(), getLatLng: vi.fn(), on: vi.fn(), setLatLng: vi.fn() };
+  const marker = { addTo: vi.fn(), bindPopup: vi.fn(), getLatLng: vi.fn(), on: vi.fn(), setLatLng: vi.fn() };
   marker.addTo.mockReturnValue(marker);
+  marker.bindPopup.mockReturnValue(marker);
   return { map, marker };
 });
 
@@ -35,12 +37,17 @@ vi.mock("leaflet", () => ({
     marker: vi.fn(() => mapMocks.marker),
     tileLayer: vi.fn(() => ({ addTo: vi.fn() })),
   },
+  divIcon: vi.fn(() => ({})),
+  map: vi.fn(() => mapMocks.map),
+  marker: vi.fn(() => mapMocks.marker),
+  tileLayer: vi.fn(() => ({ addTo: vi.fn() })),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
   mapMocks.map.setView.mockReturnValue(mapMocks.map);
   mapMocks.marker.addTo.mockReturnValue(mapMocks.marker);
+  mapMocks.marker.bindPopup.mockReturnValue(mapMocks.marker);
   apiMocks.geocodeAddress.mockResolvedValue({
     found: true,
     latitude: 41.034,
@@ -52,6 +59,8 @@ beforeEach(() => {
   apiMocks.listTags.mockResolvedValue([]);
   apiMocks.createPlace.mockResolvedValue({ id: "place-1", name: "Konnektora Atölye" });
 });
+
+afterEach(cleanup);
 
 describe("etkinlik ve mekân adres seçici", () => {
   it("yazılan adresi gerçekten arayıp gizli koordinatları ve harita işaretini günceller", async () => {
@@ -100,5 +109,25 @@ describe("etkinlik ve mekân adres seçici", () => {
     }));
     await waitFor(() => expect(screen.queryByRole("heading", { name: "Yeni mekân" })).not.toBeInTheDocument());
     expect(screen.queryByText("Mekân oluşturulamadı. Alanları kontrol et.")).not.toBeInTheDocument();
+  });
+
+  it("mekân ile kullanıcı konumunu aynı haritada kapsar ve varsayılan harita uygulamasına bağlantı verir", async () => {
+    Object.defineProperty(window.navigator, "geolocation", {
+      configurable: true,
+      value: { getCurrentPosition: vi.fn((success) => success({ coords: { latitude: 41.02, longitude: 28.96 } })) },
+    });
+
+    render(
+      <LanguageProvider>
+        <LocationMap items={[{
+          id: "place-1", title: "Konnektora Studio", latitude: 41.034, longitude: 28.977, location: "Beyoğlu, İstanbul",
+        }]} />
+      </LanguageProvider>,
+    );
+
+    expect(await screen.findByText("Konumunuz da haritada gösteriliyor")).toBeVisible();
+    const mapLink = screen.getByRole("link", { name: /Konnektora Studio/ });
+    expect(mapLink).toHaveAttribute("target", "_blank");
+    expect(mapLink.getAttribute("href")).toMatch(/maps\.apple\.com|google\.com\/maps|^geo:/);
   });
 });

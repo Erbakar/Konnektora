@@ -165,6 +165,8 @@ async function main() {
         country: "Germany",
         city: "Berlin",
         address: "Mitte",
+        latitude: 52.5208,
+        longitude: 13.4095,
         coverImageUrl: "https://images.unsplash.com/photo-1497366754035-f200968a6e72",
         followerCount: 1,
         inviteCount: 0
@@ -176,6 +178,8 @@ async function main() {
         country: "Türkiye",
         city: "Istanbul",
         address: "Galata",
+        latitude: 41.0256,
+        longitude: 28.9744,
         coverImageUrl: "https://images.unsplash.com/photo-1497366754035-f200968a6e72",
         followerCount: 1,
         inviteCount: 0
@@ -187,6 +191,8 @@ async function main() {
         country: "Netherlands",
         city: "Amsterdam",
         address: "De Pijp",
+        latitude: 52.3547,
+        longitude: 4.8936,
         coverImageUrl: "https://images.unsplash.com/photo-1497366811353-6870744d04b2",
         followerCount: 1,
         inviteCount: 0
@@ -198,6 +204,8 @@ async function main() {
         country: "United Kingdom",
         city: "London",
         address: "Shoreditch",
+        latitude: 51.5255,
+        longitude: -0.0786,
         coverImageUrl: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4",
         followerCount: 1,
         inviteCount: 0
@@ -210,6 +218,8 @@ async function main() {
         country: place.country,
         city: place.city,
         address: place.address,
+        latitude: place.latitude,
+        longitude: place.longitude,
         coverImageUrl: place.coverImageUrl,
         followerCount: place.followerCount,
         inviteCount: place.inviteCount,

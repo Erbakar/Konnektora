@@ -179,6 +179,14 @@ describe("topluluk ve ilgili kullanıcı gereksinimleri", () => {
     await screen.findByText("2 ortak ilgi alanı");
     expect(screen.getByText("Filtrele").closest("details")).not.toHaveAttribute("open");
     expect(screen.getByRole("button", { name: /Üyeler/ })).toBeVisible();
+    const placeTabs = screen.getByRole("tablist");
+    const placeTabLabels = within(placeTabs).getAllByRole("button").map((button) => button.textContent?.replace(/\s+/g, " ").trim());
+    expect(placeTabLabels).toEqual([
+      "Üyeler (1)", "Bekleyenler (0)", "Davetliler (0)", "Takip ettiklerim (0)",
+      "Yöneticiler", "Reddedilenler", "Yasaklananlar",
+    ]);
+    expect(within(placeTabs).queryByRole("button", { name: /Tümü/ })).not.toBeInTheDocument();
+    expect(within(placeTabs).queryByRole("button", { name: /Check-in/ })).not.toBeInTheDocument();
     const placeActions = document.querySelector('summary[aria-label="Kullanıcı aksiyonları"]');
     expect(placeActions).toBeInTheDocument();
     fireEvent.click(placeActions!);
