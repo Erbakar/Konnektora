@@ -8,6 +8,7 @@ import { JwtService } from "@nestjs/jwt";
 import { UserStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { ScanMemberDto } from "./identity.dto";
+import { NotificationsService } from "../notifications/notifications.service";
 
 const memberSelect = {
   id: true,
@@ -23,6 +24,7 @@ export class IdentityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async onboardingStatus(userId: string) {
@@ -174,23 +176,8 @@ export class IdentityService {
       throw new BadRequestException("Üye kartı artık geçerli değil.");
     if (block)
       throw new ForbiddenException("Engellenen kullanıcı kartı taranamaz.");
-    const scan = await this.prisma.$transaction(async (tx) => {
-      if (!existing) {
-        await tx.userFollow.create({
-          data: { followerId: scannerId, followingId: member.id },
-        });
-        await tx.user.update({
-          where: { id: scannerId },
-          data: { followingCount: { increment: 1 } },
-        });
-        await tx.user.update({
-          where: { id: member.id },
-          data: { followerCount: { increment: 1 } },
-        });
-      }
-      return tx.memberScan.create({
-        data: { scannerId, memberId: member.id, method: input.method },
-      });
+    const scan = await this.prisma.memberScan.create({
+      data: { scannerId, memberId: member.id, method: input.method },
     });
     const card = {
       id: member.id,
@@ -200,12 +187,21 @@ export class IdentityService {
       country: member.country,
       followerCount: member.followerCount,
     };
+    await this.notifications.dispatch({
+      userId: member.id,
+      topic: "admin_message",
+      type: "member_scan",
+      title: "Üye kartınız tarandı",
+      body: "Kartınızı tarayan üyenin profilini ve ortak ilgi alanlarınızı şimdi görebilirsiniz.",
+      targetType: "user",
+      targetId: scannerId,
+    });
     return {
       id: scan.id,
       method: input.method,
       createdAt: scan.createdAt,
       member: card,
-      following: true,
+      following: Boolean(existing),
     };
   }
 
@@ -244,7 +240,26 @@ export class IdentityService {
       method: scan.method,
       createdAt: scan.createdAt,
       member: scan.member,
-      following: true,
+      following: false,
+    }));
+  }
+
+  async incomingScans(userId: string, after?: string) {
+    const parsedAfter = after ? new Date(after) : new Date(Date.now() - 30_000);
+    if (Number.isNaN(parsedAfter.getTime()))
+      throw new BadRequestException("Tarama başlangıç zamanı geçersiz.");
+    const scans = await this.prisma.memberScan.findMany({
+      where: { memberId: userId, createdAt: { gt: parsedAfter } },
+      orderBy: { createdAt: "asc" },
+      take: 20,
+      include: { scanner: { select: memberSelect } },
+    });
+    return scans.map((scan) => ({
+      id: scan.id,
+      method: scan.method,
+      createdAt: scan.createdAt,
+      member: scan.scanner,
+      following: false,
     }));
   }
 

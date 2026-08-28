@@ -13,7 +13,7 @@ import { AppLayout } from "./components/AppLayout";
 import { ServiceFeedback } from "./components/ServiceFeedback";
 import { ApiHttpError } from "./lib/api";
 import { publicSiteHref } from "./lib/domains";
-import { LanguageProvider } from "./lib/i18n";
+import { LanguageProvider, useLanguage } from "./lib/i18n";
 import "./styles.css";
 
 const chunkReloadKey = "konnektora:chunk-reload";
@@ -44,6 +44,8 @@ const lazy: typeof reactLazy = (loader) =>
   });
 
 function RouteErrorPage() {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const error = useRouteError();
   const serviceError = isRouteErrorResponse(error)
     ? { message: error.statusText, status: error.status }
@@ -52,20 +54,25 @@ function RouteErrorPage() {
   return (
     <main className="route-error-page" role="alert">
       <div className="loading-mark" aria-hidden="true" />
-      <span className="eyebrow">Bağlantı yenilenemedi</span>
-      <h1>Sayfayı yeniden yükleyelim.</h1>
+      <span className="eyebrow">{t("Bağlantı yenilenemedi", "The connection could not be refreshed")}</span>
+      <h1>{t("Sayfayı yeniden yükleyelim.", "Let's reload the page.")}</h1>
       <ServiceFeedback
         error={serviceError}
-        fallback="Sayfa yüklenirken beklenmeyen bir sorun oluştu. Yeniden deneyebilirsin."
+        fallback={t("Sayfa yüklenirken beklenmeyen bir sorun oluştu. Yeniden deneyebilirsin.", "An unexpected problem occurred while loading the page. You can try again.")}
         onRetry={() => window.location.reload()}
       />
       <div className="row-actions">
         <a className="secondary-action" href={publicSiteHref()}>
-          Ana sayfaya dön
+          {t("Ana sayfaya dön", "Back to home")}
         </a>
       </div>
     </main>
   );
+}
+
+function LoadingScreen() {
+  const { language } = useLanguage();
+  return <div className="page route-loading app-loading-screen" role="status"><div className="loading-mark" aria-hidden="true"/><strong>{language === "tr" ? "Sayfa yükleniyor…" : "Loading page…"}</strong><span>{language === "tr" ? "İçerik hazırlanıyor" : "Preparing content"}</span></div>;
 }
 
 const AccountPage = lazy(() =>
@@ -187,6 +194,11 @@ const PublicProfilePage = lazy(() =>
     default: module.PublicProfilePage,
   })),
 );
+const MutualismPage = lazy(() =>
+  import("./pages/MutualismPage").then((module) => ({
+    default: module.MutualismPage,
+  })),
+);
 const OnboardingPage = lazy(() =>
   import("./pages/OnboardingPage").then((module) => ({
     default: module.OnboardingPage,
@@ -291,6 +303,8 @@ const router = createBrowserRouter([
       { path: "search", element: <SearchPage /> },
       { path: "users/:username", element: <PublicProfilePage /> },
       { path: "users/id/:userId", element: <PublicProfilePage /> },
+      { path: "users/:username/mutualism", element: <MutualismPage /> },
+      { path: "users/id/:userId/mutualism", element: <MutualismPage /> },
       { path: "tags", element: <TagsPage /> },
       { path: "tags/:slug", element: <TagsPage /> },
       { path: "tags/:slug/users", element: <RelatedUsersPage kind="tag" /> },
@@ -352,9 +366,7 @@ createRoot(document.getElementById("root")!).render(
     <LanguageProvider>
       <QueryClientProvider client={queryClient}>
         <Suspense
-          fallback={
-            <div className="page route-loading app-loading-screen" role="status"><div className="loading-mark" aria-hidden="true"/><strong>Sayfa yükleniyor…</strong><span>İçerik hazırlanıyor</span></div>
-          }
+          fallback={<LoadingScreen />}
         >
           <RouterProvider router={router} />
         </Suspense>

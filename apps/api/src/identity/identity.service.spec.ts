@@ -11,7 +11,8 @@ describe("IdentityService", () => {
   const memberScan = { create: jest.fn(), findMany: jest.fn() };
   const prisma = { user, mediaFile, userInterestTag, userFollow, userBlock, memberScan, $transaction: jest.fn(async (fn: any) => fn({ user, userFollow, memberScan })) };
   const jwt = { signAsync: jest.fn(), verifyAsync: jest.fn() };
-  const service = new IdentityService(prisma as never, jwt as never);
+  const notifications = { dispatch: jest.fn() };
+  const service = new IdentityService(prisma as never, jwt as never, notifications as never);
   const id = "11111111-1111-4111-8111-111111111111";
   const peerId = "22222222-2222-4222-8222-222222222222";
 
@@ -49,21 +50,38 @@ describe("IdentityService", () => {
     await expect(service.scan(id, { payload: "signed-token-value", method: "qr" })).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it.each(["qr", "nfc"] as const)("records a real %s device scan and follows once", async (method) => {
+  it.each(["qr", "nfc"] as const)("records a real %s device scan without silently following", async (method) => {
     jwt.verifyAsync.mockResolvedValue({ sub: peerId, purpose: "member-pass", version: 2 });
     user.findUnique.mockResolvedValue({ id: peerId, name: "Peer", username: "peer", city: "Berlin", country: "Germany", followerCount: 4, memberPassVersion: 2, status: UserStatus.active });
     memberScan.create.mockResolvedValue({ id: `scan-${method}`, method, createdAt: new Date() });
     user.update.mockResolvedValue({});
     userFollow.create.mockResolvedValue({});
     const result = await service.scan(id, { payload: "signed-device-token", method });
-    expect(result).toMatchObject({ method, following: true, member: { id: peerId } });
-    expect(userFollow.create).toHaveBeenCalledWith({ data: { followerId: id, followingId: peerId } });
+    expect(result).toMatchObject({ method, following: false, member: { id: peerId } });
+    expect(userFollow.create).not.toHaveBeenCalled();
     expect(memberScan.create).toHaveBeenCalledWith({ data: { scannerId: id, memberId: peerId, method } });
+    expect(notifications.dispatch).toHaveBeenCalledWith(expect.objectContaining({ userId: peerId, targetId: id, type: "member_scan" }));
   });
 
   it("rejects a rotated member pass captured by a QR screenshot", async () => {
     jwt.verifyAsync.mockResolvedValue({ sub: peerId, purpose: "member-pass", version: 1 });
     user.findUnique.mockResolvedValue({ id: peerId, name: "Peer", username: "peer", city: null, country: null, followerCount: 0, memberPassVersion: 2, status: UserStatus.active });
     await expect(service.scan(id, { payload: "old-signed-token", method: "qr" })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("returns new incoming scans so the displayed-card device can open the scanner profile", async () => {
+    memberScan.findMany.mockResolvedValue([{
+      id: "scan-incoming",
+      method: "qr",
+      createdAt: new Date("2026-08-28T00:00:02.000Z"),
+      scanner: { id: peerId, name: "Peer", username: "peer", city: null, country: null, followerCount: 1 },
+    }]);
+
+    await expect(service.incomingScans(id, "2026-08-28T00:00:00.000Z")).resolves.toEqual([
+      expect.objectContaining({ id: "scan-incoming", member: expect.objectContaining({ id: peerId }) }),
+    ]);
+    expect(memberScan.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { memberId: id, createdAt: { gt: new Date("2026-08-28T00:00:00.000Z") } },
+    }));
   });
 });

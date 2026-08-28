@@ -7,6 +7,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { getServiceErrorPresentation } from "../lib/serviceErrors";
+import { useLanguage } from "../lib/i18n";
 
 type ServiceFeedbackProps = {
   actionLabel?: string;
@@ -21,7 +22,7 @@ type ServiceFeedbackProps = {
 };
 
 export function ServiceFeedback({
-  actionLabel = "Yeniden dene",
+  actionLabel,
   className = "",
   compact = false,
   error,
@@ -31,6 +32,8 @@ export function ServiceFeedback({
   title,
   tone = "error",
 }: ServiceFeedbackProps) {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const presentation =
     tone === "error"
       ? getServiceErrorPresentation(error, fallback)
@@ -38,9 +41,9 @@ export function ServiceFeedback({
   const resolvedTitle =
     title ??
     presentation?.title ??
-    (tone === "success" ? "İşlem tamamlandı" : "Bilgilendirme");
+    (tone === "success" ? t("İşlem tamamlandı", "Action completed") : t("Bilgilendirme", "Information"));
   const resolvedMessage =
-    message ?? presentation?.message ?? fallback ?? "İşlem tamamlandı.";
+    message ?? presentation?.message ?? fallback ?? t("İşlem tamamlandı.", "The action was completed.");
   const kind = presentation?.kind ?? tone;
   const Icon =
     tone === "success"
@@ -73,7 +76,7 @@ export function ServiceFeedback({
           type="button"
         >
           <RefreshCw size={15} />
-          {actionLabel}
+          {actionLabel ?? t("Yeniden dene", "Try again")}
         </button>
       ) : null}
     </div>

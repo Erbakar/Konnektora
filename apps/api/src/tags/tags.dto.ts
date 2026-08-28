@@ -23,7 +23,6 @@ export class MergeTagDto {
 
 export class CreateTagCommentDto {
   @IsString()
-  @MinLength(1)
   @MaxLength(1000)
   body!: string;
 }

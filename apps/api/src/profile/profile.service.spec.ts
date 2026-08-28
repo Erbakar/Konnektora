@@ -38,8 +38,10 @@ describe("ProfileService", () => {
       },
       tag: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
         updateMany: jest.fn().mockResolvedValue({ count: 1 })
       },
       event: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
@@ -63,14 +65,49 @@ describe("ProfileService", () => {
       },
       userInterestTag: {
         findMany: jest.fn(),
+        findUnique: jest.fn(),
         deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
         upsert: jest.fn().mockResolvedValue({})
+      },
+      profileTagSuggestion: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn().mockResolvedValue({})
       },
       $transaction: jest.fn().mockImplementation((operations: unknown[]) => Promise.all(operations))
     };
 
-    return { service: new ProfileService(prisma as never), prisma };
+    const notifications = { dispatch: jest.fn() };
+    return { service: new ProfileService(prisma as never, notifications as never), prisma, notifications };
   };
+
+  it("creates a pending profile tag suggestion and notifies the profile owner", async () => {
+    const { service, prisma, notifications } = createService();
+    prisma.user.findFirst.mockResolvedValue({ id: "user-2" });
+    prisma.tag.findFirst.mockResolvedValue({ id: "tag-1", name: "Caz" });
+    prisma.userInterestTag.findUnique.mockResolvedValue(null);
+    prisma.profileTagSuggestion.findFirst.mockResolvedValue(null);
+    prisma.profileTagSuggestion.create.mockResolvedValue({
+      id: "suggestion-1", targetUserId: "user-2", suggestedById: "user-1", tagId: "tag-1", sentiment: "like", status: "pending",
+      tag: { id: "tag-1", name: "Caz" }, targetUser: { id: "user-2", name: "Selin" }, suggestedBy: { id: "user-1", name: "Ada", username: "ada" }
+    });
+
+    await service.createTagSuggestion("user-1", "user-2", { tagId: "tag-1", sentiment: "like" });
+
+    expect(prisma.profileTagSuggestion.create).toHaveBeenCalled();
+    expect(notifications.dispatch).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-2", topic: "tag_request" }));
+  });
+
+  it("accepts a suggestion and adds it to the target profile", async () => {
+    const { service, prisma } = createService();
+    prisma.profileTagSuggestion.findUnique.mockResolvedValue({ id: "suggestion-1", targetUserId: "user-2", suggestedById: "user-1", tagId: "tag-1", sentiment: "ok", status: "pending", tag: { id: "tag-1", name: "Caz" } });
+    prisma.userInterestTag.findUnique.mockResolvedValue(null);
+
+    await expect(service.decideTagSuggestion("user-2", "suggestion-1", "accept")).resolves.toEqual({ ok: true, status: "accepted" });
+    expect(prisma.userInterestTag.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ userId: "user-2", tagId: "tag-1", sentiment: "ok" }) }));
+  });
 
   it("returns the authenticated user's profile", async () => {
     const { service, prisma } = createService();

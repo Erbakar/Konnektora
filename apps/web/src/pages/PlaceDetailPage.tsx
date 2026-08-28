@@ -12,7 +12,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
 import { ContentComments } from "../components/ContentComments";
@@ -23,7 +23,7 @@ import { EventCard } from "../components/EventCard";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
 import { ReportDialog } from "../components/ReportDialog";
 import { CountryCityFields } from "../components/CountryCityFields";
-import { PlaceCard, placeTypeLabels } from "../components/PlaceCard";
+import { PlaceCard, placeTypeKeys, placeTypeLabels, placeTypeLabelsTr } from "../components/PlaceCard";
 import {
   archiveMyPlace,
   createBlock,
@@ -35,6 +35,7 @@ import {
   listPlaceRelatedUsers,
   listPlaces,
   respondPlaceInvite,
+  recordContentView,
   setContentNotification,
   unfollowPlace,
   updateMyPlace,
@@ -42,8 +43,12 @@ import {
   resolveMediaUrl,
 } from "../lib/api";
 import { NotFoundPage } from "./NotFoundPage";
+import { getServiceErrorPresentation } from "../lib/serviceErrors";
+import { useLanguage } from "../lib/i18n";
+import { localizeCityName, localizeCountryName } from "../lib/formats";
 
 export function PlaceDetailPage() {
+  const { language } = useLanguage();
   const { slug = "" } = useParams();
   const user = getUserSession();
   const queryClient = useQueryClient();
@@ -53,6 +58,7 @@ export function PlaceDetailPage() {
   const [showAllTags, setShowAllTags] = useState(false);
   const [placeEventTab, setPlaceEventTab] = useState<"future" | "past">("future");
   const [reportOpen, setReportOpen] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const placeQuery = useQuery({
     queryKey: ["place", slug],
     queryFn: () => getPlace(slug),
@@ -143,9 +149,23 @@ export function PlaceDetailPage() {
     },
   });
 
+  useEffect(() => {
+    if (place?.id) void recordContentView("place", place.id);
+  }, [place?.id]);
+
   if (placeQuery.isLoading)
-    return <section className="page">Mekân yükleniyor…</section>;
+    return <section className="page">{language === "tr" ? "Mekân yükleniyor…" : "Loading place…"}</section>;
+  if (placeQuery.isError) {
+    const presentation = getServiceErrorPresentation(placeQuery.error, language === "tr" ? "Mekân bilgileri şu anda yüklenemedi. Lütfen tekrar deneyin." : "The place could not be loaded. Please try again.");
+    if (presentation.kind === "not-found") return <NotFoundPage kind="place" />;
+    return <section className="page not-found-page" role="alert"><p className="eyebrow">{language === "tr" ? "Mekân yüklenemedi" : "Place unavailable"}</p><h1>{presentation.title}</h1><p>{presentation.message}</p><button className="primary-action" onClick={() => void placeQuery.refetch()} type="button">{language === "tr" ? "Tekrar dene" : "Try again"}</button></section>;
+  }
   if (!place) return <NotFoundPage kind="place" />;
+  const placeEvents = place.events ?? [];
+  const visiblePlaceEvents = placeEvents.filter((event) => placeEventTab === "future" ? new Date(event.startsAt) >= new Date() : new Date(event.startsAt) < new Date()).slice(0, 8);
+  const invitedPreviewCount = canManage
+    ? (relatedUsersQuery.data ?? []).filter((member) => member.status === "invited").length
+    : place.inviteCount;
 
   return (
     <article className="page detail-page">
@@ -154,20 +174,20 @@ export function PlaceDetailPage() {
           <img alt="" src={resolveMediaUrl(place.coverImageUrl)} />
         </div>
       ) : null}
-      <ContentMediaGallery targetId={place.id} targetType="place" />
-      <p className="eyebrow">MEKÂN – {place.visibility === "invite_only" ? "SADECE DAVETLİ" : place.visibility === "approval_required" ? "ONAY GEREKLİ" : "HERKESE AÇIK"}</p>
+      <ContentMediaGallery canManage={canManage} coverAlt={place.name} coverImageUrl={place.coverImageUrl} targetId={place.id} targetType="place" />
+      <p className="eyebrow">{language === "tr" ? "MEKÂN" : "PLACE"} – {place.visibility === "invite_only" ? language === "tr" ? "SADECE DAVETLİ" : "INVITE ONLY" : place.visibility === "approval_required" ? language === "tr" ? "ONAY GEREKLİ" : "APPROVAL REQUIRED" : language === "tr" ? "HERKESE AÇIK" : "OPEN TO EVERYONE"}</p>
       <h1>{place.name}</h1>
       <div className="detail-meta">
-        <span>{placeTypeLabels[place.placeType ?? ""] ?? "Mekân"}</span>
+        <span>{(language === "tr" ? placeTypeLabelsTr : placeTypeLabels)[place.placeType ?? ""] ?? (language === "tr" ? "Mekân" : "Place")}</span>
         <span>
           <MapPin size={16} />
-          {[place.address, place.city, place.country]
+          {[place.address, localizeCityName(place.city, language), localizeCountryName(place.country, language)]
             .filter(Boolean)
-            .join(", ") || "Konum belirtilmedi"}
+            .join(", ") || (language === "tr" ? "Konum belirtilmedi" : "Location not specified")}
         </span>
         <span>
           <Users size={16} />
-          <Link to={`/places/${place.slug}/users`}>{place.followerCount} takipçi</Link>
+          <Link to={`/places/${place.slug}/users`}>{place.memberCount ?? place.followerCount} {language === "tr" ? "üye" : (place.memberCount ?? place.followerCount) === 1 ? "member" : "members"}{place.inviteCount ? ` · ${place.inviteCount} ${language === "tr" ? "davetli" : "invited"}` : ""}{place.followingMemberCount ? ` · ${place.followingMemberCount} ${language === "tr" ? "takip ettiğiniz" : "you follow"}` : ""}</Link>
         </span>
         <DistanceLabel latitude={place.latitude} longitude={place.longitude} />
       </div>
@@ -179,67 +199,71 @@ export function PlaceDetailPage() {
             onClick={() => followMutation.mutate()}
             type="button"
           >
-            {place.isFollowing ? "Takibi bırak" : "Takip et"}
+            {place.isFollowing ? language === "tr" ? "Takibi bırak" : "Unfollow" : language === "tr" ? "Takip et" : "Follow"}
           </button>
         ) : (
           <Link className="primary-action" to="/login">
-            Takip etmek için giriş yap
+            {language === "tr" ? "Takip etmek için giriş yap" : "Log in to follow"}
           </Link>
         )}
         {user ? <button className="secondary-action" onClick={() => {
-          if (!canManage && place.viewerMembership?.status !== "accepted") return window.alert("Sadece üyeler ve davetliler davet edebilir.");
+          if (!canManage && place.viewerMembership?.status !== "accepted") {
+            setActionNotice(language === "tr" ? "Sadece üyeler ve davetliler davet edebilir." : "Only members and invited people can send invitations.");
+            return;
+          }
           navigate(`/places/${place.slug}/invites`);
-        }} type="button"><UserPlus size={18}/>Davet et</button> : null}
-        <button className="secondary-action" onClick={() => setShareOpen(true)}><Share2 size={18}/>Paylaş</button>
+        }} type="button"><UserPlus size={18}/>{language === "tr" ? "Davet et" : "Invite"}</button> : null}
+        <button className="secondary-action" onClick={() => setShareOpen(true)}><Share2 size={18}/>{language === "tr" ? "Paylaş" : "Share"}</button>
         <details className="action-menu place-actions-menu">
-          <summary aria-label="Mekân aksiyonları"><MoreVertical size={20}/></summary>
+          <summary aria-label={language === "tr" ? "Mekân aksiyonları" : "Place actions"}><MoreVertical size={20}/></summary>
           <div>
-            {user ? <button onClick={() => setNotificationOpen(true)} type="button"><Bell size={17}/> Bildirim ayarla</button> : null}
-            <Link to={`/places/${place.slug}/users`}><Users size={17}/> İlgili kullanıcılar</Link>
-            {canViewStats ? <Link to={`/stats/place/${place.id}`}><BarChart3 size={17}/> Mekân istatistikleri</Link> : null}
-            {canManage ? <><a href="#place-edit">Mekânı düzenle</a><Link to={`/places/${place.slug}/invites#check-in`}><UserPlus size={17}/> Check-in control</Link></> : null}
-            {user && !canManage ? <button onClick={() => setReportOpen(true)} type="button"><Flag size={17}/> Mekânı rapor et</button> : null}
-            {user && !canManage ? <button disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()} type="button"><Ban size={17}/> Mekânı engelle</button> : null}
+            {user ? <button onClick={() => setNotificationOpen(true)} type="button"><Bell size={17}/> {language === "tr" ? "Bildirim ayarla" : "Set notifications"}</button> : null}
+            <Link to={`/places/${place.slug}/users`}><Users size={17}/> {language === "tr" ? "İlgili kullanıcılar" : "Related people"}</Link>
+            {canViewStats ? <Link to={`/stats/place/${place.id}`}><BarChart3 size={17}/> {language === "tr" ? "Mekân istatistikleri" : "Place analytics"}</Link> : null}
+            {canManage ? <><a href="#place-edit">{language === "tr" ? "Mekânı düzenle" : "Edit place"}</a><Link to={`/places/${place.slug}/invites#check-in`}><UserPlus size={17}/> {language === "tr" ? "Check-in kontrolü" : "Check-in control"}</Link></> : null}
+            {user && !canManage ? <button onClick={() => setReportOpen(true)} type="button"><Flag size={17}/> {language === "tr" ? "Mekânı rapor et" : "Report place"}</button> : null}
+            {user && !canManage ? <button disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()} type="button"><Ban size={17}/> {language === "tr" ? "Mekânı engelle" : "Block place"}</button> : null}
           </div>
         </details>
       </div>
+      {actionNotice ? <div className="form-error detail-action-notice" role="alert"><span>{actionNotice}</span><button aria-label={language === "tr" ? "Mesajı kapat" : "Dismiss message"} onClick={() => setActionNotice(null)} type="button">×</button></div> : null}
       {place.viewerMembership?.status === "invited" ? (
         <section className="admin-form compact-form">
-          <strong>Mekân daveti</strong>
+          <strong>{language === "tr" ? "Mekân daveti" : "Place invitation"}</strong>
           <div className="row-actions">
             <button
               className="primary-action"
               onClick={() => respondMutation.mutate("accepted")}
             >
-              <Check size={16} /> Kabul et
+              <Check size={16} /> {language === "tr" ? "Kabul et" : "Accept"}
             </button>
             <button
               className="danger-action"
               onClick={() => respondMutation.mutate("declined")}
             >
-              <X size={16} /> Reddet
+              <X size={16} /> {language === "tr" ? "Reddet" : "Decline"}
             </button>
           </div>
         </section>
       ) : null}
-      <section className="admin-form event-attendee-preview"><h2>Mekân üyeleri</h2><span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).filter((member) => member.status === "accepted").slice(0, 8).map((member) => <Link key={member.id} title={member.name} to={member.username ? `/users/${member.username}` : `/users/id/${member.id}`}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/places/${place.slug}/users`}><strong>{(relatedUsersQuery.data ?? []).filter((member) => member.status === "accepted").length} üye · {(relatedUsersQuery.data ?? []).filter((member) => member.status === "invited").length} davetli{canManage ? ` · ${(relatedUsersQuery.data ?? []).filter((member) => member.status === "pending").length} bekleyen` : ""}</strong></Link></section>
+      <section className="admin-form event-attendee-preview"><h2>{language === "tr" ? "Takipçiler" : "Followers"}</h2><span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).filter((member) => member.status === "accepted").slice(0, 8).map((member) => <Link key={member.id} title={member.name} to={member.username ? `/users/${member.username}` : `/users/id/${member.id}`}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/places/${place.slug}/users`}><strong>{place.memberCount ?? (relatedUsersQuery.data ?? []).filter((member) => member.status === "accepted").length} {language === "tr" ? "üye" : "members"} · {invitedPreviewCount} {language === "tr" ? "davetli" : "invited"}{canManage ? ` · ${(relatedUsersQuery.data ?? []).filter((member) => member.status === "pending").length} ${language === "tr" ? "bekleyen" : "pending"}` : ""} · {place.followingMemberCount ?? 0} {language === "tr" ? "takip ettiğiniz" : "you follow"}</strong></Link></section>
       <p className="detail-copy">
         <RichText
-          text={place.description || "Bu mekân için henüz açıklama eklenmemiş."}
+          text={place.description || (language === "tr" ? "Bu mekân için henüz açıklama eklenmemiş." : "No description has been added for this place yet.")}
         />
       </p>
       {place.latitude != null && place.longitude != null ? (
-        <LocationMap items={[{ id: place.id, title: place.name, latitude: place.latitude, longitude: place.longitude, location: [place.address, place.city, place.country].filter(Boolean).join(", ") }]} />
+        <LocationMap items={[{ id: place.id, title: place.name, latitude: place.latitude, longitude: place.longitude, location: [place.address, localizeCityName(place.city, language), localizeCountryName(place.country, language)].filter(Boolean).join(", ") }]} />
       ) : null}
       {place.tags?.length ? (
         <section className="detail-section">
-          <h2>Etiketler</h2>
+          <h2>{language === "tr" ? "Etiketler" : "Tags"}</h2>
           <div className="tag-row">{place.tags.slice(0, showAllTags ? undefined : 6).map((tag) => <Link key={tag.id} to={`/tags/${tag.slug}`}>#{tag.name}</Link>)}</div>
-          {place.tags.length > 6 ? <button className="text-action" onClick={() => setShowAllTags((shown) => !shown)} type="button">{showAllTags ? "Daha az" : `Tümünü göster (${place.tags.length})`}</button> : null}
+          {place.tags.length > 6 ? <button className="text-action" onClick={() => setShowAllTags((shown) => !shown)} type="button">{showAllTags ? language === "tr" ? "Daha az" : "Show less" : language === "tr" ? `Tümünü göster (${place.tags.length})` : `Show all (${place.tags.length})`}</button> : null}
         </section>
       ) : null}
-      {place.managers?.length ? <section className="detail-section"><h2>Mekân yöneticileri</h2><div className="manager-avatar-list">{place.managers.map((manager) => <Link key={manager.id} title={`${manager.name} · ${manager.role}`} to={manager.username ? `/users/${manager.username}` : `/users/id/${manager.id}`}>{manager.avatarUrl ? <img alt={manager.name} src={resolveMediaUrl(manager.avatarUrl)}/> : <span>{manager.name.slice(0, 1).toUpperCase()}</span>}</Link>)}</div></section> : null}
-      {place.events?.length ? <section className="detail-section"><div className="section-header"><h2>Mekândaki etkinlikler</h2><Link to={`/events?city=${encodeURIComponent(place.city ?? "")}`}>Tümünü gör</Link></div><nav className="feed-tabs"><button className={placeEventTab === "future" ? "active" : ""} onClick={() => setPlaceEventTab("future")} type="button">Gelecek etkinlikler</button><button className={placeEventTab === "past" ? "active" : ""} onClick={() => setPlaceEventTab("past")} type="button">Geçmiş etkinlikler</button></nav><div className="event-grid recommendation-carousel">{place.events.filter((event) => placeEventTab === "future" ? new Date(event.startsAt) >= new Date() : new Date(event.startsAt) < new Date()).slice(0, 8).map((event) => <EventCard event={event} key={event.id}/>)}</div></section> : null}
+      {place.managers?.length ? <section className="detail-section"><h2>{language === "tr" ? "Mekân yöneticileri" : "Place managers"}</h2><div className="manager-avatar-list">{place.managers.map((manager) => <Link key={manager.id} title={`${manager.name} · ${manager.role}`} to={manager.username ? `/users/${manager.username}` : `/users/id/${manager.id}`}>{manager.avatarUrl ? <img alt={manager.name} src={resolveMediaUrl(manager.avatarUrl)}/> : <span>{manager.name.slice(0, 1).toUpperCase()}</span>}</Link>)}</div></section> : null}
+      <section className="detail-section"><div className="section-header"><h2>{language === "tr" ? "Mekândaki etkinlikler" : "Events at this place"}</h2>{placeEvents.length ? <Link to={`/events?city=${encodeURIComponent(place.city ?? "")}`}>{language === "tr" ? "Tümünü gör" : "See all"}</Link> : null}</div><nav className="feed-tabs"><button className={placeEventTab === "future" ? "active" : ""} onClick={() => setPlaceEventTab("future")} type="button">{language === "tr" ? "Gelecek etkinlikler" : "Upcoming events"}</button><button className={placeEventTab === "past" ? "active" : ""} onClick={() => setPlaceEventTab("past")} type="button">{language === "tr" ? "Geçmiş etkinlikler" : "Past events"}</button></nav>{visiblePlaceEvents.length ? <div className="event-grid recommendation-carousel">{visiblePlaceEvents.map((event) => <EventCard event={event} key={event.id}/>)}</div> : <p className="empty-state">{placeEventTab === "future" ? language === "tr" ? "Bu mekânda planlanmış gelecek etkinlik bulunmuyor." : "There are no upcoming events scheduled at this place." : language === "tr" ? "Bu mekânda geçmiş etkinlik bulunmuyor." : "There are no past events at this place."}</p>}</section>
       {canManage ? (
         <form
           id="place-edit"
@@ -259,10 +283,10 @@ export function PlaceDetailPage() {
             });
           }}
         >
-          <h2>Mekân bilgilerini düzenle</h2>
+          <h2>{language === "tr" ? "Mekân bilgilerini düzenle" : "Edit place details"}</h2>
           <div className="form-grid">
             <label>
-              Ad
+              {language === "tr" ? "Ad" : "Name"}
               <input
                 defaultValue={place.name}
                 name="name"
@@ -272,19 +296,19 @@ export function PlaceDetailPage() {
             </label>
             <CountryCityFields defaultCity={place.city} defaultCountry={place.country}/>
             <label>
-              Mekân türü
-              <select defaultValue={place.placeType} name="placeType"><option value="community">🏘️ Topluluk alanı</option><option value="coworking">💻 Ortak çalışma</option><option value="venue">🎭 Etkinlik mekânı</option><option value="cafe">☕ Kafe</option><option value="restaurant">🍽️ Restoran</option><option value="bar">🍸 Bar</option><option value="club">🎶 Kulüp</option><option value="gallery">🖼️ Galeri</option><option value="outdoor">🌳 Açık alan</option></select>
+              {language === "tr" ? "Mekân türü" : "Place type"}
+              <select defaultValue={place.placeType ?? "community"} name="placeType">{placeTypeKeys.map((value) => <option key={value} value={value}>{(language === "tr" ? placeTypeLabelsTr : placeTypeLabels)[value]}</option>)}</select>
             </label>
             <label>
-              Katılım tipi
-              <select defaultValue={place.visibility} name="visibility"><option value="open">Herkese açık</option><option value="approval_required">Onay gerekli</option><option value="invite_only">Sadece davetli</option></select>
+              {language === "tr" ? "Katılım tipi" : "Access type"}
+              <select defaultValue={place.visibility} name="visibility"><option value="open">{language === "tr" ? "Herkese açık" : "Open to everyone"}</option><option value="approval_required">{language === "tr" ? "Onay gerekli" : "Approval required"}</option><option value="invite_only">{language === "tr" ? "Sadece davetli" : "Invite only"}</option></select>
             </label>
             <label>
-              Adres
+              {language === "tr" ? "Adres" : "Address"}
               <input defaultValue={place.address ?? ""} name="address" />
             </label>
             <label>
-              Kapak görseli URL
+              {language === "tr" ? "Kapak görseli URL" : "Cover image URL"}
               <input
                 defaultValue={place.coverImageUrl ?? ""}
                 name="coverImageUrl"
@@ -292,7 +316,7 @@ export function PlaceDetailPage() {
               />
             </label>
             <label>
-              Açıklama
+              {language === "tr" ? "Açıklama" : "Description"}
               <textarea
                 defaultValue={place.description ?? ""}
                 name="description"
@@ -306,33 +330,33 @@ export function PlaceDetailPage() {
               disabled={updateMutation.isPending}
               type="submit"
             >
-              Kaydet
+              {language === "tr" ? "Kaydet" : "Save"}
             </button>
             {place.createdById === user?.id ? (
               <button
                 className="danger-action"
                 disabled={archiveMutation.isPending}
                 onClick={() => {
-                  if (window.confirm("Bu mekânı silmek istediğinize emin misiniz? Mekân listelerden kaldırılacaktır.")) archiveMutation.mutate();
+                  if (window.confirm(language === "tr" ? "Bu mekânı silmek istediğinize emin misiniz? Mekân listelerden kaldırılacaktır." : "Are you sure you want to archive this place? It will be removed from listings.")) archiveMutation.mutate();
                 }}
                 type="button"
               >
-                Mekânı arşivle
+                {language === "tr" ? "Mekânı arşivle" : "Archive place"}
               </button>
             ) : null}
           </div>
           {updateMutation.isSuccess ? (
-            <p className="form-success">Mekân bilgileri güncellendi.</p>
+            <p className="form-success">{language === "tr" ? "Mekân bilgileri güncellendi." : "Place details updated."}</p>
           ) : null}
         </form>
       ) : null}
       {canManage ? (
         <section className="admin-form">
           <div className="section-header compact">
-            <h2>Üye ve yöneticiler</h2>
-            <span>{membersQuery.data?.length ?? 0} kişi</span>
+            <h2>{language === "tr" ? "Üye ve yöneticiler" : "Members and managers"}</h2>
+            <span>{membersQuery.data?.length ?? 0} {language === "tr" ? "kişi" : "people"}</span>
           </div>
-          <Link className="secondary-action" to={`/places/${place.slug}/invites`}><UserPlus size={16}/> Davet yöntemini seç</Link>
+          <Link className="secondary-action" to={`/places/${place.slug}/invites`}><UserPlus size={16}/> {language === "tr" ? "Davet yöntemini seç" : "Choose invitation method"}</Link>
           <div className="guest-list">
             {membersQuery.data?.map((member) => (
               <div className="guest-list-row" key={member.userId}>
@@ -341,9 +365,9 @@ export function PlaceDetailPage() {
                   <span>{member.user?.email}</span>
                 </div>
                 <span className={`status-pill status-${member.status}`}>
-                  {member.status}
+                  {language === "tr" ? ({ accepted: "kabul edildi", invited: "davetli", pending: "bekliyor", banned: "yasaklı", declined: "reddedildi" } as Record<string, string>)[member.status] ?? member.status : member.status}
                 </span>
-                <span>{member.role}</span>
+                <span>{language === "tr" ? ({ member: "üye", manager: "yönetici", organizer: "organizatör" } as Record<string, string>)[member.role] ?? member.role : member.role}</span>
                 <div className="row-actions">
                   {member.status === "invited" ? (
                     <button
@@ -355,7 +379,7 @@ export function PlaceDetailPage() {
                         })
                       }
                     >
-                      <Check size={16} /> Kabul
+                      <Check size={16} /> {language === "tr" ? "Kabul" : "Accept"}
                     </button>
                   ) : null}
                   {member.role === "member" && member.status === "accepted" ? (
@@ -368,7 +392,7 @@ export function PlaceDetailPage() {
                         })
                       }
                     >
-                      Yönetici yap
+                      {language === "tr" ? "Yönetici yap" : "Make manager"}
                     </button>
                   ) : null}
                   {member.role !== "organizer" ? (
@@ -381,7 +405,7 @@ export function PlaceDetailPage() {
                         })
                       }
                     >
-                      <X size={16} /> Çıkar
+                      <X size={16} /> {language === "tr" ? "Çıkar" : "Remove"}
                     </button>
                   ) : null}
                 </div>
@@ -395,11 +419,11 @@ export function PlaceDetailPage() {
         canManage={canManage}
         targetId={place.id}
         targetType="place"
-        title="Mekân yorumları"
+        title={language === "tr" ? "Mekân yorumları" : "Place posts and comments"}
       />
       {(relatedPlacesQuery.data?.items ?? []).filter((item) => item.id !== place.id).length ? (
         <section className="detail-section">
-          <div className="section-header"><h2>İlginizi çekebilecek diğer mekânlar</h2><Link to="/places">Tümünü gör</Link></div>
+          <div className="section-header"><h2>{language === "tr" ? "İlginizi çekebilecek diğer mekânlar" : "Other places you may like"}</h2><Link to="/places">{language === "tr" ? "Tümünü gör" : "See all"}</Link></div>
           <div className="event-grid place-grid recommendation-carousel">{relatedPlacesQuery.data!.items.filter((item) => item.id !== place.id).sort((a, b) => { const score = (item: typeof a) => (item.city === place.city ? 5 : 0) + (item.tags ?? []).filter((tag) => place.tags?.some((own) => own.id === tag.id)).length * 3 + item.followerCount / 1000; return score(b) - score(a); }).slice(0, 8).map((item) => <PlaceCard key={item.id} place={item}/>)}</div>
         </section>
       ) : null}
@@ -414,6 +438,8 @@ export function PlaceDetailPage() {
       <ShareDialog
         open={shareOpen}
         onClose={() => setShareOpen(false)}
+        targetId={place.id}
+        targetType="place"
         title={place.name}
         url={window.location.href}
       />

@@ -42,12 +42,14 @@ import { userProfilePath } from "../components/UserIdentityLink";
 import { getSocialCredential } from "../lib/socialProviders";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
+import { useLanguage } from "../lib/i18n";
 import {
   type AdminEventInput,
   type RegistrationInput,
   archiveMyEvent,
   checkAvailability,
   checkInEventParticipant,
+  changeEmail,
   changePassword,
   connectSocialAccount,
   confirmPhoneVerification,
@@ -111,18 +113,18 @@ const timezoneOptions = [
   { value: "America/Chicago", label: "GMT-06 Chicago" },
   { value: "America/New_York", label: "GMT-05 New York" },
   { value: "America/Sao_Paulo", label: "GMT-03 São Paulo" },
-  { value: "Europe/London", label: "GMT+00 Londra" },
+  { value: "Europe/London", label: "GMT+00 London" },
   { value: "Europe/Paris", label: "GMT+01 Paris / Berlin" },
-  { value: "Europe/Athens", label: "GMT+02 Atina" },
-  { value: "Europe/Istanbul", label: "GMT+03 İstanbul" },
+  { value: "Europe/Athens", label: "GMT+02 Athens" },
+  { value: "Europe/Istanbul", label: "GMT+03 Istanbul" },
   { value: "Asia/Dubai", label: "GMT+04 Dubai" },
-  { value: "Asia/Karachi", label: "GMT+05 Karaçi" },
-  { value: "Asia/Kolkata", label: "GMT+05:30 Yeni Delhi" },
-  { value: "Asia/Dhaka", label: "GMT+06 Dakka" },
+  { value: "Asia/Karachi", label: "GMT+05 Karachi" },
+  { value: "Asia/Kolkata", label: "GMT+05:30 New Delhi" },
+  { value: "Asia/Dhaka", label: "GMT+06 Dhaka" },
   { value: "Asia/Bangkok", label: "GMT+07 Bangkok" },
-  { value: "Asia/Singapore", label: "GMT+08 Singapur" },
+  { value: "Asia/Singapore", label: "GMT+08 Singapore" },
   { value: "Asia/Tokyo", label: "GMT+09 Tokyo" },
-  { value: "Australia/Sydney", label: "GMT+10 Sidney" },
+  { value: "Australia/Sydney", label: "GMT+10 Sydney" },
   { value: "Pacific/Auckland", label: "GMT+12 Auckland" },
   { value: "UTC", label: "GMT+00 UTC" },
 ] as const;
@@ -150,6 +152,8 @@ function toDateTimeLocal(value: string | Date) {
 }
 
 export function AccountPage({ initialMode = "register", eventCreator = false }: { initialMode?: "login" | "register"; eventCreator?: boolean }) {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => (language === "tr" ? tr : en);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -174,6 +178,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   const [eventStep, setEventStep] = useState(1);
   const [eventTicketCount, setEventTicketCount] = useState(1);
   const [ticketSalesPlatforms, setTicketSalesPlatforms] = useState<Array<"door" | "konnektora" | "external">>(["door"]);
+  const [restrictedTicketPlatformIndex, setRestrictedTicketPlatformIndex] = useState<number | null>(null);
   const [lineupRows, setLineupRows] = useState<
     Array<{ id: string; type: "heading" | "subheading" | "session" }>
   >(() => [{ id: crypto.randomUUID(), type: "session" }]);
@@ -283,15 +288,35 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         message:
           response.user.status === "pending"
             ? response.verificationEmailSent === false
-              ? "Hesap oluşturuldu. E-posta teslim edilemediyse onboarding ekranındaki demo telefon koduyla devam edebilirsin."
-              : "Hesap oluşturuldu. E-posta doğrulama bağlantısını kontrol et."
-            : "Giriş yapıldı. Artık etkinlik oluşturabilirsin.",
+              ? t(
+                  "Hesap oluşturuldu. E-posta teslim edilemediyse onboarding ekranındaki demo telefon koduyla devam edebilirsin.",
+                  "Account created. If the email cannot be delivered, continue with the demo phone code on the onboarding screen.",
+                )
+              : t(
+                  "Hesap oluşturuldu. E-posta doğrulama bağlantısını kontrol et.",
+                  "Account created. Check your email verification link.",
+                )
+            : t(
+                "Giriş yapıldı. Artık etkinlik oluşturabilirsin.",
+                "You are signed in and can now create an event.",
+              ),
       });
-      navigate(mode === "login" ? "/feed" : "/onboarding");
+      const onboardingRequired = response.user.role === "user" && response.user.onboardingCompleted === false;
+      navigate(mode === "login" && !onboardingRequired ? "/feed" : "/onboarding");
     },
     onError: (error, input) => {
-      const message = getServiceErrorMessage(error, "İşlem tamamlanamadı. Bilgilerini kontrol edip yeniden dene.");
-      if (mode === "login" && message.includes("Dondurulmuş hesap")) {
+      const rawMessage =
+        error && typeof error === "object" && "message" in error
+          ? String(error.message)
+          : "";
+      const message = getServiceErrorMessage(
+        error,
+        t(
+          "İşlem tamamlanamadı. Bilgilerini kontrol edip yeniden dene.",
+          "The action could not be completed. Check your details and try again.",
+        ),
+      );
+      if (mode === "login" && /dondurulmuş hesap|frozen account/i.test(rawMessage)) {
         setFrozenCredentials({ email: input.email, password: input.password });
         return;
       }
@@ -311,14 +336,14 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         : connectSocialAccount(provider, await getSocialCredential(provider)),
     onSuccess: (accounts) => {
       queryClient.setQueryData(["social-accounts", user?.id], accounts);
-      setNotice({ tone: "success", message: "Bağlı hesaplar güncellendi." });
+      setNotice({ tone: "success", message: t("Bağlı hesaplar güncellendi.", "Connected accounts were updated.") });
     },
     onError: (error) =>
       setNotice({
         tone: "error",
         message: getServiceErrorMessage(
           error,
-          "Bağlı hesap işlemi tamamlanamadı. Yeniden deneyebilirsin.",
+          t("Bağlı hesap işlemi tamamlanamadı. Yeniden deneyebilirsin.", "The connected account action could not be completed. Try again."),
         ),
       }),
   });
@@ -329,7 +354,16 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       setForgotPasswordOpen(false);
       setNotice({
         tone: "success",
-        message: resetChannel === "phone" ? "Şifre sıfırlama bağlantısı GSM numaranıza gönderildi." : "Şifre sıfırlama bağlantısı e-posta adresinize gönderildi.",
+        message:
+          resetChannel === "phone"
+            ? t(
+                "Şifre sıfırlama bağlantısı GSM numaranıza gönderildi.",
+                "The password reset link was sent to your mobile number.",
+              )
+            : t(
+                "Şifre sıfırlama bağlantısı e-posta adresinize gönderildi.",
+                "The password reset link was sent to your email address.",
+              ),
       });
     },
     onError: (error) =>
@@ -337,7 +371,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         tone: "error",
         message: getServiceErrorMessage(
           error,
-          "Şifre sıfırlama isteği gönderilemedi. Birkaç dakika sonra yeniden dene.",
+          t(
+            "Şifre sıfırlama isteği gönderilemedi. Birkaç dakika sonra yeniden dene.",
+            "The password reset request could not be sent. Try again in a few minutes.",
+          ),
         ),
       }),
   });
@@ -349,7 +386,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       setUser(response.user);
       setNotice({
         tone: "success",
-        message: "Hesabınız yeniden aktifleştirildi.",
+        message: t(
+          "Hesabınız yeniden aktifleştirildi.",
+          "Your account has been reactivated.",
+        ),
       });
       setFrozenCredentials(null);
       navigate("/");
@@ -359,7 +399,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         tone: "error",
         message: getServiceErrorMessage(
           error,
-          "Dondurulmuş hesap bulunamadı veya şifre doğru değil.",
+          t(
+            "Dondurulmuş hesap bulunamadı veya şifre doğru değil.",
+            "The frozen account could not be found or the password is incorrect.",
+          ),
         ),
       }),
   });
@@ -369,15 +412,24 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       setNotice({
         tone: response.sent === false ? "error" : "success",
         message: response.sent === false
-          ? "E-posta servisi şu an teslimatı kabul etmedi. Demo telefon koduyla devam edebilirsin."
-          : "Doğrulama e-postası tekrar gönderildi.",
+          ? t(
+              "E-posta servisi şu an teslimatı kabul etmedi. Demo telefon koduyla devam edebilirsin.",
+              "The email service did not accept delivery. You can continue with the demo phone code.",
+            )
+          : t(
+              "Doğrulama e-postası tekrar gönderildi.",
+              "The verification email was sent again.",
+            ),
       }),
     onError: (error) =>
       setNotice({
         tone: "error",
         message: getServiceErrorMessage(
           error,
-          "Doğrulama e-postası gönderilemedi. Birkaç dakika sonra yeniden dene.",
+          t(
+            "Doğrulama e-postası gönderilemedi. Birkaç dakika sonra yeniden dene.",
+            "The verification email could not be sent. Try again in a few minutes.",
+          ),
         ),
       }),
   });
@@ -408,7 +460,12 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     onSuccess: (created) => {
       setNotice({
         tone: "success",
-        message: editingEvent ? "Etkinlik güncellendi." : "Etkinlik yayınlandı ve public listede görünür.",
+        message: editingEvent
+          ? t("Etkinlik güncellendi.", "Event updated.")
+          : t(
+              "Etkinlik yayınlandı ve herkese açık listede görünür.",
+              "Event published and visible in the public listing.",
+            ),
       });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
       void queryClient.invalidateQueries({ queryKey: ["my-events", user?.id] });
@@ -417,20 +474,23 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     onError: () =>
       setNotice({
         tone: "error",
-        message: "Etkinlik oluşturulamadı. Zorunlu alanları kontrol et.",
+        message: t(
+          "Etkinlik oluşturulamadı. Zorunlu alanları kontrol et.",
+          "The event could not be created. Check the required fields.",
+        ),
       }),
   });
   const tagMutation = useMutation({
     mutationFn: createUserTag,
     onSuccess: (tag) => {
-      setNotice({ tone: "success", message: `${tag.name} tag'i hazır.` });
+      setNotice({ tone: "success", message: t(`${tag.name} ilgi alanı hazır.`, `${tag.name} is ready.`) });
       void queryClient.invalidateQueries({ queryKey: ["tags"] });
       void queryClient.invalidateQueries({ queryKey: ["tags", "home"] });
     },
     onError: () =>
       setNotice({
         tone: "error",
-        message: "Tag oluşturulamadı. Aynı isimde sorunlu bir tag olabilir.",
+        message: t("İlgi alanı oluşturulamadı. Aynı isimde bir ilgi alanı olabilir.", "The interest could not be created. An interest with the same name may already exist."),
       }),
   });
   const interestsMutation = useMutation({
@@ -443,12 +503,12 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       void queryClient.invalidateQueries({
         queryKey: ["member-suggestions", user?.id],
       });
-      setNotice({ tone: "success", message: "İlgi alanların kaydedildi." });
+      setNotice({ tone: "success", message: t("İlgi alanların kaydedildi.", "Your interests were saved.") });
     },
     onError: () =>
       setNotice({
         tone: "error",
-        message: "İlgi alanları kaydedilemedi. Lütfen tekrar dene.",
+        message: t("İlgi alanları kaydedilemedi. Lütfen tekrar dene.", "Your interests could not be saved. Please try again."),
       }),
   });
   const createTagCommentMutation = useMutation({
@@ -457,10 +517,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       void queryClient.invalidateQueries({
         queryKey: ["tag-comments", commentTagId],
       });
-      setNotice({ tone: "success", message: "Tag yorumunuz eklendi." });
+      setNotice({ tone: "success", message: t("İlgi alanı yorumunuz eklendi.", "Your interest comment was added.") });
     },
     onError: () =>
-      setNotice({ tone: "error", message: "Tag yorumu eklenemedi." }),
+      setNotice({ tone: "error", message: t("İlgi alanı yorumu eklenemedi.", "The interest comment could not be added.") }),
   });
   const deleteTagCommentMutation = useMutation({
     mutationFn: (commentId: string) =>
@@ -487,24 +547,36 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         setUser(response.user);
       }
       queryClient.setQueryData(["my-profile", profile.id], profile);
-      setNotice({ tone: "success", message: "Profil bilgileri kaydedildi." });
+      setNotice({ tone: "success", message: t("Profil bilgileri kaydedildi.", "Profile details were saved.") });
     },
     onError: () =>
       setNotice({
         tone: "error",
-        message:
-          "Profil kaydedilemedi. Kullanıcı adı ve zorunlu alanları kontrol et.",
+        message: t("Profil kaydedilemedi. Kullanıcı adı ve zorunlu alanları kontrol et.", "The profile could not be saved. Check the username and required fields."),
       }),
   });
   const changePasswordMutation = useMutation({
     mutationFn: changePassword,
     onSuccess: () =>
-      setNotice({ tone: "success", message: "Şifreniz değiştirildi." }),
+      setNotice({ tone: "success", message: t("Şifreniz değiştirildi.", "Your password was changed.") }),
     onError: () =>
       setNotice({
         tone: "error",
-        message: "Şifre değiştirilemedi. Mevcut şifrenizi kontrol edin.",
+        message: t("Şifre değiştirilemedi. Mevcut şifrenizi kontrol edin.", "The password could not be changed. Check your current password."),
       }),
+  });
+  const changeEmailMutation = useMutation({
+    mutationFn: changeEmail,
+    onSuccess: (response) => {
+      if (user) {
+        const updatedUser = { ...user, email: response.email, emailVerified: false };
+        setUserSession({ accessToken: getUserToken() ?? "", user: updatedUser });
+        setUser(updatedUser);
+      }
+      void queryClient.invalidateQueries({ queryKey: ["my-profile"] });
+      setNotice({ tone: "success", message: response.sent ? t("E-posta adresi değiştirildi. Yeni adresine gönderilen doğrulama bağlantısını aç.", "Your email was changed. Open the verification link sent to your new address.") : t("E-posta adresi değiştirildi ancak doğrulama iletisi gönderilemedi.", "Your email was changed, but the verification message could not be delivered.") });
+    },
+    onError: () => setNotice({ tone: "error", message: t("E-posta değiştirilemedi. Adresin kullanılmadığını ve mevcut şifreni kontrol et.", "The email could not be changed. Check that the address is available and verify your current password.") }),
   });
   const deactivateMutation = useMutation({
     mutationFn: deactivateAccount,
@@ -516,7 +588,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     onError: () =>
       setNotice({
         tone: "error",
-        message: "Hesap dondurulamadı. Mevcut şifrenizi kontrol edin.",
+        message: t("Hesap dondurulamadı. Mevcut şifrenizi kontrol edin.", "The account could not be frozen. Check your current password."),
       }),
   });
   const requestPhoneMutation = useMutation({
@@ -527,15 +599,14 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       setNotice({
         tone: "success",
         message: response.demoCode
-          ? "Demo doğrulama kodu oluşturuldu. Kodu aşağıdaki alana girin."
-          : "Doğrulama kodu gönderildi. Kod 2 dakika geçerlidir.",
+          ? t("Demo doğrulama kodu oluşturuldu. Kodu aşağıdaki alana girin.", "A demo verification code was generated. Enter it below.")
+          : t("Doğrulama kodu gönderildi. Kod 2 dakika geçerlidir.", "The verification code was sent and is valid for 2 minutes."),
       });
     },
     onError: () =>
       setNotice({
         tone: "error",
-        message:
-          "Kod gönderilemedi. Numarayı +905551112233 biçiminde kontrol edin.",
+        message: t("Kod gönderilemedi. Numarayı +905551112233 biçiminde kontrol edin.", "The code could not be sent. Check the number in +905551112233 format."),
       }),
   });
   const confirmPhoneMutation = useMutation({
@@ -547,19 +618,19 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       void queryClient.invalidateQueries({
         queryKey: ["my-profile", user?.id],
       });
-      setNotice({ tone: "success", message: "Telefon numaranız doğrulandı." });
+      setNotice({ tone: "success", message: t("Telefon numaranız doğrulandı.", "Your phone number was verified.") });
     },
     onError: () =>
-      setNotice({ tone: "error", message: "Kod hatalı veya süresi dolmuş." }),
+      setNotice({ tone: "error", message: t("Kod hatalı veya süresi dolmuş.", "The code is incorrect or has expired.") }),
   });
   const privacyMutation = useMutation({
     mutationFn: updatePrivacySettings,
     onSuccess: (settings) => {
       queryClient.setQueryData(["privacy-settings", user?.id], settings);
-      setNotice({ tone: "success", message: "Gizlilik ayarları kaydedildi." });
+      setNotice({ tone: "success", message: t("Gizlilik ayarları kaydedildi.", "Privacy settings were saved.") });
     },
     onError: () =>
-      setNotice({ tone: "error", message: "Gizlilik ayarları kaydedilemedi." }),
+      setNotice({ tone: "error", message: t("Gizlilik ayarları kaydedilemedi.", "Privacy settings could not be saved.") }),
   });
   const notificationPreferencesMutation = useMutation({
     mutationFn: updateNotificationPreferences,
@@ -570,13 +641,13 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       );
       setNotice({
         tone: "success",
-        message: "Bildirim tercihleri kaydedildi.",
+        message: t("Bildirim tercihleri kaydedildi.", "Notification preferences were saved."),
       });
     },
     onError: () =>
       setNotice({
         tone: "error",
-        message: "Bildirim tercihleri kaydedilemedi.",
+        message: t("Bildirim tercihleri kaydedilemedi.", "Notification preferences could not be saved."),
       }),
   });
   const removeBlockMutation = useMutation({
@@ -588,7 +659,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       void queryClient.invalidateQueries({ queryKey: ["blocks", user?.id] });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
       void queryClient.invalidateQueries({ queryKey: ["tags"] });
-      setNotice({ tone: "success", message: "Engel kaldırıldı." });
+      setNotice({ tone: "success", message: t("Engel kaldırıldı.", "The block was removed.") });
     },
   });
   const followMutation = useMutation({
@@ -654,7 +725,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       setEventStep(invalidStep);
       setNotice({
         tone: "error",
-        message: `Lütfen ${invalidStep}. adımdaki zorunlu alanları kontrol edin.`,
+        message: t(
+          `Lütfen ${invalidStep}. adımdaki zorunlu alanları kontrol edin.`,
+          `Check the required fields in step ${invalidStep}.`,
+        ),
       });
       window.setTimeout(() => invalidControl.reportValidity(), 0);
       return;
@@ -664,7 +738,13 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     const endsAt = String(form.get("endsAt") || "");
     const eventTagIds = form.getAll("tagIds").map(String);
     if (eventTagIds.length > 10) {
-      setNotice({ tone: "error", message: "Bir etkinliğe en fazla 10 etiket ekleyebilirsiniz." });
+      setNotice({
+        tone: "error",
+        message: t(
+          "Bir etkinliğe en fazla 10 etiket ekleyebilirsiniz.",
+          "You can add up to 10 tags to an event.",
+        ),
+      });
       return;
     }
     if (
@@ -675,8 +755,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     ) {
       setNotice({
         tone: "error",
-        message:
+        message: t(
           "Başlangıç gelecekte olmalı; bitiş zamanı başlangıçtan sonra olmalıdır.",
+          "The start must be in the future and the end must be after the start.",
+        ),
       });
       return;
     }
@@ -851,6 +933,15 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     changePasswordMutation.mutate({ currentPassword, newPassword });
   }
 
+  function handleChangeEmail(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    changeEmailMutation.mutate({
+      email: normalizeEmail(String(form.get("email") || "")),
+      currentPassword: String(form.get("currentPassword") || ""),
+    });
+  }
+
   function handleDeactivate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -894,9 +985,9 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       demographicsAudience: audience("demographicsAudience"),
       locationAudience: audience("locationAudience"),
       websiteAudience: audience("websiteAudience"),
-      businessAudience: audience("businessAudience"),
-      addressAudience: privacyQuery.data?.addressAudience ?? "everybody",
-      tradeNameAudience: privacyQuery.data?.tradeNameAudience ?? "everybody",
+      businessAudience: privacyQuery.data?.businessAudience ?? "everybody",
+      addressAudience: form.has("addressAudience") ? audience("addressAudience") : privacyQuery.data?.addressAudience ?? "everybody",
+      tradeNameAudience: form.has("tradeNameAudience") ? audience("tradeNameAudience") : privacyQuery.data?.tradeNameAudience ?? "everybody",
     });
   }
 
@@ -918,10 +1009,21 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
 
   return (
     <section className={`page account-page${eventCreator ? " event-create-only" : ""}${eventCreator && !user ? " event-create-unauthenticated" : ""}`}>
-      <div className="section-header">
+      {!eventCreator || !user ? <div className="section-header">
         <div>
           <p className="eyebrow">Konnektora</p>
-          <h1>{eventCreator ? user ? "Etkinlik oluştur" : "Etkinlik oluşturmak için giriş yap" : "Üye alanı"}</h1>
+          <h1>
+            {eventCreator
+              ? user
+                ? editingEvent
+                  ? t("Etkinliği düzenle", "Edit event")
+                  : t("Etkinlik oluştur", "Create event")
+                : t(
+                    "Etkinlik oluşturmak için giriş yap",
+                    "Sign in to create an event",
+                  )
+              : t("Üye alanı", "Member area")}
+          </h1>
         </div>
         {user ? (
           <button
@@ -930,10 +1032,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
             type="button"
           >
             <LogOut size={18} />
-            Çıkış
+            {t("Çıkış", "Log out")}
           </button>
         ) : null}
-      </div>
+      </div> : null}
 
       {notice ? (
         <ServiceFeedback
@@ -942,17 +1044,17 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
           tone={notice.tone}
         />
       ) : null}
-      {passwordResetPath ? <Link className="primary-action" to={passwordResetPath}>Demo şifre sıfırlama bağlantısını aç</Link> : null}
+      {passwordResetPath ? <Link className="primary-action" to={passwordResetPath}>{t("Demo şifre sıfırlama bağlantısını aç", "Open demo password reset link")}</Link> : null}
       {showFrozenConfirmation ? (
         <div
           className="emotion-modal"
           role="dialog"
           aria-modal="true"
-          aria-label="Hesap donduruldu"
+          aria-label={t("Hesap donduruldu", "Account frozen")}
         >
           <div>
             <button
-              aria-label="Kapat"
+              aria-label={t("Kapat", "Close")}
               onClick={() => {
                 window.sessionStorage.removeItem("konnektora_account_frozen");
                 setShowFrozenConfirmation(false);
@@ -961,15 +1063,17 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
             >
               ×
             </button>
-            <h2>Hesap donduruldu</h2>
+            <h2>{t("Hesap donduruldu", "Account frozen")}</h2>
             <p>
-              Oturumun güvenli biçimde kapatıldı. Dilediğin zaman giriş
-              bilgilerinle hesabını yeniden aktifleştirebilirsin.
+              {t(
+                "Oturumun güvenli biçimde kapatıldı. Dilediğin zaman giriş bilgilerinle hesabını yeniden aktifleştirebilirsin.",
+                "Your session was closed securely. You can reactivate your account with your sign-in details at any time.",
+              )}
             </p>
           </div>
         </div>
       ) : null}
-      {frozenCredentials ? <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Hesabı yeniden aktifleştir"><div><h2>Tekrar hoşgeldin!</h2><p>Dondurduğun hesabı yeniden aktifleştirmek istiyor musun?</p><div className="row-actions"><button className="ghost-action" onClick={() => setFrozenCredentials(null)} type="button">İptal</button><button className="primary-action" disabled={reactivateMutation.isPending} onClick={() => reactivateMutation.mutate(frozenCredentials)} type="button">Hesabı aktifleştir</button></div>{reactivateMutation.isError ? <ServiceFeedback compact error={reactivateMutation.error} fallback="Hesap yeniden aktifleştirilemedi."/> : null}</div></div> : null}
+      {frozenCredentials ? <div className="emotion-modal" role="dialog" aria-modal="true" aria-label={t("Hesabı yeniden aktifleştir", "Reactivate account")}><div><h2>{t("Tekrar hoş geldin!", "Welcome back!")}</h2><p>{t("Dondurduğun hesabı yeniden aktifleştirmek istiyor musun?", "Would you like to reactivate your frozen account?")}</p><div className="row-actions"><button className="ghost-action" onClick={() => setFrozenCredentials(null)} type="button">{t("İptal", "Cancel")}</button><button className="primary-action" disabled={reactivateMutation.isPending} onClick={() => reactivateMutation.mutate(frozenCredentials)} type="button">{t("Hesabı aktifleştir", "Reactivate account")}</button></div>{reactivateMutation.isError ? <ServiceFeedback compact error={reactivateMutation.error} fallback={t("Hesap yeniden aktifleştirilemedi.", "The account could not be reactivated.")}/> : null}</div></div> : null}
       {user?.status === "pending" ? (
         <button
           className="secondary-action"
@@ -977,7 +1081,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
           onClick={() => resendVerificationMutation.mutate(user.email)}
           type="button"
         >
-          Doğrulama e-postasını tekrar gönder
+          {t("Doğrulama e-postasını tekrar gönder", "Resend verification email")}
         </button>
       ) : null}
 
@@ -985,36 +1089,41 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         <div className="account-grid">
           <div>
             <p className="lead">
-              Üye hesabı oluştur, giriş yap ve Konnektora community içinde kendi
-              etkinliğini yayınla.
+              {t(
+                "Üye hesabı oluştur, giriş yap ve Konnektora topluluğunda kendi etkinliğini yayınla.",
+                "Create a member account, sign in and publish your own event in the Konnektora community.",
+              )}
             </p>
             {isMockApiMode ? (
               <p className="form-help">
-                Demo modunda üyelik ve etkinlikler bu tarayıcıya kaydedilir.
+                {t(
+                  "Demo modunda üyelik ve etkinlikler bu tarayıcıya kaydedilir.",
+                  "In demo mode, memberships and events are stored in this browser.",
+                )}
               </p>
             ) : null}
           </div>
           <form className="admin-form compact-form" onSubmit={handleAuthSubmit}>
-            <div className="segmented-control" aria-label="Hesap modu">
+            <div className="segmented-control" aria-label={t("Hesap modu", "Account mode")}>
               <button
                 className={mode === "register" ? "active" : ""}
                 onClick={() => setMode("register")}
                 type="button"
               >
-                Üye ol
+                {t("Üye ol", "Sign up")}
               </button>
               <button
                 className={mode === "login" ? "active" : ""}
                 onClick={() => setMode("login")}
                 type="button"
               >
-                Giriş yap
+                {t("Giriş yap", "Sign in")}
               </button>
             </div>
             {mode === "register" ? (
               <>
                 <label>
-                  Hesap türü
+                  {t("Hesap türü", "Account type")}
                   <select
                     name="accountType"
                     onChange={(event) =>
@@ -1024,14 +1133,14 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     }
                     value={registrationAccountType}
                   >
-                    <option value="individual">Bireysel</option>
-                    <option value="corporate">Kurumsal</option>
+                    <option value="individual">{t("Bireysel", "Individual")}</option>
+                    <option value="corporate">{t("Kurumsal", "Corporate")}</option>
                   </select>
                 </label>
                 <label>
                   {registrationAccountType === "corporate"
-                    ? "Yetkili kişi adı soyadı"
-                    : "Ad Soyad"}
+                    ? t("Yetkili kişi adı soyadı", "Authorised representative's full name")
+                    : t("Ad Soyad", "Full name")}
                   <input
                     autoComplete="name"
                     name="name"
@@ -1043,7 +1152,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 {registrationAccountType === "corporate" ? (
                   <>
                     <label>
-                      İşletme adı
+                      {t("İşletme adı", "Business name")}
                       <input
                         name="companyName"
                         placeholder="Konnektora"
@@ -1053,7 +1162,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       />
                     </label>
                     <label>
-                      Ticari unvan
+                      {t("Ticari unvan", "Registered business name")}
                       <input
                         name="tradeName"
                         placeholder="Konnektora Teknoloji Ltd."
@@ -1063,44 +1172,44 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       />
                     </label>
                     <label>
-                      Şirket türü
+                      {t("Şirket türü", "Company type")}
                       <select name="companyType" required defaultValue="">
                         <option disabled value="">
-                          Seçiniz
+                          {t("Seçiniz", "Select")}
                         </option>
                         <option value="sole_proprietorship">
-                          Şahıs firması
+                          {t("Şahıs firması", "Sole proprietorship")}
                         </option>
                         <option value="limited_or_corporation">
-                          Limited / Anonim
+                          {t("Limited / Anonim", "Limited company / corporation")}
                         </option>
-                        <option value="association">Dernek</option>
-                        <option value="foundation">Vakıf</option>
-                        <option value="public_body">Kamu kurumu</option>
-                        <option value="other">Diğer</option>
+                        <option value="association">{t("Dernek", "Association")}</option>
+                        <option value="foundation">{t("Vakıf", "Foundation")}</option>
+                        <option value="public_body">{t("Kamu kurumu", "Public body")}</option>
+                        <option value="other">{t("Diğer", "Other")}</option>
                       </select>
                     </label>
                     <label>
-                      İşletme kategorisi
+                      {t("İşletme kategorisi", "Business category")}
                       <select name="businessCategory" required defaultValue="">
                         <option disabled value="">
-                          Seçiniz
+                          {t("Seçiniz", "Select")}
                         </option>
                         <option value="event_organizer">
-                          Etkinlik organizatörü
+                          {t("Etkinlik organizatörü", "Event organiser")}
                         </option>
                         <option value="restaurant_bar_cafe">
-                          Restoran / Bar / Kafe
+                          {t("Restoran / Bar / Kafe", "Restaurant / Bar / Café")}
                         </option>
-                        <option value="night_club">Gece kulübü</option>
+                        <option value="night_club">{t("Gece kulübü", "Nightclub")}</option>
                         <option value="university_club">
-                          Üniversite kulübü
+                          {t("Üniversite kulübü", "University club")}
                         </option>
-                        <option value="ngo">STK</option>
-                        <option value="brand">Marka</option>
-                        <option value="tourism_company">Turizm şirketi</option>
-                        <option value="sports_club">Spor kulübü</option>
-                        <option value="other">Diğer</option>
+                        <option value="ngo">{t("STK", "NGO")}</option>
+                        <option value="brand">{t("Marka", "Brand")}</option>
+                        <option value="tourism_company">{t("Turizm şirketi", "Tourism company")}</option>
+                        <option value="sports_club">{t("Spor kulübü", "Sports club")}</option>
+                        <option value="other">{t("Diğer", "Other")}</option>
                       </select>
                     </label>
                   </>
@@ -1108,21 +1217,24 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               </>
             ) : null}
             <label>
-              E-posta
+              {t("E-posta", "Email")}
               <EmailInput name="email" required />
-              <span className="form-help">Örnek: ada@ornek.com</span>
+              <span className="form-help">{t("Örnek: ada@ornek.com", "Example: ada@example.com")}</span>
             </label>
             {mode === "register" ? (
               <label>
-                GSM numarası
+                {t("GSM numarası", "Mobile number")}
                 <PhoneInput name="phone" required />
                 <span className="form-help">
-                  Hesabın açıldıktan sonra bu numarayı doğrulaman gerekir.
+                  {t(
+                    "Hesabın açıldıktan sonra bu numarayı doğrulaman gerekir.",
+                    "You will need to verify this number after creating your account.",
+                  )}
                 </span>
               </label>
             ) : null}
             <label>
-              Şifre
+              {t("Şifre", "Password")}
               <input
                 autoComplete={
                   mode === "login" ? "current-password" : "new-password"
@@ -1138,15 +1250,20 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 required
                 title={
                   mode === "register"
-                    ? "En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam kullanın."
+                    ? t(
+                        "En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam kullanın.",
+                        "Use at least 8 characters with an uppercase letter, a lowercase letter and a number.",
+                      )
                     : undefined
                 }
                 type="password"
               />
               {mode === "register" ? (
                 <span className="form-help">
-                  En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam
-                  içermeli.
+                  {t(
+                    "En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam içermeli.",
+                    "At least 8 characters, including an uppercase letter, a lowercase letter and a number.",
+                  )}
                 </span>
               ) : null}
             </label>
@@ -1154,9 +1271,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               <label className="check-row">
                 <input required type="checkbox" />
                 <span>
-                  <Link to="/terms">Kullanım Koşullarını</Link> ve{" "}
-                  <Link to="/privacy">Gizlilik Politikasını</Link> kabul
-                  ediyorum.
+                  <Link to="/terms">{t("Kullanım Koşullarını", "Terms of Use")}</Link>{" "}
+                  {t("ve", "and")}{" "}
+                  <Link to="/privacy">{t("Gizlilik Politikasını", "Privacy Policy")}</Link>{" "}
+                  {t("kabul ediyorum.", "I accept.")}
                 </span>
               </label>
             ) : null}
@@ -1166,7 +1284,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               type="submit"
             >
               <UserRound size={18} />
-              {mode === "register" ? "Üye ol" : "Giriş yap"}
+              {mode === "register" ? t("Üye ol", "Sign up") : t("Giriş yap", "Sign in")}
             </button>
             {mode === "login" ? (
               <>
@@ -1176,7 +1294,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   onClick={() => setForgotPasswordOpen(true)}
                   type="button"
                 >
-                  Şifremi unuttum
+                  {t("Şifremi unuttum", "Forgot password")}
                 </button>
               </>
             ) : null}
@@ -1187,7 +1305,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 setUser(response.user);
                 setNotice({
                   tone: "success",
-                  message: "Sosyal hesapla giriş yapıldı.",
+                  message: t(
+                    "Sosyal hesapla giriş yapıldı.",
+                    "Signed in with your social account.",
+                  ),
                 });
                 navigate(response.user.status === "pending" ? "/onboarding" : "/feed");
               }}
@@ -1198,14 +1319,14 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
             const form = new FormData(event.currentTarget);
             if (resetChannel === "phone") forgotPasswordMutation.mutate({ channel: "phone", phone: normalizePhone(String(form.get("resetPhone") || "")) });
             else forgotPasswordMutation.mutate({ channel: "email", email: normalizeEmail(String(form.get("resetEmail") || "")) });
-          }} role="dialog"><div className="section-header"><div><p className="eyebrow">Hesap kurtarma</p><h2>Şifrenizi nasıl sıfırlayalım?</h2></div><button onClick={() => setForgotPasswordOpen(false)} type="button">Kapat</button></div><div className="reset-channel-options"><label><input checked={resetChannel === "email"} name="resetChannel" onChange={() => setResetChannel("email")} type="radio"/> E-posta</label><label><input checked={resetChannel === "phone"} name="resetChannel" onChange={() => setResetChannel("phone")} type="radio"/> GSM</label></div>{resetChannel === "email" ? <label>E-posta adresi<EmailInput autoComplete="email" name="resetEmail" required/></label> : <label>GSM numarası<PhoneInput autoComplete="tel" name="resetPhone" required/></label>}<button className="primary-action" disabled={forgotPasswordMutation.isPending}>{forgotPasswordMutation.isPending ? "Gönderiliyor…" : "Sıfırlama bağlantısı gönder"}</button>{forgotPasswordMutation.isError ? <ServiceFeedback error={forgotPasswordMutation.error} fallback="Şifre sıfırlama isteği gönderilemedi."/> : null}</form></div> : null}
+          }} role="dialog"><div className="section-header"><div><p className="eyebrow">{t("Hesap kurtarma", "Account recovery")}</p><h2>{t("Şifrenizi nasıl sıfırlayalım?", "How would you like to reset your password?")}</h2></div><button onClick={() => setForgotPasswordOpen(false)} type="button">{t("Kapat", "Close")}</button></div><div className="reset-channel-options"><label><input checked={resetChannel === "email"} name="resetChannel" onChange={() => setResetChannel("email")} type="radio"/> {t("E-posta", "Email")}</label><label><input checked={resetChannel === "phone"} name="resetChannel" onChange={() => setResetChannel("phone")} type="radio"/> {t("GSM", "Mobile")}</label></div>{resetChannel === "email" ? <label>{t("E-posta adresi", "Email address")}<EmailInput autoComplete="email" name="resetEmail" required/></label> : <label>{t("GSM numarası", "Mobile number")}<PhoneInput autoComplete="tel" name="resetPhone" required/></label>}<button className="primary-action" disabled={forgotPasswordMutation.isPending}>{forgotPasswordMutation.isPending ? t("Gönderiliyor…", "Sending…") : t("Sıfırlama bağlantısı gönder", "Send reset link")}</button>{forgotPasswordMutation.isError ? <ServiceFeedback error={forgotPasswordMutation.error} fallback={t("Şifre sıfırlama isteği gönderilemedi.", "The password reset request could not be sent.")}/> : null}</form></div> : null}
         </div>
       ) : (
         <div className="account-grid">
           <aside className="account-summary">
             {profileMediaQuery.data?.find((media) => media.isProfilePicture) ? (
               <img
-                alt={`${user.name} profil resmi`}
+                alt={t(`${user.name} profil resmi`, `${user.name} profile picture`)}
                 className="profile-avatar-image"
                 src={resolveMediaUrl(
                   profileMediaQuery.data.find(
@@ -1218,10 +1339,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
             )}
             <strong>{user.name}</strong>
             <span>{user.email}</span>
-            <span>Rol: {user.role}</span>
+            <span>{t("Rol", "Role")}: {translateParticipationRole(user.role, language)}</span>
             <span>
-              Hesap:{" "}
-              {user.accountType === "corporate" ? "Kurumsal" : "Bireysel"}
+              {t("Hesap", "Account")}:{" "}
+              {user.accountType === "corporate" ? t("Kurumsal", "Corporate") : t("Bireysel", "Individual")}
             </span>
             {interestTags.length > 0 ? (
               <div className="profile-tag-row">
@@ -1230,16 +1351,15 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 ))}
               </div>
             ) : (
-              <span>İlgi alanı seçilmedi</span>
+              <span>{t("İlgi alanı seçilmedi", "No interests selected")}</span>
             )}
           </aside>
           <div className="account-stack">
             <ProfileVerificationPanel userId={user.id} />
             <section className="admin-form">
-              <h2>Bağlı hesaplar</h2>
+              <h2>{t("Bağlı hesaplar", "Connected accounts")}</h2>
               <p className="form-help">
-                Google veya Facebook hesabını bağlayarak tek dokunuşla giriş
-                yapabilirsin.
+                {t("Google veya Facebook hesabını bağlayarak tek dokunuşla giriş yapabilirsin.", "Connect your Google or Facebook account for one-tap sign-in.")}
               </p>
               <div className="connected-account-list">
                 {(["google", "facebook"] as SocialProvider[]).map(
@@ -1260,8 +1380,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                             {account
                               ? (account.email ??
                                 account.displayName ??
-                                "Bağlı")
-                              : "Bağlı değil"}
+                                t("Bağlı", "Connected"))
+                              : t("Bağlı değil", "Not connected")}
                           </small>
                         </div>
                         <button
@@ -1275,7 +1395,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                           }
                           type="button"
                         >
-                          {account ? "Bağlantıyı kaldır" : "Hesabı bağla"}
+                          {account ? t("Bağlantıyı kaldır", "Disconnect") : t("Hesabı bağla", "Connect account")}
                         </button>
                       </div>
                     );
@@ -1283,7 +1403,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 )}
               </div>
               <Link className="ghost-action" to="/contacts">
-                Rehberden arkadaş bul ve davet et
+                {t("Rehberden arkadaş bul ve davet et", "Find and invite friends from contacts")}
               </Link>
             </section>
             <ProfileMediaPanel
@@ -1292,14 +1412,14 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
             />
             <MemberList
               members={followingQuery.data ?? []}
-              title="Takip ettiklerim"
+              title={t("Takip ettiklerim", "Following")}
               onToggle={(member) =>
                 followMutation.mutate({ userId: member.id, following: true })
               }
             />
             <MemberList
               members={suggestionsQuery.data ?? []}
-              title="Sana benzer üyeler"
+              title={t("Sana benzer üyeler", "Members like you")}
               onToggle={(member) =>
                 followMutation.mutate({ userId: member.id, following: false })
               }
@@ -1311,12 +1431,12 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 key={String(profileQuery.data.updatedAt)}
                 onSubmit={handleProfileSubmit}
               >
-                <h2>Profili düzenle</h2>
+                <h2>{t("Profili düzenle", "Edit profile")}</h2>
                 <div className="form-grid">
                   <label>
                     {profileQuery.data.accountType === "corporate"
-                      ? "Yetkili kişi / görünen ad"
-                      : "Ad Soyad"}
+                      ? t("Yetkili kişi / görünen ad", "Authorised representative / display name")
+                      : t("Ad Soyad", "Full name")}
                     <input
                       defaultValue={profileQuery.data.name}
                       name="name"
@@ -1326,7 +1446,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     />
                   </label>
                   <label>
-                    Kullanıcı adı
+                    {t("Kullanıcı adı", "Username")}
                     <input
                       defaultValue={profileQuery.data.username ?? ""}
                       name="username"
@@ -1347,40 +1467,26 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                               message:
                                 result.usernameAvailable ||
                                 value === profileQuery.data?.username
-                                  ? "Kullanıcı adı uygun."
-                                  : "Kullanıcı adı kullanımda.",
+                                  ? t("Kullanıcı adı uygun.", "Username is available.")
+                                  : t("Kullanıcı adı kullanımda.", "Username is already in use."),
                             }),
                         );
                       }}
                     />
                   </label>
                   <label>
-                    Telefon
-                    <input
-                      defaultValue={profileQuery.data.phone ?? ""}
-                      name="phone"
-                      readOnly
-                      type="tel"
-                    />
-                    <span className="form-help">
-                      {profileQuery.data.phoneVerified
-                        ? "Doğrulandı"
-                        : "Doğrulanmadı"}
-                    </span>
-                  </label>
-                  <label>
-                    Web sitesi
+                    {t("Web sitesi", "Website")}
                     <input
                       defaultValue={profileQuery.data.website ?? ""}
                       name="website"
-                      placeholder="ornek.com (isteğe bağlı)"
+                      placeholder={t("ornek.com (isteğe bağlı)", "example.com (optional)")}
                     />
                   </label>
                   <CountryCityFields defaultCity={profileQuery.data.city} defaultCountry={profileQuery.data.country}/>
                   {profileQuery.data.accountType === "individual" ? (
                     <>
                       <label>
-                        Doğum tarihi
+                        {t("Doğum tarihi", "Date of birth")}
                         <input
                           defaultValue={
                             profileQuery.data.birthDate
@@ -1394,21 +1500,21 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         />
                       </label>
                       <label>
-                        Cinsiyet
+                        {t("Cinsiyet", "Gender")}
                         <select
                           defaultValue={profileQuery.data.gender ?? ""}
                           name="gender"
                         >
-                          <option value="">Belirtmek istemiyorum</option>
-                          <option value="female">Kadın</option>
-                          <option value="male">Erkek</option>
+                          <option value="">{t("Belirtmek istemiyorum", "Prefer not to say")}</option>
+                          <option value="female">{t("Kadın", "Female")}</option>
+                          <option value="male">{t("Erkek", "Male")}</option>
                         </select>
                       </label>
                     </>
                   ) : (
                     <>
                       <label>
-                        İşletme adı
+                        {t("İşletme adı", "Business name")}
                         <input
                           defaultValue={profileQuery.data.companyName ?? ""}
                           name="companyName"
@@ -1416,7 +1522,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         />
                       </label>
                       <label>
-                        Ticari unvan
+                        {t("Ticari unvan", "Trading name")}
                         <input
                           defaultValue={profileQuery.data.tradeName ?? ""}
                           name="tradeName"
@@ -1424,14 +1530,14 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         />
                       </label>
                       <label>
-                        Şirket türü
+                        {t("Şirket türü", "Company type")}
                         <input
                           defaultValue={profileQuery.data.companyType ?? ""}
                           name="companyType"
                         />
                       </label>
                       <label>
-                        İşletme kategorisi
+                        {t("İşletme kategorisi", "Business category")}
                         <input
                           defaultValue={
                             profileQuery.data.businessCategory ?? ""
@@ -1440,14 +1546,14 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         />
                       </label>
                       <label>
-                        İlçe
+                        {t("İlçe", "District")}
                         <input
                           defaultValue={profileQuery.data.district ?? ""}
                           name="district"
                         />
                       </label>
                       <label>
-                        Adres
+                        {t("Adres", "Address")}
                         <input
                           defaultValue={profileQuery.data.address ?? ""}
                           name="address"
@@ -1462,11 +1568,26 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   type="submit"
                 >
                   {profileMutation.isPending
-                    ? "Kaydediliyor"
-                    : "Profili kaydet"}
+                    ? t("Kaydediliyor", "Saving")
+                    : t("Profili kaydet", "Save profile")}
                 </button>
               </form>
             ) : null}
+            <form className="admin-form" id="account-email" onSubmit={handleChangeEmail}>
+              <h2>{t("Hesap e-postası", "Account email")}</h2>
+              <p className="form-help">{t("Mevcut e-posta adresin", "Your current email address")}: <strong>{user.email}</strong></p>
+              <div className="form-grid">
+                <label>
+                  {t("Yeni e-posta adresi", "New email address")}
+                  <EmailInput autoComplete="email" name="email" required />
+                </label>
+                <label>
+                  {t("Mevcut şifre", "Current password")}
+                  <input autoComplete="current-password" minLength={8} name="currentPassword" required type="password" />
+                </label>
+              </div>
+              <button className="secondary-action" disabled={changeEmailMutation.isPending} type="submit">{changeEmailMutation.isPending ? t("Değiştiriliyor", "Changing") : t("E-postayı değiştir", "Change email")}</button>
+            </form>
             <form
               className="admin-form phone-verification-form"
               id="account-settings"
@@ -1474,31 +1595,31 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 pendingPhone ? handlePhoneConfirmation : handlePhoneRequest
               }
             >
-              <h2>Telefon doğrulama</h2>
+              <h2>{t("Telefon doğrulama", "Phone verification")}</h2>
               {!pendingPhone ? (
                 <label>
-                  Yeni telefon numarası
+                  {t("Yeni telefon numarası", "New phone number")}
                   <PhoneInput
                     name="phone"
                     pattern="\+?[0-9 ]{10,19}"
                     required
                   />
-                  <span className="form-help">Örnek: +90 555 111 22 33</span>
+                  <span className="form-help">{t("Örnek: +90 555 111 22 33", "Example: +44 7700 900123")}</span>
                 </label>
               ) : (
                 <>
                   <p className="form-help">
-                    {pendingPhone} numarasına gönderilen 6 haneli kodu girin.
+                    {t(`${pendingPhone} numarasına gönderilen 6 haneli kodu girin.`, `Enter the 6-digit code sent to ${pendingPhone}.`)}
                   </p>
                   {developmentPhoneCode ? (
                     <div className="demo-verification-code" role="status">
-                      <span>Demo doğrulama kodun</span>
+                      <span>{t("Demo doğrulama kodun", "Your demo verification code")}</span>
                       <strong>{developmentPhoneCode}</strong>
-                      <p>Kodu aşağıdaki alana kendin gir.</p>
+                      <p>{t("Kodu aşağıdaki alana kendin gir.", "Enter the code in the field below.")}</p>
                     </div>
                   ) : null}
                   <label>
-                    Doğrulama kodu
+                    {t("Doğrulama kodu", "Verification code")}
                     <VerificationCodeInput
                       name="code"
                       required
@@ -1514,7 +1635,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 }
                 type="submit"
               >
-                {pendingPhone ? "Numarayı doğrula" : "Kod gönder"}
+                {pendingPhone ? t("Numarayı doğrula", "Verify number") : t("Kod gönder", "Send code")}
               </button>
               {pendingPhone ? (
                 <button
@@ -1525,7 +1646,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   }}
                   type="button"
                 >
-                  İptal
+                  {t("İptal", "Cancel")}
                 </button>
               ) : null}
             </form>
@@ -1536,66 +1657,72 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 key={String(privacyQuery.data.updatedAt ?? "privacy-defaults")}
                 onSubmit={handlePrivacySubmit}
               >
-                <h2>Gizlilik ayarları</h2>
+                <h2>{t("Gizlilik ayarları", "Privacy settings")}</h2>
                 <p className="form-help">
-                  Network: takip ettikleriniz ve onların takip ettiği kişiler.
+                  {t("Ağ: takip ettikleriniz ve onların takip ettiği kişiler.", "Network: people you follow and the people they follow.")}
                 </p>
                 <PrivacyAudienceField
                   defaultValue={privacyQuery.data.messageAudience}
-                  label="Kimler özel mesaj gönderebilir?"
+                  label={t("Kimler özel mesaj gönderebilir?", "Who can send me private messages?")}
                   name="messageAudience"
+                  allowNobody={false}
                 />
                 <label>
-                  Rehberinde kayıtlı olduğum üyeler beni bulabilsin
+                  {t("Arkadaşlarım beni aramada bulabilsin", "Allow my friends to find me in search")}
                   <select
                     defaultValue={String(
                       privacyQuery.data.directoryDiscoverable,
                     )}
                     name="directoryDiscoverable"
                   >
-                    <option value="true">Evet</option>
-                    <option value="false">Hayır</option>
+                    <option value="true">{t("Evet", "Yes")}</option>
+                    <option value="false">{t("Hayır", "No")}</option>
                   </select>
                 </label>
                 <PrivacyAudienceField
                   defaultValue={privacyQuery.data.eventAudience}
-                  label="Etkinliklerimi kimler görebilir?"
+                  label={t("Etkinliklerimi kimler görebilir?", "Who can see my events?")}
                   name="eventAudience"
                 />
                 <PrivacyAudienceField
                   defaultValue={privacyQuery.data.eventInviteAudience}
-                  label="Kimler etkinliğe davet edebilir?"
+                  label={t("Kimler etkinliğe davet edebilir?", "Who can invite me to events?")}
                   name="eventInviteAudience"
+                  allowNobody={false}
                 />
                 <PrivacyAudienceField
                   defaultValue={privacyQuery.data.placeAudience}
-                  label="Mekânlarımı kimler görebilir?"
+                  label={t("Mekânlarımı kimler görebilir?", "Who can see my places?")}
                   name="placeAudience"
                 />
                 <PrivacyAudienceField
                   defaultValue={privacyQuery.data.placeInviteAudience}
-                  label="Kimler mekâna davet edebilir?"
+                  label={t("Kimler mekâna davet edebilir?", "Who can invite me to places?")}
                   name="placeInviteAudience"
+                  allowNobody={false}
                 />
-                <h3>Profil bilgileri</h3>
-                <PrivacyAudienceField defaultValue={privacyQuery.data.profileNameAudience} label="Adımı kimler görebilir?" name="profileNameAudience" />
-                <PrivacyAudienceField defaultValue={privacyQuery.data.demographicsAudience} label="Yaş ve cinsiyetimi kimler görebilir?" name="demographicsAudience" />
-                <PrivacyAudienceField defaultValue={privacyQuery.data.locationAudience} label="Konumumu kimler görebilir?" name="locationAudience" />
-                <PrivacyAudienceField defaultValue={privacyQuery.data.websiteAudience} label="Web adresimi kimler görebilir?" name="websiteAudience" />
-                <PrivacyAudienceField defaultValue={privacyQuery.data.businessAudience} label="Kurumsal bilgilerimi kimler görebilir?" name="businessAudience" />
+                <h3>{t("Profil bilgileri", "Profile information")}</h3>
+                <PrivacyAudienceField defaultValue={privacyQuery.data.profileNameAudience} label={t("Adımı kimler görebilir?", "Who can see my name?")} name="profileNameAudience" />
+                <PrivacyAudienceField defaultValue={privacyQuery.data.demographicsAudience} label={t("Yaş ve cinsiyetimi kimler görebilir?", "Who can see my age and gender?")} name="demographicsAudience" />
+                <PrivacyAudienceField defaultValue={privacyQuery.data.locationAudience} label={profileQuery.data?.accountType === "corporate" ? t("Profilimde kayıtlı şehri kimler görebilir?", "Who can see the city saved on my profile?") : t("Profilimde kayıtlı şehri kimler görebilir?", "Who can see the city saved on my profile?")} name="locationAudience" />
+                <PrivacyAudienceField defaultValue={privacyQuery.data.websiteAudience} label={t("Web adresimi kimler görebilir?", "Who can see my website?")} name="websiteAudience" />
+                {profileQuery.data?.accountType === "corporate" ? <>
+                  <PrivacyAudienceField defaultValue={privacyQuery.data.addressAudience} label={t("Profilimde kayıtlı adresimi kimler görebilir?", "Who can see the address saved on my profile?")} name="addressAudience" />
+                  <PrivacyAudienceField defaultValue={privacyQuery.data.tradeNameAudience} label={t("Ticari unvanımı kimler görebilir?", "Who can see my registered business name?")} name="tradeNameAudience" />
+                </> : null}
                 <button
                   className="secondary-action"
                   disabled={privacyMutation.isPending}
                   type="submit"
                 >
                   {privacyMutation.isPending
-                    ? "Kaydediliyor"
-                    : "Gizlilik ayarlarını kaydet"}
+                    ? t("Kaydediliyor", "Saving")
+                    : t("Gizlilik ayarlarını kaydet", "Save privacy settings")}
                 </button>
               </form>
             ) : null}
             <section className="admin-form">
-              <h2>Engellenenler</h2>
+              <h2>{t("Engellenenler", "Blocked")}</h2>
               {blocksQuery.data?.length ? (
                 <div className="admin-list">
                   {blocksQuery.data.map((block) => (
@@ -1616,13 +1743,13 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         onClick={() => removeBlockMutation.mutate(block)}
                         type="button"
                       >
-                        Engeli kaldır
+                        {t("Engeli kaldır", "Unblock")}
                       </button>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="muted">Engellenen kullanıcı veya içerik yok.</p>
+                <p className="muted">{t("Engellenen kullanıcı veya içerik yok.", "There are no blocked members or content.")}</p>
               )}
             </section>
             {notificationPreferencesQuery.data ? (
@@ -1631,20 +1758,20 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 id="notifications"
                 onSubmit={handleNotificationPreferencesSubmit}
               >
-                <h2>Bildirim tercihleri</h2>
+                <h2>{t("Bildirim tercihleri", "Notification preferences")}</h2>
                 <PushNotificationControl />
                 <div className="form-grid">
                   {notificationPreferencesQuery.data.map((preference) => (
                     <label key={preference.topic}>
-                      {notificationTopicLabels[preference.topic]}
+                      {notificationTopicLabel(preference.topic, language)}
                       <select
                         defaultValue={preference.channel}
                         name={preference.topic}
                       >
-                        <option value="none">Kapalı</option>
-                        <option value="both">E-posta ve push</option>
-                        <option value="email">Yalnız e-posta</option>
-                        <option value="push">Yalnız push</option>
+                        <option value="none">{t("Kapalı", "Off")}</option>
+                        <option value="both">{t("E-posta ve push", "Email and push")}</option>
+                        <option value="email">{t("Yalnız e-posta", "Email only")}</option>
+                        <option value="push">{t("Yalnız push", "Push only")}</option>
                       </select>
                     </label>
                   ))}
@@ -1655,15 +1782,15 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   type="submit"
                 >
                   {notificationPreferencesMutation.isPending
-                    ? "Kaydediliyor"
-                    : "Bildirim tercihlerini kaydet"}
+                    ? t("Kaydediliyor", "Saving")
+                    : t("Bildirim tercihlerini kaydet", "Save notification preferences")}
                 </button>
               </form>
             ) : null}
             <form className="admin-form" onSubmit={handleChangePassword}>
-              <h2>Şifre değiştir</h2>
+              <h2>{t("Şifre değiştir", "Change password")}</h2>
               <label>
-                Mevcut şifre
+                {t("Mevcut şifre", "Current password")}
                 <input
                   autoComplete="current-password"
                   minLength={8}
@@ -1674,7 +1801,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               </label>
               <div className="form-grid">
                 <label>
-                  Yeni şifre
+                  {t("Yeni şifre", "New password")}
                   <input
                     autoComplete="new-password"
                     maxLength={128}
@@ -1685,12 +1812,11 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     type="password"
                   />
                   <span className="form-help">
-                    En az 8 karakter; bir büyük harf, bir küçük harf ve bir
-                    rakam içermeli.
+                    {t("En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam içermeli.", "Use at least 8 characters with an uppercase letter, a lowercase letter and a number.")}
                   </span>
                 </label>
                 <label>
-                  Yeni şifre tekrar
+                  {t("Yeni şifre tekrar", "Confirm new password")}
                   <input
                     autoComplete="new-password"
                     maxLength={128}
@@ -1701,7 +1827,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     type="password"
                   />
                   <span className="form-help">
-                    Yukarıdaki güçlü şifreyle aynı olmalı.
+                    {t("Yukarıdaki güçlü şifreyle aynı olmalı.", "It must match the strong password above.")}
                   </span>
                 </label>
               </div>
@@ -1711,18 +1837,17 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 type="submit"
               >
                 {changePasswordMutation.isPending
-                  ? "Değiştiriliyor"
-                  : "Şifreyi değiştir"}
+                  ? t("Değiştiriliyor", "Changing")
+                  : t("Şifreyi değiştir", "Change password")}
               </button>
             </form>
             <form className="admin-form" onSubmit={handleDeactivate}>
-              <h2>Hesabı dondur</h2>
+              <h2>{t("Hesabı dondur", "Freeze account")}</h2>
               <p className="form-help">
-                Profiliniz ve tek yöneticisi olduğunuz içerikler yayından
-                kaldırılır. Giriş bilgilerinizle hesabı yeniden açabilirsiniz.
+                {t("Profiliniz ve tek yöneticisi olduğunuz içerikler yayından kaldırılır. Giriş bilgilerinizle hesabı yeniden açabilirsiniz.", "Your profile and content for which you are the sole manager will be unpublished. You can reactivate the account with your sign-in details.")}
               </p>
               <label>
-                Mevcut şifre
+                {t("Mevcut şifre", "Current password")}
                 <input
                   autoComplete="current-password"
                   minLength={8}
@@ -1732,7 +1857,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 />
               </label>
               <label>
-                Ayrılma nedeni
+                {t("Ayrılma nedeni", "Reason for leaving")}
                 <textarea
                   maxLength={1000}
                   minLength={3}
@@ -1746,16 +1871,16 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 disabled={deactivateMutation.isPending}
                 type="submit"
               >
-                Hesabı dondur
+                {t("Hesabı dondur", "Freeze account")}
               </button>
             </form>
             <section className="admin-form">
               <div className="section-header compact">
-                <h2>Bildirimler</h2>
+                <h2>{t("Bildirimler", "Notifications")}</h2>
                 <span>
                   {notificationsQuery.data?.filter((item) => !item.readAt)
                     .length ?? 0}{" "}
-                  okunmamış
+                  {t("okunmamış", "unread")}
                 </span>
               </div>
               {notificationsQuery.data?.length ? (
@@ -1769,7 +1894,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         </span>
                         <span>
                           {notification.createdAt
-                            ? new Intl.DateTimeFormat("tr-TR", {
+                            ? new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-GB", {
                                 dateStyle: "medium",
                                 timeStyle: "short",
                               }).format(new Date(notification.createdAt))
@@ -1779,7 +1904,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       <span
                         className={`status-pill status-${notification.readAt ? "resolved" : "open"}`}
                       >
-                        {notification.readAt ? "Okundu" : "Yeni"}
+                        {notification.readAt ? t("Okundu", "Read") : t("Yeni", "New")}
                       </span>
                       {!notification.readAt ? (
                         <button
@@ -1790,25 +1915,24 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                           }
                           type="button"
                         >
-                          Okundu yap
+                          {t("Okundu yap", "Mark as read")}
                         </button>
                       ) : null}
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="muted">Henüz bildirim yok.</p>
+                <p className="muted">{t("Henüz bildirim yok.", "There are no notifications yet.")}</p>
               )}
             </section>
             <form className="admin-form" onSubmit={handleTagSubmit}>
-              <h2>Tag oluştur</h2>
+              <h2>{t("İlgi alanı oluştur", "Create an interest")}</h2>
               <p className="form-help">
-                Var olan tag'leri önce arayıp öneriyoruz; yeni ihtiyaç varsa
-                kullanıcılar direkt aktif tag oluşturabilir.
+                {t("Önce mevcut ilgi alanlarını arayıp öneriyoruz; ihtiyaç varsa doğrudan yeni bir ilgi alanı oluşturabilirsin.", "We suggest existing interests first; if needed, you can create a new active interest directly.")}
               </p>
               <div className="form-grid">
                 <label>
-                  Tag adı
+                  {t("İlgi alanı adı", "Interest name")}
                   <input
                     name="name"
                     placeholder="AI Builders"
@@ -1824,7 +1948,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 type="submit"
               >
                 <Plus size={18} />
-                {tagMutation.isPending ? "Oluşturuluyor" : "Tag oluştur"}
+                {tagMutation.isPending ? t("Oluşturuluyor", "Creating") : t("İlgi alanı oluştur", "Create interest")}
               </button>
             </form>
             <MyEventsPanel
@@ -1834,13 +1958,12 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               userId={user.id}
             />
             <form className="admin-form" id="interests" onSubmit={handleInterestSubmit}>
-              <h2>İlgi alanları</h2>
+              <h2>{t("İlgi alanları", "Interests")}</h2>
               <p className="form-help">
-                Seçtiğin tag'ler profilinde görünür ve etkinlik oluştururken
-                varsayılan seçili gelir.
+                {t("Seçtiğin ilgi alanları profilinde görünür ve etkinlik oluştururken varsayılan seçili gelir.", "Your selected interests appear on your profile and are selected by default when creating an event.")}
               </p>
               <fieldset className="tag-fieldset">
-                <legend>Tag'ler</legend>
+                <legend>{t("İlgi alanları", "Interests")}</legend>
                 {tags.map((tag) => (
                   <label key={tag.id}>
                     <input
@@ -1854,28 +1977,28 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       defaultValue={interestSentiments.get(tag.id) ?? "like"}
                       name={`sentiment:${tag.id}`}
                     >
-                      <option value="like">Like</option>
-                      <option value="ok">OK, no problem</option>
-                      <option value="dislike">Dislike</option>
+                      <option value="like">{t("Beğeniyorum", "Like")}</option>
+                      <option value="ok">{t("Fikrim yok", "Neutral")}</option>
+                      <option value="dislike">{t("İlgilenmiyorum", "Not interested")}</option>
                     </select>
                   </label>
                 ))}
               </fieldset>
               <button className="secondary-action" type="submit">
                 {interestsMutation.isPending
-                  ? "Kaydediliyor"
-                  : "İlgi alanlarını kaydet"}
+                  ? t("Kaydediliyor", "Saving")
+                  : t("İlgi alanlarını kaydet", "Save interests")}
               </button>
             </form>
             <section className="admin-form">
-              <h2>Tag yorumları</h2>
+              <h2>{t("İlgi alanı yorumları", "Interest comments")}</h2>
               <label>
-                İlgi alanı
+                {t("İlgi alanı", "Interest")}
                 <select
                   onChange={(event) => setCommentTagId(event.target.value)}
                   value={commentTagId}
                 >
-                  <option value="">Tag seçin</option>
+                  <option value="">{t("İlgi alanı seçin", "Choose an interest")}</option>
                   {interestTags.map((tag) => (
                     <option key={tag.id} value={tag.id}>
                       {tag.name}
@@ -1890,7 +2013,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     onSubmit={handleTagCommentSubmit}
                   >
                     <label>
-                      Yorumunuz
+                      {t("Yorumunuz", "Your comment")}
                       <textarea
                         maxLength={1000}
                         minLength={1}
@@ -1904,7 +2027,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       disabled={createTagCommentMutation.isPending}
                       type="submit"
                     >
-                      Yorum ekle
+                      {t("Yorum ekle", "Add comment")}
                     </button>
                   </form>
                   <div className="admin-list">
@@ -1914,7 +2037,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                           <strong>
                             {comment.author?.username
                               ? `@${comment.author.username}`
-                              : (comment.author?.name ?? "Silinmiş kullanıcı")}
+                              : (comment.author?.name ?? t("Silinmiş kullanıcı", "Deleted member"))}
                           </strong>
                           <span>
                             <RichText text={comment.body} />
@@ -1928,7 +2051,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                             }
                             type="button"
                           >
-                            Sil
+                            {t("Sil", "Delete")}
                           </button>
                         ) : null}
                       </div>
@@ -1936,7 +2059,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   </div>
                 </>
               ) : (
-                <p className="muted">Yorumları görmek için bir tag seçin.</p>
+                <p className="muted">{t("Yorumları görmek için bir ilgi alanı seçin.", "Choose an interest to view its comments.")}</p>
               )}
             </section>
             <form
@@ -1945,10 +2068,22 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               noValidate
               onSubmit={handleEventSubmit}
             >
-              <h1>{editingEvent ? "Etkinliği düzenle" : "Etkinlik oluştur"}</h1>
+              {eventCreator ? (
+                <h1>
+                  {editingEvent
+                    ? t("Etkinliği düzenle", "Edit event")
+                    : t("Etkinlik oluştur", "Create event")}
+                </h1>
+              ) : (
+                <h2>
+                  {editingEvent
+                    ? t("Etkinliği düzenle", "Edit event")
+                    : t("Etkinlik oluştur", "Create event")}
+                </h2>
+              )}
               <div
                 className="event-stepper"
-                aria-label="Etkinlik oluşturma adımları"
+                aria-label={t("Etkinlik oluşturma adımları", "Event creation steps")}
               >
                 {[1, 2, 3, 4, 5, 6].map((step) => (
                   <button
@@ -1956,16 +2091,16 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     key={step}
                     onClick={() => setEventStep(step)}
                     type="button"
-                    aria-label={`Adım ${step}`}
+                    aria-label={t(`Adım ${step}`, `Step ${step}`)}
                   >
                     {step}
                   </button>
                 ))}
               </div>
               <div data-event-step="1" hidden={eventStep !== 1}>
-                <h3>Adım 1: Temel bilgiler</h3>
+                <h3>{t("Adım 1: Temel bilgiler", "Step 1: Basic information")}</h3>
                 <label>
-                  Başlık
+                  {t("Başlık", "Title")}
                   <input
                     defaultValue={editingEvent?.title}
                     name="title"
@@ -1975,7 +2110,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   />
                 </label>
                 <label>
-                  Açıklama
+                  {t("Açıklama", "Description")}
                   <textarea
                     defaultValue={editingEvent?.description}
                     name="description"
@@ -1986,7 +2121,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 </label>
                 <div className="form-grid">
                   <label className="event-timezone-field">
-                    Saat dilimi
+                    {t("Saat dilimi", "Time zone")}
                     <select
                       key={`${profileQuery.data?.city}-${profileQuery.data?.country}`}
                       name="timezone"
@@ -2002,11 +2137,14 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       ))}
                     </select>
                     <span className="form-help">
-                      Profilindeki şehir varsayılan olarak seçildi.
+                      {t(
+                        "Profilindeki şehir varsayılan olarak seçildi.",
+                        "The city in your profile is selected by default.",
+                      )}
                     </span>
                   </label>
                   <label className="event-start-field">
-                    Başlangıç
+                    {t("Başlangıç", "Start")}
                     <input
                       min={editingEvent ? undefined : new Date().toISOString().slice(0, 16)}
                       name="startsAt"
@@ -2033,7 +2171,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     />
                   </label>
                   <label>
-                    Bitiş
+                    {t("Bitiş", "End")}
                     <input
                       defaultValue={editingEvent?.endsAt ? toDateTimeLocal(editingEvent.endsAt) : ""}
                       min={eventStartsAt || new Date().toISOString().slice(0, 16)}
@@ -2042,7 +2180,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       type="datetime-local"
                     />
                     <span className="form-help">
-                      İsteğe bağlıdır; başlangıçtan önce olamaz.
+                      {t(
+                        "İsteğe bağlıdır; başlangıçtan önce olamaz.",
+                        "Optional; it cannot be before the start.",
+                      )}
                     </span>
                   </label>
                   <label>
@@ -2058,42 +2199,42 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     </select>
                   </label>
                   <label>
-                    Katılım tipi
+                    {t("Katılım tipi", "Participation type")}
                     <select name="visibility" defaultValue={editingEvent?.visibility ?? "open"}>
-                      <option value="open">Herkese açık</option>
+                      <option value="open">{t("Herkese açık", "Open to everyone")}</option>
                       <option value="approval_required">
-                        Onay gerekli
+                        {t("Onay gerekli", "Approval required")}
                       </option>
-                      <option value="invite_only">Sadece davetli</option>
+                      <option value="invite_only">{t("Sadece davetli", "Invite only")}</option>
                     </select>
                   </label>
                 </div>
-                <TagPicker initialIds={editingEvent?.tags.map((tag) => tag.id)} label="Etkinlik etiketleri" recommendedIds={interestTagIds} tags={tags}/>
+                <TagPicker initialIds={editingEvent?.tags.map((tag) => tag.id)} label={t("Etkinlik etiketleri", "Event tags")} recommendedIds={interestTagIds} tags={tags}/>
                 <div className="event-step-actions">
                   <button
                     className="primary-action"
                     onClick={() => setEventStep(2)}
                     type="button"
                   >
-                    Sonraki
+                    {t("Sonraki", "Next")}
                   </button>
                 </div>
               </div>
               <div data-event-step="2" hidden={eventStep !== 2}>
-                <h3>Adım 2: Etkinlik yeri bilgileri</h3>
+                <h3>{t("Adım 2: Etkinlik yeri bilgileri", "Step 2: Event location")}</h3>
                 {eventFormat !== "online" ? (
                   <div className="form-grid">
                     <label>
-                      Mekân adı
+                      {t("Mekân adı", "Place name")}
                       <input defaultValue={editingEvent?.locationName ?? ""} name="locationName" />
                     </label>
-                    <label>Var olan mekânlarımdan seç<select name="placeId" defaultValue=""><option value="">Mekân seçilmedi</option>{myPlacesQuery.data?.map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}</select></label>
+                    <label>{t("Var olan mekânlarımdan seç", "Choose from my existing places")}<select name="placeId" defaultValue=""><option value="">{t("Mekân seçilmedi", "No place selected")}</option>{myPlacesQuery.data?.map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}</select></label>
                     <div className="location-fields-group"><CountryCityFields defaultCity={editingEvent?.city ?? profileQuery.data?.city} defaultCountry={editingEvent?.country ?? profileQuery.data?.country}/><LocationPicker addressName="locationAddress" defaultAddress={editingEvent?.locationAddress ?? ""} defaultLatitude={editingEvent?.latitude} defaultLongitude={editingEvent?.longitude}/></div>
                   </div>
                 ) : null}
                 {eventFormat !== "offline" ? (
                   <label>
-                    Canlı yayın URL'si
+                    {t("Canlı yayın URL'si", "Live stream URL")}
                     <input
                       defaultValue={editingEvent?.liveUrl ?? ""}
                       name="liveUrl"
@@ -2102,26 +2243,29 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       placeholder="https://..."
                     />
                     <span className="form-help">
-                      Katılımcılar etkinlik saatinde bu bağlantıyı kullanır.
+                      {t(
+                        "Katılımcılar etkinlik saatinde bu bağlantıyı kullanır.",
+                        "Attendees use this link when the event starts.",
+                      )}
                     </span>
                   </label>
                 ) : null}
                 <div className="event-step-actions">
                   <button onClick={() => setEventStep(1)} type="button">
-                    Geri
+                    {t("Geri", "Back")}
                   </button>
                   <button
                     className="primary-action"
                     onClick={() => setEventStep(3)}
                     type="button"
                   >
-                    Sonraki
+                    {t("Sonraki", "Next")}
                   </button>
                 </div>
               </div>
               <div data-event-step="3" hidden={eventStep !== 3}>
                 <label>
-                  Etkinlik fotoğraf ve videoları
+                  {t("Etkinlik fotoğraf ve videoları", "Event photos and videos")}
                   <input
                     accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
                     multiple
@@ -2129,48 +2273,51 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     type="file"
                   />
                   <span className="form-help">
-                    En fazla 20 dosya seçebilirsin.
+                    {t("En fazla 20 dosya seçebilirsin.", "You can select up to 20 files.")}
                   </span>
                 </label>
-                <h3>Adım 3: Etkinlik medyası</h3>
+                <h3>{t("Adım 3: Etkinlik medyası", "Step 3: Event media")}</h3>
                 <div className="event-step-actions">
                   <button onClick={() => setEventStep(2)} type="button">
-                    Geri
+                    {t("Geri", "Back")}
                   </button>
                   <button
                     className="primary-action"
                     onClick={() => setEventStep(4)}
                     type="button"
                   >
-                    Sonraki
+                    {t("Sonraki", "Next")}
                   </button>
                 </div>
               </div>
               <div data-event-step="4" hidden={eventStep !== 4}>
-                <h3>Adım 4: Etkinlik yöneticileri</h3>
+                <h3>{t("Adım 4: Etkinlik yöneticileri", "Step 4: Event managers")}</h3>
                 <label>
-                  Yönetici kullanıcı adları
+                  {t("Yönetici kullanıcı adları", "Manager usernames")}
                   <input list="event-manager-suggestions" name="managerUsernames" placeholder="@ayse, @mehmet" />
                   <datalist id="event-manager-suggestions">{(suggestionsQuery.data ?? []).map((member) => <option key={member.id} value={member.username ? `@${member.username}` : member.name}/>)}</datalist>
                   <span className="form-help">
-                    Birden fazla kullanıcı adını virgülle ayır.
+                    {t(
+                      "Birden fazla kullanıcı adını virgülle ayır.",
+                      "Separate multiple usernames with commas.",
+                    )}
                   </span>
                 </label>
                 <div className="event-step-actions">
                   <button onClick={() => setEventStep(3)} type="button">
-                    Geri
+                    {t("Geri", "Back")}
                   </button>
                   <button
                     className="primary-action"
                     onClick={() => setEventStep(5)}
                     type="button"
                   >
-                    Sonraki
+                    {t("Sonraki", "Next")}
                   </button>
                 </div>
               </div>
               <div data-event-step="5" hidden={eventStep !== 5}>
-                <h3>Adım 5: Etkinlik programı / Line up</h3>
+                <h3>{t("Adım 5: Etkinlik programı / Line up", "Step 5: Event programme / Line-up")}</h3>
                 <div className="lineup-editor">
                   {lineupRows.map((row, index) => (
                     <fieldset
@@ -2201,30 +2348,30 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       <legend>
                         <GripVertical size={17} /> {index + 1}.{" "}
                         {row.type === "heading"
-                          ? "ana başlık"
+                          ? t("ana başlık", "main heading")
                           : row.type === "subheading"
-                            ? "alt başlık"
-                            : "program maddesi"}
+                            ? t("alt başlık", "subheading")
+                            : t("program maddesi", "programme item")}
                       </legend>
                       <input name="lineupType" type="hidden" value={row.type} />
                       <div className="form-grid">
                         <label>
-                          Başlık
+                          {t("Başlık", "Title")}
                           <input
                             defaultValue={editingEvent?.lineup?.[index]?.title ?? ""}
                             name="lineupTitle"
                             placeholder={
                               row.type === "heading"
-                                ? "Örn: 1. Gün"
+                                ? t("Örn: 1. Gün", "E.g. Day 1")
                                 : row.type === "subheading"
-                                  ? "Örn: Ana Sahne"
-                                  : "Sanatçı / performans adı"
+                                  ? t("Örn: Ana Sahne", "E.g. Main Stage")
+                                  : t("Sanatçı / performans adı", "Artist / performance name")
                             }
                           />
                         </label>
                         {row.type === "session" ? (
                           <label>
-                            Başlangıç
+                            {t("Başlangıç", "Start")}
                             <input
                               name="lineupStartsAt"
                               defaultValue={editingEvent?.lineup?.[index]?.startsAt ? toDateTimeLocal(editingEvent.lineup[index]!.startsAt!) : ""}
@@ -2235,7 +2382,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                           <input name="lineupStartsAt" type="hidden" value="" />
                         )}
                       </div>
-                      <div className="lineup-row-actions"><button disabled={index === 0} onClick={() => setLineupRows((rows) => { const next = [...rows]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; return next; })} type="button">Yukarı</button><button disabled={index === lineupRows.length - 1} onClick={() => setLineupRows((rows) => { const next = [...rows]; [next[index], next[index + 1]] = [next[index + 1]!, next[index]!]; return next; })} type="button">Aşağı</button><button
+                      <div className="lineup-row-actions"><button disabled={index === 0} onClick={() => setLineupRows((rows) => { const next = [...rows]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; return next; })} type="button">{t("Yukarı", "Move up")}</button><button disabled={index === lineupRows.length - 1} onClick={() => setLineupRows((rows) => { const next = [...rows]; [next[index], next[index + 1]] = [next[index + 1]!, next[index]!]; return next; })} type="button">{t("Aşağı", "Move down")}</button><button
                         className="ghost-action lineup-remove"
                         disabled={lineupRows.length === 1}
                         onClick={() =>
@@ -2246,7 +2393,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         type="button"
                       >
                         <Trash2 size={16} />
-                        Satırı kaldır
+                        {t("Satırı kaldır", "Remove row")}
                       </button></div>
                     </fieldset>
                   ))}
@@ -2263,7 +2410,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     type="button"
                   >
                     <Plus size={16} />
-                    Ana Başlık Ekle (Örn: Gün bilgisi)
+                    {t("Ana Başlık Ekle (Örn: Gün bilgisi)", "Add main heading (e.g. day)")}
                   </button>
                   <button
                     className="create-inline-link"
@@ -2276,7 +2423,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     type="button"
                   >
                     <Plus size={16} />
-                    Alt Başlık Ekle (Örn: Sahne bilgisi)
+                    {t("Alt Başlık Ekle (Örn: Sahne bilgisi)", "Add subheading (e.g. stage)")}
                   </button>
                   <button
                     className="create-inline-link"
@@ -2289,41 +2436,41 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     type="button"
                   >
                     <Plus size={16} />
-                    Madde ekle (Sanatçı &amp; Performans adı)
+                    {t("Madde ekle (Sanatçı & Performans adı)", "Add item (artist & performance name)")}
                   </button>
                 </div>
                 <div className="event-step-actions">
                   <button onClick={() => setEventStep(4)} type="button">
-                    Geri
+                    {t("Geri", "Back")}
                   </button>
                   <button
                     className="primary-action"
                     onClick={() => setEventStep(6)}
                     type="button"
                   >
-                    Sonraki
+                    {t("Sonraki", "Next")}
                   </button>
                 </div>
               </div>
               <div data-event-step="6" hidden={eventStep !== 6}>
-                <h3>Adım 6: Etkinlik biletleri</h3>
+                <h3>{t("Adım 6: Etkinlik biletleri", "Step 6: Event tickets")}</h3>
                 {Array.from({ length: eventTicketCount }, (_, index) => (
                   <fieldset
                     className="ticket-definition"
                     key={`ticket-${index}`}
                   >
-                    <legend>Bilet {index + 1}</legend>
+                    <legend>{t("Bilet", "Ticket")} {index + 1}</legend>
                     <div className="form-grid">
                       <label>
-                        Bilet adı
+                        {t("Bilet adı", "Ticket name")}
                         <input defaultValue={editingEvent?.ticketTypes?.[index]?.name ?? ""} name="ticketName" />
                       </label>
                       <label>
-                        Açıklama
+                        {t("Açıklama", "Description")}
                         <input defaultValue={editingEvent?.ticketTypes?.[index]?.description ?? ""} name="ticketDescription" />
                       </label>
                       <label>
-                        Fiyat
+                        {t("Fiyat", "Price")}
                         <input
                           defaultValue={editingEvent?.ticketTypes?.[index]?.price ?? ""}
                           min="0"
@@ -2333,7 +2480,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         />
                       </label>
                       <label>
-                        Para birimi
+                        {t("Para birimi", "Currency")}
                         <select defaultValue={editingEvent?.ticketTypes?.[index]?.currency ?? "TRY"} name="ticketCurrency">
                           {[
                             "TRY",
@@ -2360,43 +2507,44 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         </select>
                       </label>
                       <label>
-                        Satış platformu
-                        <select name="ticketSalesPlatform" value={ticketSalesPlatforms[index] ?? "door"} onChange={(event) => { const next = event.currentTarget.value as "door" | "konnektora" | "external"; if (next === "konnektora" && user?.accountType !== "corporate" && !["admin", "super_admin"].includes(user?.role ?? "user")) { window.alert('Sadece kurumsal üyeler "Konnektora online satış" ayarını tercih edebilir.'); return; } setTicketSalesPlatforms((items) => { const copy = [...items]; copy[index] = next; return copy; }); }}>
-                          <option value="door">Kapıda ödeme</option>
-                          <option value="konnektora">Konnektora online satış</option>
-                          <option value="external">Diğer platform</option>
+                        {t("Satış platformu", "Sales platform")}
+                        <select name="ticketSalesPlatform" value={ticketSalesPlatforms[index] ?? "door"} onChange={(event) => { const next = event.currentTarget.value as "door" | "konnektora" | "external"; if (next === "konnektora" && user?.accountType !== "corporate" && !["admin", "super_admin"].includes(user?.role ?? "user")) { setRestrictedTicketPlatformIndex(index); return; } setRestrictedTicketPlatformIndex(null); setTicketSalesPlatforms((items) => { const copy = [...items]; copy[index] = next; return copy; }); }}>
+                          <option value="door">{t("Kapıda ödeme", "Pay at the door")}</option>
+                          <option value="konnektora">{t("Konnektora online satış", "Konnektora online sales")}</option>
+                          <option value="external">{t("Diğer platform", "Other platform")}</option>
                         </select>
                       </label>
+                      {restrictedTicketPlatformIndex === index ? <p className="form-error" role="alert">{t('Sadece kurumsal üyeler "Konnektora online satış" ayarını tercih edebilir.', 'Only corporate members can select "Konnektora online sales".')}</p> : null}
                       {ticketSalesPlatforms[index] === "external" ? <label>
-                        Dış satış URL'si
+                        {t("Dış satış URL'si", "External sales URL")}
                         <input defaultValue={editingEvent?.ticketTypes?.[index]?.externalSalesUrl ?? ""} name="ticketExternalSalesUrl" placeholder="https://" required type="url" />
                       </label> : <input name="ticketExternalSalesUrl" type="hidden" value=""/>}
                       <label>
-                        Kontenjan
+                        {t("Kontenjan", "Capacity")}
                         <input defaultValue={editingEvent?.ticketTypes?.[index]?.capacity ?? ""} min="1" name="ticketCapacity" type="number" />
                       </label>
                       <label>
-                        Kişi başına maksimum bilet
+                        {t("Kişi başına maksimum bilet", "Maximum tickets per person")}
                         <input defaultValue={editingEvent?.ticketTypes?.[index]?.perUserLimit ?? ""} max="20" min="1" name="ticketPerUserLimit" type="number" />
                       </label>
-                      {editingEvent ? <label>Bilet durumu<select defaultValue={editingEvent.ticketTypes?.[index]?.status ?? "active"} name="ticketStatus" onChange={(event) => { const previous = editingEvent.ticketTypes?.[index]?.status ?? "active"; if (event.currentTarget.value !== previous && !window.confirm(event.currentTarget.value === "inactive" ? "Bu bilet pasif yapılsın mı? Yeni satışlarda listelenmeyecek, mevcut biletler iptal edilmeyecek." : "Bu bilet yeniden aktif yapılsın mı? Satış koşulları uygunsa tekrar listelenecek.")) event.currentTarget.value = previous; }}><option value="active">Aktif</option><option value="inactive">Pasif</option></select></label> : <input name="ticketStatus" type="hidden" value="active"/>}
+                      {editingEvent ? <label>{t("Bilet durumu", "Ticket status")}<select defaultValue={editingEvent.ticketTypes?.[index]?.status ?? "active"} name="ticketStatus" onChange={(event) => { const previous = editingEvent.ticketTypes?.[index]?.status ?? "active"; if (event.currentTarget.value !== previous && !window.confirm(event.currentTarget.value === "inactive" ? t("Bu bilet pasif yapılsın mı? Yeni satışlarda listelenmeyecek, mevcut biletler iptal edilmeyecek.", "Make this ticket inactive? It will disappear from new sales without cancelling existing tickets.") : t("Bu bilet yeniden aktif yapılsın mı? Satış koşulları uygunsa tekrar listelenecek.", "Reactivate this ticket? It will be listed again when its sales conditions are met."))) event.currentTarget.value = previous; }}><option value="active">{t("Aktif", "Active")}</option><option value="inactive">{t("Pasif", "Inactive")}</option></select></label> : <input name="ticketStatus" type="hidden" value="active"/>}
                       <label>
-                        Satış başlangıcı
+                        {t("Satış başlangıcı", "Sales start")}
                         <input
                           name="ticketSaleStartsAt"
                           type="datetime-local"
                         />
                       </label>
                       <label>
-                        Satış bitişi
+                        {t("Satış bitişi", "Sales end")}
                         <input name="ticketSaleEndsAt" type="datetime-local" />
                       </label>
                       <label>
-                        Gate açılışı
+                        {t("Gate açılışı", "Gate opens")}
                         <input name="ticketGateOpensAt" type="datetime-local" />
                       </label>
                       <label>
-                        Gate kapanışı
+                        {t("Gate kapanışı", "Gate closes")}
                         <input
                           name="ticketGateClosesAt"
                           type="datetime-local"
@@ -2420,7 +2568,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   }}
                   type="button"
                 >
-                  <Plus size={16} /> Yeni bir bilet tanımla
+                  <Plus size={16} /> {t("Yeni bir bilet tanımla", "Add another ticket")}
                 </button>
                 <button
                   className="secondary-action"
@@ -2428,11 +2576,13 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   type="submit"
                 >
                   <Plus size={18} />
-                  {editingEvent ? "Değişiklikleri kaydet" : "Etkinlik yayınla"}
+                  {editingEvent
+                    ? t("Değişiklikleri kaydet", "Save changes")
+                    : t("Etkinlik yayınla", "Publish event")}
                 </button>
                 <div className="event-step-actions">
                   <button onClick={() => setEventStep(5)} type="button">
-                    Geri
+                    {t("Geri", "Back")}
                   </button>
                 </div>
               </div>
@@ -2444,22 +2594,26 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   );
 }
 
-const notificationTopicLabels: Record<NotificationPreference["topic"], string> =
+const notificationTopicLabels: Record<NotificationPreference["topic"], [string, string]> =
   {
-    tag_request: "Profilime tag ekleme talebi",
-    private_message: "Yeni özel mesaj",
-    mention: "Gönderi veya yorumda bahsedilme",
-    comment: "İçeriğime yeni yorum",
-    password_changed: "Şifre değişikliği",
-    email_changed: "E-posta değişikliği",
-    phone_changed: "Telefon değişikliği",
-    login: "Yeni giriş",
-    admin_message: "Konnektora yönetim mesajı",
-    event_invite: "Etkinlik daveti",
-    event_manager: "Etkinlik yöneticisi atanma",
-    place_invite: "Mekân daveti",
-    place_manager: "Mekân yöneticisi atanma",
+    tag_request: ["Profilime ilgi alanı ekleme talebi", "Interest addition request"],
+    private_message: ["Yeni özel mesaj", "New private message"],
+    mention: ["Gönderi veya yorumda bahsedilme", "Mention in a post or comment"],
+    comment: ["İçeriğime yeni yorum", "New comment on my content"],
+    password_changed: ["Şifre değişikliği", "Password change"],
+    email_changed: ["E-posta değişikliği", "Email change"],
+    phone_changed: ["Telefon değişikliği", "Phone change"],
+    login: ["Yeni giriş", "New sign-in"],
+    admin_message: ["Konnektora yönetim mesajı", "Konnektora administration message"],
+    event_invite: ["Etkinlik daveti", "Event invitation"],
+    event_manager: ["Etkinlik yöneticisi atanma", "Event manager assignment"],
+    place_invite: ["Mekân daveti", "Place invitation"],
+    place_manager: ["Mekân yöneticisi atanma", "Place manager assignment"],
   };
+
+function notificationTopicLabel(topic: NotificationPreference["topic"], language: "tr" | "en") {
+  return notificationTopicLabels[topic][language === "tr" ? 0 : 1];
+}
 
 function MemberList({
   members,
@@ -2470,6 +2624,8 @@ function MemberList({
   onToggle: (member: MemberCard) => void;
   title: string;
 }) {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   return (
     <section className="admin-form" id="profile-pictures">
       <div className="section-header compact">
@@ -2487,8 +2643,8 @@ function MemberList({
                   </Link>
                 </strong>
                 <span>
-                  {member.commonTagCount} ortak ilgi alanı ·{" "}
-                  {member.followerCount} takipçi
+                  {member.commonTagCount} {t("ortak ilgi alanı", "shared interests")} ·{" "}
+                  {member.followerCount} {t("takipçi", "followers")}
                 </span>
                 <span>
                   {[member.city, member.country].filter(Boolean).join(", ")}
@@ -2499,13 +2655,13 @@ function MemberList({
                 onClick={() => onToggle(member)}
                 type="button"
               >
-                {member.following ? "Takibi bırak" : "Takip et"}
+                {member.following ? t("Takibi bırak", "Unfollow") : t("Takip et", "Follow")}
               </button>
             </div>
           ))}
         </div>
       ) : (
-        <p className="muted">Gösterilecek üye yok.</p>
+        <p className="muted">{t("Gösterilecek üye yok.", "There are no members to show.")}</p>
       )}
     </section>
   );
@@ -2515,18 +2671,23 @@ function PrivacyAudienceField({
   defaultValue,
   label,
   name,
+  allowNobody = true,
 }: {
   defaultValue: PrivacyAudience;
   label: string;
   name: string;
+  allowNobody?: boolean;
 }) {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   return (
     <label>
       {label}
       <select defaultValue={defaultValue} name={name}>
-        <option value="everybody">Herkes</option>
-        <option value="following">Takip ettiklerim</option>
-        <option value="network">Takip ağım</option>
+        <option value="everybody">{t("Herkes", "Everybody")}</option>
+        <option value="following">{t("Takip ettiklerim", "People I follow")}</option>
+        <option value="network">{t("Takip ağım", "My network")}</option>
+        {allowNobody ? <option value="nobody">{t("Hiç kimse", "Nobody")}</option> : null}
       </select>
     </label>
   );
@@ -2539,6 +2700,8 @@ function ProfileMediaPanel({
   media: ProfileMedia[];
   userId: string;
 }) {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{
     tone: "success" | "error";
@@ -2549,13 +2712,13 @@ function ProfileMediaPanel({
   const uploadMutation = useMutation({
     mutationFn: uploadProfileMedia,
     onSuccess: () => {
-      setNotice({ tone: "success", message: "Medya albüme eklendi." });
+      setNotice({ tone: "success", message: t("Medya albüme eklendi.", "Media was added to the album.") });
       refresh();
     },
     onError: () =>
       setNotice({
         tone: "error",
-        message: "Medya yüklenemedi. Dosya türü ve 10 MB sınırını kontrol et.",
+        message: t("Medya yüklenemedi. Dosya türü ve 10 MB sınırını kontrol et.", "Media could not be uploaded. Check the file type and 10 MB limit."),
       }),
   });
   const profilePictureMutation = useMutation({
@@ -2564,20 +2727,20 @@ function ProfileMediaPanel({
     onError: () =>
       setNotice({
         tone: "error",
-        message: "Bu medya profil resmi yapılamadı.",
+        message: t("Bu medya profil resmi yapılamadı.", "This media could not be set as the profile picture."),
       }),
   });
   const deleteMutation = useMutation({
     mutationFn: deleteProfileMedia,
     onSuccess: refresh,
     onError: () =>
-      setNotice({ tone: "error", message: "Son profil fotoğrafı silinemez." }),
+      setNotice({ tone: "error", message: t("Son profil fotoğrafı silinemez.", "The last profile picture cannot be deleted.") }),
   });
   const reorderMutation = useMutation({
     mutationFn: reorderProfileMedia,
     onSuccess: refresh,
     onError: () =>
-      setNotice({ tone: "error", message: "Albüm sırası değiştirilemedi." }),
+      setNotice({ tone: "error", message: t("Albüm sırası değiştirilemedi.", "The album order could not be changed.") }),
   });
   const isPending =
     uploadMutation.isPending ||
@@ -2596,12 +2759,12 @@ function ProfileMediaPanel({
   return (
     <section className="admin-form">
       <div className="section-header compact">
-        <h2>Profil fotoğrafları</h2>
-        <span>{media.length} / 50 medya</span>
+        <h2>{t("Profil fotoğrafları", "Profile media")}</h2>
+        <span>{media.length} / 50 {t("medya", "media")}</span>
       </div>
       <div className="guest-invite-form">
         <label>
-          Yeni fotoğraf veya video
+          {t("Yeni fotoğraf veya video", "New photo or video")}
           <input
             accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
             disabled={isPending || media.length >= 50}
@@ -2619,12 +2782,12 @@ function ProfileMediaPanel({
           />
         </label>
         {uploadMutation.isPending ? (
-          <span className="form-help">Yükleniyor…</span>
+          <span className="form-help">{t("Yükleniyor…", "Uploading…")}</span>
         ) : null}
       </div>
       {media.length === 0 ? (
         <p className="form-help">
-          Profilini tamamlamak için ilk olarak bir fotoğraf yükle.
+          {t("Profilini tamamlamak için ilk olarak bir fotoğraf yükle.", "Upload a photo first to complete your profile.")}
         </p>
       ) : null}
       {notice ? (
@@ -2635,7 +2798,7 @@ function ProfileMediaPanel({
           <article className="profile-media-item" key={item.id}>
             {item.type === "image" ? (
               <img
-                alt={`Profil albümü ${index + 1}`}
+                alt={t(`Profil albümü ${index + 1}`, `Profile album ${index + 1}`)}
                 src={resolveMediaUrl(item.url)}
               />
             ) : (
@@ -2646,7 +2809,7 @@ function ProfileMediaPanel({
               />
             )}
             <strong>
-              {item.isProfilePicture ? "Profil resmi" : `${index + 1}. medya`}
+              {item.isProfilePicture ? t("Profil resmi", "Profile picture") : t(`${index + 1}. medya`, `Media ${index + 1}`)}
             </strong>
             <div className="row-actions">
               {!item.isProfilePicture && item.type === "image" ? (
@@ -2656,7 +2819,7 @@ function ProfileMediaPanel({
                   onClick={() => profilePictureMutation.mutate(item.id)}
                   type="button"
                 >
-                  Profil resmi yap
+                  {t("Profil resmi yap", "Set as profile picture")}
                 </button>
               ) : null}
               {!item.isProfilePicture ? (
@@ -2685,7 +2848,7 @@ function ProfileMediaPanel({
                 onClick={() => deleteMutation.mutate(item.id)}
                 type="button"
               >
-                <Trash2 size={16} /> Sil
+                <Trash2 size={16} /> {t("Sil", "Delete")}
               </button>
             </div>
           </article>
@@ -2711,6 +2874,8 @@ function MyEventsPanel({
   tags: Tag[];
   userId: string;
 }) {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const queryClient = useQueryClient();
   const [guestListEventId, setGuestListEventId] = useState<string | null>(null);
   const updateMutation = useMutation({
@@ -2732,11 +2897,11 @@ function MyEventsPanel({
   return (
     <section className="admin-form">
       <div className="section-header compact">
-        <h2>Etkinliklerim</h2>
-        <span>{isLoading ? "Yükleniyor" : `${events.length} etkinlik`}</span>
+        <h2>{t("Etkinliklerim", "My events")}</h2>
+        <span>{isLoading ? t("Yükleniyor", "Loading") : t(`${events.length} etkinlik`, `${events.length} events`)}</span>
       </div>
       {events.length === 0 && !isLoading ? (
-        <p className="muted">Henüz etkinlik oluşturmadın.</p>
+        <p className="muted">{t("Henüz etkinlik oluşturmadın.", "You have not created an event yet.")}</p>
       ) : null}
       <div className="admin-list">
         {events.map((event) => (
@@ -2746,13 +2911,13 @@ function MyEventsPanel({
                 <strong>{event.title}</strong>
                 <span>
                   {event.status} ·{" "}
-                  {new Intl.DateTimeFormat("tr-TR", {
+                  {new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-GB", {
                     dateStyle: "medium",
                   }).format(new Date(event.startsAt))}
                 </span>
               </div>
               <span className="muted">
-                {event.tags.map((tag) => tag.name).join(", ") || "Tag yok"}
+                {event.tags.map((tag) => tag.name).join(", ") || t("İlgi alanı yok", "No interests")}
               </span>
               <div className="row-actions">
                 {event.status !== "published" && event.status !== "archived" ? (
@@ -2767,7 +2932,7 @@ function MyEventsPanel({
                     }
                     type="button"
                   >
-                    Yayınla
+                    {t("Yayınla", "Publish")}
                   </button>
                 ) : null}
                 {event.status !== "draft" && event.status !== "archived" ? (
@@ -2782,7 +2947,7 @@ function MyEventsPanel({
                     }
                     type="button"
                   >
-                    Taslak
+                    {t("Taslak", "Draft")}
                   </button>
                 ) : null}
                 <button
@@ -2795,7 +2960,7 @@ function MyEventsPanel({
                   type="button"
                 >
                   <Users size={16} />
-                  Guest list
+                  {t("Misafir listesi", "Guest list")}
                 </button>
                 {event.status !== "archived" ? (
                   <button
@@ -2804,7 +2969,7 @@ function MyEventsPanel({
                     onClick={() => archiveMutation.mutate(event.id)}
                     type="button"
                   >
-                    Arşivle
+                    {t("Arşivle", "Archive")}
                   </button>
                 ) : null}
               </div>
@@ -2817,7 +2982,7 @@ function MyEventsPanel({
       </div>
       {tags.length === 0 ? (
         <p className="form-help">
-          Etkinlik oluşturmak için önce bir tag ekleyebilirsin.
+          {t("Etkinlik oluşturmak için önce bir ilgi alanı ekleyebilirsin.", "You can add an interest before creating an event.")}
         </p>
       ) : null}
     </section>
@@ -2825,6 +2990,8 @@ function MyEventsPanel({
 }
 
 function OrganizerGuestList({ eventId }: { eventId: string }) {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{
     tone: "success" | "error";
@@ -2838,7 +3005,7 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
     mutationFn: (input: { email: string; name?: string; role?: string }) =>
       inviteEventParticipant(eventId, input, "user"),
     onSuccess: () => {
-      setNotice({ tone: "success", message: "Davet guest list'e eklendi." });
+      setNotice({ tone: "success", message: t("Davet misafir listesine eklendi.", "The invitation was added to the guest list.") });
       void queryClient.invalidateQueries({
         queryKey: ["event-participants", eventId, "organizer"],
       });
@@ -2846,7 +3013,7 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
     onError: () =>
       setNotice({
         tone: "error",
-        message: "Davet eklenemedi. E-posta adresini kontrol et.",
+        message: t("Davet eklenemedi. E-posta adresini kontrol et.", "The invitation could not be added. Check the email address."),
       }),
   });
   const statusMutation = useMutation({
@@ -2872,7 +3039,7 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
     onSuccess: () => {
       setNotice({
         tone: "success",
-        message: "QR bilet doğrulandı; katılımcı giriş yaptı.",
+        message: t("QR bilet doğrulandı; katılımcı giriş yaptı.", "The QR ticket was verified and the attendee checked in."),
       });
       void queryClient.invalidateQueries({
         queryKey: ["event-participants", eventId, "organizer"],
@@ -2881,7 +3048,7 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
     onError: () =>
       setNotice({
         tone: "error",
-        message: "QR bilet geçersiz, uygun değil veya daha önce kullanılmış.",
+        message: t("QR bilet geçersiz, uygun değil veya daha önce kullanılmış.", "The QR ticket is invalid, ineligible or has already been used."),
       }),
   });
   const participants = participantsQuery.data ?? [];
@@ -2915,16 +3082,16 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
   return (
     <div className="guest-list-panel">
       <div className="guest-list-header">
-        <strong>Guest list</strong>
+        <strong>{t("Misafir listesi", "Guest list")}</strong>
         <span>
           {participantsQuery.isLoading
-            ? "Yükleniyor"
-            : `${participants.length} kişi`}
+            ? t("Yükleniyor", "Loading")
+            : t(`${participants.length} kişi`, `${participants.length} people`)}
         </span>
       </div>
       <form className="guest-invite-form" onSubmit={handleInviteSubmit}>
         <label>
-          E-posta
+          {t("E-posta", "Email")}
           <input
             name="email"
             placeholder="member@example.com"
@@ -2933,14 +3100,14 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
           />
         </label>
         <label>
-          Ad
-          <input name="name" placeholder="Opsiyonel" />
+          {t("Ad", "Name")}
+          <input name="name" placeholder={t("İsteğe bağlı", "Optional")} />
         </label>
         <label>
-          Rol
+          {t("Rol", "Role")}
           <select name="role" defaultValue="attendee">
-            <option value="attendee">Attendee</option>
-            <option value="manager">Manager</option>
+            <option value="attendee">{t("Katılımcı", "Attendee")}</option>
+            <option value="manager">{t("Yönetici", "Manager")}</option>
           </select>
         </label>
         <button
@@ -2949,15 +3116,15 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
           type="submit"
         >
           <Plus size={16} />
-          Davet et
+          {t("Davet et", "Invite")}
         </button>
       </form>
       <form className="guest-invite-form" onSubmit={handleTicketScan}>
         <label>
-          QR bilet verisi
+          {t("QR bilet verisi", "QR ticket data")}
           <input
             name="ticket"
-            placeholder="QR kodunu tara veya içeriğini yapıştır"
+            placeholder={t("QR kodunu tara veya içeriğini yapıştır", "Scan the QR code or paste its contents")}
             required
           />
         </label>
@@ -2967,7 +3134,7 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
           type="submit"
         >
           <ClipboardCheck size={16} />
-          {ticketScanMutation.isPending ? "Doğrulanıyor" : "QR ile giriş"}
+          {ticketScanMutation.isPending ? t("Doğrulanıyor", "Verifying") : t("QR ile giriş", "Check in with QR")}
         </button>
       </form>
       {notice ? (
@@ -2983,6 +3150,7 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
               statusMutation.mutate({ userId: participant.userId, status })
             }
             participant={participant}
+            language={language}
           />
         ))}
       </div>
@@ -2995,22 +3163,25 @@ function OrganizerGuestListRow({
   onCheckIn,
   onStatusChange,
   participant,
+  language,
 }: {
   isPending: boolean;
   onCheckIn: () => void;
   onStatusChange: (status: string) => void;
   participant: EventParticipant;
+  language: "tr" | "en";
 }) {
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   return (
     <div className="guest-list-row">
       <div>
-        <strong>{participant.user?.name ?? "Community member"}</strong>
+        <strong>{participant.user?.name ?? t("Topluluk üyesi", "Community member")}</strong>
         <span>{participant.user?.email ?? participant.userId}</span>
       </div>
       <span className={`status-pill status-${participant.status}`}>
-        {participant.status}
+        {translateParticipationStatus(participant.status, language)}
       </span>
-      <span className="muted">{participant.role}</span>
+      <span className="muted">{translateParticipationRole(participant.role, language)}</span>
       <div className="row-actions">
         {participant.status === "requested" ? (
           <>
@@ -3021,7 +3192,7 @@ function OrganizerGuestListRow({
               type="button"
             >
               <Check size={16} />
-              Kabul
+              {t("Kabul", "Accept")}
             </button>
             <button
               className="danger-action"
@@ -3030,7 +3201,7 @@ function OrganizerGuestListRow({
               type="button"
             >
               <X size={16} />
-              Ret
+              {t("Ret", "Decline")}
             </button>
           </>
         ) : null}
@@ -3044,7 +3215,7 @@ function OrganizerGuestListRow({
             type="button"
           >
             <ClipboardCheck size={16} />
-            Check-in
+            {t("Giriş yap", "Check in")}
           </button>
         ) : null}
         {participant.status !== "banned" &&
@@ -3055,10 +3226,26 @@ function OrganizerGuestListRow({
             onClick={() => onStatusChange("banned")}
             type="button"
           >
-            Ban
+            {t("Yasakla", "Ban")}
           </button>
         ) : null}
       </div>
     </div>
   );
+}
+
+function translateParticipationStatus(status: string, language: "tr" | "en") {
+  const labels: Record<string, [string, string]> = {
+    requested: ["Bekliyor", "Pending"], invited: ["Davetli", "Invited"], accepted: ["Kabul edildi", "Accepted"],
+    declined: ["Reddedildi", "Declined"], attended: ["Katıldı", "Attended"], banned: ["Yasaklandı", "Banned"],
+  };
+  return labels[status]?.[language === "tr" ? 0 : 1] ?? status;
+}
+
+function translateParticipationRole(role: string, language: "tr" | "en") {
+  const labels: Record<string, [string, string]> = {
+    attendee: ["Katılımcı", "Attendee"], member: ["Üye", "Member"], manager: ["Yönetici", "Manager"],
+    organizer: ["Organizatör", "Organiser"], owner: ["Sahip", "Owner"],
+  };
+  return labels[role]?.[language === "tr" ? 0 : 1] ?? role;
 }

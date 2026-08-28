@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { APP_INTERCEPTOR } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
 import { AdminModule } from "./admin/admin.module";
 import { AuthModule } from "./auth/auth.module";
@@ -28,6 +29,7 @@ import { TicketsModule } from "./tickets/tickets.module";
 import { CuratorsModule } from "./curators/curators.module";
 import { AutomationsModule } from "./automations/automations.module";
 import { validateEnvironment } from "./config/validate-environment";
+import { ActivityLogInterceptor } from "./admin/activity-log.interceptor";
 
 @Module({
   imports: [
@@ -59,6 +61,7 @@ import { validateEnvironment } from "./config/validate-environment";
     TagsModule,
     TicketsModule
   ],
-  controllers: [HealthController]
+  controllers: [HealthController],
+  providers: [{ provide: APP_INTERCEPTOR, useClass: ActivityLogInterceptor }]
 })
 export class AppModule {}

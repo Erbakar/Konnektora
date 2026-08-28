@@ -183,6 +183,7 @@ export class NotificationsService {
   }
 
   private async targetUrl(input: NotificationInput) {
+    if (["event_check_in_admitted", "event_check_in_declined", "place_check_in_admitted", "place_check_in_declined"].includes(input.type)) return "/notifications";
     if (input.targetType === "post" && input.targetId) return `/feed?post=${input.targetId}`;
     if (input.targetType === "user" && input.targetId) return `/users/id/${input.targetId}`;
     if (input.targetType === "event" && input.targetId) {

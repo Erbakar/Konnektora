@@ -1,7 +1,8 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { BlockedTargetType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import { CreateUserBlockDto, NotificationPreferenceDto, TagAffinityInputDto, UpgradeCorporateAccountDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto } from "./profile.dto";
+import { CreateProfileTagSuggestionDto, CreateUserBlockDto, NotificationPreferenceDto, TagAffinityInputDto, UpgradeCorporateAccountDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto } from "./profile.dto";
+import { NotificationsService } from "../notifications/notifications.service";
 
 const notificationTopics: NotificationPreferenceDto["topic"][] = [
   "tag_request", "private_message", "mention", "comment", "password_changed", "email_changed", "phone_changed",
@@ -36,7 +37,14 @@ const profileSelect = {
 
 @Injectable()
 export class ProfileService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly notifications: NotificationsService) {}
+
+  async updatePreferredLanguage(userId: string, language?: string) {
+    const preferredLanguage = language === "en" ? "en" : language === "tr" ? "tr" : null;
+    if (!preferredLanguage) throw new BadRequestException("Desteklenmeyen dil tercihi.");
+    await this.prisma.user.update({ where: { id: userId }, data: { preferredLanguage } });
+    return { preferredLanguage };
+  }
 
   async getProfile(userId: string) {
     const profile = await this.prisma.user.findUnique({ where: { id: userId }, select: profileSelect });
@@ -322,6 +330,55 @@ export class ProfileService {
       this.prisma.tag.updateMany({ where: { id: { in: removed }, usageCount: { gt: 0 } }, data: { usageCount: { decrement: 1 } } })
     ]);
     return this.getAffinities(userId);
+  }
+
+  async listTagSuggestions(userId: string) {
+    return this.prisma.profileTagSuggestion.findMany({
+      where: { status: "pending", OR: [{ targetUserId: userId }, { suggestedById: userId }] },
+      orderBy: { createdAt: "desc" },
+      include: {
+        tag: true,
+        targetUser: { select: { id: true, name: true, username: true, email: true, role: true, status: true } },
+        suggestedBy: { select: { id: true, name: true, username: true, email: true, role: true, status: true } },
+      },
+    });
+  }
+
+  async createTagSuggestion(suggestedById: string, targetUserId: string, input: CreateProfileTagSuggestionDto) {
+    if (suggestedById === targetUserId) throw new BadRequestException("Kendi profilinize etiketi doğrudan ekleyebilirsiniz.");
+    const [target, tag, existing, pending] = await Promise.all([
+      this.prisma.user.findFirst({ where: { id: targetUserId, status: "active" }, select: { id: true } }),
+      this.prisma.tag.findFirst({ where: { id: input.tagId, status: "active" }, select: { id: true, name: true } }),
+      this.prisma.userInterestTag.findUnique({ where: { userId_tagId: { userId: targetUserId, tagId: input.tagId } } }),
+      this.prisma.profileTagSuggestion.findFirst({ where: { targetUserId, suggestedById, tagId: input.tagId, status: "pending" } }),
+    ]);
+    if (!target || !tag) throw new NotFoundException("Kullanıcı veya etiket bulunamadı.");
+    if (existing) throw new ConflictException("Bu etiket kullanıcının profilinde zaten var.");
+    if (pending) throw new ConflictException("Bu etiket daha önce onaya gönderildi.");
+    const suggestion = await this.prisma.profileTagSuggestion.create({
+      data: { targetUserId, suggestedById, tagId: input.tagId, sentiment: input.sentiment },
+      include: { tag: true, targetUser: { select: { id: true, name: true, username: true, email: true, role: true, status: true } }, suggestedBy: { select: { id: true, name: true, username: true, email: true, role: true, status: true } } },
+    });
+    await this.notifications.dispatch({ userId: targetUserId, topic: "tag_request", type: "profile_tag_suggestion", title: "Profilinize yeni etiket önerildi", body: `${suggestion.suggestedBy.username ? `@${suggestion.suggestedBy.username}` : suggestion.suggestedBy.name}, ${tag.name} etiketini profilinize eklemek istiyor.`, targetType: "user", targetId: targetUserId });
+    return suggestion;
+  }
+
+  async decideTagSuggestion(userId: string, id: string, action: "accept" | "decline" | "cancel") {
+    const suggestion = await this.prisma.profileTagSuggestion.findUnique({ where: { id }, include: { tag: true } });
+    if (!suggestion || suggestion.status !== "pending") throw new NotFoundException("Bekleyen etiket önerisi bulunamadı.");
+    if (action === "cancel" ? suggestion.suggestedById !== userId : suggestion.targetUserId !== userId) throw new BadRequestException("Bu öneri üzerinde işlem yapamazsınız.");
+    if (action === "accept") {
+      const exists = await this.prisma.userInterestTag.findUnique({ where: { userId_tagId: { userId: suggestion.targetUserId, tagId: suggestion.tagId } } });
+      await this.prisma.$transaction([
+        this.prisma.userInterestTag.upsert({ where: { userId_tagId: { userId: suggestion.targetUserId, tagId: suggestion.tagId } }, create: { userId: suggestion.targetUserId, tagId: suggestion.tagId, sentiment: suggestion.sentiment }, update: { sentiment: suggestion.sentiment } }),
+        this.prisma.profileTagSuggestion.update({ where: { id }, data: { status: "accepted" } }),
+        ...(exists ? [] : [this.prisma.tag.update({ where: { id: suggestion.tagId }, data: { usageCount: { increment: 1 } } })]),
+      ]);
+    } else {
+      await this.prisma.profileTagSuggestion.update({ where: { id }, data: { status: action === "cancel" ? "cancelled" : "declined" } });
+    }
+    if (action !== "cancel") await this.notifications.dispatch({ userId: suggestion.suggestedById, topic: "tag_request", type: "profile_tag_suggestion_result", title: action === "accept" ? "Etiket öneriniz kabul edildi" : "Etiket öneriniz reddedildi", body: `${suggestion.tag.name} etiketi için gönderdiğiniz öneri ${action === "accept" ? "kabul edildi" : "reddedildi"}.`, targetType: "user", targetId: suggestion.targetUserId });
+    return { ok: true as const, status: action === "accept" ? "accepted" : action === "cancel" ? "cancelled" : "declined" };
   }
 
   getNotifications(userId: string) {

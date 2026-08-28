@@ -17,6 +17,7 @@ import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 import { RequirePermissions } from "../auth/permissions";
 import {
   CreateEventDto,
+  CheckInDecisionDto,
   EventQueryDto,
   GuestListDto,
   GuestListMemberDto,
@@ -140,6 +141,37 @@ export class EventsController {
     return this.eventsService.checkInWithTicket(id, body.token, user);
   }
 
+  @Post("events/:id/check-in/preview")
+  @UseGuards(JwtAuthGuard)
+  previewTicket(
+    @Param("id") id: string,
+    @Body() body: ScanCheckInTicketDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.eventsService.previewCheckInWithTicket(id, body.token, body.method ?? "qr", user);
+  }
+
+  @Get("events/:id/check-in/passport/:userId")
+  @UseGuards(JwtAuthGuard)
+  passport(
+    @Param("id") id: string,
+    @Param("userId") participantUserId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.eventsService.getCheckInPassport(id, participantUserId, user);
+  }
+
+  @Post("events/:id/check-in/passport/:userId/decision")
+  @UseGuards(JwtAuthGuard)
+  decidePassport(
+    @Param("id") id: string,
+    @Param("userId") participantUserId: string,
+    @Body() body: CheckInDecisionDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.eventsService.decideCheckInPassport(id, participantUserId, body, user);
+  }
+
   @Post("events/:id/invite")
   @UseGuards(JwtAuthGuard)
   inviteParticipant(
@@ -158,12 +190,7 @@ export class EventsController {
     @Body() body: UpdateParticipantDto,
     @CurrentUser() user: User,
   ) {
-    return this.eventsService.updateParticipantStatus(
-      id,
-      participantUserId,
-      body.status,
-      user,
-    );
+    return this.eventsService.updateParticipant(id, participantUserId, body, user);
   }
 
   @Post("events/:id/participants/:userId/check-in")

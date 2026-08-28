@@ -140,6 +140,10 @@ describe("AuthService", () => {
         emailVerified: pendingUser.emailVerified,
         status: pendingUser.status,
         avatarUrl: null,
+        username: undefined,
+        city: undefined,
+        country: undefined,
+        onboardingCompleted: false,
       },
     });
     expect(mailService.sendVerificationEmail).toHaveBeenCalledWith({
@@ -260,6 +264,29 @@ describe("AuthService", () => {
       where: { id: "user-5" },
       data: { passwordHash: expect.any(String) },
     });
+  });
+
+  it("changes an account email securely and sends a new verification link", async () => {
+    const { service, prisma, mailService } = createService();
+    const current = {
+      id: "user-6",
+      email: "old@example.com",
+      name: "Member",
+      passwordHash: await hash("CurrentPass!1", 4),
+    };
+    prisma.user.findUnique.mockResolvedValueOnce(current).mockResolvedValueOnce(null);
+    prisma.user.update.mockResolvedValue({ ...current, email: "new@example.com" });
+
+    await expect(service.changeEmail("user-6", {
+      email: "New@Example.com",
+      currentPassword: "CurrentPass!1",
+    })).resolves.toEqual({ ok: true, sent: true, email: "new@example.com" });
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-6" },
+      data: { email: "new@example.com", emailVerified: false },
+    });
+    expect(mailService.sendVerificationEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "new@example.com" }));
   });
 
   it("freezes the account and archives content without another manager", async () => {

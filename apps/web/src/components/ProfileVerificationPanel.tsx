@@ -3,15 +3,18 @@ import { BadgeCheck, Camera, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { getProfileVerification, submitProfileVerification } from "../lib/api";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
+import { useLanguage } from "../lib/i18n";
 
 const challenges = [
-  { value: "blink" as const, label: "İki kez göz kırp" },
-  { value: "smile" as const, label: "Gülümse" },
-  { value: "turn_left" as const, label: "Başını hafifçe sola çevir" },
-  { value: "turn_right" as const, label: "Başını hafifçe sağa çevir" },
+  { value: "blink" as const, tr: "İki kez göz kırp", en: "Blink twice" },
+  { value: "smile" as const, tr: "Gülümse", en: "Smile" },
+  { value: "turn_left" as const, tr: "Başını hafifçe sola çevir", en: "Turn your head slightly left" },
+  { value: "turn_right" as const, tr: "Başını hafifçe sağa çevir", en: "Turn your head slightly right" },
 ];
 
 export function ProfileVerificationPanel({ userId }: { userId: string }) {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const queryClient = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -36,7 +39,7 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
       setError(
         getServiceErrorMessage(
           reason,
-          "Fotoğraf doğrulaması tamamlanamadı. Lütfen yeniden dene.",
+          t("Fotoğraf doğrulaması tamamlanamadı. Lütfen yeniden dene.", "Photo verification could not be completed. Please try again."),
         ),
       ),
   });
@@ -66,7 +69,7 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
       });
     } catch {
       setError(
-        "Kamera açılamadı. Tarayıcı kamera iznini kontrol et veya aşağıdan fotoğraf seç.",
+        t("Kamera açılamadı. Tarayıcı kamera iznini kontrol et veya aşağıdan fotoğraf seç.", "The camera could not be opened. Check your browser permission or choose a photo below."),
       );
     }
   }
@@ -78,7 +81,7 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
   function capture() {
     const video = videoRef.current;
     if (!video?.videoWidth)
-      return setError("Kamera görüntüsü henüz hazır değil.");
+      return setError(t("Kamera görüntüsü henüz hazır değil.", "The camera image is not ready yet."));
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -91,12 +94,12 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
       <section className="admin-form verification-panel is-verified">
         <BadgeCheck size={38} />
         <div>
-          <h2>Profilin doğrulandı</h2>
+          <h2>{t("Profilin doğrulandı", "Your profile is verified")}</h2>
           <p>
-            Mavi tik public profilinde görünür. Doğrulama:{" "}
+            {t("Mavi tik herkese açık profilinde görünür. Doğrulama: ", "The blue tick is visible on your public profile. Verification: ")}
             {status.request?.provider === "development_simulator"
-              ? "geliştirme simülasyonu"
-              : "yüz ve canlılık kontrolü"}
+              ? t("geliştirme simülasyonu", "development simulation")
+              : t("yüz ve canlılık kontrolü", "face and liveness check")}
             .
           </p>
         </div>
@@ -107,9 +110,9 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
       <section className="admin-form verification-panel">
         <ShieldCheck size={34} />
         <div>
-          <h2>Kurumsal hesap doğrulaması</h2>
+          <h2>{t("Kurumsal hesap doğrulaması", "Business account verification")}</h2>
           <p>
-            Kurumsal profiller mavi tiki KYC sürecini tamamladıktan sonra alır.
+            {t("Kurumsal profiller mavi tiki KYC sürecini tamamladıktan sonra alır.", "Business profiles receive the blue tick after completing the KYC process.")}
           </p>
         </div>
       </section>
@@ -119,10 +122,9 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
       <section className="admin-form verification-panel">
         <RefreshCw size={34} />
         <div>
-          <h2>Başvurun inceleniyor</h2>
+          <h2>{t("Başvurun inceleniyor", "Your application is under review")}</h2>
           <p>
-            Otomatik kontrol kesin karar veremediği için ekip incelemesine
-            aktarıldı.
+            {t("Otomatik kontrol kesin karar veremediği için ekip incelemesine aktarıldı.", "The automated check could not reach a final decision, so your application was sent for team review.")}
           </p>
         </div>
       </section>
@@ -132,24 +134,22 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
     <section className="admin-form verification-flow">
       <div className="section-header compact">
         <div>
-          <h2>Fotoğrafını doğrula</h2>
+          <h2>{t("Fotoğrafını doğrula", "Verify your photo")}</h2>
           <p className="form-help">
-            Profil fotoğrafındaki kişinin sen olduğunu canlı kamera kontrolüyle
-            doğrula ve mavi tik al.
+            {t("Profil fotoğrafındaki kişinin sen olduğunu canlı kamera kontrolüyle doğrula ve mavi tik al.", "Use a live camera check to confirm that you are the person in your profile photo and receive a blue tick.")}
           </p>
         </div>
         <ShieldCheck size={34} />
       </div>
       <div className="verification-privacy">
-        <strong>Gizlilik</strong>
+        <strong>{t("Gizlilik", "Privacy")}</strong>
         <span>
-          Doğrulama karesi profilinde yayınlanmaz ve yalnızca yetkili inceleme
-          için erişilebilir.
+          {t("Doğrulama karesi profilinde yayınlanmaz ve yalnızca yetkili inceleme için erişilebilir.", "Your verification frame is not published on your profile and is accessible only for authorised review.")}
         </span>
       </div>
       <div className="verification-challenge">
-        <span>Canlılık hareketin</span>
-        <strong>{challenge.label}</strong>
+        <span>{t("Canlılık hareketin", "Your liveness action")}</span>
+        <strong>{challenge[language]}</strong>
         <button
           className="ghost-action"
           onClick={() =>
@@ -161,7 +161,7 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
           }
           type="button"
         >
-          Başka hareket
+          {t("Başka hareket", "Choose another action")}
         </button>
       </div>
       {cameraOpen ? (
@@ -174,10 +174,10 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
               onClick={capture}
               type="button"
             >
-              <Camera size={18} /> Kareyi çek ve doğrula
+              <Camera size={18} /> {t("Kareyi çek ve doğrula", "Capture and verify")}
             </button>
             <button className="ghost-action" onClick={stopCamera} type="button">
-              Kamerayı kapat
+              {t("Kamerayı kapat", "Close camera")}
             </button>
           </div>
         </div>
@@ -187,11 +187,11 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
           onClick={() => void startCamera()}
           type="button"
         >
-          <Camera size={18} /> Kamerayı aç
+          <Camera size={18} /> {t("Kamerayı aç", "Open camera")}
         </button>
       )}
       <label className="verification-fallback">
-        Kamera kullanamıyor musun?
+        {t("Kamera kullanamıyor musun?", "Cannot use the camera?")}
         <input
           accept="image/jpeg"
           onChange={(event) => {
@@ -200,13 +200,13 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
           }}
           type="file"
         />
-        <span>JPEG doğrulama karesi seç</span>
+        <span>{t("JPEG doğrulama karesi seç", "Choose a JPEG verification image")}</span>
       </label>
       {status?.request?.status === "rejected" ? (
         <p className="form-error">
-          Önceki kontrol başarısız:{" "}
+          {t("Önceki kontrol başarısız: ", "Previous check failed: ")}
           {status.request.decisionReason ??
-            "Yeni bir kareyle tekrar deneyebilirsin."}
+            t("Yeni bir kareyle tekrar deneyebilirsin.", "You can try again with a new image.")}
         </p>
       ) : null}
       {error ? <p className="form-error">{error}</p> : null}

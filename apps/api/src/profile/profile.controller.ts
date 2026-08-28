@@ -3,7 +3,7 @@ import { User } from "@prisma/client";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { OnboardingJwtAuthGuard } from "../auth/onboarding-jwt-auth.guard";
-import { CreateUserBlockDto, UpgradeCorporateAccountDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto, UpdateProfileInterestsDto, UpdateTagAffinitiesDto } from "./profile.dto";
+import { CreateProfileTagSuggestionDto, CreateUserBlockDto, DecideProfileTagSuggestionDto, UpgradeCorporateAccountDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto, UpdateProfileInterestsDto, UpdateTagAffinitiesDto } from "./profile.dto";
 import { ProfileService } from "./profile.service";
 
 @Controller("profile")
@@ -20,6 +20,12 @@ export class ProfileController {
   @UseGuards(OnboardingJwtAuthGuard)
   updateProfile(@CurrentUser() user: User, @Body() body: UpdateProfileDto) {
     return this.profileService.updateProfile(user.id, body);
+  }
+
+  @Patch("language")
+  @UseGuards(JwtAuthGuard)
+  updatePreferredLanguage(@CurrentUser() user: User, @Body() body: { language?: string }) {
+    return this.profileService.updatePreferredLanguage(user.id, body.language);
   }
 
   @Post("upgrade-corporate")
@@ -86,6 +92,24 @@ export class ProfileController {
   @UseGuards(OnboardingJwtAuthGuard)
   updateAffinities(@CurrentUser() user: User, @Body() body: UpdateTagAffinitiesDto) {
     return this.profileService.updateAffinities(user.id, body.affinities);
+  }
+
+  @Get("tag-suggestions")
+  @UseGuards(JwtAuthGuard)
+  listTagSuggestions(@CurrentUser() user: User) {
+    return this.profileService.listTagSuggestions(user.id);
+  }
+
+  @Post("tag-suggestions/:targetUserId")
+  @UseGuards(JwtAuthGuard)
+  createTagSuggestion(@CurrentUser() user: User, @Param("targetUserId") targetUserId: string, @Body() body: CreateProfileTagSuggestionDto) {
+    return this.profileService.createTagSuggestion(user.id, targetUserId, body);
+  }
+
+  @Patch("tag-suggestions/:id")
+  @UseGuards(JwtAuthGuard)
+  decideTagSuggestion(@CurrentUser() user: User, @Param("id") id: string, @Body() body: DecideProfileTagSuggestionDto) {
+    return this.profileService.decideTagSuggestion(user.id, id, body.action);
   }
 
   @Put("interests")

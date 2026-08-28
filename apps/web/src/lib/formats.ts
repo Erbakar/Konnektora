@@ -28,6 +28,27 @@ export function formatPhone(value: string) {
   return normalized;
 }
 
+const countryNames = {
+  tr: {
+    Turkey: "Türkiye", Germany: "Almanya", Netherlands: "Hollanda", France: "Fransa", Spain: "İspanya", Italy: "İtalya", Greece: "Yunanistan", "United Kingdom": "Birleşik Krallık", "United States": "Amerika Birleşik Devletleri",
+  },
+  en: {
+    Türkiye: "Turkey", Almanya: "Germany", Hollanda: "Netherlands", Fransa: "France", İspanya: "Spain", İtalya: "Italy", Yunanistan: "Greece", "Birleşik Krallık": "United Kingdom", "Amerika Birleşik Devletleri": "United States",
+  },
+} as const;
+
+export function localizeCountryName(value: string | null | undefined, language: "tr" | "en") {
+  if (!value) return value ?? "";
+  return (countryNames[language] as Record<string, string>)[value] ?? value;
+}
+
+export function localizeCityName(value: string | null | undefined, language: "tr" | "en") {
+  if (!value) return value ?? "";
+  if (language === "tr" && value === "Istanbul") return "İstanbul";
+  if (language === "en" && value === "İstanbul") return "Istanbul";
+  return value;
+}
+
 function dateParts(value: Date, locale: string, includeYear: boolean) {
   return new Intl.DateTimeFormat(locale, {
     weekday: "short",

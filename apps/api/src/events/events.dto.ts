@@ -95,6 +95,18 @@ export class ScanCheckInTicketDto {
   @MaxLength(64)
   @Matches(/^[a-f0-9]{64}$/)
   token!: string;
+
+  @IsOptional()
+  @IsIn(["qr", "nfc"])
+  method?: "qr" | "nfc";
+}
+
+export class CheckInDecisionDto {
+  @IsIn(["admit", "decline"])
+  decision!: "admit" | "decline";
+
+  @IsIn(["manual", "qr", "nfc"])
+  method!: "manual" | "qr" | "nfc";
 }
 
 export class CreateEventDto {
@@ -262,8 +274,13 @@ export class InviteParticipantDto {
 }
 
 export class UpdateParticipantDto {
+  @IsOptional()
   @IsEnum(EventParticipantStatus)
-  status!: EventParticipantStatus;
+  status?: EventParticipantStatus;
+
+  @IsOptional()
+  @IsEnum(EventParticipantRole)
+  role?: EventParticipantRole;
 }
 
 export class GuestListDto {

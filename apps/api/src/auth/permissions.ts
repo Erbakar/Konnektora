@@ -16,8 +16,12 @@ export const ADMIN_PERMISSIONS = [
   "messages.account_freeze.manage",
   "messages.write_to_us.manage",
   "places.manage",
+  "posts.manage",
   "comments.manage",
-  "media.manage"
+  "media.manage",
+  "private_messages.manage",
+  "user_activity.manage",
+  "finance.manage"
 ] as const;
 
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];

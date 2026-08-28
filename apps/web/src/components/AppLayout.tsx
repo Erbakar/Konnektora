@@ -1,18 +1,26 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, CalendarDays, ChevronDown, Home, LogOut, MapPin, Menu, MessageCircle, QrCode, Search, Settings, Tag, Ticket, UserRound, Users, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import type { Notification } from "@konnektora/shared";
+import { Bell, CalendarDays, ChevronDown, Home, LogOut, MapPin, Menu, MessageCircle, Navigation, QrCode, Search, Settings, Tag, Ticket, UserRound, Users, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
-import { clearUserSession, getUserSession, listConversations, listMyNotifications, resolveMediaUrl, USER_SESSION_CHANGED_EVENT } from "../lib/api";
+import { clearUserSession, getUserSession, listConversations, listMyNotifications, markMyNotificationRead, resolveMediaUrl, updatePreferredLanguage, USER_SESSION_CHANGED_EVENT } from "../lib/api";
 import { publicSiteHref } from "../lib/domains";
 import { useLanguage } from "../lib/i18n";
 import { DialogAccessibilityManager } from "./DialogAccessibilityManager";
+import { CheckInDecisionDialog } from "./CheckInDecisionDialog";
 
 export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [locationIntroOpen, setLocationIntroOpen] = useState(false);
+  const [liveCheckInDecision, setLiveCheckInDecision] = useState<Notification | null>(null);
   const [, setSessionRevision] = useState(0);
   const { language, setLanguage, t } = useLanguage();
   const location = useLocation();
+  const navigate = useNavigate();
+  const openedMemberScans = useRef(new Set<string>());
+  const openedCheckInDecisions = useRef(new Set<string>());
+  const scanSessionStartedAt = useRef(Date.now());
   const storedUser = getUserSession();
   const user = storedUser?.status === "active" ? storedUser : null;
   const conversationsQuery = useQuery({
@@ -25,9 +33,31 @@ export function AppLayout() {
     queryKey: ["my-notifications", user?.id],
     queryFn: listMyNotifications,
     enabled: Boolean(user),
-    refetchInterval: 30_000,
+    refetchInterval: 2_500,
   });
   const unreadNotifications = notificationsQuery.data?.filter((item) => !item.readAt).length ?? 0;
+
+  useEffect(() => {
+    if (!user) return;
+    void updatePreferredLanguage(language).catch(() => undefined);
+  }, [language, user?.id]);
+
+  useEffect(() => {
+    const scan = notificationsQuery.data?.find((item) => item.type === "member_scan" && !item.readAt && item.targetId && item.createdAt && new Date(item.createdAt).getTime() >= scanSessionStartedAt.current && !openedMemberScans.current.has(item.id));
+    if (!scan?.targetId) return;
+    openedMemberScans.current.add(scan.id);
+    navigate(`/users/id/${scan.targetId}`);
+    void markMyNotificationRead(scan.id).then(() => notificationsQuery.refetch());
+  }, [navigate, notificationsQuery.data]);
+
+  useEffect(() => {
+    if (liveCheckInDecision) return;
+    const decisionTypes = new Set(["event_check_in_admitted", "event_check_in_declined", "place_check_in_admitted", "place_check_in_declined"]);
+    const decision = notificationsQuery.data?.find((item) => decisionTypes.has(item.type) && !item.readAt && item.createdAt && new Date(item.createdAt).getTime() >= scanSessionStartedAt.current && !openedCheckInDecisions.current.has(item.id));
+    if (!decision) return;
+    openedCheckInDecisions.current.add(decision.id);
+    setLiveCheckInDecision(decision);
+  }, [liveCheckInDecision, notificationsQuery.data]);
 
   useEffect(() => {
     const refreshSession = () => setSessionRevision((revision) => revision + 1);
@@ -41,6 +71,49 @@ export function AppLayout() {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
+    if (!user || user.role !== "user" || user.onboardingCompleted !== false || location.pathname === "/onboarding" || location.pathname === "/verify-email") return;
+    navigate("/onboarding", { replace: true });
+  }, [location.pathname, navigate, user]);
+
+  useEffect(() => {
+    const relevantPage = location.pathname === "/" || location.pathname.startsWith("/events") || location.pathname.startsWith("/places");
+    setLocationIntroOpen(Boolean(relevantPage && navigator.geolocation && sessionStorage.getItem("konnektora:location-intro") !== "seen"));
+  }, [location.pathname]);
+
+  function requestLocationPermission() {
+    sessionStorage.setItem("konnektora:location-intro", "seen");
+    setLocationIntroOpen(false);
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      () => window.dispatchEvent(new Event("konnektora:location-updated")),
+      () => window.dispatchEvent(new Event("konnektora:location-updated")),
+      { maximumAge: 300_000, timeout: 10_000 },
+    );
+  }
+
+  useEffect(() => {
+    const announced = new WeakSet<Element>();
+    const revealFeedback = () => {
+      document.querySelectorAll(".form-error, .service-feedback--error").forEach((element) => {
+        if (announced.has(element) || !element.textContent?.trim()) return;
+        announced.add(element);
+        element.setAttribute("role", "alert");
+        element.setAttribute("aria-live", "assertive");
+        const box = element.getBoundingClientRect();
+        if (box.top < 0 || box.bottom > window.innerHeight) element.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      document.querySelectorAll(".form-success, .service-feedback--success").forEach((element) => {
+        element.setAttribute("role", "status");
+        element.setAttribute("aria-live", "polite");
+      });
+    };
+    revealFeedback();
+    const observer = new MutationObserver(revealFeedback);
+    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
@@ -50,6 +123,8 @@ export function AppLayout() {
   return (
     <div className={`app-shell${user ? " authenticated-shell" : ""}`}>
       <DialogAccessibilityManager />
+      {liveCheckInDecision ? <CheckInDecisionDialog notification={liveCheckInDecision} onClose={() => { const id = liveCheckInDecision.id; setLiveCheckInDecision(null); void markMyNotificationRead(id).then(() => notificationsQuery.refetch()); }}/>: null}
+      {locationIntroOpen ? <div className="dialog-backdrop location-intro-backdrop" role="presentation"><section aria-describedby="location-intro-description" aria-labelledby="location-intro-title" aria-modal="true" className="content-dialog location-intro-dialog" role="dialog"><span className="location-intro-icon"><Navigation size={25}/></span><p className="eyebrow">{language === "tr" ? "Konum tabanlı keşif" : "Location-based discovery"}</p><h2 id="location-intro-title">{language === "tr" ? "Size daha yakın deneyimleri gösterelim" : "Let us show experiences closer to you"}</h2><p id="location-intro-description">{language === "tr" ? "Konnektora, özellikle etkinlikler ve mekânlarda ilgi alanı ve konum bazlı bir deneyim sunar. Bu ekranı kapattığınızda tarayıcınız konum erişimi için izin isteyecek." : "Konnektora uses interests and location to improve event and venue discovery. After you continue, your browser will ask for location access."}</p><button className="primary-action" onClick={requestLocationPermission} type="button">{language === "tr" ? "Tamam, devam et" : "Continue"}</button></section></div> : null}
       <header className="corp-topbar">
         <a href={publicSiteHref()} className="brand" aria-label={t("brandHome")}>
           <img alt="Konnektora" src="/brand/konnektora-logo.svg" />

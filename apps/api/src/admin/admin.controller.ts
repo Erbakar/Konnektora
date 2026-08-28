@@ -3,7 +3,7 @@ import { User } from "@prisma/client";
 import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { RequirePermissions } from "../auth/permissions";
-import { AdminUserActionDto, AdminUserQueryDto, CreateAdminRoleGroupDto, UpdateAdminRoleGroupDto, UpdateAdminUserDto } from "./admin.dto";
+import { AdminActivityLogQueryDto, AdminUserActionDto, AdminUserQueryDto, CreateAdminRoleGroupDto, UpdateAdminRoleGroupDto, UpdateAdminUserDto } from "./admin.dto";
 import { AdminService } from "./admin.service";
 
 @Controller("admin")
@@ -20,6 +20,12 @@ export class AdminController {
   @RequirePermissions("users.manage")
   listUsers(@Query() query: AdminUserQueryDto) {
     return this.adminService.listUsers(query);
+  }
+
+  @Get("activity-logs")
+  @RequirePermissions("user_activity.manage")
+  listActivityLogs(@Query() query: AdminActivityLogQueryDto) {
+    return this.adminService.listActivityLogs(query);
   }
 
   @Get("users/:id")

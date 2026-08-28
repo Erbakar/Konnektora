@@ -288,6 +288,8 @@ export const discoveryFeedSchema = z.object({
   activeUserCount: z.number().int().nonnegative(),
   scope: z.enum(["local", "global"]),
   location: z.string().nullable(),
+  city: z.string().nullable().optional(),
+  country: z.string().nullable().optional(),
   activities: z.array(discoveryActivitySchema),
 });
 export const discoverySearchSchema = z.object({
@@ -423,8 +425,12 @@ export const adminPermissionSchema = z.enum([
   "messages.account_freeze.manage",
   "messages.write_to_us.manage",
   "places.manage",
+  "posts.manage",
   "comments.manage",
   "media.manage",
+  "private_messages.manage",
+  "user_activity.manage",
+  "finance.manage",
 ]);
 
 export const slugSchema = z
@@ -523,6 +529,31 @@ export const publicProfileInterestSchema = z.object({
   commentCount: z.number().int().nonnegative().optional(),
   lastActivityAt: z.string().datetime().or(z.date()).optional(),
 });
+export const mutualismAnalysisSchema = z.object({
+  total: z.number().int().nonnegative(),
+  hiddenCount: z.number().int().nonnegative(),
+  sameSentimentTags: z.array(publicProfileInterestSchema),
+  events: z.array(discoveryItemSchema),
+  places: z.array(discoveryItemSchema),
+  people: z.array(z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    username: z.string().nullable().optional(),
+    avatarUrl: z.string().nullable().optional(),
+  })),
+  sharedReactionCount: z.number().int().nonnegative(),
+  sharedCommentTargetCount: z.number().int().nonnegative(),
+  scores: z.object({
+    overall: z.number().int().min(0).max(100),
+    friendship: z.number().int().min(0).max(100),
+    networking: z.number().int().min(0).max(100),
+    eventPartner: z.number().int().min(0).max(100),
+    travel: z.number().int().min(0).max(100),
+    business: z.number().int().min(0).max(100),
+  }),
+  explanation: z.string(),
+  actions: z.array(z.string()),
+});
 export const publicProfileSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -554,6 +585,7 @@ export const publicProfileSchema = z.object({
   ),
   interests: z.array(publicProfileInterestSchema),
   commonInterestCount: z.number().int().nonnegative(),
+  mutualism: mutualismAnalysisSchema.optional(),
   relationship: z.object({
     isSelf: z.boolean(),
     following: z.boolean(),
@@ -614,10 +646,32 @@ export const tagAffinitySchema = z.object({
   updatedAt: z.string().datetime().or(z.date()).optional(),
 });
 export const tagAffinitiesSchema = z.array(tagAffinitySchema);
+const profileTagSuggestionUserSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  username: z.string().nullable().optional(),
+  email: z.string().email(),
+  role: z.string(),
+  status: z.string(),
+});
+export const profileTagSuggestionSchema = z.object({
+  id: z.string().uuid(),
+  targetUserId: z.string().uuid(),
+  suggestedById: z.string().uuid(),
+  tagId: z.string().uuid(),
+  sentiment: tagSentimentSchema,
+  status: z.enum(["pending", "accepted", "declined", "cancelled"]),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+  tag: tagSchema,
+  targetUser: profileTagSuggestionUserSchema,
+  suggestedBy: profileTagSuggestionUserSchema,
+});
+export const profileTagSuggestionsSchema = z.array(profileTagSuggestionSchema);
 export const tagCommentSchema = z.object({
   id: z.string().uuid(),
   tagId: z.string().uuid(),
-  body: z.string().min(1).max(1000),
+  body: z.string().max(1000),
   likeCount: z.number().int().nonnegative(),
   liked: z.boolean().optional(),
   replyCount: z.number().int().nonnegative().optional(),
@@ -662,6 +716,8 @@ export const eventSchema = z.object({
   locationAddress: z.string().max(500).nullable().optional(),
   place: z.object({ id: z.string().uuid(), name: z.string(), slug: slugSchema, address: z.string().nullable(), city: z.string().nullable(), country: z.string().nullable() }).nullable().optional(),
   attendeeCount: z.number().int().nonnegative().optional(),
+  invitedCount: z.number().int().nonnegative().optional(),
+  followingAttendeeCount: z.number().int().nonnegative().optional(),
   viewerParticipation: z
     .object({ role: z.string(), status: z.string() })
     .nullable()
@@ -877,11 +933,16 @@ export const adminUserSchema = z.object({
   email: z.string().email(),
   name: z.string(),
   username: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  country: z.string().nullable().optional(),
   role: userRoleSchema,
   accountType: accountTypeSchema.optional(),
   emailVerified: z.boolean().optional(),
   status: userStatusSchema.optional(),
+  onboardingCompleted: z.boolean().optional(),
   avatarUrl: z.string().nullable().optional(),
+  followerCount: z.number().int().nonnegative().optional(),
+  relatedFollowerCount: z.number().int().nonnegative().optional(),
 });
 
 export const profileSchema = z.object({
@@ -1002,9 +1063,23 @@ export const eventParticipantSchema = z.object({
   status: eventParticipantStatusSchema,
   role: eventParticipantRoleSchema,
   checkedInAt: z.string().datetime().nullable(),
+  checkInMethod: z.enum(["manual", "qr", "nfc"]).nullable().optional(),
+  checkInOrder: z.number().int().positive().nullable().optional(),
+  checkInDecisionAt: z.string().datetime().or(z.date()).nullable().optional(),
+  joinOrder: z.number().int().positive().optional(),
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional(),
   user: adminUserSchema.optional(),
+  tickets: z.array(z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    description: z.string().nullable(),
+    quantity: z.number().int().positive(),
+    unitPrice: z.number().nonnegative(),
+    currency: z.string(),
+    gateOpensAt: z.string().datetime().or(z.date()).nullable(),
+    gateClosesAt: z.string().datetime().or(z.date()).nullable(),
+  })).optional(),
 });
 
 export const loginResponseSchema = z.object({
@@ -1087,6 +1162,14 @@ export const adminActivityLogSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.string().datetime().or(z.date()).optional(),
   actor: adminUserSchema.optional().nullable(),
+});
+
+export const adminActivityLogListSchema = z.object({
+  items: z.array(adminActivityLogSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+  hasNextPage: z.boolean(),
 });
 
 export const moderationDecisionSchema = z.object({
@@ -1175,7 +1258,9 @@ export const placeSchema = adminPlaceSchema
   .extend({
     tags: z.array(tagSchema).optional(),
     isFollowing: z.boolean(),
+    memberCount: z.number().int().nonnegative().optional(),
     followingMemberCount: z.number().int().nonnegative().optional(),
+    upcomingEventCount: z.number().int().nonnegative().optional(),
     viewerMembership: z
       .object({
         status: placeMemberStatusSchema,
@@ -1200,9 +1285,53 @@ export const placeMemberSchema = z.object({
   status: placeMemberStatusSchema,
   role: placeMemberRoleSchema,
   checkedInAt: z.string().datetime().or(z.date()).nullable().optional(),
+  checkInMethod: z.enum(["manual", "qr", "nfc"]).nullable().optional(),
+  checkInOrder: z.number().int().positive().nullable().optional(),
+  checkInDecisionAt: z.string().datetime().or(z.date()).nullable().optional(),
+  joinOrder: z.number().int().positive().optional(),
   createdAt: z.string().datetime().or(z.date()),
   updatedAt: z.string().datetime().or(z.date()),
   user: adminUserSchema.optional(),
+});
+
+export const checkInPassportSchema = z.object({
+  targetType: z.enum(["event", "place"]),
+  targetId: z.string().uuid(),
+  targetName: z.string(),
+  user: adminUserSchema.extend({
+    followerCount: z.number().int().nonnegative(),
+    plan: z.string().optional(),
+    profileVerifiedAt: z.string().datetime().or(z.date()).nullable().optional(),
+    media: z.array(z.object({ id: z.string().uuid(), url: z.string(), type: z.string() })),
+  }),
+  status: z.string(),
+  role: z.string(),
+  alreadyInside: z.boolean(),
+  checkedInAt: z.string().datetime().or(z.date()).nullable(),
+  checkInOrder: z.number().int().positive().nullable(),
+  checkInMethod: z.enum(["manual", "qr", "nfc"]).nullable(),
+  invitedBy: z.array(z.string()),
+  relatedFollowerCount: z.number().int().nonnegative(),
+  guestLists: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+  relatedPlace: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    status: z.string(),
+    role: z.string(),
+    checkedInAt: z.string().datetime().or(z.date()).nullable(),
+    order: z.number().int().positive().nullable(),
+    invitedBy: z.array(z.string()),
+  }).nullable().optional(),
+  tickets: z.array(z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    description: z.string().nullable(),
+    quantity: z.number().int().positive(),
+    unitPrice: z.number().nonnegative(),
+    currency: z.string(),
+    gateOpensAt: z.string().datetime().or(z.date()).nullable(),
+    gateClosesAt: z.string().datetime().or(z.date()).nullable(),
+  })),
 });
 
 export const adminMediaSchema = z.object({
@@ -1260,6 +1389,21 @@ export const adminCommentSchema = z.object({
   reportCount: z.number().int().nonnegative().optional(),
 });
 
+export const adminPostSchema = z.object({
+  id: z.string().uuid(),
+  authorId: z.string().uuid(),
+  body: z.string(),
+  visibility: postVisibilitySchema,
+  status: z.string(),
+  likeCount: z.number().int().nonnegative(),
+  commentCount: z.number().int().nonnegative(),
+  createdAt: z.string().datetime().or(z.date()),
+  updatedAt: z.string().datetime().or(z.date()),
+  author: adminUserSchema.optional(),
+  media: z.array(postMediaSchema).optional(),
+  reportCount: z.number().int().nonnegative().optional(),
+});
+
 export const adminPrivateMessageSchema = z.object({
   id: z.string().uuid(),
   senderId: z.string().uuid().nullable(),
@@ -1277,7 +1421,7 @@ export const privateChatMessageSchema = z.object({
   id: z.string().uuid(),
   senderId: z.string().uuid().nullable(),
   recipientId: z.string().uuid().nullable(),
-  body: z.string().min(1).max(5000),
+  body: z.string().max(5000),
   replyToId: z.string().uuid().nullable().optional(),
   attachmentUrl: z.string().nullable().optional(),
   attachmentType: z.string().nullable().optional(),
@@ -1460,6 +1604,7 @@ export type DiscoverySearch = z.infer<typeof discoverySearchSchema>;
 export type PublicProfile = z.infer<typeof publicProfileSchema>;
 export type TagSentiment = z.infer<typeof tagSentimentSchema>;
 export type TagAffinity = z.infer<typeof tagAffinitySchema>;
+export type ProfileTagSuggestion = z.infer<typeof profileTagSuggestionSchema>;
 export type TagComment = z.infer<typeof tagCommentSchema>;
 export type UserStatus = z.infer<typeof userStatusSchema>;
 export type EventParticipantStatus = z.infer<
@@ -1506,11 +1651,13 @@ export type AdminPlace = z.infer<typeof adminPlaceSchema>;
 export type Place = z.infer<typeof placeSchema>;
 export type PlaceList = z.infer<typeof placeListSchema>;
 export type PlaceMember = z.infer<typeof placeMemberSchema>;
+export type CheckInPassport = z.infer<typeof checkInPassportSchema>;
 export type PlaceMemberStatus = z.infer<typeof placeMemberStatusSchema>;
 export type PlaceMemberRole = z.infer<typeof placeMemberRoleSchema>;
 export type AdminMedia = z.infer<typeof adminMediaSchema>;
 export type ProfileMedia = z.infer<typeof profileMediaSchema>;
 export type AdminComment = z.infer<typeof adminCommentSchema>;
+export type AdminPost = z.infer<typeof adminPostSchema>;
 export type AdminPrivateMessage = z.infer<typeof adminPrivateMessageSchema>;
 export type PrivateChatMessage = z.infer<typeof privateChatMessageSchema>;
 export type MessageSearchResult = z.infer<typeof messageSearchResultSchema>;

@@ -12,7 +12,7 @@ export class ContentService {
   listMedia(targetType?: ReportTargetType, targetId?: string) {
     return this.prisma.mediaFile.findMany({
       where: { status: "active", contentType: targetType, contentId: targetId },
-      orderBy: [{ createdAt: "desc" }],
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       include: { uploadedBy: { select: { id: true, email: true, name: true, role: true, status: true } } }
     });
   }
@@ -35,13 +35,9 @@ export class ContentService {
       throw new BadRequestException("Bu içerik türüne medya yüklenemez.");
     }
     if (targetType === ReportTargetType.event) {
-      const event = await this.prisma.event.findUnique({ where: { id: targetId }, select: { createdById: true } });
-      if (!event) throw new NotFoundException("Etkinlik bulunamadı.");
-      if (event.createdById !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu etkinliğe medya yükleme yetkiniz yok.");
+      await this.ensureContentMediaManager(targetType, targetId, user);
     } else if (targetType === ReportTargetType.place) {
-      const place = await this.prisma.place.findUnique({ where: { id: targetId }, select: { createdById: true } });
-      if (!place) throw new NotFoundException("Mekân bulunamadı.");
-      if (place.createdById !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu mekâna medya yükleme yetkiniz yok.");
+      await this.ensureContentMediaManager(targetType, targetId, user);
     } else {
       const comment = await this.prisma.contentComment.findUnique({ where: { id: targetId }, select: { authorId: true, status: true } });
       if (!comment || comment.status !== "active") throw new NotFoundException("Yorum bulunamadı.");
@@ -50,6 +46,56 @@ export class ContentService {
     const count = await this.prisma.mediaFile.count({ where: { contentType: targetType, contentId: targetId, status: "active" } });
     if (count >= 20) throw new BadRequestException("Bir içerikte en fazla 20 medya bulunabilir.");
     return this.prisma.mediaFile.create({ data: { url, type, contentType: targetType, contentId: targetId, uploadedById: user.id, sortOrder: count } });
+  }
+
+  async reorderContentMedia(targetType: ReportTargetType, targetId: string, mediaIds: string[], user: User) {
+    if (targetType !== ReportTargetType.event && targetType !== ReportTargetType.place) throw new BadRequestException("Bu medya albümü sıralanamaz.");
+    await this.ensureContentMediaManager(targetType, targetId, user);
+    const current = await this.prisma.mediaFile.findMany({ where: { contentType: targetType, contentId: targetId, status: "active" }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] });
+    if (mediaIds.length !== current.length || new Set(mediaIds).size !== mediaIds.length || current.some((item) => !mediaIds.includes(item.id))) throw new BadRequestException("Sıralama albümdeki tüm medyaları tam olarak bir kez içermelidir.");
+    const first = current.find((item) => item.id === mediaIds[0]);
+    if (first && first.type !== "image") throw new BadRequestException("Albümün ilk medyası kapak olarak kullanılabilecek bir fotoğraf olmalıdır.");
+    await this.prisma.$transaction([
+      ...mediaIds.map((id, sortOrder) => this.prisma.mediaFile.update({ where: { id }, data: { sortOrder } })),
+      ...(first && targetType === ReportTargetType.event ? [this.prisma.event.update({ where: { id: targetId }, data: { coverImageUrl: first.url } })] : []),
+      ...(first && targetType === ReportTargetType.place ? [this.prisma.place.update({ where: { id: targetId }, data: { coverImageUrl: first.url } })] : []),
+    ]);
+    return this.listMedia(targetType, targetId);
+  }
+
+  async deleteContentMedia(targetType: ReportTargetType, targetId: string, mediaId: string, user: User) {
+    if (targetType !== ReportTargetType.event && targetType !== ReportTargetType.place) throw new BadRequestException("Bu medya albümünden silme yapılamaz.");
+    await this.ensureContentMediaManager(targetType, targetId, user);
+    const media = await this.prisma.mediaFile.findFirst({ where: { id: mediaId, contentType: targetType, contentId: targetId, status: "active" } });
+    if (!media) throw new NotFoundException("Medya bulunamadı.");
+    const remaining = await this.prisma.mediaFile.findMany({ where: { contentType: targetType, contentId: targetId, status: "active", id: { not: mediaId } }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] });
+    const nextCover = remaining.find((item) => item.type === "image")?.url ?? null;
+    await this.prisma.$transaction([
+      this.prisma.mediaFile.update({ where: { id: mediaId }, data: { status: "deleted" } }),
+      ...remaining.map((item, sortOrder) => this.prisma.mediaFile.update({ where: { id: item.id }, data: { sortOrder } })),
+      ...(media.sortOrder === 0 && targetType === ReportTargetType.event ? [this.prisma.event.update({ where: { id: targetId }, data: { coverImageUrl: nextCover } })] : []),
+      ...(media.sortOrder === 0 && targetType === ReportTargetType.place ? [this.prisma.place.update({ where: { id: targetId }, data: { coverImageUrl: nextCover } })] : []),
+    ]);
+    if (media.url.startsWith("/uploads/")) await unlink(resolve(process.cwd(), media.url.slice(1))).catch(() => undefined);
+    return this.listMedia(targetType, targetId);
+  }
+
+  private async ensureContentMediaManager(targetType: "event" | "place", targetId: string, user: User) {
+    if (["admin", "super_admin", "curator"].includes(user.role)) return;
+    if (targetType === ReportTargetType.event) {
+      const event = await this.prisma.event.findUnique({ where: { id: targetId }, select: { createdById: true } });
+      if (!event) throw new NotFoundException("Etkinlik bulunamadı.");
+      if (event.createdById === user.id) return;
+      const manager = await this.prisma.eventParticipant.findFirst({ where: { eventId: targetId, userId: user.id, status: { in: ["accepted", "attended"] }, role: { in: ["organizer", "manager"] } }, select: { id: true } });
+      if (manager) return;
+      throw new ForbiddenException("Bu etkinliğin medya albümünü yönetme yetkiniz yok.");
+    }
+    const place = await this.prisma.place.findUnique({ where: { id: targetId }, select: { createdById: true } });
+    if (!place) throw new NotFoundException("Mekân bulunamadı.");
+    if (place.createdById === user.id) return;
+    const manager = await this.prisma.placeMember.findFirst({ where: { placeId: targetId, userId: user.id, status: "accepted", role: { in: ["organizer", "manager"] } }, select: { placeId: true } });
+    if (manager) return;
+    throw new ForbiddenException("Bu mekânın medya albümünü yönetme yetkiniz yok.");
   }
 
   listProfileMedia(userId: string) {
@@ -225,14 +271,30 @@ export class ContentService {
     });
   }
 
-  createView(targetType: ReportTargetType, targetId: string, user?: User) {
+  createView(targetType: ReportTargetType, targetId: string, user?: User, source?: string, referrer?: string, kind = "detail") {
+    if (!new Set(["detail", "impression"]).has(kind)) throw new BadRequestException("Geçersiz görüntülenme türü.");
     return this.prisma.contentView.create({
       data: {
         targetType,
         targetId,
+        kind,
+        source: source?.trim().slice(0, 80) || null,
+        referrer: referrer?.trim().slice(0, 500) || null,
         user: user ? { connect: { id: user.id } } : undefined
       }
     });
+  }
+
+  createShare(targetType: ReportTargetType, targetId: string, channel: string, user?: User) {
+    const normalizedChannel = channel.trim().toLocaleLowerCase("en-US").replace(/[^a-z0-9_-]+/g, "_").slice(0, 40);
+    if (!normalizedChannel) throw new BadRequestException("Paylaşım kanalı gereklidir.");
+    return this.prisma.contentShare.create({ data: { targetType, targetId, channel: normalizedChannel, user: user ? { connect: { id: user.id } } : undefined } });
+  }
+
+  createAction(targetType: ReportTargetType, targetId: string, action: string, user?: User) {
+    const normalizedAction = action.trim().toLocaleLowerCase("en-US").replace(/[^a-z0-9_-]+/g, "_").slice(0, 40);
+    if (!normalizedAction) throw new BadRequestException("Etkileşim türü gereklidir.");
+    return this.prisma.contentAction.create({ data: { targetType, targetId, action: normalizedAction, user: user ? { connect: { id: user.id } } : undefined } });
   }
 
 }

@@ -21,9 +21,12 @@ import { createHash, randomBytes, randomInt, randomUUID } from "crypto";
 import { AuthService } from "../auth/auth.service";
 import { toSlug } from "../common/slug";
 import { MailService } from "../mail/mail.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { SmsService } from "../sms/sms.service";
 import {
   CreateEventDto,
+  CheckInDecisionDto,
   EventQueryDto,
   InviteParticipantDto,
 } from "./events.dto";
@@ -34,6 +37,8 @@ export class EventsService {
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
     private readonly authService: AuthService,
+    private readonly notifications: NotificationsService,
+    private readonly smsService: SmsService,
   ) {}
 
   async listPublicEvents(query: EventQueryDto, userId?: string) {
@@ -120,6 +125,65 @@ export class EventsService {
       };
     }
 
+    if (query.scope === "popular" && (query.city || query.country)) {
+      const localCount = await this.prisma.event.count({ where });
+      if (!localCount && query.city) {
+        delete where.city;
+        if (query.country) where.country = { equals: query.country, mode: "insensitive" };
+      }
+      if (!await this.prisma.event.count({ where })) {
+        delete where.city;
+        delete where.country;
+      }
+    }
+
+    if (query.scope === "individual") {
+      const [total, viewer, candidates] = await Promise.all([
+        this.prisma.event.count({ where }),
+        userId
+          ? this.prisma.user.findUnique({
+              where: { id: userId },
+              select: {
+                city: true,
+                country: true,
+                interestTags: { select: { tagId: true } },
+                following: { select: { followingId: true } },
+              },
+            })
+          : Promise.resolve(null),
+        this.prisma.event.findMany({
+          where,
+          orderBy: { startsAt: "asc" },
+          take: 2000,
+          include: {
+            tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
+            participants: {
+              where: { status: { in: ["accepted", "attended", "invited"] } },
+              select: { status: true, userId: true, user: { select: { followers: { where: { followerId: userId ?? "" }, select: { followerId: true }, take: 1 } } } },
+            },
+            _count: { select: { participants: { where: { status: { in: ["accepted", "attended"] } } } } },
+          },
+        }),
+      ]);
+      const interestTagIds = new Set(viewer?.interestTags.map((item) => item.tagId) ?? []);
+      const followingIds = new Set(viewer?.following.map((item) => item.followingId) ?? []);
+      const now = Date.now();
+      const scored = candidates.map((event) => {
+        const daysAway = Math.max(0, (event.startsAt.getTime() - now) / 86_400_000);
+        const timeScore = Math.max(0, 45 - Math.min(daysAway, 45));
+        const interestScore = event.tags.filter((item) => interestTagIds.has(item.tagId)).length * 24;
+        const networkScore = Math.min(32, event.participants.filter((item) => item.status !== "invited" && followingIds.has(item.userId)).length * 8);
+        const locationScore = viewer?.city && event.city?.localeCompare(viewer.city, undefined, { sensitivity: "accent" }) === 0
+          ? 28
+          : viewer?.country && event.country?.localeCompare(viewer.country, undefined, { sensitivity: "accent" }) === 0
+            ? 12
+            : 0;
+        return { event, score: timeScore + interestScore + networkScore + locationScore };
+      }).sort((left, right) => right.score - left.score || left.event.startsAt.getTime() - right.event.startsAt.getTime());
+      const items = scored.slice((page - 1) * pageSize, page * pageSize).map(({ event }) => this.mapEvent(event));
+      return { items, total, page, pageSize, hasNextPage: page * pageSize < total };
+    }
+
     const orderBy: Prisma.EventOrderByWithRelationInput[] =
       query.scope === "popular"
         ? [{ participants: { _count: "desc" } }, { startsAt: "asc" }]
@@ -133,7 +197,11 @@ export class EventsService {
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: {
-          tags: { include: { tag: true } },
+          tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
+          participants: {
+            where: { status: { in: ["accepted", "attended", "invited"] } },
+            select: { status: true, userId: true, user: { select: { followers: { where: { followerId: userId ?? "" }, select: { followerId: true }, take: 1 } } } },
+          },
           _count: {
             select: {
               participants: {
@@ -155,6 +223,7 @@ export class EventsService {
   }
 
   async getPublicEvent(slug: string, userId?: string) {
+    const publicCode = slug.match(/-(\d{6,})$/)?.[1];
     const blocks = userId
       ? await this.prisma.userBlock.findMany({
           where: { userId },
@@ -167,7 +236,11 @@ export class EventsService {
         .map((item) => item.targetId);
     const event = await this.prisma.event.findFirst({
       where: {
-        slug,
+        OR: [
+          { slug },
+          { legacySlugs: { has: slug } },
+          ...(publicCode ? [{ slug: { endsWith: `-${publicCode}` } }] : []),
+        ],
         status: "published",
         NOT: [
           { id: { in: blocked("event") } },
@@ -176,7 +249,7 @@ export class EventsService {
         ],
       },
       include: {
-        tags: { include: { tag: true } },
+        tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
         place: { select: { id: true, name: true, slug: true, address: true, city: true, country: true } },
         participants: userId ? { where: { userId }, select: { role: true, status: true }, take: 1 } : false,
         _count: {
@@ -199,15 +272,16 @@ export class EventsService {
   async listAdminEvents() {
     const events = await this.prisma.event.findMany({
       orderBy: { startsAt: "desc" },
-      include: { tags: { include: { tag: true } } },
+      include: { tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } },
     });
 
     return events.map(this.mapEvent);
   }
 
   async listManagedEvents(user: User) {
+    const elevated = ["admin", "super_admin", "curator"].includes(user.role);
     const events = await this.prisma.event.findMany({
-      where: {
+      where: elevated ? {} : {
         OR: [
           { createdById: user.id },
           {
@@ -227,7 +301,11 @@ export class EventsService {
         ],
       },
       orderBy: { startsAt: "desc" },
-      include: { tags: { include: { tag: true } } },
+      include: {
+        tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
+        ticketTypeRecords: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+        place: { select: { id: true, name: true, slug: true, address: true, city: true, country: true } },
+      },
     });
 
     return events.map(this.mapEvent);
@@ -237,14 +315,32 @@ export class EventsService {
     if (actor) await this.ensureCanManageParticipants(eventId, actor, true);
     const exists = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true },
+      select: { id: true, startsAt: true, endsAt: true },
     });
     if (!exists) throw new NotFoundException("Etkinlik bulunamadı.");
-    const [participants, comments, reactions, views, ticketOrders, refunds] = await Promise.all([
+    const [participants, participantDetails, comments, reactions, views, detailViews, viewSources, sharesByChannel, ticketOrders, orderDetails, refunds, ticketTypes, payments] = await Promise.all([
       this.prisma.eventParticipant.groupBy({
         by: ["status"],
         where: { eventId },
         _count: { _all: true },
+      }),
+      this.prisma.eventParticipant.findMany({
+        where: { eventId, status: { in: ["accepted", "attended"] } },
+        select: {
+          createdAt: true,
+          checkedInAt: true,
+          userId: true,
+          user: {
+            select: {
+              birthDate: true,
+              gender: true,
+              city: true,
+              country: true,
+              preferredLanguage: true,
+              interestTags: { select: { tag: { select: { name: true } } } },
+            },
+          },
+        },
       }),
       this.prisma.contentComment.count({
         where: { targetType: "event", targetId: eventId, status: "active" },
@@ -253,14 +349,24 @@ export class EventsService {
         where: { targetType: "event", targetId: eventId },
       }),
       this.prisma.contentView.count({
-        where: { targetType: "event", targetId: eventId },
+        where: { targetType: "event", targetId: eventId, kind: "impression" },
       }),
+      this.prisma.contentView.count({ where: { targetType: "event", targetId: eventId, kind: "detail" } }),
+      this.prisma.contentView.groupBy({ by: ["source"], where: { targetType: "event", targetId: eventId, kind: "detail" }, _count: { _all: true } }),
+      this.prisma.contentShare.groupBy({ by: ["channel"], where: { targetType: "event", targetId: eventId }, _count: { _all: true } }),
       this.prisma.eventTicketOrder.aggregate({
         where: { eventId, status: "paid" },
         _sum: { quantity: true, totalAmount: true },
         _count: { _all: true },
       }),
-      this.prisma.ticketRefund.count({ where: { eventId } }),
+      this.prisma.eventTicketOrder.findMany({
+        where: { eventId, status: "paid" },
+        select: { quantity: true, totalAmount: true, purchasedAt: true, createdAt: true, ticketType: { select: { name: true } } },
+        take: 50_000,
+      }),
+      this.prisma.ticketRefund.aggregate({ where: { eventId }, _count: { _all: true }, _sum: { amount: true } }),
+      this.prisma.eventTicketType.findMany({ where: { eventId }, select: { id: true, name: true, capacity: true, soldCount: true, price: true } }),
+      this.prisma.paymentTransaction.aggregate({ where: { eventId, status: { in: ["succeeded", "partially_refunded", "refunded"] } }, _sum: { grossAmount: true, platformFee: true, netAmount: true, refundedAmount: true } }),
     ]);
     const count = (status: string) =>
       participants.find((item) => item.status === status)?._count._all ?? 0;
@@ -268,6 +374,37 @@ export class EventsService {
     const attended = count("attended");
     const requested = count("requested");
     const invited = count("invited");
+    const ticketCapacity = ticketTypes.reduce((sum, ticket) => sum + ticket.capacity, 0);
+    const ticketSold = ticketTypes.reduce((sum, ticket) => sum + ticket.soldCount, 0);
+    const now = new Date();
+    const ageCounts = distributionCount(participantDetails.map((item) => ageBucket(item.user.birthDate, now)));
+    const genderCounts = distributionCount(participantDetails.map((item) => item.user.gender || "belirtilmedi"));
+    const countryCounts = distributionCount(participantDetails.map((item) => item.user.country || item.user.city || "belirtilmedi"), 9);
+    const interestCounts = distributionCount(participantDetails.flatMap((item) => item.user.interestTags.map((interest) => interest.tag.name)), 12);
+    const languageCounts = distributionCount(participantDetails.map((item) => item.user.preferredLanguage || "belirtilmedi"));
+    const decisionBuckets = { "15_gun_once": 0, "7_gun_once": 0, "3_gun_once": 0, "etkinlik_gunu": 0 };
+    for (const participant of participantDetails) {
+      const days = (exists.startsAt.getTime() - participant.createdAt.getTime()) / 86_400_000;
+      if (days >= 15) decisionBuckets["15_gun_once"] += 1;
+      else if (days >= 7) decisionBuckets["7_gun_once"] += 1;
+      else if (days >= 3) decisionBuckets["3_gun_once"] += 1;
+      else decisionBuckets.etkinlik_gunu += 1;
+    }
+    const participantIds = participantDetails.map((item) => item.userId);
+    const socialConnections = participantIds.length ? await this.prisma.memberScan.count({
+      where: {
+        createdAt: { gte: exists.startsAt, lte: exists.endsAt ?? new Date(exists.startsAt.getTime() + 86_400_000) },
+        OR: [{ scannerId: { in: participantIds } }, { memberId: { in: participantIds } }],
+      },
+    }) : 0;
+    const acceptedTotal = accepted + attended;
+    const shares = sharesByChannel.reduce((sum, item) => sum + item._count._all, 0);
+    const ticketTypeSold = distributionSum(orderDetails.map((order) => [order.ticketType.name, order.quantity] as const));
+    const ticketTypeRevenue = distributionSum(orderDetails.map((order) => [order.ticketType.name, Number(order.totalAmount)] as const));
+    const ticketSaleDay = distributionCount(orderDetails.map((order) => (order.purchasedAt ?? order.createdAt).toISOString().slice(0, 10)));
+    const ticketSaleHour = distributionCount(orderDetails.map((order) => hourBucket(order.purchasedAt ?? order.createdAt)));
+    const ticketGroup = distributionCount(orderDetails.map((order) => order.quantity === 1 ? "tekli" : order.quantity === 2 ? "2_kisilik" : "3_plus"));
+    const checkInHour = distributionCount(participantDetails.filter((item) => item.checkedInAt).map((item) => hourBucket(item.checkedInAt!)));
     return {
       accepted,
       attended,
@@ -276,19 +413,47 @@ export class EventsService {
       comments,
       reactions,
       views,
-      ticketsSold: ticketOrders._sum.quantity ?? 0,
+      shares,
+      ticketsSold: ticketOrders._sum.quantity ?? ticketSold,
       ticketOrders: ticketOrders._count._all,
       ticketRevenue: Number(ticketOrders._sum.totalAmount ?? 0),
-      refunds,
+      refunds: refunds._count._all,
+      refundAmount: Number(refunds._sum.amount ?? payments._sum.refundedAmount ?? 0),
+      ticketCapacity,
+      ticketsRemaining: Math.max(0, ticketCapacity - ticketSold),
+      averageTicketPrice: ticketSold > 0 ? Math.round(Number(payments._sum.grossAmount ?? 0) / ticketSold * 100) / 100 : 0,
+      platformCommission: Number(payments._sum.platformFee ?? 0),
+      organizerRevenue: Number(payments._sum.netAmount ?? 0),
       rsvpRate: invited + requested > 0 ? Math.round((accepted + attended) / (invited + requested + accepted + attended) * 100) : 0,
       attendanceRate: accepted + attended > 0 ? Math.round(attended / (accepted + attended) * 100) : 0,
-      engagementRate: views > 0 ? Math.round((comments + reactions) / views * 100) : 0,
+      engagementRate: detailViews > 0 ? Math.round((comments + reactions) / detailViews * 100) : 0,
+      detailViews,
+      socialConnections,
+      socialConnectionRate: attended > 0 ? Math.round(socialConnections / attended * 100) : 0,
+      ticketConversionRate: detailViews > 0 ? Math.round((ticketOrders._sum.quantity ?? ticketSold) / detailViews * 100) : 0,
+      averageConnectionsPerAttendee: attended > 0 ? Math.round(socialConnections / attended * 10) / 10 : 0,
+      ...prefixMetrics("source", Object.fromEntries(viewSources.map((item) => [item.source || "direct", item._count._all]))),
+      ...prefixMetrics("shareChannel", Object.fromEntries(sharesByChannel.map((item) => [item.channel, item._count._all]))),
+      ...prefixMetrics("age", ageCounts),
+      ...prefixMetrics("gender", genderCounts),
+      ...prefixMetrics("location", countryCounts),
+      ...prefixMetrics("interest", interestCounts),
+      ...prefixMetrics("language", languageCounts),
+      ...prefixMetrics("decision", decisionBuckets),
+      ...prefixMetrics("ticketTypeSold", ticketTypeSold),
+      ...prefixMetrics("ticketTypeRevenue", ticketTypeRevenue),
+      ...prefixMetrics("ticketSaleDay", ticketSaleDay),
+      ...prefixMetrics("ticketSaleHour", ticketSaleHour),
+      ...prefixMetrics("ticketGroup", ticketGroup),
+      ...prefixMetrics("checkInHour", checkInHour),
+      performanceScore: Math.min(100, Math.round(((detailViews ? acceptedTotal / detailViews : 0) * 40 + (acceptedTotal ? attended / acceptedTotal : 0) * 40 + (detailViews ? (comments + reactions) / detailViews : 0) * 20) * 100)),
     };
   }
 
   async createEvent(input: CreateEventDto, userId?: string) {
     await this.validateTicketPlatforms(input.ticketTypes, userId);
     const slug = await this.uniqueSlug(input.title);
+    const tagIds = await this.resolveEventTagIds(input.tagIds ?? [], input.lineup, userId);
 
     const event = await this.prisma.event.create({
       data: {
@@ -352,7 +517,7 @@ export class EventsService {
         createdBy: userId ? { connect: { id: userId } } : undefined,
         updatedBy: userId ? { connect: { id: userId } } : undefined,
         tags: {
-          create: input.tagIds?.map((tagId) => ({ tagId })) ?? [],
+          create: tagIds.map((tagId, sortOrder) => ({ tagId, sortOrder })),
         },
         participants: userId
           ? {
@@ -364,10 +529,10 @@ export class EventsService {
             }
           : undefined,
       },
-      include: { tags: { include: { tag: true } } },
+      include: { tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } },
     });
 
-    await this.refreshTagUsageCounts(input.tagIds ?? []);
+    await this.refreshTagUsageCounts(tagIds);
 
     return this.mapEvent(event);
   }
@@ -383,7 +548,7 @@ export class EventsService {
           ],
         },
       },
-      include: { event: { include: { tags: { include: { tag: true } } } } },
+      include: { event: { include: { tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } } } },
       orderBy: { event: { startsAt: "asc" } },
     });
     return participants.map((item) => ({
@@ -396,7 +561,7 @@ export class EventsService {
   async listParticipants(eventId: string, user: User) {
     await this.ensureCanManageParticipants(eventId, user);
 
-    return this.prisma.eventParticipant.findMany({
+    const participants = await this.prisma.eventParticipant.findMany({
       where: { eventId },
       orderBy: [{ role: "desc" }, { status: "asc" }, { createdAt: "asc" }],
       include: {
@@ -405,11 +570,44 @@ export class EventsService {
             id: true,
             email: true,
             name: true,
+            username: true,
             role: true,
+            accountType: true,
+            followerCount: true,
             status: true,
+            _count: { select: { followers: { where: { follower: { eventParticipations: { some: { eventId, status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] } } } } } } } },
+            uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
+            ownedTickets: { where: { eventId, status: { in: [OwnedTicketStatus.active, OwnedTicketStatus.used] } }, include: { ticketType: true } },
           },
         },
       },
+    });
+    const joinOrder = new Map([...participants].sort((a, b) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime()).map((participant, index) => [participant.userId, index + 1]));
+    return participants.map((participant) => {
+      const tickets = new Map<string, { id: string; name: string; description: string | null; quantity: number; unitPrice: number; currency: string; gateOpensAt: Date | null; gateClosesAt: Date | null }>();
+      for (const ticket of participant.user.ownedTickets) {
+        const current = tickets.get(ticket.ticketTypeId);
+        if (current) current.quantity += 1;
+        else tickets.set(ticket.ticketTypeId, { id: ticket.ticketTypeId, name: ticket.ticketType.name, description: ticket.ticketType.description, quantity: 1, unitPrice: Number(ticket.ticketType.price), currency: ticket.ticketType.currency, gateOpensAt: ticket.ticketType.gateOpensAt, gateClosesAt: ticket.ticketType.gateClosesAt });
+      }
+      const user = participant.user;
+      return {
+        ...participant,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          username: user.username,
+          role: user.role,
+          accountType: user.accountType,
+          followerCount: user.followerCount,
+          relatedFollowerCount: user._count?.followers ?? 0,
+          status: user.status,
+          avatarUrl: user.uploadedMedia[0]?.url ?? null,
+        },
+        joinOrder: joinOrder.get(participant.userId),
+        tickets: [...tickets.values()],
+      };
     });
   }
 
@@ -561,6 +759,7 @@ export class EventsService {
 
   async checkInWithTicket(eventId: string, token: string, actor: User) {
     await this.ensureCanManageParticipants(eventId, actor, true);
+    await this.ensureEventCheckInOpen(eventId);
     const participant = await this.prisma.eventParticipant.findUnique({
       where: { checkInTokenHash: this.hashCheckInToken(token) },
     });
@@ -576,11 +775,15 @@ export class EventsService {
     ) {
       throw new NotFoundException("QR bilet check-in için uygun değil.");
     }
+    const checkInOrder = await this.prisma.eventParticipant.count({ where: { eventId, checkedInAt: { not: null } } }) + 1;
     return this.prisma.eventParticipant.update({
       where: { id: participant.id },
       data: {
         status: EventParticipantStatus.attended,
         checkedInAt: new Date(),
+        checkInDecisionAt: new Date(),
+        checkInMethod: "qr",
+        checkInOrder,
       },
       include: {
         user: {
@@ -596,6 +799,163 @@ export class EventsService {
     });
   }
 
+  async previewCheckInWithTicket(eventId: string, token: string, method: "qr" | "nfc", actor: User) {
+    await this.ensureCanManageParticipants(eventId, actor, true);
+    const participant = await this.prisma.eventParticipant.findUnique({
+      where: { checkInTokenHash: this.hashCheckInToken(token) },
+      select: { eventId: true, userId: true },
+    });
+    if (!participant || participant.eventId !== eventId) throw new NotFoundException("QR bilet geçersiz.");
+    return this.getCheckInPassport(eventId, participant.userId, actor, method);
+  }
+
+  async getCheckInPassport(eventId: string, userId: string, actor: User, method: "manual" | "qr" | "nfc" = "manual") {
+    await this.ensureCanManageParticipants(eventId, actor, true);
+    await this.ensureEventCheckInOpen(eventId);
+    const participant = await this.prisma.eventParticipant.findUnique({
+      where: { eventId_userId: { eventId, userId } },
+      include: {
+        event: { select: { id: true, title: true, placeId: true, place: { select: { id: true, name: true } } } },
+        user: {
+          select: {
+            id: true, email: true, name: true, username: true, role: true, status: true,
+            accountType: true, memberPlan: true, businessPlan: true, followerCount: true, profileVerifiedAt: true,
+            uploadedMedia: {
+              where: { contentType: "user", status: "active" },
+              orderBy: [{ isProfilePicture: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
+              select: { id: true, url: true, type: true, isProfilePicture: true },
+              take: 12,
+            },
+            ownedTickets: {
+              where: { eventId, status: { in: [OwnedTicketStatus.active, OwnedTicketStatus.used] } },
+              include: { ticketType: true },
+            },
+          },
+        },
+      },
+    });
+    if (!participant) throw new NotFoundException("Katılımcı bulunamadı.");
+    const [invitations, guestLists, relatedFollowerCount, relatedPlaceMember, relatedPlaceInvitations] = await Promise.all([
+      this.prisma.eventInvitation.findMany({
+        where: { eventId, inviteeId: userId },
+        orderBy: { createdAt: "asc" },
+        include: { inviter: { select: { username: true, name: true } } },
+      }),
+      this.prisma.guestList.findMany({
+        where: { ownerId: actor.id, members: { some: { userId } } },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+      this.prisma.userFollow.count({
+        where: {
+          followingId: userId,
+          follower: { eventParticipations: { some: { eventId, status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] } } } },
+        },
+      }),
+      participant.event.placeId ? this.prisma.placeMember.findUnique({ where: { placeId_userId: { placeId: participant.event.placeId, userId } } }) : Promise.resolve(null),
+      participant.event.placeId ? this.prisma.placeInvitation.findMany({ where: { placeId: participant.event.placeId, inviteeId: userId }, include: { inviter: { select: { username: true, name: true } } }, orderBy: { createdAt: "asc" } }) : Promise.resolve([]),
+    ]);
+    const tickets = new Map<string, { id: string; name: string; description: string | null; quantity: number; unitPrice: number; currency: string; gateOpensAt: Date | null; gateClosesAt: Date | null }>();
+    for (const ticket of participant.user.ownedTickets) {
+      const current = tickets.get(ticket.ticketTypeId);
+      if (current) current.quantity += 1;
+      else tickets.set(ticket.ticketTypeId, { id: ticket.ticketTypeId, name: ticket.ticketType.name, description: ticket.ticketType.description, quantity: 1, unitPrice: Number(ticket.ticketType.price), currency: ticket.ticketType.currency, gateOpensAt: ticket.ticketType.gateOpensAt, gateClosesAt: ticket.ticketType.gateClosesAt });
+    }
+    const media = participant.user.uploadedMedia.map(({ id, url, type }) => ({ id, url, type }));
+    const avatarUrl = participant.user.uploadedMedia.find((item) => item.isProfilePicture)?.url ?? media[0]?.url ?? null;
+    return {
+      targetType: "event" as const,
+      targetId: eventId,
+      targetName: participant.event.title,
+      user: { id: participant.user.id, email: participant.user.email, name: participant.user.name, username: participant.user.username, role: participant.user.role, status: participant.user.status, accountType: participant.user.accountType, avatarUrl, followerCount: participant.user.followerCount, plan: this.getPassportPlan(participant.user), profileVerifiedAt: participant.user.profileVerifiedAt, media },
+      status: participant.status,
+      role: participant.role,
+      alreadyInside: participant.status === EventParticipantStatus.attended || Boolean(participant.checkedInAt),
+      checkedInAt: participant.checkedInAt,
+      checkInOrder: participant.checkInOrder,
+      checkInMethod: participant.checkInMethod ?? method,
+      invitedBy: invitations.map((item) => item.inviter.username ? `@${item.inviter.username}` : item.inviter.name),
+      relatedFollowerCount,
+      guestLists,
+      relatedPlace: participant.event.place && relatedPlaceMember ? { id: participant.event.place.id, name: participant.event.place.name, status: relatedPlaceMember.status, role: relatedPlaceMember.role, checkedInAt: relatedPlaceMember.checkedInAt, order: relatedPlaceMember.checkInOrder, invitedBy: relatedPlaceInvitations.map((item) => item.inviter.username ? `@${item.inviter.username}` : item.inviter.name) } : null,
+      tickets: [...tickets.values()],
+    };
+  }
+
+  private getPassportPlan(user: { role: string; accountType: string; memberPlan: string; businessPlan: string }) {
+    if (["admin", "super_admin"].includes(user.role)) return "Admin";
+    if (user.role === "curator") return "Küratör";
+    if (user.accountType === "corporate") return user.businessPlan === "starter" ? "Kurumsal Başlangıç" : `Kurumsal ${user.businessPlan}`;
+    return user.memberPlan === "free" ? "Standart" : user.memberPlan;
+  }
+
+  async decideCheckInPassport(eventId: string, userId: string, input: CheckInDecisionDto, actor: User) {
+    await this.ensureCanManageParticipants(eventId, actor, true);
+    await this.ensureEventCheckInOpen(eventId);
+    const participant = await this.prisma.eventParticipant.findUnique({ where: { eventId_userId: { eventId, userId } }, include: { event: { select: { title: true } } } });
+    if (!participant) throw new NotFoundException("Katılımcı bulunamadı.");
+    if (input.decision === "admit" && participant.status === EventParticipantStatus.attended) throw new ConflictException("Kullanıcı zaten check-in içeride.");
+    const refundableOrders = input.decision === "decline"
+      ? await this.prisma.eventTicketOrder.findMany({
+          where: {
+            eventId,
+            buyerId: userId,
+            status: TicketOrderStatus.paid,
+            payment: { isNot: null },
+            tickets: {
+              some: { ownerId: userId, status: OwnedTicketStatus.active },
+              every: { ownerId: userId, status: OwnedTicketStatus.active },
+            },
+          },
+          include: { payment: true },
+        })
+      : [];
+    const now = new Date();
+    const result = await this.prisma.$transaction(async (tx) => {
+      const checkInOrder = input.decision === "admit" ? await tx.eventParticipant.count({ where: { eventId, checkedInAt: { not: null } } }) + 1 : null;
+      const updated = await tx.eventParticipant.update({
+        where: { eventId_userId: { eventId, userId } },
+        data: input.decision === "admit"
+          ? { status: EventParticipantStatus.attended, checkedInAt: now, checkInDecisionAt: now, checkInMethod: input.method, checkInOrder }
+          : { status: EventParticipantStatus.declined, checkedInAt: null, checkInDecisionAt: now, checkInMethod: input.method, checkInOrder: null },
+        include: { user: { select: { id: true, email: true, name: true, username: true, role: true, status: true } } },
+      });
+      let refundedAmount = 0;
+      let refundedCurrency = "";
+      for (const order of refundableOrders) {
+        if (!order.payment) continue;
+        const reversal = Number(order.payment.netAmount);
+        const account = await tx.financialAccount.findUnique({ where: { userId: order.payment.payeeId } });
+        if (!account || Number(account.availableBalance) < reversal) {
+          throw new BadRequestException("Bilet iadesi için organizatör bakiyesi yetersiz; giriş reddi kaydedilmedi.");
+        }
+        await tx.financialAccount.update({ where: { userId: order.payment.payeeId }, data: { availableBalance: { decrement: reversal } } });
+        await tx.paymentTransaction.update({ where: { id: order.payment.id }, data: { status: PaymentStatus.refunded, refundedAmount: order.payment.grossAmount } });
+        await tx.ticketRefund.create({ data: { eventId, userId, paymentId: order.payment.id, amount: order.payment.grossAmount, currency: order.currency, provider: order.payment.provider, status: "refunded", reason: "Check-in kontrolünde giriş reddedildi." } });
+        await tx.ownedEventTicket.updateMany({ where: { orderId: order.id }, data: { status: OwnedTicketStatus.refunded } });
+        await tx.eventTicketType.update({ where: { id: order.ticketTypeId }, data: { soldCount: { decrement: order.quantity }, status: "active" } });
+        await tx.eventTicketOrder.update({ where: { id: order.id }, data: { status: TicketOrderStatus.refunded } });
+        refundedAmount += Number(order.payment.grossAmount);
+        refundedCurrency = order.currency;
+      }
+      return { updated, refundedAmount, refundedCurrency };
+    });
+    await this.notifications.dispatch({
+      userId,
+      topic: "event_invite",
+      type: input.decision === "admit" ? "event_check_in_admitted" : "event_check_in_declined",
+      title: input.decision === "admit" ? "Etkinliğe girişin onaylandı" : "Etkinliğe girişin onaylanmadı",
+      body: input.decision === "admit"
+        ? `${participant.event.title}: Hoş geldin, iyi eğlenceler.`
+        : result.refundedAmount > 0
+          ? `${participant.event.title}: Üzgünüz, etkinliğe kabul edilmediniz. ${result.refundedAmount} ${result.refundedCurrency} bilet ücretiniz iade edildi.`
+          : `${participant.event.title}: Üzgünüz, etkinliğe kabul edilmediniz.`,
+      targetType: "event",
+      targetId: eventId,
+    });
+    return result.updated;
+  }
+
   async inviteParticipant(
     eventId: string,
     input: InviteParticipantDto,
@@ -607,14 +967,50 @@ export class EventsService {
     }
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, title: true, slug: true },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        startsAt: true,
+        endsAt: true,
+        status: true,
+        participants: {
+          where: { userId: actor.id },
+          select: { status: true },
+          take: 1,
+        },
+      },
     });
 
-    if (!event) {
+    if (!event || event.status !== EventStatus.published) {
       throw new NotFoundException("Etkinlik bulunamadı.");
+    }
+    const cutoff = event.endsAt
+      ? event.endsAt.getTime() + 12 * 60 * 60 * 1000
+      : event.startsAt.getTime() + 24 * 60 * 60 * 1000;
+    if (Date.now() > cutoff) {
+      throw new BadRequestException("Bitmiş bir etkinliğe başkasını davet edemezsiniz. Etkinlik Düzenle sayfasındaki etkinlik bitiş zamanını güncelleyerek tekrar deneyin.");
+    }
+    const actorStatus = event.participants[0]?.status;
+    const invitationStatuses = new Set<EventParticipantStatus>([
+      EventParticipantStatus.accepted,
+      EventParticipantStatus.attended,
+      EventParticipantStatus.invited,
+    ]);
+    if (!canManage && (!actorStatus || !invitationStatuses.has(actorStatus))) {
+      throw new ForbiddenException("Sadece katılımcılar ve davetliler davet edebilir.");
     }
 
     const invitee = await this.resolveInvitee(input);
+
+    if (invitee.status === "active") {
+      const existingInvitation = await this.prisma.eventInvitation.findUnique({
+        where: { eventId_inviterId_inviteeId: { eventId, inviterId: actor.id, inviteeId: invitee.id } },
+        select: { id: true },
+      });
+      if (existingInvitation) throw new ConflictException("Bu kullanıcıyı bu etkinliğe daha önce davet ettiniz.");
+      await this.prisma.eventInvitation.create({ data: { eventId, inviterId: actor.id, inviteeId: invitee.id } });
+    }
 
     const participant = await this.prisma.eventParticipant.upsert({
       where: { eventId_userId: { eventId, userId: invitee.id } },
@@ -646,37 +1042,49 @@ export class EventsService {
         ? await this.authService.createInviteAcceptToken(invitee.id)
         : undefined;
 
-    await this.mailService.sendEventInviteEmail({
-      to: invitee.email,
-      name: invitee.name,
-      eventTitle: event.title,
-      eventSlug: event.slug,
-      invitedByName: actor.name,
-      acceptToken,
-    });
+    if (input.phone && invitee.phone) {
+      await this.smsService.sendEventInvite(
+        invitee.phone,
+        actor.name,
+        event.title,
+        event.slug,
+        acceptToken,
+      );
+    } else if (!invitee.email.endsWith("@invite.konnektora.local")) {
+      await this.mailService.sendEventInviteEmail({
+        to: invitee.email,
+        name: invitee.name,
+        eventTitle: event.title,
+        eventSlug: event.slug,
+        invitedByName: actor.name,
+        acceptToken,
+      });
+    }
 
     return participant;
   }
 
-  async updateParticipantStatus(
+  async updateParticipant(
     eventId: string,
     userId: string,
-    status: EventParticipantStatus,
+    input: { status?: EventParticipantStatus; role?: EventParticipantRole },
     actor: User,
   ) {
     await this.ensureCanManageParticipants(eventId, actor);
-
-    const participant = await this.prisma.eventParticipant.findUnique({
-      where: { eventId_userId: { eventId, userId } },
-    });
+    if (!input.status && !input.role) throw new BadRequestException("Katılımcı durumu veya rolü seçilmelidir.");
+    const [participant, event] = await Promise.all([
+      this.prisma.eventParticipant.findUnique({ where: { eventId_userId: { eventId, userId } } }),
+      this.prisma.event.findUnique({ where: { id: eventId }, select: { createdById: true } }),
+    ]);
 
     if (!participant) {
       throw new NotFoundException("Katılımcı bulunamadı.");
     }
 
+    if (input.role === EventParticipantRole.manager && event?.createdById !== actor.id && !["admin", "super_admin"].includes(actor.role)) throw new ForbiddenException("Etkinlik sahibi rolünü yalnızca etkinlik kurucusu değiştirebilir.");
     return this.prisma.eventParticipant.update({
       where: { eventId_userId: { eventId, userId } },
-      data: { status },
+      data: { ...(input.status ? { status: input.status } : {}), ...(input.role ? { role: input.role } : {}) },
       include: {
         user: {
           select: {
@@ -691,8 +1099,13 @@ export class EventsService {
     });
   }
 
+  async updateParticipantStatus(eventId: string, userId: string, status: EventParticipantStatus, actor: User) {
+    return this.updateParticipant(eventId, userId, { status }, actor);
+  }
+
   async checkInParticipant(eventId: string, userId: string, actor: User) {
     await this.ensureCanManageParticipants(eventId, actor);
+    await this.ensureEventCheckInOpen(eventId);
 
     const participant = await this.prisma.eventParticipant.findUnique({
       where: { eventId_userId: { eventId, userId } },
@@ -706,11 +1119,15 @@ export class EventsService {
       throw new NotFoundException("Check-in için uygun katılımcı bulunamadı.");
     }
 
+    const checkInOrder = await this.prisma.eventParticipant.count({ where: { eventId, checkedInAt: { not: null } } }) + 1;
     return this.prisma.eventParticipant.update({
       where: { eventId_userId: { eventId, userId } },
       data: {
         status: EventParticipantStatus.attended,
         checkedInAt: new Date(),
+        checkInDecisionAt: new Date(),
+        checkInMethod: "manual",
+        checkInOrder,
       },
       include: {
         user: {
@@ -733,6 +1150,9 @@ export class EventsService {
   ) {
     await this.validateTicketPlatforms(input.ticketTypes, userId);
     const previousTagIds = await this.getEventTagIds(id);
+    const nextTagIds = input.tagIds || input.lineup
+      ? await this.resolveEventTagIds(input.tagIds ?? previousTagIds, input.lineup, userId)
+      : null;
     const data: Prisma.EventUpdateInput = {
       title: input.title,
       summary: input.summary
@@ -771,30 +1191,78 @@ export class EventsService {
     };
 
     if (input.title) {
-      data.slug = await this.uniqueSlug(input.title, id);
+      const current = await this.prisma.event.findUnique({
+        where: { id },
+        select: { slug: true, legacySlugs: true },
+      });
+      const nextSlug = await this.uniqueSlug(input.title, id);
+      data.slug = nextSlug;
+      if (current && current.slug !== nextSlug) {
+        data.legacySlugs = {
+          set: [...new Set([...(current.legacySlugs ?? []), current.slug])],
+        };
+      }
     }
 
-    if (input.tagIds) {
+    if (nextTagIds) {
       data.tags = {
         deleteMany: {},
-        create: input.tagIds.map((tagId) => ({ tagId })),
+        create: nextTagIds.map((tagId, sortOrder) => ({ tagId, sortOrder })),
       };
     }
 
     const event = await this.prisma.event.update({
       where: { id },
       data,
-      include: { tags: { include: { tag: true } } },
+      include: { tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } },
     });
 
     if (input.ticketTypes) await this.syncTicketTypes(id, input.ticketTypes);
 
     await this.refreshTagUsageCounts([
       ...previousTagIds,
-      ...(input.tagIds ?? []),
+      ...(nextTagIds ?? []),
     ]);
 
     return this.mapEvent(event);
+  }
+
+  private async resolveEventTagIds(
+    explicitTagIds: string[],
+    lineup?: CreateEventDto["lineup"],
+    userId?: string,
+  ) {
+    const ids = new Set(explicitTagIds);
+    const sessionTitles = [...new Set((lineup ?? [])
+      .filter((item) => (item.type ?? "session") === "session")
+      .map((item) => item.title.trim())
+      .filter(Boolean))];
+    for (const title of sessionTitles) {
+      const slug = toSlug(title);
+      if (!slug) continue;
+      const existing = await this.prisma.tag.findUnique({
+        where: { slug },
+        select: { id: true, status: true },
+      });
+      if (existing?.status === "active") {
+        ids.add(existing.id);
+        continue;
+      }
+      if (!existing && userId) {
+        const created = await this.prisma.tag.create({
+          data: {
+            name: title,
+            slug,
+            status: "active",
+            createdById: userId,
+            updatedById: userId,
+          },
+          select: { id: true },
+        });
+        ids.add(created.id);
+      }
+    }
+    return [...ids];
   }
 
   private async syncTicketTypes(eventId: string, ticketTypes: NonNullable<CreateEventDto["ticketTypes"]>) {
@@ -876,7 +1344,7 @@ export class EventsService {
         await tx.eventTicketType.updateMany({ where: { id: order.ticketTypeId, soldCount: { gte: order.quantity } }, data: { soldCount: { decrement: order.quantity } } });
         await tx.eventTicketOrder.update({ where: { id: order.id }, data: { status: TicketOrderStatus.refunded } });
       }
-      return tx.event.update({ where: { id }, data: { status: EventStatus.archived, updatedBy: userId ? { connect: { id: userId } } : undefined }, include: { tags: { include: { tag: true } } } });
+      return tx.event.update({ where: { id }, data: { status: EventStatus.archived, updatedBy: userId ? { connect: { id: userId } } : undefined }, include: { tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } } });
     });
 
     await this.refreshTagUsageCounts(tagIds);
@@ -890,17 +1358,46 @@ export class EventsService {
   }
 
   private mapEvent(event: any) {
-    return {
+    const participantSummary = Array.isArray(event.participants) && event.participants.some((participant: any) => participant.user !== undefined)
+      ? event.participants
+      : null;
+    const mapped = {
       ...event,
       price: Number(event.price),
       startsAt: event.startsAt.toISOString(),
       endsAt: event.endsAt?.toISOString() ?? null,
       latitude: event.latitude == null ? null : Number(event.latitude),
       longitude: event.longitude == null ? null : Number(event.longitude),
-      attendeeCount: event._count?.participants ?? 0,
-      viewerParticipation: event.participants?.[0] ?? null,
+      attendeeCount: participantSummary
+        ? participantSummary.filter((participant: any) => participant.status === "accepted" || participant.status === "attended").length
+        : event._count?.participants ?? 0,
+      invitedCount: participantSummary?.filter((participant: any) => participant.status === "invited").length ?? 0,
+      followingAttendeeCount: participantSummary?.filter((participant: any) => participant.status !== "invited" && participant.user?.followers?.length).length ?? 0,
+      viewerParticipation: participantSummary ? null : event.participants?.[0] ?? null,
       tags: event.tags.map((eventTag: { tag: unknown }) => eventTag.tag),
+      ticketTypes: Array.isArray(event.ticketTypeRecords)
+        ? event.ticketTypeRecords.map((ticket: any) => ({
+            name: ticket.name,
+            ...(ticket.description ? { description: ticket.description } : {}),
+            price: Number(ticket.price),
+            currency: ticket.currency,
+            salesPlatform: ticket.salesPlatform,
+            ...(ticket.externalSalesUrl ? { externalSalesUrl: ticket.externalSalesUrl } : {}),
+            capacity: ticket.capacity,
+            ...(ticket.perUserLimit ? { perUserLimit: ticket.perUserLimit } : {}),
+            ...(ticket.saleStartsAt ? { saleStartsAt: ticket.saleStartsAt.toISOString() } : {}),
+            ...(ticket.saleEndsAt ? { saleEndsAt: ticket.saleEndsAt.toISOString() } : {}),
+            ...(ticket.gateOpensAt ? { gateOpensAt: ticket.gateOpensAt.toISOString() } : {}),
+            ...(ticket.gateClosesAt ? { gateClosesAt: ticket.gateClosesAt.toISOString() } : {}),
+            status: ticket.status,
+          }))
+        : event.ticketTypes,
     };
+    delete mapped.legacySlugs;
+    delete mapped.participants;
+    delete mapped._count;
+    delete mapped.ticketTypeRecords;
+    return mapped;
   }
 
   private hashCheckInToken(token: string) {
@@ -938,6 +1435,11 @@ export class EventsService {
 
   private async uniqueSlug(title: string, currentId?: string) {
     const base = toSlug(title) || "event";
+    if (currentId) {
+      const current = await this.prisma.event.findUnique({ where: { id: currentId }, select: { slug: true } });
+      const publicCode = current?.slug.match(/-(\d{6,})$/)?.[1];
+      if (publicCode) return `${base}-${publicCode}`;
+    }
     for (let attempt = 0; attempt < 20; attempt += 1) {
       const slug = `${base}-${randomInt(100000, 1000000)}`;
       const existing = await this.prisma.event.findFirst({ where: { slug, id: currentId ? { not: currentId } : undefined }, select: { id: true } });
@@ -999,11 +1501,18 @@ export class EventsService {
     if (input.phone) {
       const phone = input.phone.replace(/[\s()-]/g, "");
       const user = await this.prisma.user.findUnique({ where: { phone } });
-      if (!user)
-        throw new NotFoundException(
-          "Bu telefon numarasıyla bulunabilir bir Konnektora üyesi yok. Üyelik daveti için rehber davetini kullanın.",
-        );
-      return user;
+      if (user) return user;
+      const digest = createHash("sha256").update(phone).digest("hex").slice(0, 20);
+      return this.prisma.user.create({
+        data: {
+          email: `phone-${digest}@invite.konnektora.local`,
+          phone,
+          name: input.name?.trim() || phone,
+          passwordHash: await hash(randomUUID(), 10),
+          role: "user",
+          status: "invited",
+        },
+      });
     }
 
     if (input.name && !input.email) {
@@ -1093,6 +1602,15 @@ export class EventsService {
     if (!await this.canManageParticipants(eventId, user, allowCurator)) throw new ForbiddenException("Bu etkinliğin katılımcılarını yönetme yetkiniz yok.");
   }
 
+  private async ensureEventCheckInOpen(eventId: string) {
+    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { startsAt: true, endsAt: true } });
+    if (!event) throw new NotFoundException("Etkinlik bulunamadı.");
+    const cutoff = event.endsAt
+      ? event.endsAt.getTime() + 12 * 60 * 60 * 1000
+      : event.startsAt.getTime() + 24 * 60 * 60 * 1000;
+    if (Date.now() > cutoff) throw new BadRequestException("Bitmiş bir etkinlik için check-in kontrolü yapamazsınız. Etkinlik Düzenle sayfasındaki etkinlik bitiş zamanını güncelleyerek tekrar deneyin.");
+  }
+
   private async canManageParticipants(eventId: string, user: User, allowCurator = false) {
     if (["admin", "super_admin"].includes(user.role) || allowCurator && user.role === "curator") return true;
     const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { createdById: true } });
@@ -1101,4 +1619,39 @@ export class EventsService {
     const participant = await this.prisma.eventParticipant.findUnique({ where: { eventId_userId: { eventId, userId: user.id } }, select: { role: true, status: true } });
     return participant?.status === EventParticipantStatus.accepted && (participant.role === EventParticipantRole.organizer || participant.role === EventParticipantRole.manager);
   }
+}
+
+function ageBucket(birthDate: Date | null, now = new Date()) {
+  if (!birthDate) return "belirtilmedi";
+  let age = now.getFullYear() - birthDate.getFullYear();
+  if (now.getMonth() < birthDate.getMonth() || now.getMonth() === birthDate.getMonth() && now.getDate() < birthDate.getDate()) age -= 1;
+  if (age < 25) return "18_24";
+  if (age < 35) return "25_34";
+  if (age < 45) return "35_44";
+  return "45_plus";
+}
+
+function distributionCount(values: string[], limit = 100) {
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return Object.fromEntries([...counts.entries()].sort((left, right) => right[1] - left[1]).slice(0, limit));
+}
+
+function distributionSum(values: ReadonlyArray<readonly [string, number]>, limit = 100) {
+  const totals = new Map<string, number>();
+  for (const [key, value] of values) totals.set(key, (totals.get(key) ?? 0) + value);
+  return Object.fromEntries([...totals.entries()].sort((left, right) => right[1] - left[1]).slice(0, limit));
+}
+
+function hourBucket(value: Date) {
+  const hour = value.getHours();
+  return hour < 6 ? "00_06" : hour < 12 ? "06_12" : hour < 18 ? "12_18" : "18_24";
+}
+
+function prefixMetrics(prefix: string, values: Record<string, number>) {
+  return Object.fromEntries(Object.entries(values).map(([key, value]) => [`${prefix}_${metricKey(key)}`, value]));
+}
+
+function metricKey(value: string) {
+  return value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "belirtilmedi";
 }

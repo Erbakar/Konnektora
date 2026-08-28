@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
-  Building2,
   Globe2,
   Hash,
   MapPin,
@@ -16,6 +15,7 @@ import {
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { HomeEventTile } from "../components/HomeEventTile";
+import { PlaceCard } from "../components/PlaceCard";
 import { DiscoveryCard } from "../components/DiscoveryCard";
 import { RichText } from "../components/RichText";
 import {
@@ -92,13 +92,13 @@ export function HomePage() {
             "Etkinlik oluştur, davetli listelerini yönet ve topluluğunu güvenle büyüt.",
           organizer: "Organizatör araçları",
           communityFirst: "Önce topluluk",
-          connections: "Bağlantılar Konnektora'da kurulur",
+          connections: "Markalarınızı Konnektora'ya taşıyın.",
           connectionsCopy:
-            "Üyeler doğru insanlarla tanışmak, seçilmiş buluşmalara katılmak ve kalabalık gelmeden profesyonel ilişkiler kurmak için Konnektora'yı kullanır.",
+            "Kurumsal üyelik, mekân ve etkinlik oluşturmak ve bağlantılarınızı buraya taşımak için sunduğumuz araçlar ücretsiz. Kişiselleştirebileceğiniz özel davetli listelerini check-in sırasında görmek ya da işinizi büyütmek için ihtiyaç duyduğunuz gelişmiş istatistikler ile yapay zekâ içgörüleri için daha fazlasını keşfedin.",
           joinCommunity: "Topluluğa katıl",
           curatedEvents: "seçilmiş etkinlik",
           activeTags: "aktif ilgi alanı",
-          global: "varsayılan olarak global",
+          global: "çoklu dil ile varsayılan olarak global",
           finalTitle: "Kapılar açılmadan önce ağını kur.",
           finalCopy:
             "Konnektora; gerçek etkinlikler için yeterli yapıya, doğru kullanıcılarla gelişmek için gereken odağa sahip kontrollü bir topluluk deneyimi sunar.",
@@ -106,8 +106,8 @@ export function HomePage() {
         }
       : {
           eyebrow: "The curated community platform",
-          title: "Where intent becomes trusted connections.",
-          lead: "From startup demos to investor roundtables, Konnektora helps founders, operators and community builders discover events, manage guest lists and grow meaningful networks in one closed platform.",
+          title: "From interests to real-life connections.",
+          lead: "Konnektora is a social discovery platform that helps people discover one another through interests, events, places and shared passions, then connect in real life. It focuses on what people care about, what they want to do and who they can do it with.",
           explore: "Explore events",
           join: "Join the beta",
           searchPlaceholder: "Search anything",
@@ -148,13 +148,13 @@ export function HomePage() {
             "Create events, manage guest lists and keep your community accountable.",
           organizer: "Organizer tools",
           communityFirst: "Community-first",
-          connections: "Connections are made on Konnektora",
+          connections: "Bring your brands to Konnektora.",
           connectionsCopy:
-            "Members use Konnektora to meet the right people, join curated rooms, get invited to the right events and build professional relationships before the crowd arrives.",
+            "Business membership and the tools for creating places and events and bringing your connections here are free. Explore more for custom guest lists at check-in, advanced analytics and AI insights that help grow your business.",
           joinCommunity: "Join the community",
           curatedEvents: "curated events",
           activeTags: "active tags",
-          global: "global by default",
+          global: "multilingual and global by default",
           finalTitle: "Build the network before opening the doors.",
           finalCopy:
             "Konnektora is shaped for a controlled community launch with enough structure for real events and enough focus to improve with the right users.",
@@ -192,8 +192,8 @@ export function HomePage() {
     if (trendScope === "local" && discovery && !discovery.trendingTags.length) setTrendScope("global");
   }, [discovery, trendScope]);
   const { data: popularEventList } = useQuery({
-    queryKey: ["events", "home", "popular", discovery?.location],
-    queryFn: () => listEvents(new URLSearchParams({ scope: "popular", pageSize: "8", ...(discovery?.location ? { city: discovery.location } : {}) })),
+    queryKey: ["events", "home", "popular", discovery?.city, discovery?.country],
+    queryFn: () => listEvents(new URLSearchParams({ scope: "popular", pageSize: "8", ...(discovery?.city ? { city: discovery.city } : {}), ...(discovery?.country ? { country: discovery.country } : {}) })),
     enabled: discovery !== undefined,
   });
   const events = eventList?.items ?? [];
@@ -206,7 +206,7 @@ export function HomePage() {
   const popularEvents = popularEventList?.items ?? [];
   const activeAnnouncement = announcements.find((announcement) => {
     void announcementRevision;
-    return !localStorage.getItem(`konnektora_announcement_done_${announcement.id}`) && !sessionStorage.getItem(`konnektora_announcement_later_${announcement.id}`);
+    return announcement.target === "all" && !localStorage.getItem(`konnektora_announcement_done_${announcement.id}`) && !sessionStorage.getItem(`konnektora_announcement_later_${announcement.id}`);
   });
   const announcementCopy = activeAnnouncement ? localizeAnnouncement(activeAnnouncement.title, activeAnnouncement.body, language) : null;
   const dismissAnnouncement = (mode: "done" | "later") => {
@@ -456,7 +456,7 @@ export function HomePage() {
           <p>
             {language === "tr"
               ? "Sen diğer profil sayfaları arasında gezinirken diğer kullanıcılarla uyumunu yapay zekâ desteğiyle görüp, AI'dan beraber katılabileceğin etkinlikler hakkında dahi akıl alabilirsin. Üstelik mesajlaşma ücretsiz."
-              : "See the full community journey, from nearby events to trusted guest lists, in one place."}
+              : "While browsing profiles, use AI-assisted compatibility insights and even get suggestions for events you could attend together. Messaging is free, too."}
           </p>
           {!user ? <a className="corp-btn corp-btn-primary" href={publicSiteHref("/onboarding")}>
             {c.joinCommunity}
@@ -481,8 +481,7 @@ export function HomePage() {
         </div>
       </section>
 
-      {discovery ? (
-        <section className="corp-section home-trending-interests">
+      <section className="corp-section home-trending-interests">
           <header className="corp-section-head">
             <div>
               <span className="discovery-trends-icon"><Hash size={20} /></span>
@@ -495,10 +494,9 @@ export function HomePage() {
             </div>
           </header>
           <div className="home-trending-tag-cloud">
-            {discovery.trendingTags.map((item) => <Link key={item.id} to={item.href}>#{item.title.replace(/^#/, "")}</Link>)}
+            {(discovery?.trendingTags.length ? discovery.trendingTags : tags.slice().sort((a, b) => b.usageCount - a.usageCount).slice(0, 10).map((tag) => ({ id: tag.id, href: `/tags/${tag.slug}`, title: tag.name }))).map((item) => <Link key={item.id} to={item.href}>#{item.title.replace(/^#/, "")}</Link>)}
           </div>
         </section>
-      ) : null}
 
       {recentPlaces?.items.length ? (
         <section className="corp-section corp-section-muted">
@@ -507,10 +505,7 @@ export function HomePage() {
             <Link className="corp-link" to="/places">{language === "tr" ? "Tüm mekânlar" : "All places"}<ArrowRight size={18}/></Link>
           </div>
           <div className="corp-carousel">
-            {recentPlaces.items.map((place) => <Link className="home-place-tile" key={place.id} to={`/places/${place.slug}`}>
-              {place.coverImageUrl ? <img alt="" src={place.coverImageUrl}/> : <span className="home-place-fallback"><Building2 size={28}/></span>}
-              <span><strong>{place.name}</strong><small>{[place.city, place.country].filter(Boolean).join(", ") || (language === "tr" ? "Konum belirtilmedi" : "Location not specified")}</small></span>
-            </Link>)}
+            {recentPlaces.items.map((place) => <PlaceCard key={place.id} place={place} />)}
           </div>
         </section>
       ) : null}
@@ -580,9 +575,9 @@ export function HomePage() {
 
       <section className="corp-proof">
         <div className="corp-proof-copy">
-          <p className="corp-eyebrow">{language === "tr" ? "Önce topluluk" : c.communityFirst}</p>
-          <h2>{language === "tr" ? "Markalarınızı Konnektora'ya taşıyın." : c.connections}</h2>
-          <p>{language === "tr" ? "Kurumsal üyelik, mekân ve etkinlik oluşturmak ve bağlantılarınızı buraya taşımak için sunduğumuz araçlar ücretsiz. Kişiselleştirebileceğiniz özel davetli listelerini check-in sırasında görmek ya da işinizi büyütmek için ihtiyaç duyduğunuz gelişmiş istatistikler ile AI içgörüleri için daha fazlasını keşfedin." : c.connectionsCopy}</p>
+          <p className="corp-eyebrow">{c.communityFirst}</p>
+          <h2>{c.connections}</h2>
+          <p>{c.connectionsCopy}</p>
           <Link className="corp-btn corp-btn-primary" to="/business">
             {language === "tr" ? "Daha fazla" : "Learn more"}
           </Link>
@@ -600,7 +595,7 @@ export function HomePage() {
             <strong>
               <Globe2 size={28} />
             </strong>
-            <span>{language === "tr" ? "çoklu dil ile varsayılan olarak global" : c.global}</span>
+            <span>{c.global}</span>
           </div>
         </div>
       </section>

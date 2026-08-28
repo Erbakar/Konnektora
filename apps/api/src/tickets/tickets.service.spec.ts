@@ -5,7 +5,7 @@ describe("TicketsService", () => {
   const eventTicketType = { findUnique: jest.fn(), updateMany: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() };
   const paymentTransaction = { create: jest.fn() };
   const financialAccount = { upsert: jest.fn(), findUnique: jest.fn(), update: jest.fn() };
-  const eventTicketOrder = { create: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() };
+  const eventTicketOrder = { create: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn(), aggregate: jest.fn() };
   const eventParticipant = { upsert: jest.fn(), findFirst: jest.fn() };
   const prisma: any = { eventTicketType, paymentTransaction, financialAccount, eventTicketOrder, eventParticipant, $transaction: jest.fn((callback) => callback(prisma)) };
   const notifications = { dispatch: jest.fn() };
@@ -24,5 +24,24 @@ describe("TicketsService", () => {
 
   it("rejects quantities exceeding remaining stock", async () => {
     await expect(service.purchase("type-1", 5, buyer)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("issues a free ticket without creating a payment transaction", async () => {
+    eventTicketType.findUnique.mockResolvedValue({ ...type, price: 0, soldCount: 0 });
+    eventTicketOrder.create.mockResolvedValue({ id: "order-free", totalAmount: 0, unitPrice: 0, tickets: [{ id: "ticket-free" }] });
+
+    const result = await service.purchase("type-1", 1, buyer);
+
+    expect(paymentTransaction.create).not.toHaveBeenCalled();
+    expect(eventTicketOrder.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ totalAmount: 0, paymentId: undefined }) }));
+    expect(result.tickets).toHaveLength(1);
+  });
+
+  it("enforces the organizer's per-user ticket limit across purchases", async () => {
+    eventTicketType.findUnique.mockResolvedValue({ ...type, perUserLimit: 2, soldCount: 0 });
+    eventTicketOrder.aggregate.mockResolvedValue({ _sum: { quantity: 2 } });
+
+    await expect(service.purchase("type-1", 1, buyer)).rejects.toBeInstanceOf(BadRequestException);
+    expect(eventTicketType.updateMany).not.toHaveBeenCalled();
   });
 });

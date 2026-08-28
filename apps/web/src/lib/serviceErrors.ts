@@ -106,20 +106,22 @@ export function getServiceErrorPresentation(
   error: unknown,
   fallback = "İşlem tamamlanamadı. Bilgilerini kontrol edip yeniden dene.",
 ): ServiceErrorPresentation {
+  const english = typeof document !== "undefined" && document.documentElement.lang === "en";
   const shape = errorShape(error);
   const name = typeof shape.name === "string" ? shape.name : "";
   const message = rawMessage(error);
   const status = errorStatus(error);
   const safeDetail = friendlyBackendMessage(message);
+  const localizedDetail = english ? undefined : safeDetail;
   const offline =
     typeof navigator !== "undefined" && navigator.onLine === false;
 
   if (offline || (!status && /network|fetch|load failed/i.test(message))) {
     return {
       kind: "network",
-      title: "Bağlantı kurulamadı",
+      title: english ? "Could not connect" : "Bağlantı kurulamadı",
       message:
-        "İnternet bağlantını kontrol et. Bağlantı geri geldiğinde yeniden deneyebilirsin.",
+        english ? "Check your internet connection and try again when it is restored." : "İnternet bağlantını kontrol et. Bağlantı geri geldiğinde yeniden deneyebilirsin.",
       retryable: true,
     };
   }
@@ -127,9 +129,9 @@ export function getServiceErrorPresentation(
   if (name === "AbortError" || /timeout|timed out|zaman aşımı/i.test(message)) {
     return {
       kind: "timeout",
-      title: "İşlem biraz uzun sürdü",
+      title: english ? "The request took too long" : "İşlem biraz uzun sürdü",
       message:
-        "Servisten zamanında yanıt alınamadı. Bilgilerin kaybolmadı; yeniden deneyebilirsin.",
+        english ? "The service did not respond in time. Your information was not lost; please try again." : "Servisten zamanında yanıt alınamadı. Bilgilerin kaybolmadı; yeniden deneyebilirsin.",
       retryable: true,
       status,
     };
@@ -138,10 +140,10 @@ export function getServiceErrorPresentation(
   if (status === 401) {
     return {
       kind: "authentication",
-      title: "Giriş bilgilerini kontrol et",
+      title: english ? "Check your login details" : "Giriş bilgilerini kontrol et",
       message:
-        safeDetail ??
-        "Oturumun sona ermiş olabilir. Yeniden giriş yapıp işlemi tekrar dene.",
+        localizedDetail ??
+        (english ? "Your session may have expired. Log in again and retry the action." : "Oturumun sona ermiş olabilir. Yeniden giriş yapıp işlemi tekrar dene."),
       retryable: true,
       status,
     };
@@ -150,10 +152,10 @@ export function getServiceErrorPresentation(
   if (status === 403) {
     return {
       kind: "permission",
-      title: "Bu işlem için izin gerekiyor",
+      title: english ? "Permission is required" : "Bu işlem için izin gerekiyor",
       message:
-        safeDetail ??
-        "Hesabının bu işlemi yapma yetkisi bulunmuyor. Hesap türünü veya erişimlerini kontrol et.",
+        localizedDetail ??
+        (english ? "Your account is not authorised to perform this action. Check your account type or access." : "Hesabının bu işlemi yapma yetkisi bulunmuyor. Hesap türünü veya erişimlerini kontrol et."),
       retryable: false,
       status,
     };
@@ -162,10 +164,10 @@ export function getServiceErrorPresentation(
   if (status === 404) {
     return {
       kind: "not-found",
-      title: "İçerik bulunamadı",
+      title: english ? "Content not found" : "İçerik bulunamadı",
       message:
-        safeDetail ??
-        "Aradığın içerik kaldırılmış, taşınmış veya artık erişilebilir olmayabilir.",
+        localizedDetail ??
+        (english ? "The content may have been removed, moved or may no longer be accessible." : "Aradığın içerik kaldırılmış, taşınmış veya artık erişilebilir olmayabilir."),
       retryable: false,
       status,
     };
@@ -174,10 +176,10 @@ export function getServiceErrorPresentation(
   if (status === 409) {
     return {
       kind: "conflict",
-      title: "Bu bilgi zaten kullanılıyor",
+      title: english ? "This information is already in use" : "Bu bilgi zaten kullanılıyor",
       message:
-        safeDetail ??
-        "Girdiğin bilgiler mevcut bir kayıtla çakışıyor. Bilgileri değiştirip yeniden dene.",
+        localizedDetail ??
+        (english ? "The information conflicts with an existing record. Change it and try again." : "Girdiğin bilgiler mevcut bir kayıtla çakışıyor. Bilgileri değiştirip yeniden dene."),
       retryable: false,
       status,
     };
@@ -186,10 +188,10 @@ export function getServiceErrorPresentation(
   if (status === 400 || status === 422) {
     return {
       kind: "validation",
-      title: "Bazı bilgileri kontrol et",
+      title: english ? "Check some of the information" : "Bazı bilgileri kontrol et",
       message:
-        safeDetail ??
-        "Formdaki eksik veya hatalı alanları düzelttikten sonra yeniden deneyebilirsin.",
+        localizedDetail ??
+        (english ? "Correct the missing or invalid fields in the form and try again." : "Formdaki eksik veya hatalı alanları düzelttikten sonra yeniden deneyebilirsin."),
       retryable: false,
       status,
     };
@@ -198,8 +200,8 @@ export function getServiceErrorPresentation(
   if (status === 413) {
     return {
       kind: "validation",
-      title: "Dosya boyutu çok büyük",
-      message: "Daha küçük bir dosya seçip yeniden yüklemeyi dene.",
+      title: english ? "The file is too large" : "Dosya boyutu çok büyük",
+      message: english ? "Choose a smaller file and try uploading it again." : "Daha küçük bir dosya seçip yeniden yüklemeyi dene.",
       retryable: false,
       status,
     };
@@ -208,9 +210,9 @@ export function getServiceErrorPresentation(
   if (status === 429) {
     return {
       kind: "rate-limit",
-      title: "Biraz bekleyelim",
+      title: english ? "Please wait a moment" : "Biraz bekleyelim",
       message:
-        "Kısa sürede çok fazla istek gönderildi. Birkaç dakika sonra yeniden dene.",
+        english ? "Too many requests were sent in a short time. Try again in a few minutes." : "Kısa sürede çok fazla istek gönderildi. Birkaç dakika sonra yeniden dene.",
       retryable: true,
       status,
     };
@@ -219,9 +221,9 @@ export function getServiceErrorPresentation(
   if (status === 502 || status === 503 || status === 504) {
     return {
       kind: "server",
-      title: "Servis geçici olarak meşgul",
+      title: english ? "The service is temporarily busy" : "Servis geçici olarak meşgul",
       message:
-        "Konnektora şu anda bu işlemi tamamlayamıyor. Birkaç dakika sonra yeniden deneyebilirsin.",
+        english ? "Konnektora cannot complete this action right now. Try again in a few minutes." : "Konnektora şu anda bu işlemi tamamlayamıyor. Birkaç dakika sonra yeniden deneyebilirsin.",
       retryable: true,
       status,
     };
@@ -230,9 +232,9 @@ export function getServiceErrorPresentation(
   if (status && status >= 500) {
     return {
       kind: "server",
-      title: "Beklenmeyen bir servis sorunu oluştu",
+      title: english ? "An unexpected service error occurred" : "Beklenmeyen bir servis sorunu oluştu",
       message:
-        "İşlem tamamlanamadı. Biraz sonra yeniden dene; sorun sürerse destek ekibine ulaşabilirsin.",
+        english ? "The action could not be completed. Try again later or contact support if the problem continues." : "İşlem tamamlanamadı. Biraz sonra yeniden dene; sorun sürerse destek ekibine ulaşabilirsin.",
       retryable: true,
       status,
     };
@@ -240,8 +242,8 @@ export function getServiceErrorPresentation(
 
   return {
     kind: "unknown",
-    title: "İşlem tamamlanamadı",
-    message: safeDetail ?? fallback,
+    title: english ? "The action could not be completed" : "İşlem tamamlanamadı",
+    message: localizedDetail ?? (english && fallback === "İşlem tamamlanamadı. Bilgilerini kontrol edip yeniden dene." ? "The action could not be completed. Check your information and try again." : fallback),
     retryable: true,
     status,
   };

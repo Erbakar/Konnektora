@@ -1,13 +1,9 @@
 import type { Event } from "@konnektora/shared";
-import { CalendarDays, MapPin, Users } from "lucide-react";
-import { Link } from "react-router-dom";
-import { DistanceLabel } from "./DistanceLabel";
 import { useLanguage } from "../lib/i18n";
-import { resolveMediaUrl } from "../lib/api";
-import { formatEventDateRange } from "../lib/formats";
+import { EventCard } from "./EventCard";
 
 const turkishEventTitles: Record<string, string> = {
-  "global-startup-demo-night": "Global Startup Demo Gecesi",
+  "global-startup-demo-night-420001": "Global Startup Demo Gecesi",
   "ai-product-builders-breakfast": "Yapay Zekâ Ürün Geliştiricileri Kahvaltısı",
   "saas-growth-office-hours": "SaaS Büyüme Danışmanlığı",
   "climate-tech-founder-roundtable": "İklim Teknolojileri Kurucu Yuvarlak Masası",
@@ -27,33 +23,6 @@ const turkishEventTitles: Record<string, string> = {
 
 export function HomeEventTile({ event }: { event: Event }) {
   const { language } = useLanguage();
-  const visibilityLabel: Record<Event["visibility"], string> = language === "tr"
-    ? { open: "Herkese açık", approval_required: "Onay gerekli", invite_only: "Sadece davetli" }
-    : { open: "Open", approval_required: "Approval", invite_only: "Invite only" };
-  const place = [event.city, event.country].filter(Boolean).join(", ");
-  const location = event.format === "online"
-    ? "Online"
-    : event.format === "hybrid"
-      ? `Online & ${place || (language === "tr" ? "Mekân açıklanacak" : "Venue TBA")}`
-      : place || (language === "tr" ? "Mekân açıklanacak" : "Venue TBA");
   const title = language === "tr" ? turkishEventTitles[event.slug] ?? event.title : event.title;
-
-  return (
-    <Link className="home-event-tile" to={`/events/${event.slug}`}>
-      <div className="home-event-tile-media">
-        {event.coverImageUrl ? <img alt="" src={resolveMediaUrl(event.coverImageUrl)} /> : <div className="home-event-tile-fallback" />}
-        <span className="home-event-tile-badge">{visibilityLabel[event.visibility]}</span>
-      </div>
-      <div className="home-event-tile-body">
-        <h3>{title}</h3>
-        <p className="home-event-tile-meta">
-          <CalendarDays size={15} />
-          {formatEventDateRange(event.startsAt, event.endsAt, { locale: language === "tr" ? "tr-TR" : "en-US" })}
-        </p>
-        <p className="home-event-tile-location"><MapPin size={15} />{location}</p>
-        <p className="home-event-tile-location"><Users size={15} />{event.attendeeCount ?? 0} {language === "tr" ? "katılımcı" : "attendees"}</p>
-        <p className="home-event-tile-location"><DistanceLabel latitude={event.latitude} longitude={event.longitude}/></p>
-      </div>
-    </Link>
-  );
+  return <EventCard displayTitle={title} event={event} />;
 }

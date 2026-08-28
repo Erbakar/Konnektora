@@ -1,6 +1,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState } from "react";
+import { useLanguage } from "../lib/i18n";
 
 type Props = {
   addressName: string;
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function LocationPicker({ addressName, latitudeName = "latitude", longitudeName = "longitude", defaultAddress = "", defaultLatitude, defaultLongitude }: Props) {
+  const { language } = useLanguage();
   const initialLat = defaultLatitude ?? 41.0082;
   const initialLon = defaultLongitude ?? 28.9784;
   const [address, setAddress] = useState(defaultAddress);
@@ -50,7 +52,7 @@ export function LocationPicker({ addressName, latitudeName = "latitude", longitu
     const lat = Number(match[1]); const lon = Number(match[2]);
     if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return false;
     move(lat, lon);
-    setMessage("Koordinatlar haritada işaretlendi.");
+    setMessage(language === "tr" ? "Koordinatlar haritada işaretlendi." : "Coordinates marked on the map.");
     return true;
   }
 
@@ -58,14 +60,14 @@ export function LocationPicker({ addressName, latitudeName = "latitude", longitu
     if (!address.trim() || parseCoordinates(address)) return;
     setSearching(true); setMessage("");
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(address.trim())}`, { headers: { "Accept-Language": "tr" } });
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(address.trim())}`, { headers: { "Accept-Language": language } });
       const results = await response.json() as Array<{ lat: string; lon: string }>;
-      if (!results[0]) { setMessage("Adres bulunamadı; pini elle taşıyabilirsiniz."); return; }
+      if (!results[0]) { setMessage(language === "tr" ? "Adres bulunamadı; pini elle taşıyabilirsiniz." : "Address not found; you can move the pin manually."); return; }
       move(Number(results[0].lat), Number(results[0].lon));
-      setMessage("Adres haritada işaretlendi; gerekirse pini taşıyabilirsiniz.");
-    } catch { setMessage("Adres aranamadı; pini elle taşıyabilirsiniz."); }
+      setMessage(language === "tr" ? "Adres haritada işaretlendi; gerekirse pini taşıyabilirsiniz." : "Address marked on the map; move the pin if needed.");
+    } catch { setMessage(language === "tr" ? "Adres aranamadı; pini elle taşıyabilirsiniz." : "The address could not be searched; move the pin manually."); }
     finally { setSearching(false); }
   }
 
-  return <div className="location-picker"><label>Adres (veya enlem boylam)<span className="location-picker-address"><input maxLength={240} name={addressName} onBlur={() => parseCoordinates(address)} onChange={(event) => setAddress(event.target.value)} placeholder="Adres veya 41.0082, 28.9784" value={address}/><button disabled={searching} onClick={() => void locateAddress()} type="button">{searching ? "Aranıyor…" : "Haritada bul"}</button></span></label><div className="location-picker-map" ref={mapElement}/><input name={latitudeName} type="hidden" value={latitude}/><input name={longitudeName} type="hidden" value={longitude}/><small>{message || "Haritaya tıklayın veya pini sürükleyin."}</small></div>;
+  return <div className="location-picker"><label>{language === "tr" ? "Adres (veya enlem boylam)" : "Address (or latitude, longitude)"}<span className="location-picker-address"><input maxLength={240} name={addressName} onBlur={() => { if (!parseCoordinates(address)) void locateAddress(); }} onChange={(event) => setAddress(event.target.value)} placeholder={language === "tr" ? "Adres veya 41.0082, 28.9784" : "Address or 41.0082, 28.9784"} value={address}/><button disabled={searching} onClick={() => void locateAddress()} type="button">{searching ? language === "tr" ? "Aranıyor…" : "Searching…" : language === "tr" ? "Haritada bul" : "Find on map"}</button></span></label><div className="location-picker-map" ref={mapElement}/><input name={latitudeName} type="hidden" value={latitude}/><input name={longitudeName} type="hidden" value={longitude}/><small>{message || (language === "tr" ? "Adresten otomatik konum bulabilir, haritaya tıklayabilir veya pini sürükleyebilirsiniz." : "Find the location from the address automatically, click the map or drag the pin.")}</small></div>;
 }

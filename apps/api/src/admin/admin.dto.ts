@@ -101,6 +101,17 @@ export class AdminUserQueryDto {
   pageSize?: number;
 }
 
+export class AdminActivityLogQueryDto {
+  @IsOptional() @IsString() @MaxLength(120) q?: string;
+  @IsOptional() @IsString() @MaxLength(80) category?: string;
+  @IsOptional() @IsString() @MaxLength(40) action?: string;
+  @IsOptional() @IsUUID() actorId?: string;
+  @IsOptional() @IsString() from?: string;
+  @IsOptional() @IsString() to?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize?: number;
+}
+
 export class UpdateAdminUserDto {
   @IsOptional()
   @IsEnum(UserStatus)

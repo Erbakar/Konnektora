@@ -72,6 +72,17 @@ async function main() {
   );
 
   const faqCategoryBySlug = new Map(faqCategories.map((category) => [category.slug, category.id]));
+  await Promise.all(
+    [
+      { id: "10000000-0000-4000-8000-000000000011", name: "Genel geri bildirim", slug: "genel-geri-bildirim", description: "Öneri, görüş ve genel mesajlar" },
+      { id: "10000000-0000-4000-8000-000000000012", name: "İş birliği", slug: "is-birligi", description: "Marka, topluluk ve iş ortaklığı talepleri" },
+      { id: "10000000-0000-4000-8000-000000000013", name: "Teknik sorun", slug: "teknik-sorun", description: "Ürün kullanımı sırasında karşılaşılan teknik sorunlar" },
+    ].map((category) => prisma.cmsCategory.upsert({
+      where: { slug: category.slug },
+      update: { name: category.name, description: category.description, type: "write_to_us", status: "active" },
+      create: { ...category, type: "write_to_us", status: "active" },
+    })),
+  );
   const seededFaqs = [
     { id: "20000000-0000-4000-8000-000000000001", category: "hesap-ve-profil", title: "Profil bilgilerimi nasıl güncellerim?", body: "Hesap sayfasındaki Profil bölümünü açın. Bilgilerinizi düzenledikten sonra değişiklikleri kaydedin." },
     { id: "20000000-0000-4000-8000-000000000002", category: "hesap-ve-profil", title: "Hesabımı nasıl güvende tutabilirim?", body: "Benzersiz bir parola kullanın, iletişim bilgilerinizi doğrulayın ve tanımadığınız cihazlardaki oturumları kapatın." },
@@ -149,47 +160,47 @@ async function main() {
     [
       {
         name: "Konnektora Hub Berlin",
-        slug: "konnektora-hub-berlin",
+        slug: "konnektora-hub-berlin-310001",
         description: "Community meetup venue",
         country: "Germany",
         city: "Berlin",
         address: "Mitte",
-        coverImageUrl: null,
-        followerCount: 42,
-        inviteCount: 8
+        coverImageUrl: "https://images.unsplash.com/photo-1497366754035-f200968a6e72",
+        followerCount: 1,
+        inviteCount: 0
       },
       {
         name: "Galata Product House",
-        slug: "galata-product-house",
+        slug: "galata-product-house-310002",
         description: "Ürün ekipleri, bağımsız geliştiriciler ve kurucular için çalışma ve etkinlik alanı.",
         country: "Türkiye",
         city: "Istanbul",
         address: "Galata",
         coverImageUrl: "https://images.unsplash.com/photo-1497366754035-f200968a6e72",
-        followerCount: 118,
-        inviteCount: 24
+        followerCount: 1,
+        inviteCount: 0
       },
       {
         name: "Amsterdam Founder Loft",
-        slug: "amsterdam-founder-loft",
+        slug: "amsterdam-founder-loft-310003",
         description: "Founder breakfast, yatırımcı görüşmeleri ve küçük topluluk buluşmaları için sakin bir merkez.",
         country: "Netherlands",
         city: "Amsterdam",
         address: "De Pijp",
         coverImageUrl: "https://images.unsplash.com/photo-1497366811353-6870744d04b2",
-        followerCount: 86,
-        inviteCount: 16
+        followerCount: 1,
+        inviteCount: 0
       },
       {
         name: "London Community Studio",
-        slug: "london-community-studio",
+        slug: "london-community-studio-310004",
         description: "Demo geceleri, yaratıcı atölyeler ve küratörlü networking oturumları için esnek stüdyo.",
         country: "United Kingdom",
         city: "London",
         address: "Shoreditch",
         coverImageUrl: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4",
-        followerCount: 154,
-        inviteCount: 31
+        followerCount: 1,
+        inviteCount: 0
       }
     ].map((place) => prisma.place.upsert({
       where: { slug: place.slug },
@@ -200,6 +211,8 @@ async function main() {
         city: place.city,
         address: place.address,
         coverImageUrl: place.coverImageUrl,
+        followerCount: place.followerCount,
+        inviteCount: place.inviteCount,
         status: "active",
         updatedById: admin.id
       },
@@ -244,7 +257,7 @@ async function main() {
   const mockEvents = [
     {
       title: "Global Startup Demo Night",
-      slug: "global-startup-demo-night",
+      slug: "global-startup-demo-night-420001",
       summary: "Erken aşama girişim ekiplerinin ürünlerini kapalı topluluk içinde sunduğu tanıtım gecesi.",
       description:
         "Kurucular beş dakikalık ürün sunumları yapar, katılımcılar geri bildirim verir ve yatırımcılarla kontrollü tanışma alanında buluşur. Etkinlik herkese açıktır ve katılım Konnektora üzerinden yönetilir.",
@@ -259,7 +272,7 @@ async function main() {
     },
     {
       title: "AI Product Builders Breakfast",
-      slug: "ai-product-builders-breakfast",
+      slug: "ai-product-builders-breakfast-420002",
       summary: "Yapay zekâ ürünü geliştiren kurucu ve ürün ekipleri için sabah buluşması.",
       description:
         "Kapalı topluluk üyeleri ürün keşfi, kullanıcı görüşmeleri ve pazara çıkış kararlarını tartışır. Katılım onay gerektirir; organizatör talepleri misafir listesi üzerinden değerlendirir.",
@@ -274,7 +287,7 @@ async function main() {
     },
     {
       title: "SaaS Growth Office Hours",
-      slug: "saas-growth-office-hours",
+      slug: "saas-growth-office-hours-420003",
       summary: "SaaS kurucuları için büyüme, fiyatlandırma ve müşteri devamlılığı odaklı kapalı oturum.",
       description:
         "Katılımcılar kendi metriklerini getirir, küçük gruplarda problem çözme oturumlarına katılır ve deneyimli yöneticilerden geri bildirim alır. Yalnız davetlilere açık yapı, hassas metriklerin güvenli paylaşımı için tercih edilir.",
@@ -289,7 +302,7 @@ async function main() {
     },
     {
       title: "Climate Tech Founder Roundtable",
-      slug: "climate-tech-founder-roundtable",
+      slug: "climate-tech-founder-roundtable-420004",
       summary: "Climate tech girişimleri için yatırım, regülasyon ve pilot müşteri gündemi.",
       description:
         "Uluslararası kurucular iklim teknolojileri pazarındaki finansman dinamiklerini, kurumsal pilot süreçlerini ve topluluk desteklerini konuşur. Oturum sonunda katılımcılar takip listelerine eklenebilir.",
@@ -304,7 +317,7 @@ async function main() {
     },
     {
       title: "Founders & Operators Mixer",
-      slug: "founders-operators-mixer",
+      slug: "founders-operators-mixer-420005",
       summary: "Kurucu, yönetici ve topluluk liderleri için hızlı tanışma etkinliği.",
       description:
         "Katılımcılar Konnektora eşleşme mantığıyla ilgi alanlarına göre küçük gruplara ayrılır. Etkinlik boyunca davet ve takip özellikleri öne çıkar.",
@@ -319,7 +332,7 @@ async function main() {
     },
     {
       title: "Remote Builders Social",
-      slug: "remote-builders-social",
+      slug: "remote-builders-social-420006",
       summary: "Uzaktan çalışan üreticilerin şehir bağımsız tanışma ve ortak çalışma buluşması.",
       description:
         "Çevrim içi başlayan etkinlik, katılımcıların çalışma alanları ve proje hedeflerine göre küçük odalara ayrılmasıyla devam eder. Katılım listesi etkinlik sonrası iletişim için kullanılır.",
@@ -334,7 +347,7 @@ async function main() {
     },
     {
       title: "Investor Coffee Chats",
-      slug: "investor-coffee-chats",
+      slug: "investor-coffee-chats-420007",
       summary: "Yatırımcılar ve kurucular arasında kontrollü bire bir tanışma saatleri.",
       description:
         "Katılımcılar kısa profilleriyle başvurur; organizatör uygun eşleşmeleri onaylar ve misafir listesi üzerinden davet ve kabul durumlarını yönetir.",
@@ -349,7 +362,7 @@ async function main() {
     },
     {
       title: "Community Leaders Dinner",
-      slug: "community-leaders-dinner",
+      slug: "community-leaders-dinner-420008",
       summary: "Uluslararası topluluk yöneticileri için yalnız davetlilere açık akşam yemeği.",
       description:
         "Kapalı topluluk moderasyonu, etkinlik kalite standardı ve yüz yüze buluşma güvenliği konuşulur. Katılım yalnızca organizatör davetiyle mümkündür.",
@@ -364,7 +377,7 @@ async function main() {
     },
     {
       title: "Seed Funding Readiness Clinic",
-      slug: "seed-funding-readiness-clinic",
+      slug: "seed-funding-readiness-clinic-420009",
       summary: "Tohum yatırım turuna hazırlanan girişimler için sunum, metrik ve veri odası kliniği.",
       description:
         "Kurucular yatırım hazırlıklarını uzmanlarla gözden geçirir. Etkinlik detayındaki misafir listesi, yatırımcı ve kurucu rollerini takip etmek için kullanılır.",
@@ -379,7 +392,7 @@ async function main() {
     },
     {
       title: "Angel Investor AMA",
-      slug: "angel-investor-ama",
+      slug: "angel-investor-ama-420010",
       summary: "Melek yatırımcılarla soru-cevap ve yatırım değerlendirme oturumu.",
       description:
         "Katılımcılar sorularını önceden gönderir, organizatör soruları gruplar ve canlı oturumda cevapları yönetir. Katılım listesi daha sonra iletişim kurmak için saklanır.",
@@ -394,7 +407,7 @@ async function main() {
     },
     {
       title: "VC Reverse Pitch",
-      slug: "vc-reverse-pitch",
+      slug: "vc-reverse-pitch-420011",
       summary: "Girişim sermayesi fonlarının tez ve yatırım kriterlerini kuruculara anlattığı etkinlik.",
       description:
         "Bu formatta yatırımcılar sahneye çıkar ve kurucular hangi fonla görüşmek istediklerini seçer. Misafir listesi rolleri organizatör, yatırımcı ve katılımcı olarak ayrıştırılır.",
@@ -409,7 +422,7 @@ async function main() {
     },
     {
       title: "Impact Capital Roundtable",
-      slug: "impact-capital-roundtable",
+      slug: "impact-capital-roundtable-420012",
       summary: "Etki yatırımcıları ve sosyal girişim kurucuları için yuvarlak masa.",
       description:
         "Katılımcılar etki ölçümü, yatırım yapısı ve uluslararası büyüme konularını tartışır. Yalnız davetlilere açık yapı, nitelikli ve dengeli bir katılımcı grubu sağlar.",
@@ -424,7 +437,7 @@ async function main() {
     },
     {
       title: "Solo Founder Accountability Sprint",
-      slug: "solo-founder-accountability-sprint",
+      slug: "solo-founder-accountability-sprint-420013",
       summary: "Tek başına çalışan kurucular için haftalık hedef, ilerleme ve destek oturumu.",
       description:
         "Kurucular haftalık hedeflerini paylaşır, diğer katılımcılarla eşleşir ve ilerleme takibi yapar. Konnektora katılım listesi düzenli katılımı takip eder.",
@@ -439,7 +452,7 @@ async function main() {
     },
     {
       title: "Founder Mental Load Circle",
-      slug: "founder-mental-load-circle",
+      slug: "founder-mental-load-circle-420014",
       summary: "Kurucuların yalnızlık, stres ve karar yükünü konuştuğu kapalı destek grubu.",
       description:
         "Güvenli bir ortamda deneyim paylaşımı yapılır. Yalnız davetlilere açık görünürlük ve küçük misafir listesi, oturum kalitesini korumak için kullanılır.",
@@ -454,7 +467,7 @@ async function main() {
     },
     {
       title: "Co-Founder Matching Lab",
-      slug: "co-founder-matching-lab",
+      slug: "co-founder-matching-lab-420015",
       summary: "Yeni proje kurmak isteyen kurucu adayları için kontrollü eşleşme atölyesi.",
       description:
         "Katılımcılar yetkinlik, ilgi ve çalışma tarzına göre eşleştirilir. Organizatör, onay gerektiren akışta uygun profilleri kabul eder.",
@@ -469,7 +482,7 @@ async function main() {
     },
     {
       title: "Founder Story Night",
-      slug: "founder-story-night",
+      slug: "founder-story-night-420016",
       summary: "Kurucuların başarısızlık, yön değişikliği ve büyüme hikayelerini paylaştığı gece.",
       description:
         "Kısa sahne anlatımları ve sonrasında küçük grup konuşmaları yapılır. Benzer etkinlik ve ilgi alanı bağlantıları yeni keşifler için kullanılır.",

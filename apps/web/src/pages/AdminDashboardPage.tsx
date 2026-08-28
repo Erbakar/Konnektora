@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Activity,
   AlertTriangle,
   CalendarCheck,
   Check,
@@ -19,6 +20,7 @@ import {
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
+import { AnnouncementPopup } from "../components/AnnouncementPopup";
 import {
   type AdminEventInput,
   type AnnouncementInput,
@@ -53,11 +55,13 @@ import {
   listEventParticipants,
   getAdminUser,
   listAdminAnnouncements,
+  listAdminActivityLogs,
   listAdminCmsCategories,
   listAdminEvents,
   listAdminFaqs,
   listAdminMessages,
   listAdminComments,
+  listAdminPosts,
   listAdminMedia,
   listProfileVerifications,
   listAdminPlaces,
@@ -79,6 +83,7 @@ import {
   updateAdminFaq,
   updateAdminMessage,
   updateAdminComment,
+  updateAdminPost,
   updateAdminMedia,
   reviewProfileVerification,
   getProfileVerificationEvidence,
@@ -95,6 +100,8 @@ import {
 } from "../lib/api";
 import type {
   AdminComment,
+  AdminActivityLog,
+  AdminPost,
   AdminManagedUser,
   AdminManagedUserDetail,
   AdminMedia,
@@ -126,12 +133,15 @@ type AdminSection =
   | "dashboard"
   | "users"
   | "roles"
+  | "activity-logs"
   | "events"
   | "places"
   | "media"
+  | "posts"
   | "comments"
   | "private-messages"
   | "tags"
+  | "report-rules"
   | "reports"
   | "messages"
   | "cms"
@@ -149,7 +159,8 @@ const NAV_GROUPS: Array<{
     label: "Kullanıcılar",
     items: [
       { id: "users", label: "Üye Yönetimi", Icon: Users },
-      { id: "roles", label: "Rol / Yetkiler", Icon: ShieldCheck }
+      { id: "roles", label: "Rol / Yetkiler", Icon: ShieldCheck },
+      { id: "activity-logs", label: "User activity log", Icon: Activity }
     ]
   },
   {
@@ -158,6 +169,7 @@ const NAV_GROUPS: Array<{
       { id: "events", label: "Etkinlikler", Icon: CalendarCheck },
       { id: "places", label: "Mekanlar", Icon: LayoutDashboard },
       { id: "media", label: "Medya", Icon: FileText },
+      { id: "posts", label: "Post'lar", Icon: FileText },
       { id: "comments", label: "Yorumlar", Icon: MessageSquare },
       { id: "tags", label: "İlgi Alanları", Icon: Tags }
     ]
@@ -165,6 +177,7 @@ const NAV_GROUPS: Array<{
   {
     label: "Moderasyon",
     items: [
+      { id: "report-rules", label: "Kural yönetimi", Icon: ShieldCheck },
       { id: "reports", label: "Şikayetler", Icon: AlertTriangle },
       { id: "private-messages", label: "Özel Mesajlar", Icon: MessageSquare },
       { id: "messages", label: "Kullanıcı Mesajları", Icon: MessageSquare }
@@ -183,12 +196,15 @@ const SECTION_TITLES: Record<AdminSection, string> = {
   dashboard: "Dashboard",
   users: "Üye Yönetimi",
   roles: "Rol / Yetkiler",
+  "activity-logs": "User activity log",
   events: "Etkinlikler",
   places: "Mekanlar",
   media: "Medya",
+  posts: "Post'lar",
   comments: "Yorumlar",
   "private-messages": "Özel Mesajlar",
   tags: "İlgi Alanları",
+  "report-rules": "Kural yönetimi",
   reports: "Şikayetler",
   messages: "Kullanıcı Mesajları",
   cms: "CMS / SSS / Duyurular / Politikalar",
@@ -200,28 +216,6 @@ const ADMIN_SECTIONS = new Set<AdminSection>(Object.keys(SECTION_TITLES) as Admi
 function isAdminSection(value: string | null): value is AdminSection {
   return value !== null && ADMIN_SECTIONS.has(value as AdminSection);
 }
-
-const REPORT_RULE_TITLE_OPTIONS: Record<ReportTargetType, string[]> = {
-  event: [
-    "Spam veya yanıltıcı etkinlik",
-    "Uygunsuz etkinlik içeriği",
-    "Sahte veya hatalı etkinlik bilgisi",
-    "Güvenlik riski taşıyan etkinlik"
-  ],
-  tag: ["Spam tag", "Yanıltıcı tag", "Uygunsuz tag adı", "Tekrarlayan / mükerrer tag"],
-  user: ["Spam kullanıcı", "Taciz veya kötüye kullanım", "Sahte profil", "Topluluk kurallarını ihlal"],
-  media: ["Uygunsuz medya", "Telif / hak ihlali", "Şiddet veya hassas medya", "Yanıltıcı medya"],
-  place: ["Yanıltıcı mekan bilgisi", "Uygunsuz mekan içeriği", "Spam mekan", "Güvenlik riski taşıyan mekan"],
-  username: ["Uygunsuz kullanıcı adı", "Taklit kullanıcı adı", "Marka/kişi hakkı ihlali", "Yanıltıcı kullanıcı adı"],
-  website_url: ["Zararlı web adresi", "Spam web adresi", "Yanıltıcı web adresi", "Uygunsuz web adresi"],
-  tag_comment: ["Uygunsuz tag yorumu", "Spam tag yorumu", "Taciz içeren tag yorumu", "Yanıltıcı tag yorumu"],
-  event_comment: ["Uygunsuz etkinlik yorumu", "Spam etkinlik yorumu", "Taciz içeren etkinlik yorumu", "Yanıltıcı etkinlik yorumu"],
-  place_comment: ["Uygunsuz mekan yorumu", "Spam mekan yorumu", "Taciz içeren mekan yorumu", "Yanıltıcı mekan yorumu"],
-  comment_reply: ["Uygunsuz yorum cevabı", "Spam yorum cevabı", "Taciz içeren yorum cevabı", "Yanıltıcı yorum cevabı"],
-  private_message: ["Uygunsuz özel mesaj", "Spam özel mesaj", "Taciz içeren özel mesaj", "Güvenlik riski taşıyan özel mesaj"],
-  post: ["Uygunsuz gönderi", "Spam gönderi", "Taciz içeren gönderi", "Yanıltıcı gönderi"],
-  post_comment: ["Uygunsuz gönderi yorumu", "Spam gönderi yorumu", "Taciz içeren gönderi yorumu", "Yanıltıcı gönderi yorumu"]
-};
 
 const REPORT_TARGET_OPTIONS: Array<{ value: ReportTargetType; label: string }> = [
   { value: "post", label: "Gönderi" },
@@ -290,12 +284,17 @@ const ADMIN_PERMISSION_GROUPS: Array<{ label: string; description: string; permi
   {
     label: "Üyeler",
     description: "Üye listesi, detayları ve rol grubu atamaları.",
-    permissions: ["users.manage", "roles.manage"]
+    permissions: ["users.manage", "roles.manage", "private_messages.manage", "user_activity.manage"]
   },
   {
     label: "İçerik",
     description: "İlgi alanları, etkinlikler ve sonraki faz içerik modülleri.",
-    permissions: ["tags.manage", "events.manage", "places.manage", "comments.manage", "media.manage"]
+    permissions: ["tags.manage", "events.manage", "places.manage", "posts.manage", "comments.manage", "media.manage"]
+  },
+  {
+    label: "Muhasebe & Finans",
+    description: "Finans, gelirler, faturalar, ödeme hesapları ve KYC kontrolleri.",
+    permissions: ["finance.manage"]
   }
 ];
 
@@ -366,6 +365,11 @@ export function AdminDashboardPage() {
   const commentsQuery = useQuery({
     queryKey: ["admin-comments"],
     queryFn: () => listAdminComments(),
+    enabled: Boolean(token)
+  });
+  const postsQuery = useQuery({
+    queryKey: ["admin-posts"],
+    queryFn: () => listAdminPosts(),
     enabled: Boolean(token)
   });
   const privateMessagesQuery = useQuery({
@@ -511,6 +515,10 @@ export function AdminDashboardPage() {
   const updateCommentMutation = useMutation({
     mutationFn: (input: { id: string; status: string }) => updateAdminComment(input.id, input.status),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-comments"] })
+  });
+  const updatePostMutation = useMutation({
+    mutationFn: (input: { id: string; status: string }) => updateAdminPost(input.id, input.status),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-posts"] })
   });
   const updatePrivateMessageMutation = useMutation({
     mutationFn: (input: { id: string; status: string }) => updateAdminPrivateMessage(input.id, input.status),
@@ -744,12 +752,14 @@ export function AdminDashboardPage() {
   const cmsCategories = cmsCategoriesQuery.data ?? [];
   const faqs = faqsQuery.data ?? [];
   const announcements = announcementsQuery.data ?? [];
+  const activeAdminAnnouncements = announcements.filter((announcement) => announcement.target === "admins" && announcement.status === "active" && new Date(announcement.publishAt).getTime() <= Date.now() && (!announcement.expiresAt || new Date(announcement.expiresAt).getTime() > Date.now()));
   const policies = policiesQuery.data ?? [];
 
   const openReports = reports.filter((r) => r.status === "open").length;
 
   return (
     <div className="admin-layout">
+      <AnnouncementPopup announcements={activeAdminAnnouncements}/>
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
           <span className="admin-sidebar-title">
@@ -957,6 +967,8 @@ export function AdminDashboardPage() {
           />
         )}
 
+        {activeSection === "activity-logs" && <ActivityLogAdminPanel />}
+
         {activeSection === "events" && (
           <EventAdminPanel
             events={events}
@@ -999,6 +1011,19 @@ export function AdminDashboardPage() {
           </>
         )}
 
+        {activeSection === "posts" && (
+          <AdminContentPanel
+            title="Post Yönetimi"
+            description="İlgi alanı, etkinlik ve mekânlarda yayınlanan postları tek yerden yönetin."
+            items={postsQuery.data ?? []}
+            isPending={updatePostMutation.isPending}
+            onStatusChange={(id, status) => updatePostMutation.mutate({ id, status })}
+            renderPrimary={(item: AdminPost) => <RichText text={item.body} />}
+            renderSecondary={(item: AdminPost) => `${item.author?.username ? `@${item.author.username}` : item.author?.email ?? "Bilinmiyor"} · ${item.visibility}`}
+            renderMeta={(item: AdminPost) => `${item.likeCount} beğeni · ${item.commentCount} yorum · ${item.media?.length ?? 0} medya · ${item.reportCount ?? 0} şikayet`}
+          />
+        )}
+
         {activeSection === "comments" && (
           <AdminContentPanel
             title="Yorum Yönetimi"
@@ -1013,15 +1038,10 @@ export function AdminDashboardPage() {
         )}
 
         {activeSection === "private-messages" && (
-          <AdminContentPanel
-            title="Özel Mesaj Yönetimi"
-            description="Kullanıcılar arasındaki raporlanabilir özel mesaj içeriklerini yönet."
+          <PrivateMessageAdminPanel
             items={privateMessagesQuery.data ?? []}
             isPending={updatePrivateMessageMutation.isPending}
             onStatusChange={(id, status) => updatePrivateMessageMutation.mutate({ id, status })}
-            renderPrimary={(item: AdminPrivateMessage) => <RichText text={item.body} />}
-            renderSecondary={(item: AdminPrivateMessage) => `${item.sender?.email ?? "Bilinmiyor"} → ${item.recipient?.email ?? "Bilinmiyor"}`}
-            renderMeta={(item: AdminPrivateMessage) => `${item.reportCount ?? 0} şikayet · ${formatDateTime(item.createdAt)}`}
           />
         )}
 
@@ -1038,13 +1058,20 @@ export function AdminDashboardPage() {
           />
         )}
 
+        {activeSection === "report-rules" && (
+          <ReportRuleAdminPanel
+            isPending={createReportRuleMutation.isPending || updateReportRuleMutation.isPending}
+            onCreate={(input) => createReportRuleMutation.mutate(input)}
+            onUpdate={(id, data) => updateReportRuleMutation.mutate({ id, data })}
+            rules={reportRules}
+          />
+        )}
+
         {activeSection === "reports" && (
           <ReportAdminPanel
             isPending={
               updateReportMutation.isPending ||
               resolveReportActionMutation.isPending ||
-              createReportRuleMutation.isPending ||
-              updateReportRuleMutation.isPending ||
               updateReportGroupNoteMutation.isPending ||
               createReportGroupCommentMutation.isPending ||
               createModerationDecisionMutation.isPending
@@ -1052,16 +1079,13 @@ export function AdminDashboardPage() {
             groupDetail={reportGroupDetail}
             groupScope={reportGroupScope}
             groups={reportGroups}
-            onCreateRule={(input) => createReportRuleMutation.mutate(input)}
             onResolve={(input) => resolveReportActionMutation.mutate(input)}
             onSaveGroupNote={(input) => updateReportGroupNoteMutation.mutate(input)}
             onCreateGroupComment={(input) => createReportGroupCommentMutation.mutate(input)}
             onCreateDecision={(input) => createModerationDecisionMutation.mutate(input)}
             onSelectGroup={(group) => setSelectedReportGroup({ targetType: group.targetType, targetId: group.targetId })}
             onSetGroupScope={setReportGroupScope}
-            onUpdateRule={(id, data) => updateReportRuleMutation.mutate({ id, data })}
             onUpdate={(input) => updateReportMutation.mutate(input)}
-            rules={reportRules}
             reports={reports}
           />
         )}
@@ -1671,6 +1695,7 @@ function CmsAdminPanel({
                   <option value="after_signup">Üyelikten sonra</option>
                   <option value="login_window">Login zaman aralığında</option>
                 </select>
+                <small className="form-help">Planlı yayın, duyuruyu belirlediğiniz yayın zamanında açar. Diğer modlar üyelik veya son giriş tarih aralıklarına göre hedefler.</small>
               </label>
               <label>
                 Yayın zamanı
@@ -3119,6 +3144,67 @@ function AdminContentPanel<T extends { id: string; status: string; createdAt?: s
   );
 }
 
+function PrivateMessageAdminPanel({ items, isPending, onStatusChange }: { items: AdminPrivateMessage[]; isPending: boolean; onStatusChange: (id: string, status: string) => void }) {
+  const [usernameQuery, setUsernameQuery] = useState("");
+  const [contentQuery, setContentQuery] = useState("");
+  const [selectedKey, setSelectedKey] = useState("");
+  const [matchIndex, setMatchIndex] = useState(0);
+  const threads = new Map<string, AdminPrivateMessage[]>();
+  for (const message of [...items].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())) {
+    if (!message.senderId || !message.recipientId) continue;
+    const key = [message.senderId, message.recipientId].sort().join(":");
+    threads.set(key, [...(threads.get(key) ?? []), message]);
+  }
+  const usernameNeedle = usernameQuery.trim().toLocaleLowerCase("tr-TR");
+  const contentNeedle = contentQuery.trim().toLocaleLowerCase("tr-TR");
+  const visibleThreads = [...threads.entries()].filter(([, messages]) => {
+    const users = messages.flatMap((message) => [message.sender, message.recipient]).filter(Boolean);
+    const usernameMatch = !usernameNeedle || users.some((user) => `${user?.username ?? ""} ${user?.name ?? ""} ${user?.email ?? ""}`.toLocaleLowerCase("tr-TR").includes(usernameNeedle));
+    const contentMatch = !contentNeedle || messages.some((message) => message.body.toLocaleLowerCase("tr-TR").includes(contentNeedle));
+    return usernameMatch && contentMatch;
+  });
+  const selected = threads.get(selectedKey) ?? [];
+  const matchingMessageIds = contentNeedle ? selected.filter((message) => message.body.toLocaleLowerCase("tr-TR").includes(contentNeedle)).map((message) => message.id) : [];
+  useEffect(() => {
+    const id = matchingMessageIds[matchIndex];
+    if (id) document.getElementById(`admin-message-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [matchIndex, selectedKey, contentNeedle]);
+  return <section className="admin-panel"><div className="section-header compact"><h2>Özel Mesajlar</h2><span>{threads.size} ileti dizisi · {items.length} mesaj</span></div><p className="admin-section-desc">Kullanıcı adına veya mesaj içeriğine göre ileti dizilerini bulun; silinmiş kayıtlar dahil tam konuşmayı inceleyin.</p><div className="admin-form-grid private-message-search"><label>Kullanıcı adı<input value={usernameQuery} onChange={(event) => { setUsernameQuery(event.target.value); setSelectedKey(""); }} placeholder="@kullanici"/></label><label>İçerik<input value={contentQuery} onChange={(event) => { setContentQuery(event.target.value); setMatchIndex(0); }} placeholder="Mesajlarda ara"/></label></div><div className="private-message-admin-layout"><div className="admin-list private-message-thread-list">{visibleThreads.map(([key, messages]) => { const first = messages[0]!; const last = messages.at(-1)!; return <button className={`admin-list-row admin-list-button ${selectedKey === key ? "active" : ""}`} key={key} onClick={() => { setSelectedKey(key); setMatchIndex(0); }} type="button"><div><strong>{adminUserLabel(first.sender)} – {adminUserLabel(first.recipient)}</strong><span>{formatDateTime(first.createdAt)} – {formatDateTime(last.createdAt)}</span><span>{messages.length} mesaj</span></div></button>; })}{!visibleThreads.length ? <p className="form-help">Aramayla eşleşen ileti dizisi bulunamadı.</p> : null}</div><div className="admin-private-conversation">{selected.length ? <><header><strong>{adminUserLabel(selected[0]?.sender)} – {adminUserLabel(selected[0]?.recipient)}</strong>{contentNeedle && matchingMessageIds.length ? <div className="row-actions"><button disabled={matchIndex <= 0} onClick={() => setMatchIndex((index) => Math.max(0, index - 1))} type="button">Önceki</button><span>{matchIndex + 1}/{matchingMessageIds.length}</span><button disabled={matchIndex >= matchingMessageIds.length - 1} onClick={() => setMatchIndex((index) => Math.min(matchingMessageIds.length - 1, index + 1))} type="button">Sonraki</button></div> : null}</header>{selected.map((message) => <article className={matchingMessageIds[matchIndex] === message.id ? "current-match" : ""} id={`admin-message-${message.id}`} key={message.id}><div><strong>{adminUserLabel(message.sender)}</strong><span>{formatDateTime(message.createdAt)} · {message.status}</span></div><p><HighlightedText query={contentQuery} text={message.body}/></p><div className="row-actions"><span>{message.reportCount ?? 0} şikayet</span><select disabled={isPending} value={message.status} onChange={(event) => onStatusChange(message.id, event.target.value)}><option value="active">Aktif</option><option value="deleted">Silinmiş</option><option value="archived">Arşiv</option></select></div></article>)}</> : <p className="form-help">İncelemek için bir ileti dizisi seçin.</p>}</div></div></section>;
+}
+
+function HighlightedText({ text, query }: { text: string; query: string }) {
+  const needle = query.trim();
+  if (!needle) return text;
+  const parts: ReactNode[] = [];
+  const lowerText = text.toLocaleLowerCase("tr-TR");
+  const lowerNeedle = needle.toLocaleLowerCase("tr-TR");
+  let cursor = 0;
+  let index = lowerText.indexOf(lowerNeedle);
+  while (index >= 0) {
+    parts.push(text.slice(cursor, index), <mark key={`${index}-${cursor}`}>{text.slice(index, index + needle.length)}</mark>);
+    cursor = index + needle.length;
+    index = lowerText.indexOf(lowerNeedle, cursor);
+  }
+  parts.push(text.slice(cursor));
+  return <>{parts}</>;
+}
+
+function adminUserLabel(user: AdminPrivateMessage["sender"]) {
+  if (!user) return "Bilinmeyen kullanıcı";
+  return user.username ? `@${user.username}` : user.name || user.email;
+}
+
+function ReportRuleAdminPanel({ rules, isPending, onCreate, onUpdate }: {
+  rules: ReportRule[];
+  isPending: boolean;
+  onCreate: (input: ReportRuleInput) => void;
+  onUpdate: (id: string, input: Partial<ReportRuleInput> & { status?: string }) => void;
+}) {
+  const [targetType, setTargetType] = useState<ReportTargetType>("event");
+  const grouped = REPORT_TARGET_OPTIONS.map((option) => ({ ...option, rules: rules.filter((rule) => rule.targetType === option.value).sort((a, b) => a.title.localeCompare(b.title, "tr")) })).filter((group) => group.rules.length);
+  return <section className="admin-panel"><div className="section-header compact"><h2>Kural yönetimi</h2><span>{rules.length} kural</span></div><p className="admin-section-desc">Şikayet kurallarını oluşturun; aktif ve pasif kuralları içerik kategorilerine göre yönetin.</p><form className="admin-form" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); onCreate({ targetType: String(form.get("targetType")) as ReportTargetType, title: String(form.get("title")).trim(), description: String(form.get("description") || "").trim() || undefined, violationScore: Number(form.get("violationScore") || 1) }); event.currentTarget.reset(); setTargetType("event"); }}><h3>Şikayet kuralı oluştur</h3><div className="admin-form-grid"><label>İçerik kategorisi<select name="targetType" value={targetType} onChange={(event) => setTargetType(event.target.value as ReportTargetType)}>{REPORT_TARGET_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>İhlal puanı<input name="violationScore" defaultValue={1} min={1} max={100} required type="number"/></label></div><label>Kural başlığı<input name="title" minLength={3} maxLength={160} placeholder="Kural başlığını yazın" required/></label><label>Açıklama<textarea name="description" maxLength={500} rows={3}/></label><button className="secondary-action" disabled={isPending} type="submit"><Plus size={18}/>Kural ekle</button></form><div className="report-rule-groups">{grouped.map((group) => <section className="admin-form" key={group.value}><h3>{group.label}</h3>{group.rules.map((rule) => <form className="admin-list-row report-rule-edit" key={rule.id} onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); onUpdate(rule.id, { title: String(form.get("title")).trim(), description: String(form.get("description") || "").trim() || undefined, violationScore: Number(form.get("violationScore")), status: String(form.get("status")) }); }}><label>Başlık<input defaultValue={rule.title} name="title" required/></label><label>Açıklama<textarea defaultValue={rule.description ?? ""} name="description" rows={2}/></label><div className="admin-form-grid"><label>İhlal puanı<input defaultValue={rule.violationScore} max={100} min={1} name="violationScore" type="number"/></label><label>Durum<select defaultValue={rule.status} name="status"><option value="active">Aktif</option><option value="passive">Pasif</option></select></label></div><button className="secondary-action" disabled={isPending} type="submit">Değişiklikleri kaydet</button></form>)}</section>)}{!grouped.length ? <p className="form-help">Henüz kural oluşturulmadı.</p> : null}</div></section>;
+}
+
 function ReportAdminPanel({
   groupDetail,
   groupScope,
@@ -3126,14 +3212,11 @@ function ReportAdminPanel({
   isPending,
   onCreateDecision,
   onCreateGroupComment,
-  onCreateRule,
   onResolve,
   onSaveGroupNote,
   onSelectGroup,
   onSetGroupScope,
-  onUpdateRule,
   onUpdate,
-  rules,
   reports
 }: {
   groupDetail: ReportGroupDetail | null;
@@ -3142,7 +3225,6 @@ function ReportAdminPanel({
   isPending: boolean;
   onCreateDecision: (input: { targetType: ReportTargetType; targetId: string; data: ModerationDecisionInput }) => void;
   onCreateGroupComment: (input: { targetType: ReportTargetType; targetId: string; body: string }) => void;
-  onCreateRule: (input: ReportRuleInput) => void;
   onResolve: (input: {
     id: string;
     action: ResolveReportActionInput["action"];
@@ -3151,31 +3233,15 @@ function ReportAdminPanel({
   onSaveGroupNote: (input: { targetType: ReportTargetType; targetId: string; note: string }) => void;
   onSelectGroup: (group: ReportGroup) => void;
   onSetGroupScope: (scope: "active" | "old") => void;
-  onUpdateRule: (id: string, input: Partial<ReportRuleInput> & { status?: string }) => void;
   onUpdate: (input: { id: string; status: "open" | "reviewing" | "resolved" | "dismissed"; resolutionNote?: string }) => void;
-  rules: ReportRule[];
   reports: ContentReport[];
 }) {
-  const [ruleTargetType, setRuleTargetType] = useState<ReportTargetType>("event");
   const [selectedUserAction, setSelectedUserAction] = useState<NonNullable<ModerationDecisionInput["userAction"]>>("none");
   const isUserTarget = groupDetail?.targetType === "user";
 
   useEffect(() => {
     setSelectedUserAction(groupDetail?.targetType === "user" ? "warn_user" : "none");
   }, [groupDetail?.targetType, groupDetail?.targetId]);
-
-  function handleRuleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-
-    onCreateRule({
-      targetType: String(form.get("targetType")) as ReportTargetType,
-      title: String(form.get("title")),
-      description: String(form.get("description") || "") || undefined,
-      violationScore: Number(form.get("violationScore") || 1)
-    });
-    event.currentTarget.reset();
-  }
 
   function handleSubmit(reportId: string, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3233,9 +3299,12 @@ function ReportAdminPanel({
     const effectiveAction = groupDetail.targetType === "user" ? (userAction === "none" ? "none" : userAction) : contentAction;
 
     if ((userAction === "suspend_user" || effectiveAction === "suspend_user") && !suspensionEndsAt) {
-      window.alert("Askıya alma için askı bitiş zamanı zorunludur.");
+      const input = event.currentTarget.elements.namedItem("suspensionEndsAt") as HTMLInputElement | null;
+      input?.setCustomValidity("Askıya alma için askı bitiş zamanı zorunludur.");
+      input?.reportValidity();
       return;
     }
+    (event.currentTarget.elements.namedItem("suspensionEndsAt") as HTMLInputElement | null)?.setCustomValidity("");
 
     onCreateDecision({
       targetType: groupDetail.targetType,
@@ -3292,74 +3361,14 @@ function ReportAdminPanel({
   return (
     <section className="admin-panel">
       <div className="section-header compact">
-        <h2>Şikayetler & Moderasyon</h2>
+        <h2>Şikayetler</h2>
         <span>
-          {rules.length} kural · {groups.length} grup · {reports.length} rapor
+          {groups.length} grup · {reports.length} rapor
         </span>
       </div>
       <p className="admin-section-desc">
-        Şikayet kuralları tanımla, bildirilen içerikleri incele ve moderasyon kararları uygula. Açık şikayetler acil dikkat gerektirir.
+        Bildirilen içerikleri inceleyin, şikayet gruplarını yönetin ve moderasyon kararlarını uygulayın. Açık şikayetler acil dikkat gerektirir.
       </p>
-      <div className="form-help">
-        Kural ve rapor hedefleri: {REPORT_TARGET_OPTIONS.map((option) => option.label).join(", ")}.
-      </div>
-      <form className="admin-form" onSubmit={handleRuleSubmit}>
-        <h3>Şikayet kuralı oluştur</h3>
-        <div className="admin-form-grid">
-          <label>
-            Kategori
-            <select name="targetType" value={ruleTargetType} onChange={(event) => setRuleTargetType(event.target.value as ReportTargetType)}>
-              {REPORT_TARGET_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            İhlal puanı
-            <input name="violationScore" defaultValue={1} min={1} max={100} required type="number" />
-          </label>
-        </div>
-        <label>
-          Kural başlığı
-          <select name="title" required>
-            {REPORT_RULE_TITLE_OPTIONS[ruleTargetType].map((title) => (
-              <option key={title} value={title}>
-                {title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Açıklama
-          <textarea name="description" rows={2} />
-        </label>
-        <button className="secondary-action" disabled={isPending} type="submit">
-          <Plus size={18} />
-          Kural ekle
-        </button>
-      </form>
-      <div className="admin-list">
-        {rules.map((rule) => (
-          <div className="admin-list-row" key={rule.id}>
-            <div>
-              <strong>{rule.title}</strong>
-              <span>
-                {rule.targetType} · {rule.violationScore} puan · {rule.status}
-              </span>
-            </div>
-            <button
-              className={rule.status === "active" ? "ghost-action" : "secondary-action"}
-              disabled={isPending}
-              onClick={() => onUpdateRule(rule.id, { status: rule.status === "active" ? "passive" : "active" })}
-              type="button"
-            >
-              {rule.status === "active" ? "Pasif yap" : "Aktif yap"}
-            </button>
-          </div>
-        ))}
-      </div>
       <div className="section-header compact">
         <h3>Şikayet grupları</h3>
         <div className="segmented-control">
@@ -4253,6 +4262,43 @@ function GuestListRow({
       </div>
     </div>
   );
+}
+
+function ActivityLogAdminPanel() {
+  const [filters, setFilters] = useState({ q: "", category: "", action: "", from: "", to: "" });
+  const [applied, setApplied] = useState(filters);
+  const [page, setPage] = useState(1);
+  const query = useQuery({
+    queryKey: ["admin-activity-logs", applied, page],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      Object.entries(applied).forEach(([key, value]) => { if (value) params.set(key, value); });
+      params.set("page", String(page));
+      params.set("pageSize", "50");
+      return listAdminActivityLogs(params);
+    },
+  });
+  const items = query.data?.items ?? [];
+  return <section className="admin-panel activity-log-panel">
+    <header><div><h2>User activity log</h2><p>Kullanıcıların ve adminlerin görüntüleme, işlem, ayar, kimlik ve finans hareketlerini ortam bilgileriyle birlikte izleyin.</p></div><span className="status-pill status-active">{query.data?.total ?? 0} kayıt</span></header>
+    <form className="activity-log-filters" onSubmit={(event) => { event.preventDefault(); setPage(1); setApplied(filters); }}>
+      <label>Arama<input onChange={(event) => setFilters((current) => ({ ...current, q: event.target.value }))} placeholder="Kullanıcı, e-posta, işlem veya hedef" value={filters.q}/></label>
+      <label>Kategori<select onChange={(event) => setFilters((current) => ({ ...current, category: event.target.value }))} value={filters.category}><option value="">Tümü</option>{["user", "identity", "events", "places", "finance", "settings", "moderation", "messages", "tags"].map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
+      <label>İşlem<input onChange={(event) => setFilters((current) => ({ ...current, action: event.target.value }))} placeholder="view, create, update…" value={filters.action}/></label>
+      <label>Başlangıç<input onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} type="datetime-local" value={filters.from}/></label>
+      <label>Bitiş<input onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} type="datetime-local" value={filters.to}/></label>
+      <button className="primary-action" type="submit">Filtrele</button>
+    </form>
+    {query.isError ? <p className="form-error">Aktivite kayıtları yüklenemedi.</p> : null}
+    <div className="activity-log-list">{items.map((item: AdminActivityLog) => <article key={item.id}>
+      <div><strong>{item.actor?.username ? `@${item.actor.username}` : item.actor?.name ?? "Anonim ziyaretçi"}</strong><span>{item.actor?.email ?? "Oturumsuz erişim"}</span></div>
+      <div><strong>{item.action}</strong><span>{item.targetType} · {item.targetId}</span></div>
+      <div className="activity-log-environment"><span>{String(item.metadata?.method ?? "—")} · HTTP {String(item.metadata?.statusCode ?? "—")}</span><span>{String(item.metadata?.ip ?? "IP yok")} · {String(item.metadata?.durationMs ?? "—")} ms</span><small title={String(item.metadata?.userAgent ?? "")}>{String(item.metadata?.userAgent ?? "Tarayıcı bilgisi yok")}</small></div>
+      <time>{item.createdAt ? new Date(item.createdAt).toLocaleString("tr-TR") : "—"}</time>
+    </article>)}</div>
+    {!query.isLoading && !items.length ? <p className="muted">Bu filtrelerde aktivite kaydı bulunamadı.</p> : null}
+    <div className="pagination"><button disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} type="button">Önceki</button><span>Sayfa {page}</span><button disabled={!query.data?.hasNextPage} onClick={() => setPage((current) => current + 1)} type="button">Sonraki</button></div>
+  </section>;
 }
 
 function toDateTimeLocalValue(value: string) {

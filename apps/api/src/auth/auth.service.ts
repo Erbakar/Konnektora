@@ -7,7 +7,7 @@ import { createHash, randomBytes, randomInt } from "crypto";
 import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { SmsService } from "../sms/sms.service";
-import { AcceptInviteDto, AvailabilityQueryDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, PasswordResetRequestDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, SocialAuthDto, TokenDto } from "./auth.dto";
+import { AcceptInviteDto, AvailabilityQueryDto, ChangeEmailDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, PasswordResetRequestDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, SocialAuthDto, TokenDto } from "./auth.dto";
 
 const EMAIL_TOKEN_TTL_MS = {
   verify_email: 1000 * 60 * 60 * 24,
@@ -382,6 +382,30 @@ export class AuthService {
     return { ok: true };
   }
 
+  async changeEmail(userId: string, input: ChangeEmailDto) {
+    const email = input.email.toLowerCase().trim();
+    const [user, existing] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId } }),
+      this.prisma.user.findUnique({ where: { email }, select: { id: true } }),
+    ]);
+    if (!user || !(await compare(input.currentPassword, user.passwordHash)))
+      throw new UnauthorizedException("Mevcut şifre hatalı.");
+    if (existing && existing.id !== userId)
+      throw new ConflictException("Bu e-posta adresi zaten kullanımda.");
+    if (user.email === email) return { ok: true, sent: true, email };
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { email, emailVerified: false },
+    });
+    const token = await this.createEmailToken(userId, "verify_email");
+    const sent = await this.sendVerificationEmailSafely({
+      to: email,
+      name: updated.name,
+      token,
+    });
+    return { ok: true, sent, email };
+  }
+
   async deactivate(userId: string, input: DeactivateAccountDto) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !(await compare(input.currentPassword, user.passwordHash))) {
@@ -622,10 +646,14 @@ export class AuthService {
         id: user.id,
         email: user.email,
         name: user.name,
+        username: user.username,
+        city: user.city,
+        country: user.country,
         role: user.role,
         accountType: user.accountType as "individual" | "corporate",
         emailVerified: user.emailVerified,
         status: user.status,
+        onboardingCompleted: Boolean(user.onboardingCompletedAt),
         avatarUrl: avatar?.url ?? null,
       },
     };

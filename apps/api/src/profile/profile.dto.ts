@@ -166,6 +166,13 @@ export class UpdateTagAffinitiesDto {
   affinities!: TagAffinityInputDto[];
 }
 
+export class CreateProfileTagSuggestionDto extends TagAffinityInputDto {}
+
+export class DecideProfileTagSuggestionDto {
+  @IsIn(["accept", "decline", "cancel"])
+  action!: "accept" | "decline" | "cancel";
+}
+
 export class UpdateProfileInterestsDto {
   @IsArray()
   @IsUUID("4", { each: true })

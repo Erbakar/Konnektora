@@ -9,9 +9,16 @@ import { SocialAuthButtons } from "../components/SocialAuthButtons";
 import { CountryCityFields } from "../components/CountryCityFields";
 import { checkAvailability, completeOnboarding, confirmPhoneVerification, followUser, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, resolveMediaUrl, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, updateUserSession, uploadProfileMedia } from "../lib/api";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
+import { useLanguage } from "../lib/i18n";
 
-const individualSteps = ["Hesap", "Telefon", "Temel bilgiler", "Profil fotoğrafı", "İlgi alanları", "Topluluk"];
-const corporateSteps = ["Hesap", "Telefon", "Firma bilgileri", "Profil fotoğrafı", "İlgi alanları"];
+const individualSteps = {
+  tr: ["Hesap", "Telefon", "Temel bilgiler", "Profil fotoğrafı", "İlgi alanları", "Topluluk"],
+  en: ["Account", "Phone", "Basic information", "Profile photo", "Interests", "Community"],
+};
+const corporateSteps = {
+  tr: ["Hesap", "Telefon", "Firma bilgileri", "Profil fotoğrafı", "İlgi alanları"],
+  en: ["Account", "Phone", "Company information", "Profile photo", "Interests"],
+};
 const statusStep: Record<string, number> = {
   phone: 1,
   personal_info: 2,
@@ -21,6 +28,8 @@ const statusStep: Record<string, number> = {
 };
 
 export function OnboardingPage() {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => (language === "tr" ? tr : en);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [session, setSession] = useState(getUserSession());
@@ -52,7 +61,7 @@ export function OnboardingPage() {
     enabled: Boolean(session),
   });
   const isCorporate = (profile.data?.accountType ?? session?.accountType ?? accountType) === "corporate";
-  const steps = isCorporate ? corporateSteps : individualSteps;
+  const steps = isCorporate ? corporateSteps[language] : individualSteps[language];
   const media = useQuery({
     queryKey: ["profile-media", session?.id],
     queryFn: listProfileMedia,
@@ -142,7 +151,11 @@ export function OnboardingPage() {
   });
   const finish = useMutation({
     mutationFn: completeOnboarding,
-    onSuccess: () => navigate("/feed"),
+    onSuccess: () => {
+      const current = getUserSession();
+      if (current) updateUserSession({ ...current, onboardingCompleted: true });
+      navigate("/feed");
+    },
   });
   const affinitySave = useMutation({
     mutationFn: () =>
@@ -172,12 +185,12 @@ export function OnboardingPage() {
     <section className="page onboarding-shell">
       <header className="onboarding-header">
         <div>
-          <span className="eyebrow">Konnektora’ya hoş geldin</span>
-          <h1>Profilini birlikte hazırlayalım</h1>
+          <span className="eyebrow">{t("Konnektora’ya hoş geldin", "Welcome to Konnektora")}</span>
+          <h1>{t("Profilini birlikte hazırlayalım", "Let's set up your profile")}</h1>
         </div>
         <strong>{Math.round(((step + 1) / steps.length) * 100)}%</strong>
       </header>
-      <nav className="onboarding-progress" aria-label="Onboarding adımları">
+      <nav className="onboarding-progress" aria-label={t("Onboarding adımları", "Onboarding steps")}>
         {steps.map((label, index) => (
           <span className={index < step ? "is-complete" : index === step ? "is-active" : ""} key={label}>
             <b>{index < step ? <Check size={15} /> : index + 1}</b>
@@ -189,11 +202,11 @@ export function OnboardingPage() {
         {onboarding.isError ? (
           <ServiceFeedback
             error={onboarding.error}
-            fallback="Profil adımların şu anda alınamadı. Bağlantını kontrol edip yeniden deneyebilirsin."
+            fallback={t("Profil adımların şu anda alınamadı. Bağlantını kontrol edip yeniden deneyebilirsin.", "Your profile steps could not be loaded. Check your connection and try again.")}
             onRetry={() => void onboarding.refetch()}
           />
         ) : null}
-        {session?.status === "pending" && step === 1 ? <div className="onboarding-verification-choice"><Sparkles size={22}/><p>{verificationEmailSent === false ? "Hesabın oluşturuldu ancak aktivasyon e-postası şu an teslim edilemedi. Aşağıda ekranda üretilen demo GSM kodunu girerek üyeliğini hemen aktifleştirebilirsin." : "Hesabın oluşturuldu. Aktivasyon e-postasındaki bağlantıyı açabilir veya aşağıda ekranda üretilen demo GSM kodunu girerek hemen devam edebilirsin."}</p></div> : null}
+        {session?.status === "pending" && step === 1 ? <div className="onboarding-verification-choice"><Sparkles size={22}/><p>{verificationEmailSent === false ? t("Hesabın oluşturuldu ancak aktivasyon e-postası şu an teslim edilemedi. Aşağıda ekranda üretilen demo GSM kodunu girerek üyeliğini hemen aktifleştirebilirsin.", "Your account was created, but the activation email could not be delivered. Use the demo mobile code shown below to activate your membership now.") : t("Hesabın oluşturuldu. Aktivasyon e-postasındaki bağlantıyı açabilir veya aşağıda ekranda üretilen demo GSM kodunu girerek hemen devam edebilirsin.", "Your account was created. Open the activation link in the email or continue immediately with the demo mobile code shown below.")}</p></div> : null}
         {step === 0 ? (
           <form
             onSubmit={(event: FormEvent<HTMLFormElement>) => {
@@ -202,11 +215,11 @@ export function OnboardingPage() {
               const password = String(form.get("password"));
               setRegistrationError("");
               if (password !== String(form.get("passwordAgain"))) {
-                setRegistrationError("Şifreler eşleşmiyor.");
+                setRegistrationError(t("Şifreler eşleşmiyor.", "Passwords do not match."));
                 return;
               }
-              if (availabilityText.includes("kullanımda")) {
-                setRegistrationError("Bu e-posta adresi zaten kullanımda.");
+              if (/kullanımda|in use/i.test(availabilityText)) {
+                setRegistrationError(t("Bu e-posta adresi zaten kullanımda.", "This email address is already in use."));
                 return;
               }
               register.mutate({
@@ -226,65 +239,65 @@ export function OnboardingPage() {
               });
             }}
           >
-            <h2>Hesap bilgileri</h2>
+            <h2>{t("Hesap bilgileri", "Account information")}</h2>
             <label>
-              Hesap türü
+              {t("Hesap türü", "Account type")}
               <select value={accountType} onChange={(event) => setAccountType(event.target.value as typeof accountType)}>
-                <option value="individual">Bireysel</option>
-                <option value="corporate">Kurumsal</option>
+                <option value="individual">{t("Bireysel", "Individual")}</option>
+                <option value="corporate">{t("Kurumsal", "Corporate")}</option>
               </select>
             </label>
             <label>
-              {accountType === "corporate" ? "Yetkili Ad Soyadı" : "Ad Soyad"}
-              <input autoComplete="name" name="name" minLength={2} placeholder="Adın ve soyadın" required />
+              {accountType === "corporate" ? t("Yetkili Ad Soyadı", "Authorised representative's full name") : t("Ad Soyad", "Full name")}
+              <input autoComplete="name" name="name" minLength={2} placeholder={t("Adın ve soyadın", "Your full name")} required />
             </label>
             {accountType === "corporate" ? (
               <>
                 <label>
-                  İşletme adı
+                  {t("İşletme adı", "Business name")}
                   <input name="companyName" required />
                 </label>
                 <label>
-                  Ticari unvan
+                  {t("Ticari unvan", "Registered business name")}
                   <input name="tradeName" required />
                 </label>
               </>
             ) : null}
             <label>
-              E-posta
-              <EmailInput name="email" onBlur={(event) => void checkAvailability({ email: normalizeEmail(event.target.value) }).then((data) => setAvailabilityText(data.emailAvailable ? "E-posta kullanılabilir" : "E-posta kullanımda"))} required />
-              <span className="form-help">Örnek: ada@ornek.com</span>
-              {availabilityText ? <span className={availabilityText.includes("kullanımda") ? "field-error" : "form-help"}>{availabilityText}</span> : null}
+              {t("E-posta", "Email")}
+              <EmailInput name="email" onBlur={(event) => void checkAvailability({ email: normalizeEmail(event.target.value) }).then((data) => setAvailabilityText(data.emailAvailable ? t("E-posta kullanılabilir", "Email is available") : t("E-posta kullanımda", "Email is in use")))} required />
+              <span className="form-help">{t("Örnek: ada@ornek.com", "Example: ada@example.com")}</span>
+              {availabilityText ? <span className={/kullanımda|in use/i.test(availabilityText) ? "field-error" : "form-help"}>{availabilityText}</span> : null}
             </label>
             <label>
-              GSM numarası
+              {t("GSM numarası", "Mobile number")}
               <PhoneInput name="phone" pattern="\+?[0-9 ]{10,19}" required />
-              <span className="form-help">Bir sonraki adımda ekranda oluşturulan demo koduyla doğrulayabilirsin.</span>
+              <span className="form-help">{t("Bir sonraki adımda ekranda oluşturulan demo koduyla doğrulayabilirsin.", "You can verify it with the on-screen demo code in the next step.")}</span>
             </label>
             <label>
-              Şifre
+              {t("Şifre", "Password")}
               <input name="password" minLength={8} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required type="password" />
-              <span className="form-help">En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam içermeli.</span>
+              <span className="form-help">{t("En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam içermeli.", "At least 8 characters, including an uppercase letter, a lowercase letter and a number.")}</span>
             </label>
             <label>
-              Şifre tekrar
+              {t("Şifre tekrar", "Repeat password")}
               <input name="passwordAgain" minLength={8} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required type="password" />
             </label>
             <label className="check-row">
               <input required type="checkbox" />{" "}
               <span>
-                <Link to="/terms">Koşulları</Link> ve <Link to="/privacy">Gizlilik Politikasını</Link> kabul ediyorum.
+                <Link to="/terms">{t("Koşulları", "Terms")}</Link> {t("ve", "and")} <Link to="/privacy">{t("Gizlilik Politikasını", "Privacy Policy")}</Link> {t("kabul ediyorum.", "I accept.")}
               </span>
             </label>
             <button className="primary-action" disabled={register.isPending} type="submit">
-              Hesabı oluştur <ArrowRight size={18} />
+              {t("Hesabı oluştur", "Create account")} <ArrowRight size={18} />
             </button>
             {registrationError ? <p className="form-error">{registrationError}</p> : null}
             {register.isError ? (
               <ServiceFeedback
                 compact
                 error={register.error}
-                fallback="Hesap oluşturulamadı. Bilgilerini kontrol edip yeniden dene."
+                fallback={t("Hesap oluşturulamadı. Bilgilerini kontrol edip yeniden dene.", "The account could not be created. Check your details and try again.")}
               />
             ) : null}
           </form>
@@ -304,8 +317,8 @@ export function OnboardingPage() {
 
         {step === 1 ? (
           <div>
-            <h2>Telefonunu doğrula</h2>
-            <p>Telefon numaranı yazıp kod oluştur. Üretilen 6 haneli kodu hemen aşağıda açılan alana gir; bu adım üyeliğini engellemez.</p>
+            <h2>{t("Telefonunu doğrula", "Verify your phone")}</h2>
+            <p>{t("Telefon numaranı yazıp kod oluştur. Üretilen 6 haneli kodu hemen aşağıda açılan alana gir; bu adım üyeliğini engellemez.", "Enter your phone number and generate a code. Type the generated six-digit code into the field below; this step will not block your membership.")}</p>
             <form
               onSubmit={(event: FormEvent<HTMLFormElement>) => {
                 event.preventDefault();
@@ -316,26 +329,26 @@ export function OnboardingPage() {
               }}
             >
               <label>
-                Telefon numarası
+                {t("Telefon numarası", "Phone number")}
                 <PhoneInput defaultValue={profile.data?.phone ?? ""} name="phone" pattern="\+?[0-9 ]{10,19}" required />
-                <span className="form-help">0555… veya +90 555… biçiminde yazabilirsin.</span>
+                <span className="form-help">{t("0555… veya +90 555… biçiminde yazabilirsin.", "Use a local or international format, such as +44 7700…")}</span>
               </label>
               <button className="primary-action" disabled={phoneRequest.isPending || expires > 0} type="submit">
-                {phoneRequest.isPending ? "Kod oluşturuluyor…" : expires ? `${expires} sn` : "Doğrulama kodu oluştur"}
+                {phoneRequest.isPending ? t("Kod oluşturuluyor…", "Generating code…") : expires ? `${expires} ${t("sn", "sec")}` : t("Doğrulama kodu oluştur", "Generate verification code")}
               </button>
               {phoneRequest.isError ? (
                 <ServiceFeedback
                   compact
                   error={phoneRequest.error}
-                  fallback="Kod oluşturulamadı. Telefon numaranı kontrol edip tekrar dene."
+                  fallback={t("Kod oluşturulamadı. Telefon numaranı kontrol edip tekrar dene.", "The code could not be generated. Check your phone number and try again.")}
                 />
               ) : null}
             </form>
             {demoCode ? (
               <div className="demo-verification-code" role="status">
-                <span>Demo doğrulama kodun</span>
-                <strong aria-label={`Demo doğrulama kodu ${demoCode}`}>{demoCode}</strong>
-                <p>Bu kodu aşağıdaki alana kendin gir. Kod iki dakika geçerlidir.</p>
+                <span>{t("Demo doğrulama kodun", "Your demo verification code")}</span>
+                <strong aria-label={t(`Demo doğrulama kodu ${demoCode}`, `Demo verification code ${demoCode}`)}>{demoCode}</strong>
+                <p>{t("Bu kodu aşağıdaki alana kendin gir. Kod iki dakika geçerlidir.", "Enter this code in the field below. It is valid for two minutes.")}</p>
               </div>
             ) : null}
             {phoneRequest.isSuccess || expires > 0 || demoCode ? (
@@ -346,18 +359,18 @@ export function OnboardingPage() {
                 }}
               >
                 <label>
-                  Doğrulama kodu
+                  {t("Doğrulama kodu", "Verification code")}
                   <VerificationCodeInput autoFocus name="code" onChange={(event) => setVerificationCode(event.target.value)} required value={verificationCode} />
-                  <span className="form-help">{demoVerification ? "Yukarıda senin için oluşturulan 6 haneli kodu yaz." : "Telefonuna gelen 6 haneli kodu yaz."}</span>
+                  <span className="form-help">{demoVerification ? t("Yukarıda senin için oluşturulan 6 haneli kodu yaz.", "Enter the six-digit code generated for you above.") : t("Telefonuna gelen 6 haneli kodu yaz.", "Enter the six-digit code sent to your phone.")}</span>
                 </label>
                 <button className="primary-action" disabled={phoneConfirm.isPending || verificationCode.length !== 6} type="submit">
-                  {phoneConfirm.isPending ? "Doğrulanıyor…" : "Doğrula ve devam et"}
+                  {phoneConfirm.isPending ? t("Doğrulanıyor…", "Verifying…") : t("Doğrula ve devam et", "Verify and continue")}
                 </button>
                 {phoneConfirm.isError ? (
                   <ServiceFeedback
                     compact
                     error={phoneConfirm.error}
-                    fallback="Kod doğru değil veya süresi dolmuş. Yeni kod isteyip tekrar dene."
+                    fallback={t("Kod doğru değil veya süresi dolmuş. Yeni kod isteyip tekrar dene.", "The code is incorrect or expired. Request a new code and try again.")}
                   />
                 ) : null}
               </form>
@@ -387,65 +400,65 @@ export function OnboardingPage() {
               });
             }}
           >
-            <h2>{profile.data.accountType === "corporate" ? "Firma bilgileri" : "Temel bilgiler"}</h2>
+            <h2>{profile.data.accountType === "corporate" ? t("Firma bilgileri", "Company information") : t("Temel bilgiler", "Basic information")}</h2>
             <label>
-              Kullanıcı adı
+              {t("Kullanıcı adı", "Username")}
               <input defaultValue={profile.data.username ?? ""} name="username" onChange={(event) => {
                 const value = event.target.value.trim();
-                if (value.length < 2) return setAvailabilityText("Kullanıcı adı en az 2 karakter olmalı");
-                void checkAvailability({ username: value }).then((data) => setAvailabilityText(data.usernameAvailable || value === profile.data?.username ? "Kullanıcı adı uygun" : "Kullanıcı adı kullanımda"));
+                if (value.length < 2) return setAvailabilityText(t("Kullanıcı adı en az 2 karakter olmalı", "Username must be at least 2 characters"));
+                void checkAvailability({ username: value }).then((data) => setAvailabilityText(data.usernameAvailable || value === profile.data?.username ? t("Kullanıcı adı uygun", "Username is available") : t("Kullanıcı adı kullanımda", "Username is in use")));
               }} pattern="[A-Za-z0-9 .-]+" required />
-              {availabilityText ? <span className={availabilityText.includes("uygun") ? "form-success" : "form-error"}>{availabilityText}</span> : null}
+              {availabilityText ? <span className={/uygun|available/i.test(availabilityText) ? "form-success" : "form-error"}>{availabilityText}</span> : null}
             </label>
             <CountryCityFields defaultCity={profile.data.city} defaultCountry={profile.data.country} requiredCountry />
             {profile.data.accountType === "corporate" ? <label>
-              Firmanın ilçesi
-              <input defaultValue={profile.data.district ?? ""} name="district" placeholder="İsteğe bağlı" />
+              {t("Firmanın ilçesi", "Company district")}
+              <input defaultValue={profile.data.district ?? ""} name="district" placeholder={t("İsteğe bağlı", "Optional")} />
             </label> : null}
             {profile.data.accountType === "individual" ? <><label>
-              Doğum tarihi
+              {t("Doğum tarihi", "Date of birth")}
               <input defaultValue={profile.data.birthDate ? String(profile.data.birthDate).slice(0, 10) : ""} name="birthDate" required type="date" />
             </label>
             <label>
-              Cinsiyet
+              {t("Cinsiyet", "Gender")}
               <select defaultValue={profile.data.gender ?? ""} name="gender">
-                <option value="">Belirtmek istemiyorum</option>
-                <option value="female">Kadın</option>
-                <option value="male">Erkek</option>
+                <option value="">{t("Belirtmek istemiyorum", "Prefer not to say")}</option>
+                <option value="female">{t("Kadın", "Female")}</option>
+                <option value="male">{t("Erkek", "Male")}</option>
               </select>
             </label></> : null}
             <label>
-              Web sitesi
-              <input defaultValue={profile.data.website ?? ""} name="website" placeholder="ornek.com (isteğe bağlı)" />
+              {t("Web sitesi", "Website")}
+              <input defaultValue={profile.data.website ?? ""} name="website" placeholder={t("ornek.com (isteğe bağlı)", "example.com (optional)")} />
             </label>
             {profileSave.isError ? (
               <ServiceFeedback
                 compact
                 error={profileSave.error}
-                fallback="Profil bilgilerin kaydedilemedi. Alanları kontrol edip yeniden dene."
+                fallback={t("Profil bilgilerin kaydedilemedi. Alanları kontrol edip yeniden dene.", "Your profile information could not be saved. Check the fields and try again.")}
               />
             ) : null}
-            <WizardButtons back={() => setStep(1)} nextLabel="Kaydet ve devam et" />
+            <WizardButtons back={() => setStep(1)} nextLabel={t("Kaydet ve devam et", "Save and continue")} />
           </form>
         ) : null}
         {step === 2 && profile.isError ? (
           <div className="empty-state">
             <ServiceFeedback
               error={profile.error}
-              fallback="Profil bilgilerin şu anda yüklenemedi."
+              fallback={t("Profil bilgilerin şu anda yüklenemedi.", "Your profile information could not be loaded.")}
               onRetry={() => void profile.refetch()}
-              title="Profil yüklenemedi"
+              title={t("Profil yüklenemedi", "Profile could not be loaded")}
             />
           </div>
         ) : null}
 
         {step === 3 ? (
           <div>
-            <h2>Profil fotoğrafı</h2>
-            <p>En az bir fotoğraf eklemelisin. İlk fotoğraf profil görselin olur.</p>
+            <h2>{t("Profil fotoğrafı", "Profile photo")}</h2>
+            <p>{t("En az bir fotoğraf eklemelisin. İlk fotoğraf profil görselin olur.", "Add at least one photo. The first photo becomes your profile image.")}</p>
             <label className="onboarding-upload">
               <ImagePlus size={36} />
-              <span>Fotoğraf seç</span>
+              <span>{t("Fotoğraf seç", "Choose photo")}</span>
               <input accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => {
                 const files = Array.from(event.target.files ?? []);
                 setPhotoQueue(files);
@@ -456,7 +469,7 @@ export function OnboardingPage() {
               <div className="photo-editor">
                 <div className="photo-crop-frame">
                   <img
-                    alt="Düzenlenecek profil fotoğrafı"
+                    alt={t("Düzenlenecek profil fotoğrafı", "Profile photo being edited")}
                     src={photoPreview}
                     style={{
                       transform: `scale(${photoZoom}) rotate(${photoRotation}deg)`,
@@ -469,7 +482,7 @@ export function OnboardingPage() {
                 </label>
                 <div className="photo-editor-actions">
                   <button className="secondary-action" onClick={() => setPhotoRotation((value) => (value + 90) % 360)} type="button">
-                    Sağa döndür
+                    {t("Sağa döndür", "Rotate right")}
                   </button>
                   <button
                     className="primary-action"
@@ -487,7 +500,7 @@ export function OnboardingPage() {
                     }
                     type="button"
                   >
-                    Düzenleyip yükle
+                    {t("Düzenleyip yükle", "Edit and upload")}
                   </button>
                 </div>
               </div>
@@ -496,31 +509,31 @@ export function OnboardingPage() {
               <ServiceFeedback
                 compact
                 error={photoUpload.error}
-                fallback="Fotoğraf yüklenemedi. JPG, PNG veya WebP biçiminde daha küçük bir görsel deneyebilirsin."
+                fallback={t("Fotoğraf yüklenemedi. JPG, PNG veya WebP biçiminde daha küçük bir görsel deneyebilirsin.", "The photo could not be uploaded. Try a smaller JPG, PNG or WebP image.")}
               />
             ) : null}
             {media.isError ? (
               <ServiceFeedback
                 compact
                 error={media.error}
-                fallback="Yüklediğin fotoğraflar alınamadı."
+                fallback={t("Yüklediğin fotoğraflar alınamadı.", "Your uploaded photos could not be loaded.")}
                 onRetry={() => void media.refetch()}
               />
             ) : null}
-            <div className="onboarding-media-row">{media.data?.map((item) => (item.type === "image" ? <img alt="Profil yüklemesi" key={item.id} src={resolveMediaUrl(item.url)} /> : <video key={item.id} src={resolveMediaUrl(item.url)} />))}</div>
+            <div className="onboarding-media-row">{media.data?.map((item) => (item.type === "image" ? <img alt={t("Profil yüklemesi", "Profile upload")} key={item.id} src={resolveMediaUrl(item.url)} /> : <video key={item.id} src={resolveMediaUrl(item.url)} />))}</div>
             <WizardButtons back={() => setStep(2)} disabled={!media.data?.some((item) => item.type === "image")} next={() => setStep(4)} />
           </div>
         ) : null}
 
         {step === 4 ? (
           <div>
-            <h2>İlgi alanların</h2>
-            <p>Bir tag seç ve sende uyandırdığı duyguyu belirt.</p>
+            <h2>{t("İlgi alanların", "Your interests")}</h2>
+            <p>{t("Bir etiket seç ve sende uyandırdığı duyguyu belirt.", "Choose a tag and select how it makes you feel.")}</p>
             <div className="onboarding-tag-grid">
               {tags.data?.map((tag) => (
                 <button className={sentiments[tag.id] ? "is-selected" : ""} key={tag.id} onClick={() => setEmotionTagId(tag.id)} type="button">
                   #{tag.name}
-                  <small>{sentiments[tag.id] ?? "Seç"}</small>
+                  <small>{sentiments[tag.id] ? sentimentLabel(sentiments[tag.id]!, language) : t("Seç", "Select")}</small>
                 </button>
               ))}
             </div>
@@ -528,20 +541,20 @@ export function OnboardingPage() {
               <ServiceFeedback
                 compact
                 error={tags.error ?? affinities.error}
-                fallback="İlgi alanların şu anda yüklenemedi."
+                fallback={t("İlgi alanların şu anda yüklenemedi.", "Your interests could not be loaded.")}
                 onRetry={() => {
                   void tags.refetch();
                   void affinities.refetch();
                 }}
               />
             ) : null}
-            <p className="form-help">{selectedCount} tag seçildi</p>
+            <p className="form-help">{selectedCount} {t("etiket seçildi", "tags selected")}</p>
             <WizardButtons back={() => setStep(3)} disabled={!selectedCount} next={() => affinitySave.mutate()} />
             {affinitySave.isError ? (
               <ServiceFeedback
                 compact
                 error={affinitySave.error}
-                fallback="İlgi alanların kaydedilemedi. Seçimlerini kontrol edip yeniden dene."
+                fallback={t("İlgi alanların kaydedilemedi. Seçimlerini kontrol edip yeniden dene.", "Your interests could not be saved. Check your selections and try again.")}
               />
             ) : null}
           </div>
@@ -549,10 +562,10 @@ export function OnboardingPage() {
 
         {step === 5 ? (
           <div>
-            <h2>Takip edebileceklerin</h2>
-            <p>Takip ettiğin üyeler bu işlemden bildirim almaz.</p>
+            <h2>{t("Takip edebileceklerin", "People you can follow")}</h2>
+            <p>{t("Takip ettiğin üyeler bu işlemden bildirim almaz.", "Members you follow are not notified by this action.")}</p>
             <Link className="secondary-action contacts-cta" to="/contacts">
-              Telefon ve Google rehberinden arkadaşlarını bul
+              {t("Telefon ve Google rehberinden arkadaşlarını bul", "Find friends from phone and Google contacts")}
             </Link>
             <div className="onboarding-people">
               {suggestions.data?.map((member) => (
@@ -561,7 +574,7 @@ export function OnboardingPage() {
                   <div>
                     <strong>{member.username ? <Link to={`/users/${member.username}`}>@{member.username}</Link> : member.name}</strong>
                     <small>
-                      {member.commonTagCount} ortak ilgi · {member.followerCount} takipçi
+                      {member.commonTagCount} {t("ortak ilgi", "shared interests")} · {member.followerCount} {t("takipçi", "followers")}
                     </small>
                   </div>
                   <button
@@ -570,7 +583,7 @@ export function OnboardingPage() {
                     onClick={() => follow.mutate(member.id)}
                     type="button"
                   >
-                    <UserPlus size={17} /> Takip et
+                    <UserPlus size={17} /> {t("Takip et", "Follow")}
                   </button>
                 </article>
               ))}
@@ -579,7 +592,7 @@ export function OnboardingPage() {
               <ServiceFeedback
                 compact
                 error={suggestions.error}
-                fallback="Üye önerileri şu anda yüklenemedi. Bu adımı daha sonra da tamamlayabilirsin."
+                fallback={t("Üye önerileri şu anda yüklenemedi. Bu adımı daha sonra da tamamlayabilirsin.", "Member suggestions could not be loaded. You can complete this step later.")}
                 onRetry={() => void suggestions.refetch()}
               />
             ) : null}
@@ -587,28 +600,28 @@ export function OnboardingPage() {
               <ServiceFeedback
                 compact
                 error={follow.error}
-                fallback="Bu üyeyi şu anda takip edemedik. Yeniden deneyebilirsin."
+                fallback={t("Bu üyeyi şu anda takip edemedik. Yeniden deneyebilirsin.", "This member could not be followed right now. Try again.")}
               />
             ) : null}
-            <WizardButtons back={() => setStep(4)} next={() => finish.mutate()} nextLabel="Kaydet ve tamamla" />
+            <WizardButtons back={() => setStep(4)} next={() => finish.mutate()} nextLabel={t("Kaydet ve tamamla", "Save and finish")} />
             {finish.isError ? (
               <ServiceFeedback
                 compact
                 error={finish.error}
-                fallback="Profil tamamlanamadı. Eksik adımları kontrol edip yeniden dene."
+                fallback={t("Profil tamamlanamadı. Eksik adımları kontrol edip yeniden dene.", "The profile could not be completed. Check any missing steps and try again.")}
               />
             ) : null}
           </div>
         ) : null}
       </div>
       {currentTag ? (
-        <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Tag duygusu">
+        <div className="emotion-modal" role="dialog" aria-modal="true" aria-label={t("Etiket duygusu", "Tag sentiment")}>
           <div>
-            <button aria-label="Kapat" onClick={() => setEmotionTagId("")} type="button">
+            <button aria-label={t("Kapat", "Close")} onClick={() => setEmotionTagId("")} type="button">
               ×
             </button>
             <h2>#{currentTag.name}</h2>
-            <p>Bu tag sende hangi duyguyu uyandırıyor?</p>
+            <p>{t("Bu etiket sende hangi duyguyu uyandırıyor?", "How does this tag make you feel?")}</p>
             {(["like", "ok", "dislike"] as TagSentiment[]).map((sentiment) => (
               <button
                 className="secondary-action"
@@ -622,7 +635,7 @@ export function OnboardingPage() {
                 }}
                 type="button"
               >
-                {sentiment === "like" ? "Beğeniyorum" : sentiment === "ok" ? "Sorun değil" : "Beğenmiyorum"}
+                {sentimentLabel(sentiment, language)}
               </button>
             ))}
           </div>
@@ -632,17 +645,25 @@ export function OnboardingPage() {
   );
 }
 
-function WizardButtons({ back, next, disabled, nextLabel = "Devam et" }: { back: () => void; next?: () => void; disabled?: boolean; nextLabel?: string }) {
+function WizardButtons({ back, next, disabled, nextLabel }: { back: () => void; next?: () => void; disabled?: boolean; nextLabel?: string }) {
+  const { language } = useLanguage();
+  const label = nextLabel ?? (language === "tr" ? "Devam et" : "Continue");
   return (
     <div className="wizard-buttons">
       <button className="ghost-action" onClick={back} type="button">
-        <ArrowLeft size={18} /> Geri
+        <ArrowLeft size={18} /> {language === "tr" ? "Geri" : "Back"}
       </button>
       <button className="primary-action" disabled={disabled} onClick={next} type={next ? "button" : "submit"}>
-        {nextLabel} <ArrowRight size={18} />
+        {label} <ArrowRight size={18} />
       </button>
     </div>
   );
+}
+
+function sentimentLabel(sentiment: TagSentiment, language: "tr" | "en") {
+  if (sentiment === "like") return language === "tr" ? "Beğeniyorum" : "Like";
+  if (sentiment === "ok") return language === "tr" ? "Nötr" : "Neutral";
+  return language === "tr" ? "Beğenmiyorum" : "Dislike";
 }
 
 async function renderProfileImage(source: File, zoom: number, rotation: number) {

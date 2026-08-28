@@ -328,6 +328,8 @@ export class DiscoveryService {
       activeUserCount,
       scope: query.scope ?? "local",
       location: city || country || null,
+      city: city ?? null,
+      country: country ?? null,
       activities,
     };
   }

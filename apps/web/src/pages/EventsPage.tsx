@@ -89,7 +89,7 @@ export function EventsPage() {
     { key: "today", title: c.today(discoveryLocation), params: { dateFrom: today.toISOString().slice(0, 10), dateTo: tomorrow.toISOString().slice(0, 10), ...(profile.data?.city ? { city: profile.data.city } : profile.data?.country ? { country: profile.data.country } : {}) }, auth: false },
     { key: "for_you", title: c.forYou, params: { scope: "for_you" }, auth: true },
     { key: "online", title: c.onlineEvents, params: { format: "online" }, auth: false },
-    { key: "popular", title: c.popular(discoveryLocation), params: { scope: "popular", ...(profile.data?.city ? { city: profile.data.city } : profile.data?.country ? { country: profile.data.country } : {}) }, auth: false },
+    { key: "popular", title: c.popular(discoveryLocation), params: { scope: "popular", ...(profile.data?.city ? { city: profile.data.city } : {}), ...(profile.data?.country ? { country: profile.data.country } : {}) }, auth: false },
     { key: "following", title: c.following, params: { scope: "following" }, auth: true },
     ...(showDeviceLocation ? [{ key: "device_location", title: c.locationEvents(deviceLocation), params: { city: deviceLocation }, auth: false } as const] : []),
     { key: "individual", title: c.individual, params: { scope: "individual" }, auth: false },

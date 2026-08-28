@@ -38,7 +38,6 @@ export class CreateCommentDto {
   parentId?: string;
 
   @IsString()
-  @MinLength(1)
   @MaxLength(3000)
   body!: string;
 }

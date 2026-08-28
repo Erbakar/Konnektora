@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ServiceFeedback } from "./ServiceFeedback";
 import { getPushPublicKey, registerPushSubscription, removePushSubscription } from "../lib/api";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
+import { useLanguage } from "../lib/i18n";
 
 function decodeKey(value: string) {
   const padding = "=".repeat((4 - value.length % 4) % 4);
@@ -12,28 +13,30 @@ function decodeKey(value: string) {
 }
 
 export function PushNotificationControl() {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
   const [enabled, setEnabled] = useState(Notification.permission === "granted");
   const [message, setMessage] = useState("");
   const publicKey = useQuery({ queryKey: ["push-public-key"], queryFn: getPushPublicKey, enabled: supported });
   const enable = useMutation({
     mutationFn: async () => {
-      if (!publicKey.data) throw new Error("Push kanalı henüz yapılandırılmamış.");
+      if (!publicKey.data) throw new Error(t("Push kanalı henüz yapılandırılmamış.", "The push channel has not been configured yet."));
       const permission = await Notification.requestPermission();
-      if (permission !== "granted") throw new Error("Bildirim izni verilmedi.");
+      if (permission !== "granted") throw new Error(t("Bildirim izni verilmedi.", "Notification permission was not granted."));
       const registration = await navigator.serviceWorker.register("/notification-worker.js");
       const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeKey(publicKey.data) });
       const json = subscription.toJSON();
-      if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new Error("Push aboneliği oluşturulamadı.");
+      if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new Error(t("Push aboneliği oluşturulamadı.", "The push subscription could not be created."));
       await registerPushSubscription({ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });
       setEnabled(true);
-      setMessage("Push bildirimleri bu cihazda etkin.");
+      setMessage(t("Push bildirimleri bu cihazda etkin.", "Push notifications are enabled on this device."));
     },
     onError: (error) =>
       setMessage(
         getServiceErrorMessage(
           error,
-          "Bildirimler şu anda etkinleştirilemedi. Lütfen yeniden dene.",
+          t("Bildirimler şu anda etkinleştirilemedi. Lütfen yeniden dene.", "Notifications could not be enabled right now. Please try again."),
         ),
       ),
   });
@@ -46,29 +49,29 @@ export function PushNotificationControl() {
         await subscription.unsubscribe();
       }
       setEnabled(false);
-      setMessage("Push bildirimleri bu cihazda kapatıldı.");
+      setMessage(t("Push bildirimleri bu cihazda kapatıldı.", "Push notifications were disabled on this device."));
     },
     onError: (error) =>
       setMessage(
         getServiceErrorMessage(
           error,
-          "Bildirimler şu anda kapatılamadı. Lütfen yeniden dene.",
+          t("Bildirimler şu anda kapatılamadı. Lütfen yeniden dene.", "Notifications could not be disabled right now. Please try again."),
         ),
       ),
   });
 
-  if (!supported) return <p className="muted">Bu tarayıcı Web Push bildirimlerini desteklemiyor.</p>;
+  if (!supported) return <p className="muted">{t("Bu tarayıcı Web Push bildirimlerini desteklemiyor.", "This browser does not support Web Push notifications.")}</p>;
   return (
     <div className="push-notification-control">
-      <div><strong>Cihaz bildirimleri</strong><span>{enabled ? "Bu tarayıcı push bildirimlerini alabilir." : "Gerçek zamanlı bildirim almak için bu cihazı etkinleştir."}</span></div>
+      <div><strong>{t("Cihaz bildirimleri", "Device notifications")}</strong><span>{enabled ? t("Bu tarayıcı push bildirimlerini alabilir.", "This browser can receive push notifications.") : t("Gerçek zamanlı bildirim almak için bu cihazı etkinleştir.", "Enable this device to receive real-time notifications.")}</span></div>
       <button className="secondary-action" disabled={enable.isPending || disable.isPending || publicKey.isLoading} onClick={() => enabled ? disable.mutate() : enable.mutate()} type="button">
-        {enabled ? <BellOff size={17} /> : <Bell size={17} />} {enabled ? "Bu cihazda kapat" : "Bu cihazda etkinleştir"}
+        {enabled ? <BellOff size={17} /> : <Bell size={17} />} {enabled ? t("Bu cihazda kapat", "Disable on this device") : t("Bu cihazda etkinleştir", "Enable on this device")}
       </button>
       {publicKey.error && !message ? (
         <ServiceFeedback
           compact
           error={publicKey.error}
-          fallback="Bildirim servisine şu anda ulaşılamıyor. Lütfen daha sonra yeniden dene."
+          fallback={t("Bildirim servisine şu anda ulaşılamıyor. Lütfen daha sonra yeniden dene.", "The notification service is currently unavailable. Please try again later.")}
         />
       ) : message ? (
         <ServiceFeedback

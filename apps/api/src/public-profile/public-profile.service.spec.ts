@@ -2,15 +2,21 @@ import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import { PublicProfileService } from "./public-profile.service";
 
 describe("PublicProfileService", () => {
-  const user = { findFirst: jest.fn() };
+  const user = { findFirst: jest.fn(), findUnique: jest.fn() };
   const userBlock = { findFirst: jest.fn() };
   const userFollow = { findMany: jest.fn(), findFirst: jest.fn() };
   const userInterestTag = { findMany: jest.fn() };
   const mediaFile = { findMany: jest.fn() };
   const event = { findMany: jest.fn() };
   const place = { findMany: jest.fn() };
-  const contentComment = { groupBy: jest.fn() };
-  const service = new PublicProfileService({ user, userBlock, userFollow, userInterestTag, mediaFile, event, place, contentComment } as never);
+  const contentComment = { groupBy: jest.fn(), findMany: jest.fn(), count: jest.fn() };
+  const contentReaction = { findMany: jest.fn() };
+  const contentView = { count: jest.fn(), findMany: jest.fn(), groupBy: jest.fn() };
+  const contentShare = { groupBy: jest.fn() };
+  const contentAction = { groupBy: jest.fn() };
+  const privateMessage = { count: jest.fn() };
+  const memberScan = { count: jest.fn() };
+  const service = new PublicProfileService({ user, userBlock, userFollow, userInterestTag, mediaFile, event, place, contentComment, contentReaction, contentView, contentShare, contentAction, privateMessage, memberScan } as never);
   const ownerId = "11111111-1111-4111-8111-111111111111";
   const viewerId = "22222222-2222-4222-8222-222222222222";
   const tag = { id: "33333333-3333-4333-8333-333333333333", name: "AI", slug: "ai", description: null, categoryId: null, status: "active", usageCount: 2 };
@@ -19,14 +25,25 @@ describe("PublicProfileService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     user.findFirst.mockResolvedValue(profile);
+    user.findUnique.mockResolvedValue({ city: "Istanbul", country: "Türkiye" });
     userBlock.findFirst.mockResolvedValue(null);
     userFollow.findMany.mockResolvedValue([]);
     userFollow.findFirst.mockResolvedValue(null);
-    userInterestTag.findMany.mockResolvedValue([{ tagId: tag.id }]);
+    userInterestTag.findMany.mockResolvedValue([{ tagId: tag.id, sentiment: "like" }]);
     mediaFile.findMany.mockResolvedValue([]);
     event.findMany.mockResolvedValue([]);
     place.findMany.mockResolvedValue([]);
     contentComment.groupBy.mockResolvedValue([]);
+    contentComment.findMany.mockResolvedValue([]);
+    contentReaction.findMany.mockResolvedValue([]);
+    contentView.count.mockResolvedValue(0);
+    contentView.findMany.mockResolvedValue([]);
+    contentView.groupBy.mockResolvedValue([]);
+    contentShare.groupBy.mockResolvedValue([]);
+    contentAction.groupBy.mockResolvedValue([]);
+    contentComment.count.mockResolvedValue(0);
+    privateMessage.count.mockResolvedValue(0);
+    memberScan.count.mockResolvedValue(0);
   });
 
   it("returns public identity and common interests", async () => {

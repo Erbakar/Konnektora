@@ -3,7 +3,7 @@ import { Prisma, User, UserStatus } from "@prisma/client";
 import { AuthService } from "../auth/auth.service";
 import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { AdminUserActionDto, AdminUserQueryDto, CreateAdminRoleGroupDto, UpdateAdminRoleGroupDto, UpdateAdminUserDto } from "./admin.dto";
+import { AdminActivityLogQueryDto, AdminUserActionDto, AdminUserQueryDto, CreateAdminRoleGroupDto, UpdateAdminRoleGroupDto, UpdateAdminUserDto } from "./admin.dto";
 
 @Injectable()
 export class AdminService {
@@ -32,6 +32,38 @@ export class AdminService {
       activeTags,
       upcomingEvents
     };
+  }
+
+  async listActivityLogs(query: AdminActivityLogQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 50;
+    const where: Prisma.AdminActivityLogWhereInput = {
+      ...(query.category ? { targetType: query.category } : {}),
+      ...(query.actorId ? { actorId: query.actorId } : {}),
+      ...(query.action ? { action: { contains: query.action, mode: "insensitive" } } : {}),
+      ...(query.from || query.to ? { createdAt: { gte: query.from ? new Date(query.from) : undefined, lte: query.to ? new Date(query.to) : undefined } } : {}),
+      ...(query.q ? { OR: [
+        { action: { contains: query.q, mode: "insensitive" } },
+        { targetType: { contains: query.q, mode: "insensitive" } },
+        { targetId: { contains: query.q, mode: "insensitive" } },
+        { actor: { is: { OR: [
+          { username: { contains: query.q, mode: "insensitive" } },
+          { name: { contains: query.q, mode: "insensitive" } },
+          { email: { contains: query.q, mode: "insensitive" } },
+        ] } } },
+      ] } : {}),
+    };
+    const [total, items] = await Promise.all([
+      this.prisma.adminActivityLog.count({ where }),
+      this.prisma.adminActivityLog.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { actor: { select: { id: true, username: true, name: true, email: true, role: true } } },
+      }),
+    ]);
+    return { items, total, page, pageSize, hasNextPage: page * pageSize < total };
   }
 
   async listUsers(query: AdminUserQueryDto) {

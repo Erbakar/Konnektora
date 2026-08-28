@@ -24,6 +24,14 @@ export class CmsService {
     });
   }
 
+  listPublicSupportCategories(type?: "faq" | "write_to_us") {
+    return this.prisma.cmsCategory.findMany({
+      where: { status: "active", ...(type ? { type } : {}) },
+      orderBy: { name: "asc" },
+      include: { _count: { select: { faqs: true } } },
+    });
+  }
+
   listPublicAnnouncements(user?: User) {
     const now = new Date();
     const targets = user

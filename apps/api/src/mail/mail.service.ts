@@ -117,6 +117,18 @@ export class MailService {
     });
   }
 
+  async sendPlaceInviteEmail(input: { to: string; name: string; placeName: string; placeSlug: string; invitedByName: string; acceptToken?: string }) {
+    const appUrl = this.getAppUrl();
+    const placeUrl = `${appUrl}/places/${input.placeSlug}`;
+    const acceptUrl = input.acceptToken ? `${appUrl}/accept-invite?token=${encodeURIComponent(input.acceptToken)}` : placeUrl;
+    await this.send({
+      to: input.to,
+      subject: `${input.placeName} mekânına davetlisin`,
+      text: `Merhaba ${input.name}, ${input.invitedByName} seni ${input.placeName} mekânına davet etti. Daveti görüntüle: ${acceptUrl}`,
+      html: `<p>Merhaba ${this.escapeHtml(input.name)},</p><p><strong>${this.escapeHtml(input.invitedByName)}</strong> seni <strong>${this.escapeHtml(input.placeName)}</strong> mekânına davet etti.</p><p><a href="${acceptUrl}">Daveti görüntüle</a></p>`,
+    });
+  }
+
   async sendEventReminderEmail(input: { to: string; name: string; eventTitle: string; eventSlug: string; startsAt: Date }) {
     const eventUrl = `${this.getAppUrl()}/events/${input.eventSlug}`;
     return this.send({ to: input.to, subject: `${input.eventTitle} yarın başlıyor`, text: `Merhaba ${input.name}, ${input.eventTitle} etkinliği ${input.startsAt.toLocaleString("tr-TR")} tarihinde başlıyor. ${eventUrl}`, html: `<p>Merhaba ${this.escapeHtml(input.name)},</p><p><strong>${this.escapeHtml(input.eventTitle)}</strong> etkinliği yarın başlıyor.</p><p>${input.startsAt.toLocaleString("tr-TR")}</p><p><a href="${eventUrl}">Etkinliği görüntüle</a></p>` });

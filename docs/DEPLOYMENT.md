@@ -50,6 +50,8 @@ NODE_VERSION=22
 NODE_ENV=production
 VITE_MOCK_API=false
 VITE_API_URL=/api
+GOOGLE_CLIENT_ID=<google-oauth-web-client-id>
+VITE_GOOGLE_CLIENT_ID=<same-google-oauth-web-client-id>
 EMAIL_FROM=Konnektora <noreply@your-domain.com>
 RESEND_API_KEY=<resend-api-key>
 SMS_WEBHOOK_URL=<sms-provider-https-endpoint>
@@ -173,6 +175,7 @@ Render servis URL'i veya başka harici API kullanılacaksa Netlify site settings
 ```text
 VITE_API_URL=https://konnektora-api.onrender.com
 VITE_MOCK_API=false
+VITE_GOOGLE_CLIENT_ID=<google-oauth-web-client-id>
 ```
 
 Sonra Netlify deploy'u yeniden çalıştır.

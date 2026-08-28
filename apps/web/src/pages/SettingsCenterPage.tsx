@@ -51,6 +51,7 @@ import {
 } from "../components/FormInputs";
 import { ProfileVerificationPanel } from "../components/ProfileVerificationPanel";
 import { getSocialCredential } from "../lib/socialProviders";
+import { useLanguage } from "../lib/i18n";
 
 const settings = [
   {
@@ -93,19 +94,27 @@ const settings = [
 ] as const;
 
 export function SettingsCenterPage() {
-  const visibleSettings = settings;
+  const { language } = useLanguage();
+  const translated = language === "tr" ? settings : [
+    { ...settings[0], title: "Profile media", description: "Add, organise or remove your profile media." },
+    { ...settings[1], title: "Edit profile", description: "Update your basic information and interests." },
+    { ...settings[2], title: "Account settings", description: "Manage your account, security and session options." },
+    { ...settings[3], title: "Notification settings", description: "Choose your notification channels and preferences." },
+    { ...settings[4], title: "Privacy settings", description: "Choose who can contact you and view your content." },
+    { ...settings[5], title: "Business and payment settings", description: "Manage plans, billing and payment details." },
+  ];
   return (
     <section className="page settings-center-page">
       <div className="section-header">
         <div>
-          <p className="eyebrow">Hesabın</p>
-          <h1>Ayarlar Merkezi</h1>
-          <p className="lead">Profil ve hesap tercihlerini tek yerden yönet.</p>
+          <p className="eyebrow">{language === "tr" ? "Hesabın" : "Your account"}</p>
+          <h1>{language === "tr" ? "Ayarlar Merkezi" : "Settings Centre"}</h1>
+          <p className="lead">{language === "tr" ? "Profil ve hesap tercihlerini tek yerden yönet." : "Manage your profile and account preferences in one place."}</p>
         </div>
         <CreditCard size={36} />
       </div>
       <div className="settings-center-grid">
-        {visibleSettings.map(({ icon: Icon, ...item }) => (
+        {translated.map(({ icon: Icon, ...item }) => (
           <Link key={item.title} to={item.href}>
             <Icon size={24} />
             <span>
@@ -158,28 +167,38 @@ const sections: Record<
 };
 
 export function SettingsSectionPage({ section }: { section: string }) {
-  const item = sections[section] ?? sections.account!;
+  const { language } = useLanguage();
+  const selected = sections[section] ?? sections.account!;
+  const englishSections: typeof sections = {
+    "profile-pictures": { title: "Profile media", description: "Add, organise and choose your profile picture.", target: "/settings/profile-pictures" },
+    profile: { title: "Edit profile", description: "Edit your basic information, business details and interests.", target: "/settings/profile" },
+    account: { title: "Account settings", description: "Manage your phone, password, connected accounts and account status.", target: "/settings/account" },
+    notifications: { title: "Notification settings", description: "Manage email and push notification preferences.", target: "/settings/notifications" },
+    privacy: { title: "Privacy settings", description: "Manage profile, message, event and place visibility.", target: "/settings/privacy" },
+    business: { title: "Business and payment settings", description: "Manage plans, billing, bank and payment settings.", target: "/finance" },
+  };
+  const item = language === "tr" ? selected : englishSections[section] ?? englishSections.account!;
   const user = getUserSession();
   return (
     <section className="page settings-section-page">
       <Link className="back-link" to="/settings">
-        ← Ayarlar Merkezi
+        ← {language === "tr" ? "Ayarlar Merkezi" : "Settings Centre"}
       </Link>
       <div className="section-header">
         <div>
-          <p className="eyebrow">Ayarlar</p>
+          <p className="eyebrow">{language === "tr" ? "Ayarlar" : "Settings"}</p>
           <h1>{item.title}</h1>
           <p className="lead">{item.description}</p>
         </div>
       </div>
       {!user ? (
         <div className="identity-panel">
-          <h2>Giriş gerekli</h2>
+          <h2>{language === "tr" ? "Giriş gerekli" : "Login required"}</h2>
           <p>
-            Bu ayarları görüntülemek ve değiştirmek için hesabınıza giriş yapın.
+            {language === "tr" ? "Bu ayarları görüntülemek ve değiştirmek için hesabınıza giriş yapın." : "Log in to view and change these settings."}
           </p>
           <Link className="primary-action" to="/login">
-            Giriş yap
+            {language === "tr" ? "Giriş yap" : "Log in"}
           </Link>
         </div>
       ) : section === "profile-pictures" ? (
@@ -200,6 +219,8 @@ export function SettingsSectionPage({ section }: { section: string }) {
 }
 
 function ProfilePicturesSettings() {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const client = useQueryClient();
   const media = useQuery({
     queryKey: ["profile-media"],
@@ -222,7 +243,7 @@ function ProfilePicturesSettings() {
   return (
     <div className="identity-panel">
       <label className="primary-action">
-        Yeni fotoğraf/video yükle
+        {t("Yeni fotoğraf/video yükle", "Upload a new photo/video")}
         <input
           accept="image/*,video/mp4,video/webm"
           hidden
@@ -238,40 +259,42 @@ function ProfilePicturesSettings() {
         {media.data?.map((item) => (
           <article key={item.id}>
             {item.type === "image" ? (
-              <img alt="Profil medyası" src={resolveMediaUrl(item.url)} />
+              <img alt={t("Profil medyası", "Profile media")} src={resolveMediaUrl(item.url)} />
             ) : (
               <video controls src={resolveMediaUrl(item.url)} />
             )}
             <div className="row-actions">
               {item.type === "image" && !item.isProfilePicture ? (
                 <button onClick={() => primary.mutate(item.id)}>
-                  Profil fotoğrafı yap
+                  {t("Profil fotoğrafı yap", "Set as profile picture")}
                 </button>
               ) : null}
               {item.isProfilePicture ? (
-                <strong>Aktif profil fotoğrafı</strong>
+                <strong>{t("Aktif profil fotoğrafı", "Current profile picture")}</strong>
               ) : null}
               <button
                 className="danger-action"
                 onClick={() =>
-                  window.confirm("Bu medya silinsin mi?") &&
+                  window.confirm(t("Bu medya silinsin mi?", "Delete this media?")) &&
                   remove.mutate(item.id)
                 }
               >
-                Sil
+                {t("Sil", "Delete")}
               </button>
             </div>
           </article>
         ))}
       </div>
       {upload.isError || primary.isError || remove.isError ? (
-        <p className="form-error">Medya işlemi tamamlanamadı.</p>
+        <p className="form-error">{t("Medya işlemi tamamlanamadı.", "The media action could not be completed.")}</p>
       ) : null}
     </div>
   );
 }
 
 function ProfileSettings() {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const client = useQueryClient();
   const profile = useQuery({ queryKey: ["profile"], queryFn: getMyProfile });
   const tags = useQuery({
@@ -284,7 +307,11 @@ function ProfileSettings() {
   });
   const save = useMutation({
     mutationFn: updateMyProfile,
-    onSuccess: () => client.invalidateQueries({ queryKey: ["profile"] }),
+    onSuccess: (updated) => {
+      const session = getUserSession();
+      if (session) updateUserSession({ ...session, name: updated.name, username: updated.username, city: updated.city, country: updated.country, accountType: updated.accountType });
+      void client.invalidateQueries({ queryKey: ["profile"] });
+    },
   });
   const saveInterests = useMutation({
     mutationFn: updateProfileAffinities,
@@ -292,7 +319,7 @@ function ProfileSettings() {
       client.invalidateQueries({ queryKey: ["profile-affinities"] }),
   });
   if (!profile.data || !tags.data || !affinities.data)
-    return <div className="identity-panel">Profil yükleniyor…</div>;
+    return <div className="identity-panel">{t("Profil yükleniyor…", "Loading profile…")}</div>;
   const currentSentiments = new Map(
     (affinities.data ?? []).map((item) => [item.tag.id, item.sentiment]),
   );
@@ -327,12 +354,12 @@ function ProfileSettings() {
         <div className="form-grid">
           <label>
             {profile.data.accountType === "corporate"
-              ? "Yetkili Ad Soyadı"
-              : "Ad soyad"}
+              ? t("Yetkili Ad Soyadı", "Authorised representative")
+              : t("Ad soyad", "Full name")}
             <input defaultValue={profile.data.name} name="name" required />
           </label>
           <label>
-            Kullanıcı adı
+            {t("Kullanıcı adı", "Username")}
             <input defaultValue={profile.data.username ?? ""} name="username" />
           </label>
           <CountryCityFields
@@ -342,7 +369,7 @@ function ProfileSettings() {
           {profile.data.accountType === "individual" ? (
             <>
               <label>
-                Doğum tarihi
+                {t("Doğum tarihi", "Date of birth")}
                 <input
                   defaultValue={
                     profile.data.birthDate
@@ -354,32 +381,32 @@ function ProfileSettings() {
                 />
               </label>
               <label>
-                Cinsiyet
+                {t("Cinsiyet", "Gender")}
                 <select defaultValue={profile.data.gender ?? ""} name="gender">
-                  <option value="">Belirtmek istemiyorum</option>
-                  <option value="female">Kadın</option>
-                  <option value="male">Erkek</option>
+                  <option value="">{t("Belirtmek istemiyorum", "Prefer not to say")}</option>
+                  <option value="female">{t("Kadın", "Female")}</option>
+                  <option value="male">{t("Erkek", "Male")}</option>
                 </select>
               </label>
             </>
           ) : (
             <>
               <label>
-                İlçe
+                {t("İlçe", "District")}
                 <input
                   defaultValue={profile.data.district ?? ""}
                   name="district"
                 />
               </label>
               <label>
-                Adres
+                {t("Adres", "Address")}
                 <input
                   defaultValue={profile.data.address ?? ""}
                   name="address"
                 />
               </label>
               <label>
-                İşletme adı
+                {t("İşletme adı", "Business name")}
                 <input
                   defaultValue={profile.data.companyName ?? ""}
                   name="companyName"
@@ -387,7 +414,7 @@ function ProfileSettings() {
                 />
               </label>
               <label>
-                Ticari unvan
+                {t("Ticari unvan", "Registered business name")}
                 <input
                   defaultValue={profile.data.tradeName ?? ""}
                   name="tradeName"
@@ -395,14 +422,14 @@ function ProfileSettings() {
                 />
               </label>
               <label>
-                Şirket türü
+                {t("Şirket türü", "Company type")}
                 <input
                   defaultValue={profile.data.companyType ?? ""}
                   name="companyType"
                 />
               </label>
               <label>
-                Faaliyet alanı
+                {t("Faaliyet alanı", "Business category")}
                 <input
                   defaultValue={profile.data.businessCategory ?? ""}
                   name="businessCategory"
@@ -411,7 +438,7 @@ function ProfileSettings() {
             </>
           )}
           <label>
-            Web sitesi
+            {t("Web sitesi", "Website")}
             <input
               defaultValue={profile.data.website ?? ""}
               name="website"
@@ -420,13 +447,13 @@ function ProfileSettings() {
           </label>
         </div>
         <button className="primary-action" disabled={save.isPending}>
-          Kaydet
+          {t("Kaydet", "Save")}
         </button>
         {save.isSuccess ? (
-          <p className="form-success">Profil kaydedildi.</p>
+          <p className="form-success">{t("Profil kaydedildi.", "Profile saved.")}</p>
         ) : null}
         {save.isError ? (
-          <p className="form-error">Profil kaydedilemedi.</p>
+          <p className="form-error">{t("Profil kaydedilemedi.", "Profile could not be saved.")}</p>
         ) : null}
       </form>
       <form
@@ -449,8 +476,8 @@ function ProfileSettings() {
           );
         }}
       >
-        <h2>İlgi alanları</h2>
-        <p>Profilinde göstermek istediğin etiketleri ve duygunu seç.</p>
+        <h2>{t("İlgi alanları", "Interests")}</h2>
+        <p>{t("Profilinde göstermek istediğin etiketleri ve duygunu seç.", "Choose the tags and sentiment you want to show on your profile.")}</p>
         <div className="settings-interest-grid">
           {tags.data?.map((tag) => (
             <article key={tag.id}>
@@ -464,25 +491,25 @@ function ProfileSettings() {
                 <span>#{tag.name}</span>
               </label>
               <select
-                aria-label={`${tag.name} duygusu`}
+                aria-label={t(`${tag.name} duygusu`, `${tag.name} sentiment`)}
                 defaultValue={currentSentiments.get(tag.id) ?? "like"}
                 name={`sentiment:${tag.id}`}
               >
-                <option value="like">Beğeniyorum</option>
-                <option value="ok">Nötr</option>
-                <option value="dislike">Beğenmiyorum</option>
+                <option value="like">{t("Beğeniyorum", "Like")}</option>
+                <option value="ok">{t("Nötr", "Neutral")}</option>
+                <option value="dislike">{t("Beğenmiyorum", "Dislike")}</option>
               </select>
             </article>
           ))}
         </div>
         <button className="primary-action" disabled={saveInterests.isPending}>
-          İlgi alanlarını kaydet
+          {t("İlgi alanlarını kaydet", "Save interests")}
         </button>
         {saveInterests.isSuccess ? (
-          <p className="form-success">İlgi alanları güncellendi.</p>
+          <p className="form-success">{t("İlgi alanları güncellendi.", "Interests updated.")}</p>
         ) : null}
         {saveInterests.isError ? (
-          <p className="form-error">İlgi alanları güncellenemedi.</p>
+          <p className="form-error">{t("İlgi alanları güncellenemedi.", "Interests could not be updated.")}</p>
         ) : null}
       </form>
     </div>
@@ -490,6 +517,8 @@ function ProfileSettings() {
 }
 
 function AccountSettings() {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const client = useQueryClient();
   const user = getUserSession()!;
   const profile = useQuery({
@@ -502,6 +531,7 @@ function AccountSettings() {
   });
   const [pendingPhone, setPendingPhone] = useState("");
   const [demoPhoneCode, setDemoPhoneCode] = useState("");
+  const [passwordMismatch, setPasswordMismatch] = useState(false);
   const change = useMutation({ mutationFn: changePassword });
   const updateEmail = useMutation({
     mutationFn: async (email: string) => {
@@ -562,11 +592,11 @@ function AccountSettings() {
           updateEmail.mutate(String(new FormData(event.currentTarget).get("email") || ""));
         }}
       >
-        <h2>E-posta adresi</h2>
+        <h2>{t("E-posta adresi", "Email address")}</h2>
         <EmailInput defaultValue={profile.data?.email ?? user.email} name="email" required />
-        <button className="primary-action" disabled={updateEmail.isPending}>E-postayı güncelle</button>
-        {updateEmail.isSuccess ? <p className="form-success">E-posta güncellendi; doğrulama bağlantısı gönderildi.</p> : null}
-        {updateEmail.isError ? <p className="form-error">E-posta güncellenemedi.</p> : null}
+        <button className="primary-action" disabled={updateEmail.isPending}>{t("E-postayı güncelle", "Update email")}</button>
+        {updateEmail.isSuccess ? <p className="form-success">{t("E-posta güncellendi; doğrulama bağlantısı gönderildi.", "Email updated; a verification link has been sent.")}</p> : null}
+        {updateEmail.isError ? <p className="form-error">{t("E-posta güncellenemedi.", "Email could not be updated.")}</p> : null}
       </form>
       <form
         className="identity-panel settings-form"
@@ -579,13 +609,13 @@ function AccountSettings() {
           else requestPhone.mutate(phone);
         }}
       >
-        <h2>Telefon numarası</h2>
+        <h2>{t("Telefon numarası", "Phone number")}</h2>
         {pendingPhone ? (
           <>
-            <p>{pendingPhone} numarasına gelen kodu girin.</p>
+            <p>{t(`${pendingPhone} numarasına gelen kodu girin.`, `Enter the code sent to ${pendingPhone}.`)}</p>
             {demoPhoneCode ? (
               <div className="demo-verification-code">
-                <span>Demo doğrulama kodu</span>
+                <span>{t("Demo doğrulama kodu", "Demo verification code")}</span>
                 <strong>{demoPhoneCode}</strong>
               </div>
             ) : null}
@@ -602,14 +632,14 @@ function AccountSettings() {
           className="primary-action"
           disabled={requestPhone.isPending || confirmPhone.isPending}
         >
-          {pendingPhone ? "Numarayı doğrula" : "Doğrulama kodu gönder"}
+          {pendingPhone ? t("Numarayı doğrula", "Verify number") : t("Doğrulama kodu gönder", "Send verification code")}
         </button>
         {requestPhone.isError || confirmPhone.isError ? (
-          <p className="form-error">Telefon doğrulanamadı.</p>
+          <p className="form-error">{t("Telefon doğrulanamadı.", "Phone number could not be verified.")}</p>
         ) : null}
       </form>
       <section className="identity-panel settings-form">
-        <h2>Bağlı hesaplar</h2>
+        <h2>{t("Bağlı hesaplar", "Connected accounts")}</h2>
         {(["google", "facebook"] as SocialProvider[]).map((provider) => {
           const connected = socials.data?.some(
             (item) => item.provider === provider,
@@ -625,7 +655,7 @@ function AccountSettings() {
                 }
                 type="button"
               >
-                {connected ? "Bağlantıyı kaldır" : "Bağla"}
+                {connected ? t("Bağlantıyı kaldır", "Disconnect") : t("Bağla", "Connect")}
               </button>
             </div>
           );
@@ -639,14 +669,17 @@ function AccountSettings() {
           const currentPassword = String(form.get("currentPassword") || "");
           const newPassword = String(form.get("newPassword") || "");
           const confirmation = String(form.get("confirmation") || "");
-          if (newPassword !== confirmation)
-            return window.alert("Yeni şifreler eşleşmiyor.");
+          if (newPassword !== confirmation) {
+            setPasswordMismatch(true);
+            return;
+          }
+          setPasswordMismatch(false);
           change.mutate({ currentPassword, newPassword });
         }}
       >
-        <h2>Şifreyi değiştir</h2>
+        <h2>{t("Şifreyi değiştir", "Change password")}</h2>
         <label>
-          Mevcut şifre
+          {t("Mevcut şifre", "Current password")}
           <input
             autoComplete="current-password"
             name="currentPassword"
@@ -655,7 +688,7 @@ function AccountSettings() {
           />
         </label>
         <label>
-          Yeni şifre
+          {t("Yeni şifre", "New password")}
           <input
             autoComplete="new-password"
             minLength={8}
@@ -665,7 +698,7 @@ function AccountSettings() {
           />
         </label>
         <label>
-          Yeni şifre tekrar
+          {t("Yeni şifre tekrar", "Confirm new password")}
           <input
             autoComplete="new-password"
             minLength={8}
@@ -675,13 +708,14 @@ function AccountSettings() {
           />
         </label>
         <button className="primary-action" disabled={change.isPending}>
-          Şifreyi güncelle
+          {t("Şifreyi güncelle", "Update password")}
         </button>
+        {passwordMismatch ? <p className="form-error" role="alert">{t("Yeni şifreler eşleşmiyor.", "The new passwords do not match.")}</p> : null}
         {change.isSuccess ? (
-          <p className="form-success">Şifre güncellendi.</p>
+          <p className="form-success">{t("Şifre güncellendi.", "Password updated.")}</p>
         ) : null}
         {change.isError ? (
-          <p className="form-error">Şifre güncellenemedi.</p>
+          <p className="form-error">{t("Şifre güncellenemedi.", "Password could not be updated.")}</p>
         ) : null}
       </form>
       <form
@@ -695,20 +729,20 @@ function AccountSettings() {
           });
         }}
       >
-        <h2>Hesabı dondur</h2>
+        <h2>{t("Hesabı dondur", "Freeze account")}</h2>
         <label>
-          Neden
+          {t("Neden", "Reason")}
           <textarea minLength={5} name="reason" required />
         </label>
         <label>
-          Mevcut şifre
+          {t("Mevcut şifre", "Current password")}
           <input name="currentPassword" required type="password" />
         </label>
         <button className="danger-action" disabled={freeze.isPending}>
-          Hesabı dondur
+          {t("Hesabı dondur", "Freeze account")}
         </button>
         {freeze.isError ? (
-          <p className="form-error">Hesap dondurulamadı.</p>
+          <p className="form-error">{t("Hesap dondurulamadı.", "Account could not be frozen.")}</p>
         ) : null}
       </form>
     </div>
@@ -730,7 +764,24 @@ const notificationLabels: Record<string, string> = {
   place_invite: "Mekân daveti",
   place_manager: "Mekân yöneticiliği",
 };
+const notificationLabelsEn: Record<string, string> = {
+  tag_request: "Tag request",
+  private_message: "Private message",
+  mention: "Mention",
+  comment: "Comment",
+  password_changed: "Password change",
+  email_changed: "Email change",
+  phone_changed: "Phone change",
+  login: "New login",
+  admin_message: "Admin message",
+  event_invite: "Event invitation",
+  event_manager: "Event manager role",
+  place_invite: "Place invitation",
+  place_manager: "Place manager role",
+};
 function NotificationSettings() {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const client = useQueryClient();
   const preferences = useQuery({
     queryKey: ["notification-preferences"],
@@ -760,21 +811,21 @@ function NotificationSettings() {
       <div className="settings-preference-list">
         {preferences.data?.map((item) => (
           <label key={item.topic}>
-            <span>{notificationLabels[item.topic] ?? item.topic}</span>
+            <span>{(language === "tr" ? notificationLabels : notificationLabelsEn)[item.topic] ?? item.topic}</span>
             <select defaultValue={item.channel} name={item.topic}>
-              <option value="both">E-posta ve push</option>
-              <option value="email">Yalnız e-posta</option>
-              <option value="push">Yalnız push</option>
-              <option value="none">Kapalı</option>
+              <option value="both">{t("E-posta ve push", "Email and push")}</option>
+              <option value="email">{t("Yalnız e-posta", "Email only")}</option>
+              <option value="push">{t("Yalnız push", "Push only")}</option>
+              <option value="none">{t("Kapalı", "Off")}</option>
             </select>
           </label>
         ))}
       </div>
       <button className="primary-action" disabled={save.isPending}>
-        Tercihleri kaydet
+        {t("Tercihleri kaydet", "Save preferences")}
       </button>
       {save.isSuccess ? (
-        <p className="form-success">Bildirim tercihleri kaydedildi.</p>
+        <p className="form-success">{t("Bildirim tercihleri kaydedildi.", "Notification preferences saved.")}</p>
       ) : null}
     </form>
   );
@@ -807,6 +858,7 @@ const privacyLabels: Record<(typeof privacyFields)[number], string> = {
   tradeNameAudience: "Ticari unvanımı kim görebilir?",
 };
 function PrivacySettings() {
+  const { language } = useLanguage();
   const user = getUserSession()!;
   const client = useQueryClient();
   const privacy = useQuery({
@@ -819,7 +871,7 @@ function PrivacySettings() {
       client.invalidateQueries({ queryKey: ["privacy-settings"] }),
   });
   if (!privacy.data)
-    return <div className="identity-panel">Gizlilik ayarları yükleniyor…</div>;
+    return <div className="identity-panel">{language === "tr" ? "Gizlilik ayarları yükleniyor…" : "Loading privacy settings…"}</div>;
   const visibleFields = privacyFields.filter((field) =>
     user.accountType === "corporate"
       ? field !== "locationAudience"
@@ -861,34 +913,48 @@ function PrivacySettings() {
           name="directoryDiscoverable"
           type="checkbox"
         />
-        Arkadaşlarım beni aramada bulabilsin
+        {language === "tr" ? "Arkadaşlarım beni aramada bulabilsin" : "Let my friends find me in search"}
       </label>
       <div className="form-grid">
         {visibleFields.map((field) => (
           <label key={field}>
-            {privacyLabels[field]}
+            {language === "tr" ? privacyLabels[field] : ({
+              messageAudience: "Who can message me?",
+              eventAudience: "Who can see my events?",
+              eventInviteAudience: "Who can invite me to events?",
+              placeAudience: "Who can see my places?",
+              placeInviteAudience: "Who can invite me to places?",
+              profileNameAudience: "Full name visibility",
+              demographicsAudience: "Age and gender visibility",
+              locationAudience: "Who can see the city saved in my profile?",
+              websiteAudience: "Website visibility",
+              addressAudience: "Who can see the address saved in my profile?",
+              tradeNameAudience: "Who can see my registered business name?",
+            } as typeof privacyLabels)[field]}
             <select defaultValue={privacy.data[field]} name={field}>
-              <option value="everybody">Herkes</option>
-              <option value="following">Takip ettiklerim</option>
-              <option value="network">Ağım</option>
+              <option value="everybody">{language === "tr" ? "Herkes" : "Everyone"}</option>
+              <option value="following">{language === "tr" ? "Takip ettiklerim" : "People I follow"}</option>
+              <option value="network">{language === "tr" ? "Ağım" : "My network"}</option>
               {!fixedAudience.has(field) ? (
-                <option value="nobody">Hiç kimse</option>
+                <option value="nobody">{language === "tr" ? "Hiç kimse" : "Nobody"}</option>
               ) : null}
             </select>
           </label>
         ))}
       </div>
       <button className="primary-action" disabled={save.isPending}>
-        Gizliliği kaydet
+        {language === "tr" ? "Gizliliği kaydet" : "Save privacy settings"}
       </button>
       {save.isSuccess ? (
-        <p className="form-success">Gizlilik ayarları kaydedildi.</p>
+        <p className="form-success">{language === "tr" ? "Gizlilik ayarları kaydedildi." : "Privacy settings saved."}</p>
       ) : null}
     </form>
   );
 }
 
 function BusinessSettings({ user }: { user: NonNullable<ReturnType<typeof getUserSession>> }) {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const upgrade = useMutation({
     mutationFn: (input: { companyName: string; tradeName: string; companyType?: string; businessCategory?: string }) => upgradeCorporateAccount(input),
     onSuccess: () => {
@@ -901,31 +967,30 @@ function BusinessSettings({ user }: { user: NonNullable<ReturnType<typeof getUse
       event.preventDefault(); const form = new FormData(event.currentTarget);
       upgrade.mutate({ companyName: String(form.get("companyName") ?? ""), tradeName: String(form.get("tradeName") ?? ""), companyType: String(form.get("companyType") ?? "") || undefined, businessCategory: String(form.get("businessCategory") ?? "") || undefined });
     }}>
-      <h2>Kurumsal hesaba geç</h2>
-      <p>Etkinlik, mekân, finans ve kurumsal doğrulama araçlarını aç. Mevcut profilin ve bağlantıların korunur.</p>
-      <label>İşletme adı<input name="companyName" minLength={2} required /></label>
-      <label>Ticari unvan<input name="tradeName" minLength={2} required /></label>
-      <div className="form-grid"><label>Şirket türü<input name="companyType" placeholder="Örn. Limited Şirket" /></label><label>İşletme kategorisi<input name="businessCategory" placeholder="Örn. Etkinlik organizasyonu" /></label></div>
-      <button className="primary-action" disabled={upgrade.isPending}>{upgrade.isPending ? "Geçiş yapılıyor…" : "Kurumsal hesaba geç"}</button>
-      {upgrade.isError ? <p className="form-error">Hesap türü güncellenemedi. Bilgileri kontrol edip tekrar deneyin.</p> : null}
+      <h2>{t("Kurumsal hesaba geç", "Switch to a business account")}</h2>
+      <p>{t("Etkinlik, mekân, finans ve kurumsal doğrulama araçlarını aç. Mevcut profilin ve bağlantıların korunur.", "Unlock event, place, finance and business verification tools. Your existing profile and connections are preserved.")}</p>
+      <label>{t("İşletme adı", "Business name")}<input name="companyName" minLength={2} required /></label>
+      <label>{t("Ticari unvan", "Registered business name")}<input name="tradeName" minLength={2} required /></label>
+      <div className="form-grid"><label>{t("Şirket türü", "Company type")}<input name="companyType" placeholder={t("Örn. Limited Şirket", "E.g. Limited company")} /></label><label>{t("İşletme kategorisi", "Business category")}<input name="businessCategory" placeholder={t("Örn. Etkinlik organizasyonu", "E.g. Event organisation")} /></label></div>
+      <button className="primary-action" disabled={upgrade.isPending}>{upgrade.isPending ? t("Geçiş yapılıyor…", "Switching…") : t("Kurumsal hesaba geç", "Switch to a business account")}</button>
+      {upgrade.isError ? <p className="form-error">{t("Hesap türü güncellenemedi. Bilgileri kontrol edip tekrar deneyin.", "The account type could not be updated. Check your details and try again.")}</p> : null}
     </form>
   );
   return (
     <div className="identity-panel settings-form">
-      <h2>Business ve ödeme</h2>
+      <h2>{t("Business ve ödeme", "Business and payments")}</h2>
       <p>
-        Kurumsal paketini, cüzdanını, ödeme yöntemlerini, hesap hareketlerini ve
-        faturalarını yönet.
+        {t("Kurumsal paketini, cüzdanını, ödeme yöntemlerini, hesap hareketlerini ve faturalarını yönet.", "Manage your business plan, wallet, payment methods, transactions and invoices.")}
       </p>
       <div className="row-actions">
         <Link className="primary-action" to="/finance">
-          Cüzdan ve ödeme ayarları
+          {t("Cüzdan ve ödeme ayarları", "Wallet and payment settings")}
         </Link>
         <Link className="secondary-action" to="/store">
-          Paketleri görüntüle
+          {t("Paketleri görüntüle", "View plans")}
         </Link>
         <Link className="secondary-action" to="/business">
-          Business çözümleri
+          {t("Business çözümleri", "Business solutions")}
         </Link>
       </div>
     </div>

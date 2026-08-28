@@ -51,6 +51,24 @@ export class ContentAdminController {
     return this.contentAdminService.listComments(query);
   }
 
+  @Get("posts")
+  @RequirePermissions("posts.manage")
+  listPosts(@Query() query: AdminContentQueryDto) {
+    return this.contentAdminService.listPosts(query);
+  }
+
+  @Get("posts/:id")
+  @RequirePermissions("posts.manage")
+  getPost(@Param("id") id: string) {
+    return this.contentAdminService.getPost(id);
+  }
+
+  @Patch("posts/:id")
+  @RequirePermissions("posts.manage")
+  updatePost(@Param("id") id: string, @Body() body: UpdateAdminContentStatusDto) {
+    return this.contentAdminService.updatePost(id, body);
+  }
+
   @Get("comments/:id")
   @RequirePermissions("comments.manage")
   getComment(@Param("id") id: string) {
@@ -64,19 +82,19 @@ export class ContentAdminController {
   }
 
   @Get("private-messages")
-  @RequirePermissions("messages.write_to_us.manage")
+  @RequirePermissions("private_messages.manage")
   listPrivateMessages(@Query() query: AdminContentQueryDto) {
     return this.contentAdminService.listPrivateMessages(query);
   }
 
   @Get("private-messages/:id")
-  @RequirePermissions("messages.write_to_us.manage")
+  @RequirePermissions("private_messages.manage")
   getPrivateMessage(@Param("id") id: string) {
     return this.contentAdminService.getPrivateMessage(id);
   }
 
   @Patch("private-messages/:id")
-  @RequirePermissions("messages.write_to_us.manage")
+  @RequirePermissions("private_messages.manage")
   updatePrivateMessage(@Param("id") id: string, @Body() body: UpdateAdminContentStatusDto) {
     return this.contentAdminService.updatePrivateMessage(id, body);
   }

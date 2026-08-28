@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { User } from "@prisma/client";
 import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
@@ -22,6 +22,11 @@ export class CmsController {
   @Get("faqs")
   listPublicFaqs() {
     return this.cmsService.listPublicFaqs();
+  }
+
+  @Get("support/categories")
+  listPublicSupportCategories(@Query("type") type?: "faq" | "write_to_us") {
+    return this.cmsService.listPublicSupportCategories(type);
   }
 
   @Get("announcements")

@@ -5,9 +5,11 @@ import { PlacesController } from "./places.controller";
 import { PlacesService } from "./places.service";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { IdentityModule } from "../identity/identity.module";
+import { MailModule } from "../mail/mail.module";
+import { SmsModule } from "../sms/sms.module";
 
 @Module({
-  imports: [AuthModule, PrismaModule, NotificationsModule, IdentityModule],
+  imports: [AuthModule, PrismaModule, NotificationsModule, IdentityModule, MailModule, SmsModule],
   controllers: [PlacesController],
   providers: [PlacesService],
 })

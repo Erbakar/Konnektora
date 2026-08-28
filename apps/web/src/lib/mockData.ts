@@ -51,9 +51,26 @@ function tag(slug: string): Tag {
   return found;
 }
 
+const demoCityCoordinates: Record<string, { latitude: number; longitude: number }> = {
+  Amsterdam: { latitude: 52.3676, longitude: 4.9041 },
+  Berlin: { latitude: 52.52, longitude: 13.405 },
+  Copenhagen: { latitude: 55.6761, longitude: 12.5683 },
+  Istanbul: { latitude: 41.0082, longitude: 28.9784 },
+  Lisbon: { latitude: 38.7223, longitude: -9.1393 },
+  London: { latitude: 51.5074, longitude: -0.1278 },
+  "New York": { latitude: 40.7128, longitude: -74.006 },
+  Paris: { latitude: 48.8566, longitude: 2.3522 },
+  "San Francisco": { latitude: 37.7749, longitude: -122.4194 },
+  Toronto: { latitude: 43.6532, longitude: -79.3832 },
+};
+
 function event(input: Omit<Event, "status" | "timezone" | "language" | "externalRegistrationUrl" | "price" | "currency"> & Partial<Pick<Event, "price" | "currency">>): Event {
+  const coordinates = input.city ? demoCityCoordinates[input.city] : undefined;
   return {
     ...input,
+    latitude: input.latitude ?? coordinates?.latitude ?? null,
+    longitude: input.longitude ?? coordinates?.longitude ?? null,
+    createdById: input.createdById ?? "88888888-8888-4888-8888-888888888888",
     status: "published",
     timezone: input.city ? "Europe/Istanbul" : "UTC",
     language: "en",
@@ -67,7 +84,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "aaaaaaaa-0001-4000-8000-000000000001",
     title: "Global Startup Demo Night",
-    slug: "global-startup-demo-night",
+    slug: "global-startup-demo-night-420001",
     summary: "Early-stage startup teams present their products inside a curated closed community.",
     description:
       "Founders run five-minute demos, collect product feedback and meet investors in a moderated networking flow managed inside Konnektora.",
@@ -85,7 +102,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "aaaaaaaa-0002-4000-8000-000000000002",
     title: "AI Product Builders Breakfast",
-    slug: "ai-product-builders-breakfast",
+    slug: "ai-product-builders-breakfast-420002",
     summary: "A morning session for founders and product teams building AI products.",
     description:
       "Closed community members discuss discovery, customer interviews and go-to-market decisions. Organizers approve attendance requests from the guest list.",
@@ -103,7 +120,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "aaaaaaaa-0003-4000-8000-000000000003",
     title: "SaaS Growth Office Hours",
-    slug: "saas-growth-office-hours",
+    slug: "saas-growth-office-hours-420003",
     summary: "A closed office-hours session for SaaS founders focused on growth and retention.",
     description:
       "Participants bring their metrics, work through problems in small groups and get practical feedback from experienced operators.",
@@ -121,7 +138,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "aaaaaaaa-0004-4000-8000-000000000004",
     title: "Climate Tech Founder Roundtable",
-    slug: "climate-tech-founder-roundtable",
+    slug: "climate-tech-founder-roundtable-420004",
     summary: "A roundtable on funding, regulation and pilot customers for climate tech startups.",
     description:
       "Global founders discuss climate tech financing, enterprise pilot programs and community support for international expansion.",
@@ -139,7 +156,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "bbbbbbbb-0001-4000-8000-000000000001",
     title: "Founders & Operators Mixer",
-    slug: "founders-operators-mixer",
+    slug: "founders-operators-mixer-420005",
     summary: "A fast-paced mixer for founders, operators and community leaders.",
     description:
       "Participants are grouped by interest tags so they can meet relevant people quickly and continue follow-up inside Konnektora.",
@@ -157,7 +174,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "bbbbbbbb-0002-4000-8000-000000000002",
     title: "Remote Builders Social",
-    slug: "remote-builders-social",
+    slug: "remote-builders-social-420006",
     summary: "A location-independent social event for remote builders and operators.",
     description:
       "The online event uses breakout rooms organized around project goals, collaboration interests and current startup challenges.",
@@ -175,7 +192,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "bbbbbbbb-0003-4000-8000-000000000003",
     title: "Investor Coffee Chats",
-    slug: "investor-coffee-chats",
+    slug: "investor-coffee-chats-420007",
     summary: "Curated one-to-one coffee chats between founders and investors.",
     description:
       "Participants apply with short profiles. Organizers approve matches and manage invited or accepted statuses through the guest list.",
@@ -193,7 +210,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "bbbbbbbb-0004-4000-8000-000000000004",
     title: "Community Leaders Dinner",
-    slug: "community-leaders-dinner",
+    slug: "community-leaders-dinner-420008",
     summary: "An invite-only dinner for global community managers and ecosystem builders.",
     description:
       "Community leaders share moderation practices, event quality standards and safety patterns for offline gatherings.",
@@ -211,7 +228,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "cccccccc-0001-4000-8000-000000000001",
     title: "Seed Funding Readiness Clinic",
-    slug: "seed-funding-readiness-clinic",
+    slug: "seed-funding-readiness-clinic-420009",
     summary: "A practical clinic for startups preparing pitch, metrics and data room material.",
     description:
       "Founders review fundraising readiness with experts and leave with a clearer investor narrative and next-step checklist.",
@@ -229,7 +246,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "cccccccc-0002-4000-8000-000000000002",
     title: "Angel Investor AMA",
-    slug: "angel-investor-ama",
+    slug: "angel-investor-ama-420010",
     summary: "A Q&A session with angel investors on deal evaluation and early funding.",
     description:
       "Members submit questions in advance. Organizers group topics and keep the live session focused on practical decisions.",
@@ -247,7 +264,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "cccccccc-0003-4000-8000-000000000003",
     title: "VC Reverse Pitch",
-    slug: "vc-reverse-pitch",
+    slug: "vc-reverse-pitch-420011",
     summary: "VC funds present their thesis and investment criteria to founders.",
     description:
       "Investors take the stage and founders choose which funds they want to meet based on sector fit and stage alignment.",
@@ -265,7 +282,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "cccccccc-0004-4000-8000-000000000004",
     title: "Impact Capital Roundtable",
-    slug: "impact-capital-roundtable",
+    slug: "impact-capital-roundtable-420012",
     summary: "A focused roundtable for impact investors and social venture founders.",
     description:
       "Participants discuss impact measurement, capital structures and global expansion for mission-driven companies.",
@@ -283,7 +300,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "dddddddd-0001-4000-8000-000000000001",
     title: "Solo Founder Accountability Sprint",
-    slug: "solo-founder-accountability-sprint",
+    slug: "solo-founder-accountability-sprint-420013",
     summary: "A weekly goal-setting and accountability session for solo founders.",
     description:
       "Founders share weekly targets, pair with peers and use attendance history to maintain consistent progress.",
@@ -301,7 +318,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "dddddddd-0002-4000-8000-000000000002",
     title: "Founder Mental Load Circle",
-    slug: "founder-mental-load-circle",
+    slug: "founder-mental-load-circle-420014",
     summary: "A private circle for founders to discuss stress, loneliness and decision load.",
     description:
       "The session uses invite-only visibility and a small guest list to protect quality, privacy and psychological safety.",
@@ -319,7 +336,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "dddddddd-0003-4000-8000-000000000003",
     title: "Co-Founder Matching Lab",
-    slug: "co-founder-matching-lab",
+    slug: "co-founder-matching-lab-420015",
     summary: "A controlled matching lab for people looking to build a new company together.",
     description:
       "Participants are matched by skills, interests and working style. Organizers approve profiles before the session.",
@@ -337,7 +354,7 @@ const mockEventTemplates: Event[] = [
   event({
     id: "dddddddd-0004-4000-8000-000000000004",
     title: "Founder Story Night",
-    slug: "founder-story-night",
+    slug: "founder-story-night-420016",
     summary: "A story night where founders share failures, pivots and growth lessons.",
     description:
       "Short stage talks are followed by small-group conversations. Tag links help members discover related events afterwards.",
@@ -362,6 +379,12 @@ function futureDate(daysFromNow: number, hour: number) {
 }
 
 export const mockEvents: Event[] = mockEventTemplates.map((item, index) => {
+  const ownerIds = [
+    "88888888-8888-4888-8888-888888888888",
+    "72000000-0000-4000-8000-000000000003",
+    "72000000-0000-4000-8000-000000000004",
+    "99999999-9999-4999-8999-999999999999",
+  ];
   const startsAt = futureDate(3 + index * 2, 15 + (index % 4));
   const duration = item.endsAt
     ? new Date(item.endsAt).getTime() - new Date(item.startsAt).getTime()
@@ -369,6 +392,7 @@ export const mockEvents: Event[] = mockEventTemplates.map((item, index) => {
 
   return {
     ...item,
+    createdById: ownerIds[index % ownerIds.length],
     startsAt,
     endsAt: new Date(new Date(startsAt).getTime() + duration).toISOString()
   };

@@ -1,15 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { EventParticipant, MemberCard } from "@konnektora/shared";
+import type { MemberCard } from "@konnektora/shared";
 import { CalendarCheck, Mail, MapPin, MoreVertical, Sparkles, UserPlus, UserRound, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { followUser, getUserSession, inviteEventParticipant, listEventParticipants, listFollowing, listMemberSuggestions, listMyEvents, listNewMembers, unfollowUser } from "../lib/api";
+import { addGuestListMember, createGuestList, followUser, getUserSession, listFollowing, listGuestLists, listMemberSuggestions, listMyEvents, listMyPlaces, listNewMembers, unfollowUser } from "../lib/api";
 import { UserIdentityLink, userProfilePath } from "../components/UserIdentityLink";
+import { useLanguage } from "../lib/i18n";
 
 type DirectoryTab = "new" | "popular" | "following" | "guests" | "mutual";
 function memberAge(value: string | Date) { const birth = new Date(value); const now = new Date(); let age = now.getFullYear() - birth.getFullYear(); if (now.getMonth() < birth.getMonth() || now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate()) age -= 1; return Math.max(0, age); }
 
 export function CommunityPage() {
+  const { language } = useLanguage();
+  const c = language === "tr" ? {
+    community: "Topluluk", loginPrompt: "Topluluğu görmek için giriş yap.", login: "Giriş yap", eyebrow: "Konnektora topluluğu", title: "İnsanlar", lead: "Yeni üyeleri keşfet, takip ettiklerini ve etkinlik misafirlerini tek yerde yönet.",
+    new: "Yeni üyeler", popular: "Popüler", following: "Takip ettiklerim", guests: "Misafir listeleri", mutual: "Ortak ilgi alanları", loading: "Kişiler yükleniyor…", joined: "katıldı", age: "yaşında", located: "konumunda", noLocation: "Konum belirtilmedi", followers: "takipçi", shared: "ortak ilgi alanı", followingStatus: "Takipte", follow: "Takip et", guestList: "Misafir listesi", actions: "Kullanıcı aksiyonları", message: "Mesaj gönder", emptyGuests: "Henüz misafir bulunmuyor.", empty: "Bu listede kullanıcı bulunmuyor.", addGuest: "Guest List'e ekle", close: "Kapat", addCopy: "Kullanıcıyı yönettiğin etkinliklerden birinin guest listesine ekle.", noManaged: "Yönettiğin etkinlik bulunmuyor.", addFailed: "Kullanıcı guest listesine eklenemedi.",
+  } : {
+    community: "Community", loginPrompt: "Log in to view the community.", login: "Log in", eyebrow: "Konnektora community", title: "People", lead: "Discover new members and manage people you follow and event guests in one place.",
+    new: "New members", popular: "Popular", following: "Following", guests: "Guest lists", mutual: "Shared interests", loading: "Loading people…", joined: "joined", age: "years old", located: "located in", noLocation: "Location not specified", followers: "followers", shared: "shared interests", followingStatus: "Following", follow: "Follow", guestList: "Guest list", actions: "User actions", message: "Send message", emptyGuests: "No guests yet.", empty: "No members in this list.", addGuest: "Add to Guest List", close: "Close", addCopy: "Add this member to the guest list of an event you manage.", noManaged: "You do not manage any events.", addFailed: "The member could not be added to the guest list.",
+  };
   const client = useQueryClient();
   const user = getUserSession();
   const [searchParams] = useSearchParams();
@@ -19,17 +28,16 @@ export function CommunityPage() {
   const suggestions = useQuery({ queryKey: ["member-suggestions", user?.id], queryFn: listMemberSuggestions, enabled: Boolean(user) });
   const newMembers = useQuery({ queryKey: ["new-members", user?.id], queryFn: listNewMembers, enabled: Boolean(user) });
   const following = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
-  const managedEvents = useQuery({ queryKey: ["my-events", user?.id], queryFn: listMyEvents, enabled: Boolean(user && (tab === "guests" || guestTarget)) });
-  const guests = useQuery({
-    queryKey: ["community-guests", user?.id, managedEvents.data?.map((event) => event.id)],
-    enabled: Boolean(user && tab === "guests" && managedEvents.data),
-    queryFn: async () => {
-      const lists = await Promise.all((managedEvents.data ?? []).map(async (event) => ({ event, participants: await listEventParticipants(event.id, "user") })));
-      return lists.flatMap(({ event, participants }) => participants.map((participant) => ({ event, participant })));
-    }
-  });
+  const managedEvents = useQuery({ queryKey: ["my-events", user?.id, "community-guest-list-permission"], queryFn: listMyEvents, enabled: Boolean(user) });
+  const managedPlaces = useQuery({ queryKey: ["my-places", user?.id, "community-guest-list-permission"], queryFn: listMyPlaces, enabled: Boolean(user) });
+  const guestLists = useQuery({ queryKey: ["guest-lists", user?.id], queryFn: listGuestLists, enabled: Boolean(user && (tab === "guests" || guestTarget)) });
+  const canUseGuestLists = Boolean(user && (
+    ["admin", "super_admin", "curator"].includes(user.role) ||
+    (managedEvents.data ?? []).some((event) => event.createdById === user.id || ["manager", "organizer"].includes(event.viewerParticipation?.role ?? "")) ||
+    (managedPlaces.data ?? []).some((place) => place.createdById === user.id || ["manager", "organizer"].includes(place.viewerMembership?.role ?? ""))
+  ));
   const followingIds = useMemo(() => new Set((following.data ?? []).map((member) => member.id)), [following.data]);
-  const guestMembers = useMemo(() => deduplicateGuests(guests.data ?? [], followingIds), [guests.data, followingIds]);
+  const guestMembers = useMemo(() => deduplicateGuests(guestLists.data ?? [], followingIds), [guestLists.data, followingIds]);
   const members: GuestMember[] = tab === "new"
     ? newMembers.data ?? []
     : tab === "following"
@@ -39,40 +47,41 @@ export function CommunityPage() {
       : [...(suggestions.data ?? [])]
           .filter((member) => tab !== "mutual" || member.commonTagCount > 0)
           .sort((a, b) => tab === "mutual" ? b.commonTagCount - a.commonTagCount : b.followerCount - a.followerCount);
-  const pending = (tab === "new" && newMembers.isLoading) || suggestions.isLoading || following.isLoading || (tab === "guests" && (managedEvents.isLoading || guests.isLoading));
+  const pending = (tab === "new" && newMembers.isLoading) || suggestions.isLoading || following.isLoading || (tab === "guests" && guestLists.isLoading);
   const toggle = useMutation({
     mutationFn: (member: MemberCard) => member.following ? unfollowUser(member.id) : followUser(member.id),
     onSuccess: async () => { await Promise.all([client.invalidateQueries({ queryKey: ["following"] }), client.invalidateQueries({ queryKey: ["member-suggestions"] }), client.invalidateQueries({ queryKey: ["community-guests"] })]); }
   });
-  const addGuest = useMutation({ mutationFn: (eventId: string) => inviteEventParticipant(eventId, { userId: guestTarget!.id, role: "attendee" }, "user"), onSuccess: () => setGuestTarget(null) });
+  const addGuest = useMutation({ mutationFn: (guestListId: string) => addGuestListMember(guestListId, guestTarget!.id), onSuccess: () => { setGuestTarget(null); void client.invalidateQueries({ queryKey: ["guest-lists"] }); } });
+  const [newListName, setNewListName] = useState("");
+  const addList = useMutation({ mutationFn: () => createGuestList(newListName.trim()), onSuccess: () => { setNewListName(""); void client.invalidateQueries({ queryKey: ["guest-lists"] }); } });
 
-  if (!user) return <div className="page"><section className="feed-state"><h1>Topluluk</h1><strong>Topluluğu görmek için giriş yap.</strong><Link className="primary-action" to="/login">Giriş yap</Link></section></div>;
+  if (!user) return <div className="page"><section className="feed-state"><h1>{c.community}</h1><strong>{c.loginPrompt}</strong><Link className="primary-action" to="/login">{c.login}</Link></section></div>;
   return <div className="page community-page">
-    <header className="feed-heading"><div><span className="eyebrow">Konnektora topluluğu</span><h1>İnsanlar</h1><p>Yeni üyeleri keşfet, takip ettiklerini ve etkinlik misafirlerini tek yerde yönet.</p></div></header>
+    <header className="feed-heading"><div><span className="eyebrow">{c.eyebrow}</span><h1>{c.title}</h1><p>{c.lead}</p></div></header>
     <div className="feed-tabs" role="tablist">
-      <button className={tab === "new" ? "active" : ""} onClick={() => setTab("new")}><Sparkles size={17}/> Yeni üyeler</button>
-      <button className={tab === "popular" ? "active" : ""} onClick={() => setTab("popular")}><Users size={17}/> Popüler</button>
-      <button className={tab === "following" ? "active" : ""} onClick={() => setTab("following")}><UserRound size={17}/> Takip ettiklerim</button>
-      <button className={tab === "guests" ? "active" : ""} onClick={() => setTab("guests")}><CalendarCheck size={17}/> Misafir listeleri</button>
-      <button className={tab === "mutual" ? "active" : ""} onClick={() => setTab("mutual")}><Sparkles size={17}/> Ortak ilgi alanları</button>
+      <button className={tab === "new" ? "active" : ""} onClick={() => setTab("new")}><Sparkles size={17}/> {c.new}</button>
+      <button className={tab === "popular" ? "active" : ""} onClick={() => setTab("popular")}><Users size={17}/> {c.popular}</button>
+      <button className={tab === "following" ? "active" : ""} onClick={() => setTab("following")}><UserRound size={17}/> {c.following}</button>
+      <button className={tab === "guests" ? "active" : ""} onClick={() => setTab("guests")}><CalendarCheck size={17}/> {c.guests}</button>
+      <button className={tab === "mutual" ? "active" : ""} onClick={() => setTab("mutual")}><Sparkles size={17}/> {c.mutual}</button>
     </div>
-    {pending ? <div className="feed-state">Kişiler yükleniyor…</div> : members.length ? <section className="community-grid">{members.map((member) => <article className="community-card" key={member.id}>
+    {pending ? <div className="feed-state">{c.loading}</div> : members.length ? <section className="community-grid">{members.map((member) => <article className="community-card" key={member.id}>
       <UserIdentityLink user={member} avatarClassName="post-avatar" showName={false}/>
-      <div className="community-card-body"><Link to={userProfilePath(member)}><strong>{member.username ? `@${member.username}` : member.name}</strong></Link>{tab === "new" && member.createdAt ? <span>{new Intl.RelativeTimeFormat("tr", { numeric: "auto" }).format(Math.ceil((new Date(member.createdAt).getTime() - Date.now()) / 86_400_000), "day")} katıldı</span> : null}{member.birthDate ? <span>{memberAge(member.birthDate)} yaşında</span> : null}<span><MapPin size={14}/>{member.city || member.country ? `${member.city || member.country} konumunda` : "Konum belirtilmedi"}</span><small>{member.followerCount} takipçi · {member.commonTagCount} ortak ilgi alanı</small>{tab === "guests" && member.guestEvents ? <small>{member.guestEvents}</small> : null}</div>
-      <div className="community-card-actions"><button className={member.following ? "secondary-action" : "primary-action"} disabled={toggle.isPending} onClick={() => toggle.mutate(member)}>{member.following ? "Takipte" : "Takip et"}</button><button className="secondary-action" onClick={() => setGuestTarget(member)}><UserPlus size={16}/> Misafir listesi</button><details className="action-menu"><summary aria-label="Kullanıcı aksiyonları"><MoreVertical size={18}/></summary><div><Link to={`/messages?peer=${member.id}`}><Mail size={17}/> Mesaj gönder</Link></div></details></div>
-    </article>)}</section> : <div className="feed-state"><strong>{tab === "guests" ? "Henüz misafir bulunmuyor." : "Bu listede kullanıcı bulunmuyor."}</strong></div>}
-    {guestTarget ? <div className="emotion-modal" role="dialog" aria-modal="true" aria-label="Guest List'e ekle"><div><button aria-label="Kapat" onClick={() => setGuestTarget(null)}>×</button><h2>{guestTarget.name}</h2><p>Kullanıcıyı yönettiğin etkinliklerden birinin guest listesine ekle.</p><div className="admin-list">{managedEvents.data?.map((event) => <button className="admin-list-row" disabled={addGuest.isPending} key={event.id} onClick={() => addGuest.mutate(event.id)}><strong>{event.title}</strong><span>{new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date(event.startsAt))}</span></button>)}</div>{!managedEvents.isLoading && !managedEvents.data?.length ? <p className="form-help">Yönettiğin etkinlik bulunmuyor.</p> : null}{addGuest.isError ? <p className="form-error">Kullanıcı guest listesine eklenemedi.</p> : null}</div></div> : null}
+      <div className="community-card-body"><Link to={userProfilePath(member)}><strong>{member.username ? `@${member.username}` : member.name}</strong></Link>{tab === "new" && member.createdAt ? <span>{new Intl.RelativeTimeFormat(language === "tr" ? "tr" : "en", { numeric: "auto" }).format(Math.ceil((new Date(member.createdAt).getTime() - Date.now()) / 86_400_000), "day")} {c.joined}</span> : null}{member.birthDate ? <span>{memberAge(member.birthDate)} {c.age}</span> : null}<span><MapPin size={14}/>{member.city || member.country ? language === "tr" ? `${member.city || member.country} ${c.located}` : `${c.located} ${member.city || member.country}` : c.noLocation}</span><small>{member.followerCount} {c.followers} · {member.commonTagCount} {c.shared}</small>{tab === "guests" && member.guestEvents ? <small>{member.guestEvents}</small> : null}</div>
+      <div className="community-card-actions"><button className={member.following ? "secondary-action" : "primary-action"} disabled={toggle.isPending} onClick={() => toggle.mutate(member)}>{member.following ? c.followingStatus : c.follow}</button>{canUseGuestLists ? <button className="secondary-action" onClick={() => setGuestTarget(member)}><UserPlus size={16}/> {c.guestList}</button> : null}<details className="action-menu"><summary aria-label={c.actions}><MoreVertical size={18}/></summary><div><Link to={`/messages?peer=${member.id}`}><Mail size={17}/> {c.message}</Link></div></details></div>
+    </article>)}</section> : <div className="feed-state"><strong>{tab === "guests" ? c.emptyGuests : c.empty}</strong></div>}
+    {guestTarget ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setGuestTarget(null)}><section className="content-dialog guest-list-dialog" role="dialog" aria-modal="true" aria-label={c.addGuest} onMouseDown={(event) => event.stopPropagation()}><button className="passport-close" aria-label={c.close} onClick={() => setGuestTarget(null)}>×</button><h2>{guestTarget.username ? `@${guestTarget.username}` : guestTarget.name}</h2><p>{language === "tr" ? "Kullanıcıyı eklemek istediğiniz Guest List'i seçin." : "Choose the Guest List where you want to add this member."}</p><div className="admin-list">{guestLists.data?.slice().sort((a, b) => a.name.localeCompare(b.name)).map((list) => { const exists = list.members.some((member) => member.userId === guestTarget.id); return <button className="admin-list-row" disabled={addGuest.isPending || exists} key={list.id} onClick={() => addGuest.mutate(list.id)}><strong>{list.name}</strong><span>{list.members.length} {language === "tr" ? "kişi" : "people"}{exists ? ` · ${language === "tr" ? "zaten listede" : "already added"}` : ""}</span></button>; })}</div>{!guestLists.isLoading && !guestLists.data?.length ? <p className="form-help">{language === "tr" ? "Henüz Guest List oluşturmadınız." : "You have not created a Guest List yet."}</p> : null}<form className="row-actions" onSubmit={(event) => { event.preventDefault(); if (newListName.trim()) addList.mutate(); }}><input aria-label={language === "tr" ? "Yeni liste adı" : "New list name"} maxLength={80} onChange={(event) => setNewListName(event.target.value)} placeholder={language === "tr" ? "Yeni liste adı" : "New list name"} value={newListName}/><button className="secondary-action" disabled={!newListName.trim() || addList.isPending} type="submit">{language === "tr" ? "Liste oluştur" : "Create list"}</button></form>{addGuest.isError || addList.isError ? <p className="form-error">{c.addFailed}</p> : null}</section></div> : null}
   </div>;
 }
 
 type GuestMember = MemberCard & { guestEvents?: string };
-function deduplicateGuests(items: Array<{ event: { title: string }; participant: EventParticipant }>, followingIds: Set<string>): GuestMember[] {
+function deduplicateGuests(items: Awaited<ReturnType<typeof listGuestLists>>, followingIds: Set<string>): GuestMember[] {
   const result = new Map<string, GuestMember & { eventNames: Set<string> }>();
-  for (const { event, participant } of items) {
-    if (!participant.user) continue;
-    const current = result.get(participant.userId);
-    const eventNames = current?.eventNames ?? new Set<string>(); eventNames.add(event.title);
-    result.set(participant.userId, { id: participant.userId, name: participant.user.name, username: null, accountType: "individual", city: null, country: null, followerCount: 0, commonTagCount: 0, following: followingIds.has(participant.userId), eventNames });
+  for (const list of items) for (const member of list.members) {
+    const current = result.get(member.userId);
+    const eventNames = current?.eventNames ?? new Set<string>(); eventNames.add(list.name);
+    result.set(member.userId, { id: member.userId, name: member.user.name, username: member.user.username ?? null, accountType: "individual", city: null, country: null, followerCount: 0, commonTagCount: 0, following: followingIds.has(member.userId), eventNames });
   }
   return [...result.values()].map(({ eventNames, ...member }) => ({ ...member, guestEvents: [...eventNames].join(" · ") }));
 }

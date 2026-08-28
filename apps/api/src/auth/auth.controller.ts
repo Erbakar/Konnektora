@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { User } from "@prisma/client";
-import { AcceptInviteDto, AvailabilityQueryDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, PasswordResetRequestDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, SocialAuthDto, TokenDto } from "./auth.dto";
+import { AcceptInviteDto, AvailabilityQueryDto, ChangeEmailDto, ChangePasswordDto, ConfirmPhoneVerificationDto, DeactivateAccountDto, EmailDto, LoginDto, PasswordResetRequestDto, RegisterDto, RequestPhoneVerificationDto, ResetPasswordDto, SocialAuthDto, TokenDto } from "./auth.dto";
 import { CurrentUser } from "./current-user.decorator";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { OnboardingJwtAuthGuard } from "./onboarding-jwt-auth.guard";
@@ -72,6 +72,12 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   changePassword(@CurrentUser() user: User, @Body() body: ChangePasswordDto) {
     return this.authService.changePassword(user.id, body);
+  }
+
+  @Patch("me/email")
+  @UseGuards(JwtAuthGuard)
+  changeEmail(@CurrentUser() user: User, @Body() body: ChangeEmailDto) {
+    return this.authService.changeEmail(user.id, body);
   }
 
   @Post("auth/deactivate")

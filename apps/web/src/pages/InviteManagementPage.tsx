@@ -1,26 +1,37 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { EventParticipant, PlaceMember } from "@konnektora/shared";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type {
+  CheckInPassport,
+  EventParticipant,
+  PlaceMember,
+} from "@konnektora/shared";
 import {
+  BadgeCheck,
   CheckCircle2,
   Clipboard,
   LogIn,
   Mail,
   QrCode,
+  Search,
+  Ticket,
   UserPlus,
   Users,
   XCircle,
+  X,
 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { QrCheckInScanner } from "../components/QrCheckInScanner";
 import {
-  checkInEventParticipant,
-  checkInPlaceMember,
+  addGuestListMember,
   createGuestList,
+  decideEventCheckInPassport,
+  decidePlaceCheckInPassport,
   deleteGuestList,
   getEvent,
+  getEventCheckInPassport,
   getFinanceDashboard,
   getPlace,
+  getPlaceCheckInPassport,
   getUserSession,
   inviteEventParticipant,
   invitePlaceMember,
@@ -31,53 +42,146 @@ import {
   listPlaceMembers,
   removeGuestListMember,
   renameGuestList,
-  scanEventTicket,
-  scanPlaceMemberPass,
+  previewEventCheckIn,
+  previewPlaceCheckIn,
   updateEventParticipantStatus,
   updatePlaceMember,
+  resolveMediaUrl,
 } from "../lib/api";
+import { getServiceErrorMessage } from "../lib/serviceErrors";
+import { useLanguage } from "../lib/i18n";
 
-type InviteMethod = "following" | "guest_lists" | "old_attendees" | "username" | "email" | "phone" | "phonebook" | "gmail";
+type InviteMethod =
+  | "following"
+  | "guest_lists"
+  | "old_attendees"
+  | "username"
+  | "email"
+  | "phone"
+  | "phonebook"
+  | "gmail";
+type GuestLists = Awaited<ReturnType<typeof listGuestLists>>;
 
 export function EventInviteManagementPage() {
+  const { language } = useLanguage();
+  const tr = language === "tr";
   const { slug = "" } = useParams();
   const checkInMode = useLocation().hash === "#check-in";
   const user = getUserSession();
   const [inviteMethod, setInviteMethod] = useState<InviteMethod>("following");
+  const [passport, setPassport] = useState<CheckInPassport | null>(null);
+  const [passportMethod, setPassportMethod] = useState<"manual" | "qr" | "nfc">(
+    "manual",
+  );
+  const [oldEventId, setOldEventId] = useState("");
   const client = useQueryClient();
   const event = useQuery({
     queryKey: ["event", slug],
     queryFn: () => getEvent(slug),
     enabled: Boolean(slug && user),
   });
-  const canManage = Boolean(event.data && user && (event.data.createdById === user.id || event.data.viewerParticipation?.status === "accepted" && ["organizer", "manager"].includes(event.data.viewerParticipation.role) || ["admin", "super_admin", "curator"].includes(user.role)));
+  const canManage = Boolean(
+    event.data &&
+    user &&
+    (event.data.createdById === user.id ||
+      (event.data.viewerParticipation?.status === "accepted" &&
+        ["organizer", "manager"].includes(
+          event.data.viewerParticipation.role,
+        )) ||
+      ["admin", "super_admin", "curator"].includes(user.role)),
+  );
   const participants = useQuery({
     queryKey: ["event-participants", event.data?.id],
     queryFn: () => listEventParticipants(event.data!.id, "user"),
     enabled: canManage,
     retry: false,
   });
-  const following = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
-  const managedEvents = useQuery({ queryKey: ["my-events", user?.id], queryFn: listMyEvents, enabled: canManage });
-  const finance = useQuery({ queryKey: ["finance", user?.id, "invite-entitlement"], queryFn: getFinanceDashboard, enabled: Boolean(user?.accountType === "corporate") });
-  const canUseGuestLists = Boolean(canManage && user && (["admin", "super_admin", "curator"].includes(user.role) || user.accountType === "corporate" && finance.data?.business.plan !== "starter"));
-  const guestLists = useQuery({ queryKey: ["guest-lists", user?.id], queryFn: listGuestLists, enabled: Boolean(user && canUseGuestLists) });
-  const oldEventQueries = useQueries({ queries: (managedEvents.data ?? []).filter((item) => item.id !== event.data?.id).slice(0, 5).map((item) => ({ queryKey: ["event-participants", item.id, "invite-source"], queryFn: () => listEventParticipants(item.id, "user"), enabled: Boolean(event.data) })) });
-  const previousAttendees = oldEventQueries.flatMap((query) => query.data ?? []).filter((item, index, all) => item.user && all.findIndex((other) => other.userId === item.userId) === index);
+  const following = useQuery({
+    queryKey: ["following", user?.id],
+    queryFn: listFollowing,
+    enabled: Boolean(user),
+  });
+  const managedEvents = useQuery({
+    queryKey: ["my-events", user?.id],
+    queryFn: listMyEvents,
+    enabled: canManage,
+  });
+  const finance = useQuery({
+    queryKey: ["finance", user?.id, "invite-entitlement"],
+    queryFn: getFinanceDashboard,
+    enabled: Boolean(user?.accountType === "corporate"),
+  });
+  const canUseGuestLists = Boolean(
+    canManage &&
+    user &&
+    (["admin", "super_admin", "curator"].includes(user.role) ||
+      (user.accountType === "corporate" &&
+        finance.data?.business.plan !== "starter")),
+  );
+  const guestLists = useQuery({
+    queryKey: ["guest-lists", user?.id],
+    queryFn: listGuestLists,
+    enabled: Boolean(user && canUseGuestLists),
+  });
+  const oldEvents = (managedEvents.data ?? [])
+    .filter((item) => item.id !== event.data?.id)
+    .sort(
+      (a, b) =>
+        new Date(b.endsAt ?? b.startsAt).getTime() -
+        new Date(a.endsAt ?? a.startsAt).getTime(),
+    );
+  const previousAttendees = useQuery({
+    queryKey: ["event-participants", oldEventId, "invite-source"],
+    queryFn: () => listEventParticipants(oldEventId, "user"),
+    enabled: Boolean(oldEventId),
+  });
   const refresh = () => {
     void client.invalidateQueries({
       queryKey: ["event-participants", event.data?.id],
     });
   };
   const invite = useMutation({
-    mutationFn: (input: { userId?: string; username?: string; email?: string; phone?: string; name?: string; role?: string }) =>
-      inviteEventParticipant(event.data!.id, input, "user"),
+    mutationFn: (input: {
+      userId?: string;
+      username?: string;
+      email?: string;
+      phone?: string;
+      name?: string;
+      role?: string;
+    }) => inviteEventParticipant(event.data!.id, input, "user"),
+    onSuccess: refresh,
+  });
+  const inviteUsers = useMutation({
+    mutationFn: (userIds: string[]) =>
+      Promise.all(
+        userIds.map((userId) =>
+          inviteEventParticipant(
+            event.data!.id,
+            { userId, role: "attendee" },
+            "user",
+          ),
+        ),
+      ),
     onSuccess: refresh,
   });
   const bulkInvite = useMutation({
     mutationFn: async (listId: string) => {
-      const source = guestLists.data?.find((item) => item.id === listId)?.members ?? [];
-      await Promise.all(source.map((item) => inviteEventParticipant(event.data!.id, { userId: item.userId, role: "attendee" }, "user")));
+      const source =
+        guestLists.data?.find((item) => item.id === listId)?.members ?? [];
+      const invited = new Set(
+        (participants.data ?? []).map((item) => item.userId),
+      );
+      await Promise.all(
+        source
+          .filter((item) => !invited.has(item.userId))
+          .map((item) =>
+            inviteEventParticipant(
+              event.data!.id,
+              { userId: item.userId, role: "attendee" },
+              "user",
+            ),
+          ),
+      );
     },
     onSuccess: refresh,
   });
@@ -86,30 +190,65 @@ export function EventInviteManagementPage() {
       updateEventParticipantStatus(event.data!.id, userId, value, "user"),
     onSuccess: refresh,
   });
-  const checkIn = useMutation({
+  const passportLoad = useMutation({
     mutationFn: (userId: string) =>
-      checkInEventParticipant(event.data!.id, userId, "user"),
-    onSuccess: refresh,
+      getEventCheckInPassport(event.data!.id, userId),
+    onSuccess: (data) => {
+      setPassportMethod("manual");
+      setPassport(data);
+    },
   });
   const scan = useMutation({
-    mutationFn: (raw: string) => {
+    mutationFn: ({ raw, method }: { raw: string; method: "qr" | "nfc" }) => {
       let token = raw;
       try {
         token = new URL(raw).searchParams.get("token") ?? raw;
       } catch {
         /* Fiziksel okuyucu yalnız token döndürebilir. */
       }
-      return scanEventTicket(event.data!.id, token);
+      return previewEventCheckIn(event.data!.id, token, method);
     },
-    onSuccess: refresh,
+    onSuccess: (data, input) => {
+      setPassportMethod(input.method);
+      setPassport(data);
+    },
+  });
+  const passportDecision = useMutation({
+    mutationFn: ({
+      decision,
+      method,
+    }: {
+      decision: "admit" | "decline";
+      method: "manual" | "qr" | "nfc";
+    }) =>
+      decideEventCheckInPassport(
+        event.data!.id,
+        passport!.user.id,
+        decision,
+        method,
+      ),
+    onSuccess: () => {
+      setPassport(null);
+      refresh();
+    },
+  });
+  const addToGuestList = useMutation({
+    mutationFn: ({ listId, userId }: { listId: string; userId: string }) =>
+      addGuestListMember(listId, userId),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: ["guest-lists", user?.id] }),
   });
   if (!user) return <LoginState />;
   if (event.isLoading)
-    return <section className="page">Davet yönetimi yükleniyor…</section>;
+    return (
+      <section className="page">
+        {tr ? "Davet yönetimi yükleniyor…" : "Loading invite management…"}
+      </section>
+    );
   if (!event.data)
     return (
       <section className="page empty-state">
-        <h1>Etkinlik bulunamadı</h1>
+        <h1>{tr ? "Etkinlik bulunamadı" : "Event not found"}</h1>
       </section>
     );
   return (
@@ -117,86 +256,312 @@ export function EventInviteManagementPage() {
       title={event.data.title}
       back={`/events/${event.data.slug}`}
       shareUrl={`${window.location.origin}/events/${event.data.slug}`}
-      kind="Etkinlik"
+      kind={tr ? "Etkinlik" : "Event"}
     >
       <div hidden={checkInMode}>
-      <InviteMethodPicker active={inviteMethod} includeOldEvents={canManage} includeGuestLists={canUseGuestLists} onChange={setInviteMethod}/>
-      {["username", "email", "phone"].includes(inviteMethod) ? <InviteForm
-        method={inviteMethod as "username" | "email" | "phone"}
-        pending={invite.isPending}
-        canAssignRole={canManage}
-        onSubmit={(form) =>
-          invite.mutate({
-            username: form.username,
-            name: form.name,
-            email: form.email,
-            phone: form.phone,
-            role: canManage ? form.role : "attendee",
-          })
-        }
-      /> : null}
-      {inviteMethod === "following" ? <InviteSource title="Takip ettiklerim">{following.data?.map((member) => <button disabled={invite.isPending} key={member.id} onClick={() => invite.mutate({ userId: member.id, role: "attendee" })} type="button"><UserPlus size={16}/>{member.name}</button>)}</InviteSource> : null}
-      {inviteMethod === "guest_lists" && canUseGuestLists ? <GuestListManager lists={guestLists.data ?? []} pending={bulkInvite.isPending} onInvite={(id) => bulkInvite.mutate(id)} onChanged={() => void client.invalidateQueries({ queryKey: ["guest-lists", user?.id] })}/> : null}
-      {inviteMethod === "old_attendees" ? <InviteSource title="Eski etkinlik katılımcıları">{previousAttendees.map((participant) => <button disabled={invite.isPending} key={participant.userId} onClick={() => invite.mutate({ userId: participant.userId, role: "attendee" })} type="button"><Users size={16}/>{participant.user?.name ?? participant.userId}</button>)}</InviteSource> : null}
-      {inviteMethod === "phonebook" ? <InviteSource title="Telefon rehberi"><Link className="secondary-action" to="/contacts?source=phone">Telefon rehberini tara</Link></InviteSource> : null}
-      {inviteMethod === "gmail" ? <InviteSource title="Gmail"><Link className="secondary-action" to="/contacts?source=google">Google Contacts ile tara</Link></InviteSource> : null}
-      </div>
-      {checkInMode && canManage ? <><QrCheckInScanner
-        label="Etkinlik QR check-in"
-        pending={scan.isPending}
-        onScan={(payload) => scan.mutateAsync(payload).then(() => undefined)}
-      />
-      {participants.isError ? (
-        <PermissionState />
-      ) : (
-        <EventGuestList
-          items={participants.data ?? []}
-          pending={status.isPending || checkIn.isPending}
-          onStatus={(userId, value) => status.mutate({ userId, value })}
-          onCheckIn={(userId) => checkIn.mutate(userId)}
+        <InviteMethodPicker
+          active={inviteMethod}
+          includeOldEvents={canManage}
+          includeGuestLists={canUseGuestLists}
+          onChange={(method) => {
+            setInviteMethod(method);
+            invite.reset();
+            inviteUsers.reset();
+            bulkInvite.reset();
+          }}
         />
-      )}
-      <CheckInHistory
-        items={(participants.data ?? [])
-          .filter((item) => item.checkedInAt)
-          .map((item) => ({
-            id: item.id,
-            name: item.user?.name ?? item.userId,
-            checkedInAt: item.checkedInAt!,
-          }))}
-      /></> : null}
-      {checkInMode && !canManage ? <PermissionState/> : null}
+        <MutationFeedback
+          error={invite.error ?? inviteUsers.error ?? bulkInvite.error}
+          success={
+            invite.isSuccess || inviteUsers.isSuccess || bulkInvite.isSuccess
+          }
+        />
+        {["username", "email", "phone"].includes(inviteMethod) ? (
+          <InviteForm
+            method={inviteMethod as "username" | "email" | "phone"}
+            pending={invite.isPending}
+            canAssignRole={canManage}
+            onSubmit={(form) =>
+              invite.mutate({
+                username: form.username,
+                name: form.name,
+                email: form.email,
+                phone: form.phone,
+                role: canManage ? form.role : "attendee",
+              })
+            }
+          />
+        ) : null}
+        {inviteMethod === "following" ? (
+          <InviteUserCards
+            title={tr ? "Takip ettiklerim" : "People I follow"}
+            users={following.data ?? []}
+            invitedUserIds={
+              new Set((participants.data ?? []).map((item) => item.userId))
+            }
+            pending={invite.isPending || inviteUsers.isPending}
+            guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
+            onInvite={(userId) => invite.mutate({ userId, role: "attendee" })}
+            onInviteAll={(userIds) => inviteUsers.mutate(userIds)}
+            onAddToGuestList={(listId, userId) =>
+              addToGuestList.mutate({ listId, userId })
+            }
+          />
+        ) : null}
+        {inviteMethod === "guest_lists" && canUseGuestLists ? (
+          <>
+            <GuestListInviteSource
+              lists={guestLists.data ?? []}
+              invitedUserIds={
+                new Set((participants.data ?? []).map((item) => item.userId))
+              }
+              pending={invite.isPending || inviteUsers.isPending}
+              onInvite={(userId) => invite.mutate({ userId, role: "attendee" })}
+              onInviteAll={(userIds) => inviteUsers.mutate(userIds)}
+              onAddToGuestList={(listId, userId) =>
+                addToGuestList.mutate({ listId, userId })
+              }
+            />
+            <details className="guest-list-management">
+              <summary>{tr ? "Guest listeleri yönet" : "Manage guest lists"}</summary>
+              <GuestListManager
+                lists={guestLists.data ?? []}
+                pending={bulkInvite.isPending}
+                targetLabel={tr ? "Etkinliğe" : "To event"}
+                onInvite={(id) => bulkInvite.mutate(id)}
+                onChanged={() =>
+                  void client.invalidateQueries({
+                    queryKey: ["guest-lists", user?.id],
+                  })
+                }
+              />
+            </details>
+          </>
+        ) : null}
+        {inviteMethod === "old_attendees" ? (
+          <InviteSource title={tr ? "Eski etkinlik katılımcıları" : "Past event attendees"}>
+            <label>
+              {tr ? "Etkinlik" : "Event"}
+              <select
+                value={oldEventId}
+                onChange={(change) => setOldEventId(change.target.value)}
+              >
+                <option value="">{tr ? "Etkinlik seç" : "Select an event"}</option>
+                {oldEvents.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {new Date(item.endsAt ?? item.startsAt).toLocaleDateString(
+                      tr ? "tr-TR" : "en-US",
+                    )}{" "}
+                    - {item.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {oldEventId ? (
+              <InviteUserCards
+                users={(previousAttendees.data ?? []).flatMap((participant) =>
+                  participant.user ? [participant.user] : [],
+                )}
+                invitedUserIds={
+                  new Set((participants.data ?? []).map((item) => item.userId))
+                }
+                pending={invite.isPending || inviteUsers.isPending}
+                guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
+                onInvite={(userId) =>
+                  invite.mutate({ userId, role: "attendee" })
+                }
+                onInviteAll={(userIds) => inviteUsers.mutate(userIds)}
+                onAddToGuestList={(listId, userId) =>
+                  addToGuestList.mutate({ listId, userId })
+                }
+              />
+            ) : null}
+            {!oldEvents.length ? (
+              <p className="form-help">
+                {tr
+                  ? "Yöneticisi olduğunuz başka bir etkinlik bulunamadı."
+                  : "No other event you manage was found."}
+              </p>
+            ) : null}
+          </InviteSource>
+        ) : null}
+        {inviteMethod === "phonebook" ? (
+          <InviteSource title={tr ? "Telefon rehberi" : "Phone contacts"}>
+            <Link
+              className="secondary-action"
+              to={`/contacts?source=phone&targetType=event&targetId=${event.data.id}`}
+            >
+              {tr ? "Telefon rehberini tara" : "Scan phone contacts"}
+            </Link>
+          </InviteSource>
+        ) : null}
+        {inviteMethod === "gmail" ? (
+          <InviteSource title="Gmail">
+            <Link
+              className="secondary-action"
+              to={`/contacts?source=google&targetType=event&targetId=${event.data.id}`}
+            >
+              {tr ? "Google Contacts ile tara" : "Scan with Google Contacts"}
+            </Link>
+          </InviteSource>
+        ) : null}
+      </div>
+      {checkInMode && canManage ? (
+        <>
+          <QrCheckInScanner
+            label={tr ? "Etkinlik QR check-in" : "Event QR check-in"}
+            pending={scan.isPending}
+            onScan={(payload, method) =>
+              scan.mutateAsync({ raw: payload, method }).then(() => undefined)
+            }
+          />
+          {participants.isError ? (
+            <PermissionState />
+          ) : (
+            <EventGuestList
+              items={participants.data ?? []}
+              pending={status.isPending || passportLoad.isPending}
+              guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
+              onStatus={(userId, value) => status.mutate({ userId, value })}
+              onPassport={(userId) => passportLoad.mutate(userId)}
+              onAddToGuestList={(listId, userId) =>
+                addToGuestList.mutate({ listId, userId })
+              }
+            />
+          )}
+          <CheckInHistory
+            items={(participants.data ?? [])
+              .filter((item) => item.checkInDecisionAt || item.checkedInAt)
+              .map((item) => ({
+                id: item.id,
+                user: item.user,
+                name: item.user?.name ?? item.userId,
+                checkedInAt: item.checkedInAt ?? item.checkInDecisionAt!,
+                method: item.checkInMethod ?? "manual",
+                decision:
+                  item.status === "declined"
+                    ? ("declined" as const)
+                    : ("attended" as const),
+                order: item.checkInOrder ?? null,
+                followerCount: item.user?.followerCount ?? 0,
+                relatedFollowerCount: item.user?.relatedFollowerCount ?? 0,
+              }))}
+            guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
+            onAddToGuestList={(listId, userId) =>
+              addToGuestList.mutate({ listId, userId })
+            }
+          />
+        </>
+      ) : null}
+      {checkInMode && !canManage ? <PermissionState /> : null}
+      {passport ? (
+        <CheckInPassportDialog
+          passport={passport}
+          pending={passportDecision.isPending}
+          onClose={() => setPassport(null)}
+          onDecision={(decision) =>
+            passportDecision.mutate({ decision, method: passportMethod })
+          }
+        />
+      ) : null}
     </ManagementShell>
   );
 }
 
 export function PlaceInviteManagementPage() {
+  const { language } = useLanguage();
+  const tr = language === "tr";
   const { slug = "" } = useParams();
   const checkInMode = useLocation().hash === "#check-in";
   const user = getUserSession();
   const [inviteMethod, setInviteMethod] = useState<InviteMethod>("following");
+  const [passport, setPassport] = useState<CheckInPassport | null>(null);
+  const [passportMethod, setPassportMethod] = useState<"manual" | "qr" | "nfc">(
+    "manual",
+  );
   const client = useQueryClient();
   const place = useQuery({
     queryKey: ["place", slug],
     queryFn: () => getPlace(slug),
     enabled: Boolean(slug && user),
   });
-  const canManage = Boolean(place.data && user && (place.data.createdById === user.id || place.data.viewerMembership?.status === "accepted" && ["manager", "organizer"].includes(place.data.viewerMembership.role) || ["admin", "super_admin", "curator"].includes(user.role)));
+  const canManage = Boolean(
+    place.data &&
+    user &&
+    (place.data.createdById === user.id ||
+      (place.data.viewerMembership?.status === "accepted" &&
+        ["manager", "organizer"].includes(place.data.viewerMembership.role)) ||
+      ["admin", "super_admin", "curator"].includes(user.role)),
+  );
   const members = useQuery({
     queryKey: ["place-members", place.data?.id],
     queryFn: () => listPlaceMembers(place.data!.id),
     enabled: Boolean(place.data && user),
     retry: false,
   });
-  const following = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
+  const following = useQuery({
+    queryKey: ["following", user?.id],
+    queryFn: listFollowing,
+    enabled: Boolean(user),
+  });
+  const finance = useQuery({
+    queryKey: ["finance", user?.id, "place-invite-entitlement"],
+    queryFn: getFinanceDashboard,
+    enabled: Boolean(user?.accountType === "corporate"),
+  });
+  const canUseGuestLists = Boolean(
+    canManage &&
+    user &&
+    (["admin", "super_admin", "curator"].includes(user.role) ||
+      (user.accountType === "corporate" &&
+        finance.data?.business.plan !== "starter")),
+  );
+  const guestLists = useQuery({
+    queryKey: ["guest-lists", user?.id],
+    queryFn: listGuestLists,
+    enabled: Boolean(user && canUseGuestLists),
+  });
   const refresh = () => {
     void client.invalidateQueries({
       queryKey: ["place-members", place.data?.id],
     });
   };
   const invite = useMutation({
-    mutationFn: (input: { userId?: string; username?: string; email?: string; phone?: string; name?: string; role?: string }) =>
-      invitePlaceMember(place.data!.id, input),
+    mutationFn: (input: {
+      userId?: string;
+      username?: string;
+      email?: string;
+      phone?: string;
+      name?: string;
+      role?: string;
+    }) => invitePlaceMember(place.data!.id, input),
+    onSuccess: refresh,
+  });
+  const invitePlaceUsers = useMutation({
+    mutationFn: (userIds: string[]) =>
+      Promise.all(
+        userIds.map((userId) =>
+          invitePlaceMember(place.data!.id, { userId, role: "member" }),
+        ),
+      ),
+    onSuccess: refresh,
+  });
+  const bulkInvitePlace = useMutation({
+    mutationFn: async (listId: string) => {
+      const source =
+        guestLists.data?.find((item) => item.id === listId)?.members ?? [];
+      const invited = new Set((members.data ?? []).map((item) => item.userId));
+      await Promise.all(
+        source
+          .filter((item) => !invited.has(item.userId))
+          .map((item) =>
+            invitePlaceMember(place.data!.id, {
+              userId: item.userId,
+              role: "member",
+            }),
+          ),
+      );
+    },
     onSuccess: refresh,
   });
   const update = useMutation({
@@ -209,22 +574,63 @@ export function PlaceInviteManagementPage() {
     }) => updatePlaceMember(place.data!.id, userId, input),
     onSuccess: refresh,
   });
-  const checkIn = useMutation({
-    mutationFn: (userId: string) => checkInPlaceMember(place.data!.id, userId),
-    onSuccess: refresh,
+  const passportLoad = useMutation({
+    mutationFn: (userId: string) =>
+      getPlaceCheckInPassport(place.data!.id, userId),
+    onSuccess: (data) => {
+      setPassportMethod("manual");
+      setPassport(data);
+    },
   });
   const scan = useMutation({
-    mutationFn: (payload: string) =>
-      scanPlaceMemberPass(place.data!.id, payload),
-    onSuccess: refresh,
+    mutationFn: ({
+      payload,
+      method,
+    }: {
+      payload: string;
+      method: "qr" | "nfc";
+    }) => previewPlaceCheckIn(place.data!.id, payload, method),
+    onSuccess: (data, input) => {
+      setPassportMethod(input.method);
+      setPassport(data);
+    },
+  });
+  const passportDecision = useMutation({
+    mutationFn: ({
+      decision,
+      method,
+    }: {
+      decision: "admit" | "decline";
+      method: "manual" | "qr" | "nfc";
+    }) =>
+      decidePlaceCheckInPassport(
+        place.data!.id,
+        passport!.user.id,
+        decision,
+        method,
+      ),
+    onSuccess: () => {
+      setPassport(null);
+      refresh();
+    },
+  });
+  const addToGuestList = useMutation({
+    mutationFn: ({ listId, userId }: { listId: string; userId: string }) =>
+      addGuestListMember(listId, userId),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: ["guest-lists", user?.id] }),
   });
   if (!user) return <LoginState />;
   if (place.isLoading)
-    return <section className="page">Davet yönetimi yükleniyor…</section>;
+    return (
+      <section className="page">
+        {tr ? "Davet yönetimi yükleniyor…" : "Loading invite management…"}
+      </section>
+    );
   if (!place.data)
     return (
       <section className="page empty-state">
-        <h1>Mekân bulunamadı</h1>
+        <h1>{tr ? "Mekân bulunamadı" : "Place not found"}</h1>
       </section>
     );
   return (
@@ -232,54 +638,171 @@ export function PlaceInviteManagementPage() {
       title={place.data.name}
       back={`/places/${place.data.slug}`}
       shareUrl={`${window.location.origin}/places/${place.data.slug}`}
-      kind="Mekân"
+      kind={tr ? "Mekân" : "Place"}
     >
       <div hidden={checkInMode}>
-      <InviteMethodPicker active={inviteMethod} includeGuestLists onChange={setInviteMethod}/>
-      {["username", "email", "phone"].includes(inviteMethod) ? <InviteForm
-        method={inviteMethod as "username" | "email" | "phone"}
-        pending={invite.isPending}
-        onSubmit={(form) =>
-          invite.mutate({
-            username: form.username,
-            name: form.name,
-            email: form.email,
-            phone: form.phone,
-            role: form.role,
-          })
-        }
-      /> : null}
-      {inviteMethod === "following" ? <InviteSource title="Takip ettiklerim">{following.data?.map((member) => <button disabled={invite.isPending} key={member.id} onClick={() => invite.mutate({ userId: member.id, role: "member" })} type="button"><UserPlus size={16}/>{member.name}</button>)}</InviteSource> : null}
-      {inviteMethod === "guest_lists" ? <InviteSource title="Guest listeler"><Link className="secondary-action" to="/community">Topluluk ve guest listelerden seç</Link></InviteSource> : null}
-      {inviteMethod === "phonebook" ? <InviteSource title="Telefon rehberi"><Link className="secondary-action" to="/contacts?source=phone">Telefon rehberini tara</Link></InviteSource> : null}
-      {inviteMethod === "gmail" ? <InviteSource title="Gmail"><Link className="secondary-action" to="/contacts?source=google">Google Contacts ile tara</Link></InviteSource> : null}
-      </div>
-      {checkInMode && canManage ? <><QrCheckInScanner
-        label="Mekân üye kartı check-in"
-        pending={scan.isPending}
-        onScan={(payload) => scan.mutateAsync(payload).then(() => undefined)}
-      />
-      {members.isError ? (
-        <PermissionState />
-      ) : (
-        <PlaceMemberList
-          items={members.data ?? []}
-          pending={update.isPending || checkIn.isPending}
-          onUpdate={(userId, input) => update.mutate({ userId, input })}
-          onCheckIn={(userId) => checkIn.mutate(userId)}
+        <InviteMethodPicker
+          active={inviteMethod}
+          includeGuestLists={canUseGuestLists}
+          onChange={(method) => {
+            setInviteMethod(method);
+            invite.reset();
+            invitePlaceUsers.reset();
+            bulkInvitePlace.reset();
+          }}
         />
-      )}
-      <CheckInHistory
-        items={(members.data ?? [])
-          .filter((item) => item.checkedInAt)
-          .map((item) => ({
-            id: `${item.placeId}-${item.userId}`,
-            name: item.user?.name ?? item.userId,
-            checkedInAt: item.checkedInAt!,
-          }))}
-      />
-      </> : null}
-      {checkInMode && !canManage ? <PermissionState/> : null}
+        <MutationFeedback
+          error={
+            invite.error ?? invitePlaceUsers.error ?? bulkInvitePlace.error
+          }
+          success={
+            invite.isSuccess ||
+            invitePlaceUsers.isSuccess ||
+            bulkInvitePlace.isSuccess
+          }
+        />
+        {["username", "email", "phone"].includes(inviteMethod) ? (
+          <InviteForm
+            method={inviteMethod as "username" | "email" | "phone"}
+            pending={invite.isPending}
+            canAssignRole={canManage}
+            memberTarget
+            onSubmit={(form) =>
+              invite.mutate({
+                username: form.username,
+                name: form.name,
+                email: form.email,
+                phone: form.phone,
+                role: form.role,
+              })
+            }
+          />
+        ) : null}
+        {inviteMethod === "following" ? (
+          <InviteUserCards
+            title={tr ? "Takip ettiklerim" : "People I follow"}
+            users={following.data ?? []}
+            invitedUserIds={
+              new Set((members.data ?? []).map((item) => item.userId))
+            }
+            pending={invite.isPending || invitePlaceUsers.isPending}
+            guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
+            onInvite={(userId) => invite.mutate({ userId, role: "member" })}
+            onInviteAll={(userIds) => invitePlaceUsers.mutate(userIds)}
+            onAddToGuestList={(listId, userId) =>
+              addToGuestList.mutate({ listId, userId })
+            }
+          />
+        ) : null}
+        {inviteMethod === "guest_lists" && canUseGuestLists ? (
+          <>
+            <GuestListInviteSource
+              lists={guestLists.data ?? []}
+              invitedUserIds={
+                new Set((members.data ?? []).map((item) => item.userId))
+              }
+              pending={invite.isPending || invitePlaceUsers.isPending}
+              onInvite={(userId) => invite.mutate({ userId, role: "member" })}
+              onInviteAll={(userIds) => invitePlaceUsers.mutate(userIds)}
+              onAddToGuestList={(listId, userId) =>
+                addToGuestList.mutate({ listId, userId })
+              }
+            />
+            <details className="guest-list-management">
+              <summary>{tr ? "Guest listeleri yönet" : "Manage guest lists"}</summary>
+              <GuestListManager
+                lists={guestLists.data ?? []}
+                pending={bulkInvitePlace.isPending}
+                targetLabel={tr ? "Mekâna" : "To place"}
+                onInvite={(listId) => bulkInvitePlace.mutate(listId)}
+                onChanged={() =>
+                  void client.invalidateQueries({
+                    queryKey: ["guest-lists", user?.id],
+                  })
+                }
+              />
+            </details>
+          </>
+        ) : null}
+        {inviteMethod === "phonebook" ? (
+          <InviteSource title={tr ? "Telefon rehberi" : "Phone contacts"}>
+            <Link
+              className="secondary-action"
+              to={`/contacts?source=phone&targetType=place&targetId=${place.data.id}`}
+            >
+              {tr ? "Telefon rehberini tara" : "Scan phone contacts"}
+            </Link>
+          </InviteSource>
+        ) : null}
+        {inviteMethod === "gmail" ? (
+          <InviteSource title="Gmail">
+            <Link
+              className="secondary-action"
+              to={`/contacts?source=google&targetType=place&targetId=${place.data.id}`}
+            >
+              {tr ? "Google Contacts ile tara" : "Scan with Google Contacts"}
+            </Link>
+          </InviteSource>
+        ) : null}
+      </div>
+      {checkInMode && canManage ? (
+        <>
+          <QrCheckInScanner
+            label={tr ? "Mekân üye kartı check-in" : "Place member card check-in"}
+            pending={scan.isPending}
+            onScan={(payload, method) =>
+              scan.mutateAsync({ payload, method }).then(() => undefined)
+            }
+          />
+          {members.isError ? (
+            <PermissionState />
+          ) : (
+            <PlaceMemberList
+              items={members.data ?? []}
+              pending={update.isPending || passportLoad.isPending}
+              guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
+              onUpdate={(userId, input) => update.mutate({ userId, input })}
+              onPassport={(userId) => passportLoad.mutate(userId)}
+              onAddToGuestList={(listId, userId) =>
+                addToGuestList.mutate({ listId, userId })
+              }
+            />
+          )}
+          <CheckInHistory
+            items={(members.data ?? [])
+              .filter((item) => item.checkInDecisionAt || item.checkedInAt)
+              .map((item) => ({
+                id: `${item.placeId}-${item.userId}`,
+                user: item.user,
+                name: item.user?.name ?? item.userId,
+                checkedInAt: item.checkedInAt ?? item.checkInDecisionAt!,
+                method: item.checkInMethod ?? "manual",
+                decision:
+                  item.status === "declined"
+                    ? ("declined" as const)
+                    : ("attended" as const),
+                order: item.checkInOrder ?? null,
+                followerCount: item.user?.followerCount ?? 0,
+                relatedFollowerCount: item.user?.relatedFollowerCount ?? 0,
+              }))}
+            guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
+            onAddToGuestList={(listId, userId) =>
+              addToGuestList.mutate({ listId, userId })
+            }
+          />
+        </>
+      ) : null}
+      {checkInMode && !canManage ? <PermissionState /> : null}
+      {passport ? (
+        <CheckInPassportDialog
+          passport={passport}
+          pending={passportDecision.isPending}
+          onClose={() => setPassport(null)}
+          onDecision={(decision) =>
+            passportDecision.mutate({ decision, method: passportMethod })
+          }
+        />
+      ) : null}
     </ManagementShell>
   );
 }
@@ -297,26 +820,44 @@ function ManagementShell({
   kind: string;
   children: React.ReactNode;
 }) {
+  const { language } = useLanguage();
+  const tr = language === "tr";
+  const [copied, setCopied] = useState(false);
   return (
     <div className="page invite-management">
       <Link className="back-link" to={back}>
-        ← Detaya dön
+        ← {tr ? "Detaya dön" : "Back to details"}
       </Link>
-      <header className="section-header">
+      <header className="section-header invite-management-header">
         <div>
-          <p className="eyebrow">{kind} yönetimi</p>
+          <p className="eyebrow">
+            {kind} {tr ? "yönetimi" : "management"}
+          </p>
           <h1>{title}</h1>
           <p>
-            Davetleri, katılım durumlarını ve check-in işlemlerini tek yerden
-            yönet.
+            {tr
+              ? "Davetleri, katılım durumlarını ve check-in işlemlerini tek yerden yönet."
+              : "Manage invitations, participation statuses and check-ins in one place."}
           </p>
         </div>
         <button
           className="secondary-action"
-          onClick={() => void navigator.clipboard.writeText(shareUrl)}
+          onClick={() => {
+            void navigator.clipboard.writeText(shareUrl).then(() => {
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1800);
+            });
+          }}
+          type="button"
         >
           <Clipboard size={17} />
-          Davet bağlantısını kopyala
+          {copied
+            ? tr
+              ? "Bağlantı kopyalandı"
+              : "Link copied"
+            : tr
+              ? "Davet bağlantısını kopyala"
+              : "Copy invite link"}
         </button>
       </header>
       {children}
@@ -324,44 +865,455 @@ function ManagementShell({
   );
 }
 
-function InviteMethodPicker({ active, includeOldEvents = false, includeGuestLists = false, onChange }: { active: InviteMethod; includeOldEvents?: boolean; includeGuestLists?: boolean; onChange: (method: InviteMethod) => void }) {
+function InviteMethodPicker({
+  active,
+  includeOldEvents = false,
+  includeGuestLists = false,
+  onChange,
+}: {
+  active: InviteMethod;
+  includeOldEvents?: boolean;
+  includeGuestLists?: boolean;
+  onChange: (method: InviteMethod) => void;
+}) {
+  const { language } = useLanguage();
+  const tr = language === "tr";
   const methods: Array<[InviteMethod, string]> = [
-    ["following", "Takip ettiklerimden seç"],
-    ...(includeGuestLists ? [["guest_lists", "Guest listeden seç"] as [InviteMethod, string]] : []),
-    ...(includeOldEvents ? [["old_attendees", "Eski etkinlik katılımcıları"] as [InviteMethod, string]] : []),
-    ["username", "Kullanıcı adı veya ad soyad"],
-    ["email", "E-posta adresi"],
-    ["phone", "Telefon numarası"],
-    ["phonebook", "Telefon rehberini tara"],
-    ["gmail", "Gmail'i tara"],
+    ["following", tr ? "Takip ettiklerimden seç" : "Choose from people I follow"],
+    ...(includeGuestLists
+      ? [["guest_lists", tr ? "Guest listeden seç" : "Choose from a guest list"] as [InviteMethod, string]]
+      : []),
+    ...(includeOldEvents
+      ? [
+          ["old_attendees", tr ? "Eski etkinlik katılımcıları" : "Past event attendees"] as [
+            InviteMethod,
+            string,
+          ],
+        ]
+      : []),
+    ["username", tr ? "Kullanıcı adı" : "Username"],
+    ["email", tr ? "E-posta adresi" : "Email address"],
+    ["phone", tr ? "Telefon numarası" : "Phone number"],
+    ["phonebook", tr ? "Telefon rehberini tara" : "Scan phone contacts"],
+    ["gmail", tr ? "Gmail'i tara" : "Scan Gmail"],
   ];
-  return <section className="admin-form invite-method-picker"><h2>Davet yöntemini seç</h2><div>{methods.map(([value, label]) => <button className={active === value ? "active" : ""} key={value} onClick={() => onChange(value)} type="button">{label}</button>)}</div></section>;
+  return (
+    <section className="admin-form invite-method-picker">
+      <h2>{tr ? "Davet yöntemini seç" : "Choose an invite method"}</h2>
+      <div>
+        {methods.map(([value, label]) => (
+          <button
+            className={active === value ? "active" : ""}
+            key={value}
+            onClick={() => onChange(value)}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
 }
 
-function InviteSource({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="admin-form invite-source-section"><h2>{title}</h2><div className="invite-source-list">{children}</div></section>;
+function MutationFeedback({
+  success,
+  error,
+}: {
+  success: boolean;
+  error: unknown;
+}) {
+  const { language } = useLanguage();
+  const tr = language === "tr";
+  if (error)
+    return (
+      <p className="form-error" role="alert">
+        {getServiceErrorMessage(
+          error,
+          tr
+            ? "Davet gönderilemedi. Bilgileri kontrol edip yeniden deneyin."
+            : "The invitation could not be sent. Check the details and try again.",
+        )}
+      </p>
+    );
+  if (success)
+    return (
+      <p className="form-success" role="status">
+        <CheckCircle2 size={17} />
+        {tr ? "Davet başarıyla gönderildi." : "Invitation sent successfully."}
+      </p>
+    );
+  return null;
 }
 
-function GuestListManager({ lists, pending, onInvite, onChanged }: { lists: Awaited<ReturnType<typeof listGuestLists>>; pending: boolean; onInvite: (id: string) => void; onChanged: () => void }) {
+function InviteSource({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="admin-form invite-source-section">
+      <h2>{title}</h2>
+      <div className="invite-source-list">{children}</div>
+    </section>
+  );
+}
+
+function InviteUserCards({
+  title,
+  users,
+  invitedUserIds,
+  pending,
+  guestLists,
+  onInvite,
+  onInviteAll,
+  onAddToGuestList,
+}: {
+  title?: string;
+  users: Array<{
+    id: string;
+    name: string;
+    username?: string | null;
+    avatarUrl?: string | null;
+  }>;
+  invitedUserIds: Set<string>;
+  pending: boolean;
+  guestLists: GuestLists;
+  onInvite: (userId: string) => void;
+  onInviteAll: (userIds: string[]) => void;
+  onAddToGuestList: (listId: string, userId: string) => void;
+}) {
+  const { language } = useLanguage();
+  const tr = language === "tr";
+  const unique = users.filter(
+    (item, index, all) =>
+      all.findIndex((other) => other.id === item.id) === index,
+  );
+  const available = unique.filter((item) => !invitedUserIds.has(item.id));
+  const invited = unique.filter((item) => invitedUserIds.has(item.id));
+  const cards = (source: typeof unique, alreadyInvited: boolean) =>
+    source.map((member) => (
+      <article className="invite-user-card" key={member.id}>
+        <Link className="management-avatar" to={`/users/id/${member.id}`}>
+          {member.avatarUrl ? (
+            <img alt="" src={resolveMediaUrl(member.avatarUrl)} />
+          ) : (
+            <span>{member.name.slice(0, 1).toUpperCase()}</span>
+          )}
+        </Link>
+        <div>
+          <strong>
+            <Link to={`/users/id/${member.id}`}>
+              {member.username ? `@${member.username}` : member.name}
+            </Link>
+          </strong>
+        </div>
+        <div className="row-actions">
+          <button
+            className="secondary-action"
+            disabled={pending || alreadyInvited}
+            onClick={() => onInvite(member.id)}
+            type="button"
+          >
+            <UserPlus size={16} />
+            {alreadyInvited
+              ? tr
+                ? "Davet edildi"
+                : "Invited"
+              : tr
+                ? "Davet et"
+                : "Invite"}
+          </button>
+          <GuestListPicker
+            lists={guestLists}
+            onAdd={(listId) => onAddToGuestList(listId, member.id)}
+          />
+        </div>
+      </article>
+    ));
+  return (
+    <div className="invite-user-cards">
+      {title ? <h2>{title}</h2> : null}
+      {available.length > 1 ? (
+        <button
+          className="create-inline-link invite-all-link"
+          disabled={pending}
+          onClick={() => onInviteAll(available.map((item) => item.id))}
+          type="button"
+        >
+          {tr ? "Tümünü davet et" : "Invite all"}
+        </button>
+      ) : null}
+      {cards(available, false)}
+      {invited.length ? (
+        <>
+          <h3>{tr ? "Zaten davet ettikleriniz" : "Already invited"}</h3>
+          {cards(invited, true)}
+        </>
+      ) : null}
+      {!unique.length ? (
+        <p className="form-help">
+          {tr ? "Listelenecek kullanıcı bulunamadı." : "No users to display."}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function GuestListInviteSource({
+  lists,
+  invitedUserIds,
+  pending,
+  onInvite,
+  onInviteAll,
+  onAddToGuestList,
+}: {
+  lists: GuestLists;
+  invitedUserIds: Set<string>;
+  pending: boolean;
+  onInvite: (userId: string) => void;
+  onInviteAll: (userIds: string[]) => void;
+  onAddToGuestList: (listId: string, userId: string) => void;
+}) {
+  const { language } = useLanguage();
+  const tr = language === "tr";
+  const ordered = [...lists].sort((a, b) =>
+    a.name.localeCompare(b.name, tr ? "tr" : "en"),
+  );
+  const [selectedId, setSelectedId] = useState(ordered[0]?.id ?? "");
+  const selected = ordered.find((list) => list.id === selectedId) ?? ordered[0];
+  const users = (selected?.members ?? []).map((member) => ({
+    id: member.user.id,
+    name: member.user.name,
+    username: member.user.username,
+    avatarUrl: member.user.uploadedMedia?.[0]?.url ?? null,
+  }));
+  return (
+    <InviteSource title={tr ? "Guest listeden seç" : "Choose from a guest list"}>
+      <label>
+        Guest list
+        <select
+          value={selected?.id ?? ""}
+          onChange={(event) => setSelectedId(event.target.value)}
+        >
+          <option value="">{tr ? "Guest list seç" : "Select a guest list"}</option>
+          {ordered.map((list) => (
+            <option key={list.id} value={list.id}>
+              {list.name} ({list.members.length})
+            </option>
+          ))}
+        </select>
+      </label>
+      {selected ? (
+        <InviteUserCards
+          users={users}
+          invitedUserIds={invitedUserIds}
+          pending={pending}
+          guestLists={lists}
+          onInvite={onInvite}
+          onInviteAll={onInviteAll}
+          onAddToGuestList={onAddToGuestList}
+        />
+      ) : (
+        <p className="form-help">
+          {tr ? "Henüz bir guest list oluşturmadın." : "You have not created a guest list yet."}
+        </p>
+      )}
+    </InviteSource>
+  );
+}
+
+function GuestListManager({
+  lists,
+  pending,
+  targetLabel,
+  onInvite,
+  onChanged,
+}: {
+  lists: Awaited<ReturnType<typeof listGuestLists>>;
+  pending: boolean;
+  targetLabel: string;
+  onInvite: (id: string) => void;
+  onChanged: () => void;
+}) {
+  const { language } = useLanguage();
+  const tr = language === "tr";
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const create = useMutation({ mutationFn: createGuestList, onSuccess: onChanged });
-  const rename = useMutation({ mutationFn: ({ id, name }: { id: string; name: string }) => renameGuestList(id, name), onSuccess: () => { setEditingId(null); onChanged(); } });
-  const remove = useMutation({ mutationFn: deleteGuestList, onSuccess: () => { setDeletingId(null); onChanged(); } });
-  const removeMember = useMutation({ mutationFn: ({ id, userId }: { id: string; userId: string }) => removeGuestListMember(id, userId), onSuccess: onChanged });
-  return <section className="admin-form guest-list-manager"><div className="section-header compact"><h2>Guest listeler</h2><form onSubmit={(event) => { event.preventDefault(); const input = event.currentTarget.elements.namedItem("name") as HTMLInputElement; if (input.value.trim()) { create.mutate(input.value.trim()); input.value = ""; } }}><input name="name" placeholder="Yeni liste adı"/><button className="secondary-action" disabled={create.isPending}>Oluştur</button></form></div>{lists.map((list) => <article key={list.id}><header><div>{editingId === list.id ? <form className="guest-list-rename" onSubmit={(event) => { event.preventDefault(); if (editingName.trim()) rename.mutate({ id: list.id, name: editingName.trim() }); }}><input aria-label="Guest list adı" autoFocus value={editingName} onChange={(event) => setEditingName(event.target.value)}/><button disabled={rename.isPending}>Kaydet</button><button onClick={() => setEditingId(null)} type="button">Vazgeç</button></form> : <strong>{list.name}</strong>}<span>{list.members.length} kişi</span></div><div className="row-actions"><button disabled={pending || !list.members.length} onClick={() => onInvite(list.id)} type="button">Etkinliğe davet et</button><button onClick={() => { setEditingId(list.id); setEditingName(list.name); setDeletingId(null); }} type="button">Düzenle</button>{deletingId === list.id ? <><button className="danger" disabled={remove.isPending} onClick={() => remove.mutate(list.id)} type="button">Silmeyi onayla</button><button onClick={() => setDeletingId(null)} type="button">Vazgeç</button></> : <button className="danger" onClick={() => { setDeletingId(list.id); setEditingId(null); }} type="button">Sil</button>}</div></header><div className="guest-list-member-chips">{list.members.map((member) => <span key={member.id}>{member.user.name}<button aria-label={`${member.user.name} kişisini listeden çıkar`} onClick={() => removeMember.mutate({ id: list.id, userId: member.userId })} type="button">×</button></span>)}</div></article>)}{!lists.length ? <p className="form-help">Henüz bir guest list oluşturmadın.</p> : null}</section>;
+  const create = useMutation({
+    mutationFn: createGuestList,
+    onSuccess: onChanged,
+  });
+  const rename = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      renameGuestList(id, name),
+    onSuccess: () => {
+      setEditingId(null);
+      onChanged();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: deleteGuestList,
+    onSuccess: () => {
+      setDeletingId(null);
+      onChanged();
+    },
+  });
+  const removeMember = useMutation({
+    mutationFn: ({ id, userId }: { id: string; userId: string }) =>
+      removeGuestListMember(id, userId),
+    onSuccess: onChanged,
+  });
+  return (
+    <section className="admin-form guest-list-manager">
+      <div className="section-header compact">
+        <h2>{tr ? "Guest listeler" : "Guest lists"}</h2>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const input = event.currentTarget.elements.namedItem(
+              "name",
+            ) as HTMLInputElement;
+            if (input.value.trim()) {
+              create.mutate(input.value.trim());
+              input.value = "";
+            }
+          }}
+        >
+          <input
+            aria-label={tr ? "Yeni guest list adı" : "New guest list name"}
+            name="name"
+            placeholder={tr ? "Yeni liste adı" : "New list name"}
+          />
+          <button className="secondary-action" disabled={create.isPending}>
+            {tr ? "Oluştur" : "Create"}
+          </button>
+        </form>
+      </div>
+      {lists.map((list) => (
+        <article key={list.id}>
+          <header>
+            <div>
+              {editingId === list.id ? (
+                <form
+                  className="guest-list-rename"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (editingName.trim())
+                      rename.mutate({ id: list.id, name: editingName.trim() });
+                  }}
+                >
+                  <input
+                    aria-label={tr ? "Guest list adı" : "Guest list name"}
+                    autoFocus
+                    value={editingName}
+                    onChange={(event) => setEditingName(event.target.value)}
+                  />
+                  <button disabled={rename.isPending}>
+                    {tr ? "Kaydet" : "Save"}
+                  </button>
+                  <button onClick={() => setEditingId(null)} type="button">
+                    {tr ? "Vazgeç" : "Cancel"}
+                  </button>
+                </form>
+              ) : (
+                <strong>{list.name}</strong>
+              )}
+              <span>
+                {list.members.length} {tr ? "kişi" : list.members.length === 1 ? "person" : "people"}
+              </span>
+            </div>
+            <div className="row-actions">
+              <button
+                disabled={pending || !list.members.length}
+                onClick={() => onInvite(list.id)}
+                type="button"
+              >
+                {tr ? `${targetLabel} davet et` : `Invite ${targetLabel.toLowerCase()}`}
+              </button>
+              <button
+                onClick={() => {
+                  setEditingId(list.id);
+                  setEditingName(list.name);
+                  setDeletingId(null);
+                }}
+                type="button"
+              >
+                {tr ? "Düzenle" : "Edit"}
+              </button>
+              {deletingId === list.id ? (
+                <>
+                  <button
+                    className="danger"
+                    disabled={remove.isPending}
+                    onClick={() => remove.mutate(list.id)}
+                    type="button"
+                  >
+                    {tr ? "Silmeyi onayla" : "Confirm delete"}
+                  </button>
+                  <button onClick={() => setDeletingId(null)} type="button">
+                    {tr ? "Vazgeç" : "Cancel"}
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="danger"
+                  onClick={() => {
+                    setDeletingId(list.id);
+                    setEditingId(null);
+                  }}
+                  type="button"
+                >
+                  {tr ? "Sil" : "Delete"}
+                </button>
+              )}
+            </div>
+          </header>
+          <div className="guest-list-member-chips">
+            {list.members.map((member) => (
+              <span key={member.id}>
+                {member.user.name}
+                <button
+                  aria-label={
+                    tr
+                      ? `${member.user.name} kişisini listeden çıkar`
+                      : `Remove ${member.user.name} from the list`
+                  }
+                  onClick={() =>
+                    removeMember.mutate({ id: list.id, userId: member.userId })
+                  }
+                  type="button"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        </article>
+      ))}
+      {!lists.length ? (
+        <p className="form-help">
+          {tr ? "Henüz bir guest list oluşturmadın." : "You have not created a guest list yet."}
+        </p>
+      ) : null}
+    </section>
+  );
 }
 
 function InviteForm({
   method,
   pending,
   canAssignRole = true,
+  memberTarget = false,
   onSubmit,
 }: {
   method: "username" | "email" | "phone";
   pending: boolean;
   canAssignRole?: boolean;
+  memberTarget?: boolean;
   onSubmit: (input: {
     username?: string;
     email?: string;
@@ -370,6 +1322,8 @@ function InviteForm({
     role: string;
   }) => void;
 }) {
+  const { language } = useLanguage();
+  const tr = language === "tr";
   return (
     <form
       className="admin-form invite-management-form"
@@ -380,51 +1334,76 @@ function InviteForm({
           .trim()
           .replace(/^@/, "");
         const email = String(form.get("email") || "").trim();
-        const phone = String(form.get("phone") || "").trim().replace(/[\s()-]/g, "");
-        const name = String(form.get("name") || "").trim();
-        if (username || email || phone || name)
+        const phone = String(form.get("phone") || "")
+          .trim()
+          .replace(/[\s()-]/g, "");
+        if (username || email || phone)
           onSubmit({
             username: username || undefined,
             email: email || undefined,
             phone: phone || undefined,
-            name: name || undefined,
-            role: String(form.get("role") || "attendee"),
+            role: String(
+              form.get("role") || (memberTarget ? "member" : "attendee"),
+            ),
           });
       }}
     >
       <h2>
         <UserPlus size={20} />
-        Yeni davet
+        {tr ? "Yeni davet" : "New invitation"}
       </h2>
       <div className="form-grid">
-        {method === "username" ? <><label>
-          Kullanıcı adı
-          <input name="username" placeholder="@kullanici" />
-        </label>
-        <label>
-          Ad soyad
-          <input name="name" placeholder="Ad Soyad" />
-        </label></> : null}
-        {method === "email" ? <label>
-          E-posta
-          <input name="email" type="email" placeholder="uye@example.com" />
-        </label> : null}
-        {method === "phone" ? <label>
-          Telefon
-          <input name="phone" inputMode="tel" pattern="\+?[1-9][0-9]{7,14}" placeholder="+905551234567" />
-        </label> : null}
-        {canAssignRole ? <label>
-          Rol
-          <select name="role">
-            <option value="attendee">Katılımcı / üye</option>
-            <option value="manager">Yönetici</option>
-            <option value="organizer">Organizatör</option>
-          </select>
-        </label> : null}
+        {method === "username" ? (
+          <label>
+            {tr ? "Kullanıcı adı" : "Username"}
+            <input name="username" placeholder="@username" />
+          </label>
+        ) : null}
+        {method === "email" ? (
+          <label>
+            {tr ? "E-posta" : "Email"}
+            <input name="email" type="email" placeholder="uye@example.com" />
+          </label>
+        ) : null}
+        {method === "phone" ? (
+          <label>
+            {tr ? "Telefon" : "Phone"}
+            <input
+              name="phone"
+              inputMode="tel"
+              pattern="\+?[1-9][0-9]{7,14}"
+              placeholder="+905551234567"
+            />
+          </label>
+        ) : null}
+        {canAssignRole ? (
+          <label>
+            {tr ? "Rol" : "Role"}
+            <select name="role">
+              <option value={memberTarget ? "member" : "attendee"}>
+                {memberTarget
+                  ? tr
+                    ? "Üye"
+                    : "Member"
+                  : tr
+                    ? "Katılımcı"
+                    : "Attendee"}
+              </option>
+              <option value="manager">{tr ? "Yönetici" : "Manager"}</option>
+              <option value="organizer">{tr ? "Organizatör" : "Organizer"}</option>
+            </select>
+          </label>
+        ) : null}
       </div>
       <button className="primary-action" disabled={pending}>
         <Mail size={17} />
-        {pending ? "Gönderiliyor…" : "Davet gönder"}
+        {pending
+          ? tr
+            ? "Gönderiliyor…"
+            : "Sending…"
+          : tr
+            ? "Davet gönder"
+            : "Send invitation"}
       </button>
     </form>
   );
@@ -434,30 +1413,138 @@ function EventGuestList({
   items,
   pending,
   onStatus,
-  onCheckIn,
+  onPassport,
+  guestLists,
+  onAddToGuestList,
 }: {
   items: EventParticipant[];
   pending: boolean;
   onStatus: (id: string, status: string) => void;
-  onCheckIn: (id: string) => void;
+  onPassport: (id: string) => void;
+  guestLists: GuestLists;
+  onAddToGuestList: (listId: string, userId: string) => void;
 }) {
+  const { language } = useLanguage();
+  const tr = language === "tr";
+  const locale = tr ? "tr-TR" : "en-US";
   const [visibleCount, setVisibleCount] = useState(10);
-  const ordered = [...items].sort((a, b) => (a.user?.name.split(" ").at(-1) ?? "").localeCompare(b.user?.name.split(" ").at(-1) ?? "", "tr"));
+  const [query, setQuery] = useState("");
+  const normalized = query.trim().toLocaleLowerCase("tr-TR");
+  const ordered = [...items]
+    .filter(
+      (item) =>
+        !normalized ||
+        `${item.user?.username ?? ""} ${item.user?.name ?? ""}`
+          .toLocaleLowerCase("tr-TR")
+          .includes(normalized),
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt ?? 0).getTime() -
+        new Date(a.createdAt ?? 0).getTime(),
+    );
+  const exportRows = [...items].sort((a, b) =>
+    surname(a.user?.name).localeCompare(surname(b.user?.name), tr ? "tr" : "en"),
+  );
+  const exportData = exportRows.map((item) => ({
+    name: item.user?.name ?? item.userId,
+    username: item.user?.username ?? "",
+    status: translateStatus(item.status, language),
+    role: translateRole(item.role, language),
+    joinedAt: item.createdAt
+      ? new Date(item.createdAt).toLocaleString(locale)
+      : "",
+    order: item.joinOrder ? String(item.joinOrder) : "",
+    details: (item.tickets ?? [])
+      .map(
+        (ticket) =>
+          `${ticket.name}${ticket.description ? ` — ${ticket.description}` : ""}; ${ticket.quantity} ${tr ? "adet" : "qty"} × ${ticket.unitPrice} ${ticket.currency}${ticket.gateOpensAt || ticket.gateClosesAt ? `; gate ${formatGate(ticket.gateOpensAt, ticket.gateClosesAt, locale)}` : ""}`,
+      )
+      .join(" | "),
+  }));
   return (
-    <section className="admin-form">
-      <div className="section-header compact"><h2><Users size={20}/>Misafir listesi <small>{items.length}</small></h2><button className="create-inline-link" onClick={() => exportGuestList("Etkinlik misafir listesi", ordered.map((item) => ({ name: item.user?.name ?? item.userId, email: item.user?.email ?? "", status: item.status, role: item.role })))} type="button">Export</button></div>
+    <section className="admin-form checkin-list-panel">
+      <div className="section-header compact checkin-list-header">
+        <h2>
+          <Users size={20} />
+          {tr ? "Misafir listesi" : "Guest list"} <small>{items.length}</small>
+        </h2>
+        <label className="checkin-search">
+          <Search size={16} />
+          <input
+            aria-label={tr ? "Misafirlerde ara" : "Search guests"}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setVisibleCount(10);
+            }}
+            placeholder={tr ? "Kullanıcı adı veya ad soyad" : "Username or full name"}
+            value={query}
+          />
+        </label>
+        <button
+          className="create-inline-link"
+          onClick={() =>
+            exportGuestList(
+              tr ? "Etkinlik misafir listesi" : "Event guest list",
+              exportData,
+              language,
+            )
+          }
+          type="button"
+        >
+          {tr ? "Dışa aktar" : "Export"}
+        </button>
+      </div>
       <div className="management-list">
         {ordered.slice(0, visibleCount).map((item) => (
           <article key={item.userId}>
-            <div>
-              <strong>{item.user?.name ?? item.userId}</strong>
-              <span>{item.user?.email}</span>
-              <small>
-                {item.role} · {item.status}
-                {item.checkedInAt
-                  ? ` · ${new Date(item.checkedInAt).toLocaleString("tr-TR")}`
-                  : ""}
-              </small>
+            <div className="management-person">
+              <Link
+                className="management-avatar"
+                to={`/users/id/${item.userId}`}
+              >
+                {item.user?.avatarUrl ? (
+                  <img alt="" src={resolveMediaUrl(item.user.avatarUrl)} />
+                ) : (
+                  <span>
+                    {(item.user?.name ?? "?").slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+              </Link>
+              <div>
+                <strong>
+                  <Link to={`/users/id/${item.userId}`}>
+                    {item.user?.username
+                      ? `@${item.user.username}`
+                      : (item.user?.name ?? item.userId)}
+                  </Link>
+                </strong>
+                <span>
+                  <Link to={`/users/id/${item.userId}`}>{item.user?.name}</Link>
+                </span>
+                <small>
+                  {translateRole(item.role, language)} · {translateStatus(item.status, language)}
+                  {item.checkedInAt
+                    ? ` · ${new Date(item.checkedInAt).toLocaleString(locale)}`
+                    : ""}
+                </small>
+                {(item.tickets ?? []).map((ticket) => (
+                  <div className="checkin-ticket-summary" key={ticket.id}>
+                    <Ticket size={15} />
+                    <span>
+                      <b>{ticket.name}</b>
+                      {ticket.description ? ` · ${ticket.description}` : ""}
+                      <small>
+                        {ticket.quantity} {tr ? "adet" : "qty"} · {ticket.unitPrice}{" "}
+                        {ticket.currency}
+                        {ticket.gateOpensAt || ticket.gateClosesAt
+                          ? ` · Gate: ${formatGate(ticket.gateOpensAt, ticket.gateClosesAt, locale)}`
+                          : ""}
+                      </small>
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="row-actions">
               {item.status === "requested" || item.status === "invited" ? (
@@ -469,7 +1556,7 @@ function EventGuestList({
                     type="button"
                   >
                     <CheckCircle2 size={16} />
-                    Onayla
+                    {tr ? "Onayla" : "Approve"}
                   </button>
                   <button
                     className="management-action management-action-reject"
@@ -478,26 +1565,43 @@ function EventGuestList({
                     type="button"
                   >
                     <XCircle size={16} />
-                    Reddet
+                    {tr ? "Reddet" : "Reject"}
                   </button>
                 </>
               ) : null}
-              {item.status === "accepted" ? (
+              {["accepted", "invited", "attended"].includes(item.status) ? (
                 <button
                   className="management-action management-action-checkin"
                   disabled={pending}
-                  onClick={() => onCheckIn(item.userId)}
+                  onClick={() => onPassport(item.userId)}
                   type="button"
                 >
                   <QrCode size={16} />
-                  Check-in
+                  {tr ? "Pasaport kontrol" : "Check passport"}
                 </button>
               ) : null}
+              <GuestListPicker
+                lists={guestLists}
+                onAdd={(listId) => onAddToGuestList(listId, item.userId)}
+              />
             </div>
           </article>
         ))}
       </div>
-      {visibleCount < ordered.length ? <button className="secondary-action" onClick={() => setVisibleCount((count) => count + 10)} type="button">More</button> : null}
+      {visibleCount < ordered.length ? (
+        <button
+          className="secondary-action"
+          onClick={() => setVisibleCount((count) => count + 10)}
+          type="button"
+        >
+          {tr ? "Daha fazla" : "More"}
+        </button>
+      ) : null}
+      {!ordered.length ? (
+        <p className="form-help">
+          {tr ? "Aramanızla eşleşen misafir bulunamadı." : "No guests matched your search."}
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -506,30 +1610,114 @@ function PlaceMemberList({
   items,
   pending,
   onUpdate,
-  onCheckIn,
+  onPassport,
+  guestLists,
+  onAddToGuestList,
 }: {
   items: PlaceMember[];
   pending: boolean;
   onUpdate: (id: string, input: { status?: string; role?: string }) => void;
-  onCheckIn: (id: string) => void;
+  onPassport: (id: string) => void;
+  guestLists: GuestLists;
+  onAddToGuestList: (listId: string, userId: string) => void;
 }) {
+  const { language } = useLanguage();
+  const tr = language === "tr";
+  const locale = tr ? "tr-TR" : "en-US";
   const [visibleCount, setVisibleCount] = useState(10);
-  const ordered = [...items].sort((a, b) => (a.user?.name.split(" ").at(-1) ?? "").localeCompare(b.user?.name.split(" ").at(-1) ?? "", "tr"));
+  const [query, setQuery] = useState("");
+  const normalized = query.trim().toLocaleLowerCase("tr-TR");
+  const ordered = [...items]
+    .filter(
+      (item) =>
+        !normalized ||
+        `${item.user?.username ?? ""} ${item.user?.name ?? ""}`
+          .toLocaleLowerCase("tr-TR")
+          .includes(normalized),
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  const exportRows = [...items].sort((a, b) =>
+    surname(a.user?.name).localeCompare(surname(b.user?.name), tr ? "tr" : "en"),
+  );
+  const exportData = exportRows.map((item) => ({
+    name: item.user?.name ?? item.userId,
+    username: item.user?.username ?? "",
+    status: translateStatus(item.status, language),
+    role: translateRole(item.role, language),
+    joinedAt: new Date(item.createdAt).toLocaleString(locale),
+    order: item.joinOrder ? String(item.joinOrder) : "",
+    details: `${item.user?.followerCount ?? 0} ${tr ? "takipçi" : "followers"} · ${item.user?.relatedFollowerCount ?? 0} ${tr ? "mekân üyesi" : "place members"}`,
+  }));
   return (
-    <section className="admin-form">
-      <div className="section-header compact"><h2><Users size={20}/>Üye listesi <small>{items.length}</small></h2><button className="create-inline-link" onClick={() => exportGuestList("Mekân üye listesi", ordered.map((item) => ({ name: item.user?.name ?? item.userId, email: item.user?.email ?? "", status: item.status, role: item.role })))} type="button">Export</button></div>
+    <section className="admin-form checkin-list-panel">
+      <div className="section-header compact checkin-list-header">
+        <h2>
+          <Users size={20} />
+          {tr ? "Üye listesi" : "Member list"} <small>{items.length}</small>
+        </h2>
+        <label className="checkin-search">
+          <Search size={16} />
+          <input
+            aria-label={tr ? "Üyelerde ara" : "Search members"}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setVisibleCount(10);
+            }}
+            placeholder={tr ? "Kullanıcı adı veya ad soyad" : "Username or full name"}
+            value={query}
+          />
+        </label>
+        <button
+          className="create-inline-link"
+          onClick={() =>
+            exportGuestList(
+              tr ? "Mekân üye listesi" : "Place member list",
+              exportData,
+              language,
+            )
+          }
+          type="button"
+        >
+          {tr ? "Dışa aktar" : "Export"}
+        </button>
+      </div>
       <div className="management-list">
         {ordered.slice(0, visibleCount).map((item) => (
           <article key={item.userId}>
-            <div>
-              <strong>{item.user?.name ?? item.userId}</strong>
-              <span>{item.user?.email}</span>
-              <small>
-                {item.role} · {item.status}
-                {item.checkedInAt
-                  ? ` · ${new Date(item.checkedInAt).toLocaleString("tr-TR")}`
-                  : ""}
-              </small>
+            <div className="management-person">
+              <Link
+                className="management-avatar"
+                to={`/users/id/${item.userId}`}
+              >
+                {item.user?.avatarUrl ? (
+                  <img alt="" src={resolveMediaUrl(item.user.avatarUrl)} />
+                ) : (
+                  <span>
+                    {(item.user?.name ?? "?").slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+              </Link>
+              <div>
+                <strong>
+                  <Link to={`/users/id/${item.userId}`}>
+                    {item.user?.username
+                      ? `@${item.user.username}`
+                      : (item.user?.name ?? item.userId)}
+                  </Link>
+                </strong>
+                <span>
+                  <Link to={`/users/id/${item.userId}`}>{item.user?.name}</Link>
+                </span>
+                <small>
+                  {translateRole(item.role, language)} · {translateStatus(item.status, language)}
+                  {item.checkedInAt
+                    ? ` · ${new Date(item.checkedInAt).toLocaleString(locale)}`
+                    : ""}
+                </small>
+              </div>
             </div>
             <div className="row-actions">
               {item.status === "invited" ? (
@@ -543,7 +1731,7 @@ function PlaceMemberList({
                     type="button"
                   >
                     <CheckCircle2 size={16} />
-                    Onayla
+                    {tr ? "Onayla" : "Approve"}
                   </button>
                   <button
                     className="management-action management-action-reject"
@@ -554,105 +1742,566 @@ function PlaceMemberList({
                     type="button"
                   >
                     <XCircle size={16} />
-                    Reddet
+                    {tr ? "Reddet" : "Reject"}
                   </button>
                 </>
               ) : null}
               {item.status === "accepted" ? (
                 <>
                   <select
-                    aria-label="Üye rolü"
+                    aria-label={tr ? "Üye rolü" : "Member role"}
                     disabled={pending}
                     value={item.role}
                     onChange={(event) =>
                       onUpdate(item.userId, { role: event.target.value })
                     }
                   >
-                    <option value="member">Üye</option>
-                    <option value="manager">Yönetici</option>
-                    <option value="organizer">Organizatör</option>
+                    <option value="member">{tr ? "Üye" : "Member"}</option>
+                    <option value="manager">{tr ? "Yönetici" : "Manager"}</option>
+                    <option value="organizer">{tr ? "Organizatör" : "Organizer"}</option>
                   </select>
                   <button
                     className="management-action management-action-checkin"
                     disabled={pending}
-                    onClick={() => onCheckIn(item.userId)}
+                    onClick={() => onPassport(item.userId)}
                     type="button"
                   >
                     <QrCode size={16} />
-                    Check-in
+                    {tr ? "Pasaport kontrol" : "Check passport"}
                   </button>
                 </>
               ) : null}
+              <GuestListPicker
+                lists={guestLists}
+                onAdd={(listId) => onAddToGuestList(listId, item.userId)}
+              />
             </div>
           </article>
         ))}
       </div>
-      {visibleCount < ordered.length ? <button className="secondary-action" onClick={() => setVisibleCount((count) => count + 10)} type="button">More</button> : null}
+      {visibleCount < ordered.length ? (
+        <button
+          className="secondary-action"
+          onClick={() => setVisibleCount((count) => count + 10)}
+          type="button"
+        >
+          {tr ? "Daha fazla" : "More"}
+        </button>
+      ) : null}
+      {!ordered.length ? (
+        <p className="form-help">
+          {tr ? "Aramanızla eşleşen üye bulunamadı." : "No members matched your search."}
+        </p>
+      ) : null}
     </section>
   );
 }
 
 function CheckInHistory({
   items,
+  guestLists,
+  onAddToGuestList,
 }: {
-  items: Array<{ id: string; name: string; checkedInAt: string | Date }>;
+  items: Array<{
+    id: string;
+    name: string;
+    checkedInAt: string | Date;
+    user?: EventParticipant["user"] | PlaceMember["user"];
+    method: string;
+    decision: "attended" | "declined";
+    order: number | null;
+    followerCount: number;
+    relatedFollowerCount: number;
+  }>;
+  guestLists: GuestLists;
+  onAddToGuestList: (listId: string, userId: string) => void;
 }) {
+  const { language } = useLanguage();
+  const tr = language === "tr";
+  const locale = tr ? "tr-TR" : "en-US";
   const [visibleCount, setVisibleCount] = useState(10);
-  const ordered = [...items].sort((a, b) => new Date(b.checkedInAt).getTime() - new Date(a.checkedInAt).getTime());
+  const [query, setQuery] = useState("");
+  const normalized = query.trim().toLocaleLowerCase("tr-TR");
+  const ordered = [...items]
+    .filter(
+      (item) =>
+        !normalized ||
+        `${item.user?.username ?? ""} ${item.name}`
+          .toLocaleLowerCase("tr-TR")
+          .includes(normalized),
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.checkedInAt).getTime() - new Date(a.checkedInAt).getTime(),
+    );
   return (
-    <section className="admin-form">
-      <h2>
-        <CheckCircle2 size={20} />
-        Check-in geçmişi <small>{items.length}</small>
-      </h2>
+    <section className="admin-form checkin-list-panel">
+      <div className="section-header compact checkin-list-header">
+        <h2>
+          <CheckCircle2 size={20} />
+          {tr ? "Check-in geçmişi" : "Check-in history"} <small>{items.length}</small>
+        </h2>
+        <label className="checkin-search">
+          <Search size={16} />
+          <input
+            aria-label={tr ? "Check-in geçmişinde ara" : "Search check-in history"}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setVisibleCount(10);
+            }}
+            placeholder={tr ? "Kullanıcı adı veya ad soyad" : "Username or full name"}
+            value={query}
+          />
+        </label>
+      </div>
       <div className="management-list">
-        {ordered.slice(0, visibleCount)
-          .map((item) => (
-            <article key={item.id}>
+        {ordered.slice(0, visibleCount).map((item) => (
+          <article key={item.id}>
+            <div className="management-person">
+              <Link
+                className="management-avatar"
+                to={`/users/id/${item.user?.id ?? ""}`}
+              >
+                {item.user?.avatarUrl ? (
+                  <img alt="" src={resolveMediaUrl(item.user.avatarUrl)} />
+                ) : (
+                  <span>{item.name.slice(0, 1).toUpperCase()}</span>
+                )}
+              </Link>
               <div>
-                <strong>{item.name}</strong>
+                <strong>
+                  <Link to={`/users/id/${item.user?.id ?? ""}`}>
+                    {item.user?.username ? `@${item.user.username}` : item.name}
+                  </Link>
+                </strong>
+                <span>{item.name}</span>
                 <small>
-                  {new Date(item.checkedInAt).toLocaleString("tr-TR")}
+                  {new Date(item.checkedInAt).toLocaleString(locale)} ·{" "}
+                  {item.method.toUpperCase()}
+                  {item.order ? ` · #${item.order}` : ""}
+                </small>
+                <small>
+                  {item.followerCount} {tr ? "takipçi" : "followers"} ·{" "}
+                  {item.relatedFollowerCount} {tr ? "tanesi burada" : "are here"}
                 </small>
               </div>
-              <span className="status-pill status-attended">Giriş yaptı</span>
-            </article>
-          ))}
+            </div>
+            <div className="row-actions">
+              <span className={`status-pill status-${item.decision}`}>
+                {item.decision === "attended"
+                  ? tr
+                    ? "Giriş yaptı"
+                    : "Checked in"
+                  : tr
+                    ? "Giriş reddedildi"
+                    : "Entry declined"}
+              </span>
+              {item.user?.id ? (
+                <GuestListPicker
+                  lists={guestLists}
+                  onAdd={(listId) => onAddToGuestList(listId, item.user!.id)}
+                />
+              ) : null}
+            </div>
+          </article>
+        ))}
       </div>
-      {visibleCount < ordered.length ? <button className="secondary-action" onClick={() => setVisibleCount((count) => count + 10)} type="button">More</button> : null}
-      {!items.length ? (
-        <p className="form-help">Henüz check-in kaydı yok.</p>
+      {visibleCount < ordered.length ? (
+        <button
+          className="secondary-action"
+          onClick={() => setVisibleCount((count) => count + 10)}
+          type="button"
+        >
+          {tr ? "Daha fazla" : "More"}
+        </button>
+      ) : null}
+      {!ordered.length ? (
+        <p className="form-help">
+          {tr ? "Henüz check-in kaydı yok." : "There are no check-in records yet."}
+        </p>
       ) : null}
     </section>
   );
 }
 
-function exportGuestList(title: string, rows: Array<{ name: string; email: string; status: string; role: string }>) {
-  const escape = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
+function GuestListPicker({
+  lists,
+  onAdd,
+}: {
+  lists: GuestLists;
+  onAdd: (listId: string) => void;
+}) {
+  const { language } = useLanguage();
+  const tr = language === "tr";
+  if (!lists.length) return null;
+  return (
+    <select
+      aria-label={tr ? "Guest liste ekle" : "Add to guest list"}
+      className="guest-list-picker"
+      defaultValue=""
+      onChange={(event) => {
+        if (event.target.value) onAdd(event.target.value);
+        event.target.value = "";
+      }}
+    >
+      <option disabled value="">
+        {tr ? "Guest liste ekle" : "Add to guest list"}
+      </option>
+      {[...lists]
+        .sort((a, b) => a.name.localeCompare(b.name, tr ? "tr" : "en"))
+        .map((list) => (
+          <option key={list.id} value={list.id}>
+            {list.name} ({list.members.length})
+          </option>
+        ))}
+    </select>
+  );
+}
+
+function CheckInPassportDialog({
+  passport,
+  pending,
+  onClose,
+  onDecision,
+}: {
+  passport: CheckInPassport;
+  pending: boolean;
+  onClose: () => void;
+  onDecision: (decision: "admit" | "decline") => void;
+}) {
+  const { language } = useLanguage();
+  const tr = language === "tr";
+  const locale = tr ? "tr-TR" : "en-US";
+  const media = passport.user.media ?? [];
+  return (
+    <div aria-modal="true" className="passport-backdrop" role="dialog">
+      <section className="checkin-passport">
+        <header>
+          <div>
+            <p className="eyebrow">
+              {passport.targetType === "event"
+                ? tr
+                  ? "Etkinlik pasaportu"
+                  : "Event passport"
+                : tr
+                  ? "Mekân pasaportu"
+                  : "Place passport"}
+            </p>
+            <h2>{passport.targetName}</h2>
+          </div>
+          <button
+            aria-label={tr ? "Pasaportu kapat" : "Close passport"}
+            className="passport-close"
+            onClick={onClose}
+            type="button"
+          >
+            <X size={20} />
+          </button>
+        </header>
+        {media.length ? (
+          <div className="passport-media">
+            {media.map((item) =>
+              item.type.startsWith("video") ? (
+                <video controls key={item.id} src={resolveMediaUrl(item.url)} />
+              ) : (
+                <img
+                  alt={
+                    tr
+                      ? `${passport.user.name} profil medyası`
+                      : `${passport.user.name} profile media`
+                  }
+                  key={item.id}
+                  src={resolveMediaUrl(item.url)}
+                />
+              ),
+            )}
+          </div>
+        ) : (
+          <div className="passport-avatar">
+            {passport.user.avatarUrl ? (
+              <img alt="" src={resolveMediaUrl(passport.user.avatarUrl)} />
+            ) : (
+              passport.user.name.slice(0, 1).toUpperCase()
+            )}
+          </div>
+        )}
+        <div className="passport-identity">
+          <div>
+            <h3>
+              {passport.user.username
+                ? `@${passport.user.username}`
+                : passport.user.name}
+              {passport.user.profileVerifiedAt ? (
+                <BadgeCheck
+                  aria-label={tr ? "Doğrulanmış profil" : "Verified profile"}
+                  size={20}
+                />
+              ) : null}
+            </h3>
+            <p>{passport.user.name}</p>
+          </div>
+          <span
+            className={`status-pill status-${passport.alreadyInside ? "attended" : passport.status}`}
+          >
+            {passport.alreadyInside
+              ? tr
+                ? "İçeride"
+                : "Inside"
+              : translateStatus(passport.status, language)}
+          </span>
+        </div>
+        {passport.alreadyInside ? (
+          <div className="passport-warning">
+            {tr ? "Bu kullanıcı daha önce giriş yaptı" : "This user has already checked in"}
+            {passport.checkedInAt
+              ? `: ${new Date(passport.checkedInAt).toLocaleString(locale)}`
+              : "."}
+          </div>
+        ) : null}
+        <dl className="passport-facts">
+          <div>
+            <dt>{tr ? "Rol" : "Role"}</dt>
+            <dd>{translateRole(passport.role, language)}</dd>
+          </div>
+          <div>
+            <dt>{tr ? "Paket" : "Plan"}</dt>
+            <dd>
+              {passport.user.plan
+                ? translatePlan(passport.user.plan, language)
+                :
+                (passport.user.accountType === "corporate"
+                  ? tr
+                    ? "Kurumsal Başlangıç"
+                    : "Corporate Starter"
+                  : tr
+                    ? "Standart"
+                    : "Standard")}
+            </dd>
+          </div>
+          <div>
+            <dt>{tr ? "Takipçi" : "Followers"}</dt>
+            <dd>{passport.user.followerCount}</dd>
+          </div>
+          <div>
+            <dt>{tr ? "İlgili takipçi" : "Relevant followers"}</dt>
+            <dd>{passport.relatedFollowerCount}</dd>
+          </div>
+          <div>
+            <dt>{tr ? "Davet eden" : "Invited by"}</dt>
+            <dd>{passport.invitedBy.join(", ") || "—"}</dd>
+          </div>
+          <div>
+            <dt>Guest list</dt>
+            <dd>
+              {passport.guestLists.map((list) => list.name).join(", ") || "—"}
+            </dd>
+          </div>
+        </dl>
+        {passport.relatedPlace ? (
+          <div className="passport-related-place">
+            <h3>{tr ? "Mekân durumu" : "Place status"}</h3>
+            <p>
+              <strong>{passport.relatedPlace.name}</strong> ·{" "}
+              {translateStatus(passport.relatedPlace.status, language)} ·{" "}
+              {translateRole(passport.relatedPlace.role, language)}
+              {passport.relatedPlace.order
+                ? ` · #${passport.relatedPlace.order}`
+                : ""}
+            </p>
+            {passport.relatedPlace.invitedBy.length ? (
+              <small>
+                {tr ? "Davet eden" : "Invited by"}: {passport.relatedPlace.invitedBy.join(", ")}
+              </small>
+            ) : null}
+          </div>
+        ) : null}
+        {passport.tickets.length ? (
+          <div className="passport-tickets">
+            <h3>
+              <Ticket size={18} />
+              {tr ? "Biletler" : "Tickets"}
+            </h3>
+            {passport.tickets.map((ticket) => (
+              <div key={ticket.id}>
+                <strong>{ticket.name}</strong>
+                <span>
+                  {ticket.quantity} {tr ? "adet" : "qty"} · {ticket.unitPrice}{" "}
+                  {ticket.currency}
+                </span>
+                {ticket.description ? (
+                  <small>{ticket.description}</small>
+                ) : null}
+                {ticket.gateOpensAt || ticket.gateClosesAt ? (
+                  <small>
+                    Gate: {formatGate(ticket.gateOpensAt, ticket.gateClosesAt, locale)}
+                  </small>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <footer>
+          <button
+            className="management-action management-action-reject"
+            disabled={pending || passport.alreadyInside}
+            onClick={() => onDecision("decline")}
+            type="button"
+          >
+            <XCircle size={17} />
+            {tr ? "Girişi reddet" : "Decline entry"}
+          </button>
+          <button
+            className="management-action management-action-checkin"
+            disabled={pending || passport.alreadyInside}
+            onClick={() => onDecision("admit")}
+            type="button"
+          >
+            <CheckCircle2 size={17} />
+            {pending
+              ? tr
+                ? "Kaydediliyor…"
+                : "Saving…"
+              : tr
+                ? "Girişi onayla"
+                : "Approve entry"}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function surname(name?: string) {
+  return name?.trim().split(/\s+/).at(-1) ?? "";
+}
+
+function formatGate(
+  open: string | Date | null,
+  close: string | Date | null,
+  locale = "tr-TR",
+) {
+  const value = (date: string | Date | null) =>
+    date ? new Date(date).toLocaleString(locale) : "—";
+  return `${value(open)} – ${value(close)}`;
+}
+
+function translateStatus(status: string, language: "tr" | "en") {
+  const labels: Record<string, [string, string]> = {
+    requested: ["Talep etti", "Requested"],
+    invited: ["Davet edildi", "Invited"],
+    accepted: ["Kabul edildi", "Accepted"],
+    declined: ["Reddedildi", "Declined"],
+    attended: ["Giriş yaptı", "Checked in"],
+    active: ["Aktif", "Active"],
+    pending: ["Bekliyor", "Pending"],
+  };
+  const label = labels[status];
+  return label ? label[language === "tr" ? 0 : 1] : status;
+}
+
+function translateRole(role: string, language: "tr" | "en") {
+  const labels: Record<string, [string, string]> = {
+    attendee: ["Katılımcı", "Attendee"],
+    member: ["Üye", "Member"],
+    manager: ["Yönetici", "Manager"],
+    organizer: ["Organizatör", "Organizer"],
+    owner: ["Sahip", "Owner"],
+  };
+  const label = labels[role];
+  return label ? label[language === "tr" ? 0 : 1] : role;
+}
+
+function translatePlan(plan: string, language: "tr" | "en") {
+  if (language === "tr") return plan;
+  if (plan === "Küratör") return "Curator";
+  if (plan === "Standart") return "Standard";
+  if (plan === "Kurumsal Başlangıç") return "Corporate Starter";
+  return plan.replace(/^Kurumsal\s+/i, "Corporate ");
+}
+
+function exportGuestList(
+  title: string,
+  rows: Array<{
+    name: string;
+    username: string;
+    status: string;
+    role: string;
+    joinedAt: string;
+    order: string;
+    details: string;
+  }>,
+  language: "tr" | "en",
+) {
+  const escape = (value: string) =>
+    value.replace(
+      /[&<>"']/g,
+      (character) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[character]!,
+    );
   const popup = window.open("", "_blank", "noopener,noreferrer");
   if (!popup) return;
-  popup.document.write(`<html><head><title>${escape(title)}</title><style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial,sans-serif;color:#17231d}h1{font-size:22px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccd7d0;padding:8px;text-align:left}th{background:#eef4f0}</style></head><body><h1>${escape(title)}</h1><table><thead><tr><th>Soyad / Ad</th><th>E-posta</th><th>Rol</th><th>Durum</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escape(row.name)}</td><td>${escape(row.email)}</td><td>${escape(row.role)}</td><td>${escape(row.status)}</td></tr>`).join("")}</tbody></table><script>window.onload=()=>window.print()</script></body></html>`);
+  const headings =
+    language === "tr"
+      ? [
+          "Soyad / Ad",
+          "Kullanıcı adı",
+          "Rol",
+          "Durum",
+          "Katılım tarihi",
+          "Sıra",
+          "Bilet / Gate",
+        ]
+      : [
+          "Surname / Name",
+          "Username",
+          "Role",
+          "Status",
+          "Participation date",
+          "Order",
+          "Ticket / Gate",
+        ];
+  popup.document.write(
+    `<html lang="${language}"><head><title>${escape(title)}</title><style>@page{size:A4 landscape;margin:10mm}body{font-family:Arial,sans-serif;color:#17231d}h1{font-size:20px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #ccd7d0;padding:6px;text-align:left;vertical-align:top}th{background:#eef4f0}td:last-child{max-width:360px}</style></head><body><h1>${escape(title)}</h1><table><thead><tr>${headings.map((heading) => `<th>${escape(heading)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr><td>${escape(row.name)}</td><td>${escape(row.username ? `@${row.username}` : "")}</td><td>${escape(row.role)}</td><td>${escape(row.status)}</td><td>${escape(row.joinedAt)}</td><td>${escape(row.order)}</td><td>${escape(row.details)}</td></tr>`).join("")}</tbody></table><script>window.onload=()=>window.print()</script></body></html>`,
+  );
   popup.document.close();
 }
 
 function LoginState() {
+  const { language } = useLanguage();
+  const tr = language === "tr";
   return (
     <section className="page empty-state">
       <LogIn size={38} />
-      <h1>Davet yönetimi</h1>
-      <p>Bu alanı kullanmak için giriş yap.</p>
+      <h1>{tr ? "Davet yönetimi" : "Invite management"}</h1>
+      <p>
+        {tr
+          ? "Bu alanı kullanmak için giriş yap."
+          : "Sign in to use this area."}
+      </p>
       <Link className="primary-action" to="/login">
-        Giriş yap
+        {tr ? "Giriş yap" : "Sign in"}
       </Link>
     </section>
   );
 }
 function PermissionState() {
+  const { language } = useLanguage();
+  const tr = language === "tr";
   return (
     <div className="empty-state">
       <Users size={36} />
-      <h2>Yönetim yetkisi gerekiyor</h2>
-      <p>Bu listeyi yalnız organizatörler ve yöneticiler görebilir.</p>
+      <h2>{tr ? "Yönetim yetkisi gerekiyor" : "Management permission required"}</h2>
+      <p>
+        {tr
+          ? "Bu listeyi yalnız organizatörler ve yöneticiler görebilir."
+          : "Only organizers and managers can view this list."}
+      </p>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { User } from "@prisma/client";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -16,4 +16,5 @@ export class IdentityController {
   @Patch("member-pass/rotate") @UseGuards(JwtAuthGuard) rotate(@CurrentUser() user: User) { return this.identityService.rotateMemberPass(user.id); }
   @Post("member-scans") @UseGuards(JwtAuthGuard) scan(@CurrentUser() user: User, @Body() body: ScanMemberDto) { return this.identityService.scan(user.id, body); }
   @Get("member-scans") @UseGuards(JwtAuthGuard) history(@CurrentUser() user: User) { return this.identityService.scanHistory(user.id); }
+  @Get("member-scans/incoming") @UseGuards(JwtAuthGuard) incoming(@CurrentUser() user: User, @Query("after") after?: string) { return this.identityService.incomingScans(user.id, after); }
 }

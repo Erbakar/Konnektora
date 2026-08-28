@@ -5,13 +5,22 @@ import { ContentService } from "./content.service";
 describe("ContentService profile media", () => {
   const mediaFile = {
     findMany: jest.fn(),
+    findFirst: jest.fn(),
     findUnique: jest.fn(),
+    count: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     updateMany: jest.fn()
   };
   const prisma = {
     mediaFile,
+    event: { findUnique: jest.fn(), update: jest.fn() },
+    eventParticipant: { findFirst: jest.fn() },
+    place: { findUnique: jest.fn(), update: jest.fn() },
+    placeMember: { findFirst: jest.fn() },
+    contentView: { create: jest.fn() },
+    contentShare: { create: jest.fn() },
+    contentAction: { create: jest.fn() },
     $transaction: jest.fn(async (operation: unknown) => {
       if (typeof operation === "function") return operation({ mediaFile });
       return Promise.all(operation as Promise<unknown>[]);
@@ -71,5 +80,65 @@ describe("ContentService profile media", () => {
       uploadedById: "user-2"
     });
     await expect(service.makeProfilePicture("user-1", "media-2")).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("allows an accepted event organiser to upload album media", async () => {
+    prisma.event.findUnique.mockResolvedValue({ createdById: "owner-1" });
+    prisma.eventParticipant.findFirst.mockResolvedValue({ id: "participant-1" });
+    mediaFile.count.mockResolvedValue(1);
+    mediaFile.create.mockResolvedValue({ id: "media-2" });
+
+    await service.createContentMedia(ReportTargetType.event, "event-1", { id: "organiser-1", role: "user" } as never, "/uploads/photo.webp", "image");
+
+    expect(mediaFile.create).toHaveBeenCalledWith({ data: expect.objectContaining({ contentType: ReportTargetType.event, contentId: "event-1", sortOrder: 1 }) });
+  });
+
+  it("reorders event media and promotes the first photo to cover", async () => {
+    prisma.event.findUnique.mockResolvedValue({ createdById: "owner-1" });
+    const album = [
+      { id: "11111111-1111-4111-8111-111111111111", type: "image", url: "/uploads/a.webp" },
+      { id: "22222222-2222-4222-8222-222222222222", type: "image", url: "/uploads/b.webp" },
+    ];
+    mediaFile.findMany.mockResolvedValue(album);
+
+    await service.reorderContentMedia(ReportTargetType.event, "event-1", [album[1]!.id, album[0]!.id], { id: "owner-1", role: "user" } as never);
+
+    expect(prisma.event.update).toHaveBeenCalledWith({ where: { id: "event-1" }, data: { coverImageUrl: "/uploads/b.webp" } });
+    expect(mediaFile.update).toHaveBeenCalledWith({ where: { id: album[1]!.id }, data: { sortOrder: 0 } });
+  });
+
+  it("records an authenticated view with source and referrer", async () => {
+    prisma.contentView.create.mockResolvedValue({ id: "view-1" });
+    await service.createView(ReportTargetType.event, "event-1", { id: "user-1" } as never, "homepage", "https://konnektora.com/", "detail");
+    expect(prisma.contentView.create).toHaveBeenCalledWith({ data: {
+      targetType: ReportTargetType.event,
+      targetId: "event-1",
+      kind: "detail",
+      source: "homepage",
+      referrer: "https://konnektora.com/",
+      user: { connect: { id: "user-1" } },
+    } });
+  });
+
+  it("normalizes share channels before persisting them", async () => {
+    prisma.contentShare.create.mockResolvedValue({ id: "share-1" });
+    await service.createShare(ReportTargetType.place, "place-1", "Instagram Story / DM");
+    expect(prisma.contentShare.create).toHaveBeenCalledWith({ data: {
+      targetType: ReportTargetType.place,
+      targetId: "place-1",
+      channel: "instagram_story_dm",
+      user: undefined,
+    } });
+  });
+
+  it("records normalized content actions", async () => {
+    prisma.contentAction.create.mockResolvedValue({ id: "action-1" });
+    await service.createAction(ReportTargetType.user, "user-2", "Website Click", { id: "user-1" } as never);
+    expect(prisma.contentAction.create).toHaveBeenCalledWith({ data: {
+      targetType: ReportTargetType.user,
+      targetId: "user-2",
+      action: "website_click",
+      user: { connect: { id: "user-1" } },
+    } });
   });
 });

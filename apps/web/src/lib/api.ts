@@ -1,9 +1,11 @@
 import {
   adminDashboardSchema,
+  adminActivityLogListSchema,
   adminManagedUserDetailSchema,
   adminManagedUserListSchema,
   adminManagedUserSchema,
   adminCommentSchema,
+  adminPostSchema,
   adminMediaSchema,
   adminPlaceSchema,
   adminPrivateMessageSchema,
@@ -21,6 +23,7 @@ import {
   discoverySearchSchema,
   cmsCategorySchema,
   cmsPolicySchema,
+  checkInPassportSchema,
   eventListSchema,
   eventSchema,
   financeDashboardSchema,
@@ -51,6 +54,8 @@ import {
   profileVerificationStatusSchema,
   profileVerificationRequestsSchema,
   profileVerificationRequestSchema,
+  profileTagSuggestionSchema,
+  profileTagSuggestionsSchema,
   socialPostFeedSchema,
   socialPostSchema,
   socialPostCommentSchema,
@@ -70,7 +75,9 @@ import {
   userMessageSchema,
   userBlocksSchema,
   type AdminDashboard,
+  type AdminActivityLog,
   type AdminComment,
+  type AdminPost,
   type AdminManagedUser,
   type AdminManagedUserDetail,
   type AdminManagedUserList,
@@ -84,6 +91,7 @@ import {
   type Availability,
   type BlockedTargetType,
   type CmsPolicy,
+  type CheckInPassport,
   type CmsCategory,
   type ContentReport,
   type CorporateKycApplication,
@@ -118,6 +126,7 @@ import {
   type PlaceList,
   type PlaceMember,
   type Profile,
+  type ProfileTagSuggestion,
   type ProfileMedia,
   type ProfileVerificationStatus,
   type ProfileVerificationRequest,
@@ -210,6 +219,7 @@ const MOCK_USER_FOLLOWS_KEY = "konnektora_mock_user_follows";
 const MOCK_TAG_COMMENTS_KEY = "konnektora_mock_tag_comments";
 const MOCK_PROFILE_MEDIA_KEY = "konnektora_mock_profile_media";
 const MOCK_SOCIAL_POSTS_KEY = "konnektora_mock_social_posts";
+const MOCK_PROFILE_TAG_SUGGESTIONS_KEY = "konnektora_mock_profile_tag_suggestions";
 const MOCK_SOCIAL_COMMENTS_KEY = "konnektora_mock_social_comments";
 const MOCK_CONTENT_THREAD_COMMENTS_KEY =
   "konnektora_mock_content_thread_comments";
@@ -305,8 +315,12 @@ export const adminPermissionOptions: Array<{
   { value: "tags.manage", label: "İlgi Alanı Yönetimi" },
   { value: "events.manage", label: "Etkinlik Yönetimi" },
   { value: "places.manage", label: "Mekan Yönetimi" },
+  { value: "posts.manage", label: "Post Yönetimi" },
   { value: "comments.manage", label: "Yorum Yönetimi" },
   { value: "media.manage", label: "Medya Yönetimi" },
+  { value: "private_messages.manage", label: "Özel Mesaj Yönetimi" },
+  { value: "user_activity.manage", label: "User activity log" },
+  { value: "finance.manage", label: "Muhasebe & Finans" },
   {
     value: "messages.faq.manage",
     label: "Kullanıcılardan Mesajlar - SSS mesajları",
@@ -384,6 +398,7 @@ export function getUserToken() {
 export function setUserSession(response: LoginResponse) {
   localStorage.setItem(USER_TOKEN_KEY, response.accessToken);
   localStorage.setItem(USER_KEY, JSON.stringify(response.user));
+  window.dispatchEvent(new Event(USER_SESSION_CHANGED_EVENT));
 }
 
 export function getUserSession() {
@@ -392,6 +407,7 @@ export function getUserSession() {
 
 export function updateUserSession(user: LoginResponse["user"]) {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
+  window.dispatchEvent(new Event(USER_SESSION_CHANGED_EVENT));
 }
 
 export function clearUserSession() {
@@ -1217,6 +1233,14 @@ function getMockResponse<T>(
     );
   }
 
+  if (pathname === "/me/email" && method === "PATCH") {
+    return schema.parse(
+      changeMockEmail(
+        parseBody<{ email: string; currentPassword: string }>(options),
+      ),
+    );
+  }
+
   if (pathname === "/auth/deactivate" && method === "POST") {
     return schema.parse(
       deactivateMockAccount(
@@ -1353,6 +1377,29 @@ function getMockResponse<T>(
     };
     writeStorage(MOCK_MEDIA_KEY, [media, ...current]);
     return schema.parse(media);
+  }
+
+  if (
+    pathname.startsWith("/media/") &&
+    pathname.endsWith("/order") &&
+    method === "PUT"
+  ) {
+    const [, targetType, targetId] = pathname.slice(1, -"/order".length).split("/");
+    const { mediaIds } = parseBody<{ mediaIds: string[] }>(options);
+    const current = readStorage<ProfileMedia[]>(MOCK_MEDIA_KEY, []);
+    const album = current.filter((item) => item.status === "active" && item.contentType === targetType && item.contentId === targetId);
+    if (album.length !== mediaIds.length || album.some((item) => !mediaIds.includes(item.id))) throw new Error("Geçersiz medya sıralaması.");
+    const ordered = current.map((item) => item.contentType === targetType && item.contentId === targetId ? { ...item, sortOrder: mediaIds.indexOf(item.id) } : item);
+    writeStorage(MOCK_MEDIA_KEY, ordered);
+    return schema.parse(ordered.filter((item) => item.status === "active" && item.contentType === targetType && item.contentId === targetId).sort((a, b) => a.sortOrder - b.sortOrder));
+  }
+
+  if (pathname.startsWith("/media/") && method === "DELETE") {
+    const [, targetType, targetId, mediaId] = pathname.slice(1).split("/");
+    const current = readStorage<ProfileMedia[]>(MOCK_MEDIA_KEY, []);
+    const next = current.map((item) => item.id === mediaId && item.contentType === targetType && item.contentId === targetId ? { ...item, status: "deleted" } : item);
+    writeStorage(MOCK_MEDIA_KEY, next);
+    return schema.parse(next.filter((item) => item.status === "active" && item.contentType === targetType && item.contentId === targetId).sort((a, b) => a.sortOrder - b.sortOrder).map((item, sortOrder) => ({ ...item, sortOrder })));
   }
 
   if (
@@ -1586,6 +1633,8 @@ function getMockResponse<T>(
     return schema.parse(getMockMemberPass());
   if (pathname === "/me/member-pass/rotate" && method === "PATCH")
     return schema.parse(rotateMockMemberPass());
+  if (pathname === "/me/member-scans/incoming" && method === "GET")
+    return schema.parse([]);
   if (pathname === "/me/member-scans" && method === "GET")
     return schema.parse(listMockMemberScans());
   if (pathname === "/me/member-scans" && method === "POST")
@@ -1696,6 +1745,10 @@ function getMockResponse<T>(
     );
   if (pathname === "/views" && method === "POST")
     return schema.parse({ ok: true });
+  if (pathname === "/shares" && method === "POST")
+    return schema.parse({ ok: true });
+  if (pathname === "/actions" && method === "POST")
+    return schema.parse({ ok: true });
 
   if (
     pathname.startsWith("/tags/") &&
@@ -1777,6 +1830,42 @@ function getMockResponse<T>(
       affinities: Array<{ tagId: string; sentiment: TagSentiment }>;
     }>(options);
     return schema.parse(updateMockTagAffinities(input.affinities));
+  }
+
+  if (pathname === "/profile/tag-suggestions" && method === "GET") {
+    const session = getUserSession();
+    if (!session) throw new Error("Etiket önerilerini görmek için giriş yapın.");
+    return schema.parse(readStorage<ProfileTagSuggestion[]>(MOCK_PROFILE_TAG_SUGGESTIONS_KEY, []).filter((item) => item.status === "pending" && (item.targetUserId === session.id || item.suggestedById === session.id)));
+  }
+
+  if (pathname.startsWith("/profile/tag-suggestions/") && method === "POST") {
+    const session = getUserSession();
+    if (!session) throw new Error("Etiket önermek için giriş yapın.");
+    const targetUserId = pathname.slice("/profile/tag-suggestions/".length);
+    const input = parseBody<{ tagId: string; sentiment: TagSentiment }>(options);
+    const target = getAllMockUsers().find((item) => item.id === targetUserId);
+    const tag = getStoredTags().find((item) => item.id === input.tagId);
+    if (!target || !tag) throw new Error("Kullanıcı veya etiket bulunamadı.");
+    const items = readStorage<ProfileTagSuggestion[]>(MOCK_PROFILE_TAG_SUGGESTIONS_KEY, []);
+    if (items.some((item) => item.targetUserId === targetUserId && item.suggestedById === session.id && item.tagId === input.tagId && item.status === "pending")) throw new Error("Bu etiket daha önce onaya gönderildi.");
+    const now = new Date().toISOString();
+    const suggestion: ProfileTagSuggestion = { id: createId(), targetUserId, suggestedById: session.id, tagId: tag.id, sentiment: input.sentiment, status: "pending", createdAt: now, updatedAt: now, tag, targetUser: { id: target.id, name: target.name, username: target.username ?? null, email: target.email, role: target.role ?? "user", status: target.status ?? "active" }, suggestedBy: { id: session.id, name: session.name, username: session.username ?? null, email: session.email, role: session.role, status: session.status ?? "active" } };
+    writeStorage(MOCK_PROFILE_TAG_SUGGESTIONS_KEY, [suggestion, ...items]);
+    return schema.parse(suggestion);
+  }
+
+  if (pathname.startsWith("/profile/tag-suggestions/") && method === "PATCH") {
+    const session = getUserSession();
+    if (!session) throw new Error("İşlem için giriş yapın.");
+    const id = pathname.slice("/profile/tag-suggestions/".length);
+    const input = parseBody<{ action: "accept" | "decline" | "cancel" }>(options);
+    const items = readStorage<ProfileTagSuggestion[]>(MOCK_PROFILE_TAG_SUGGESTIONS_KEY, []);
+    const current = items.find((item) => item.id === id && item.status === "pending");
+    if (!current) throw new Error("Bekleyen etiket önerisi bulunamadı.");
+    if (input.action === "accept" && current.targetUserId === session.id) updateMockTagAffinities([...getMockTagAffinities().filter((item) => item.tag.id !== current.tagId).map((item) => ({ tagId: item.tag.id, sentiment: item.sentiment })), { tagId: current.tagId, sentiment: current.sentiment }]);
+    const status = input.action === "accept" ? "accepted" : input.action === "cancel" ? "cancelled" : "declined";
+    writeStorage(MOCK_PROFILE_TAG_SUGGESTIONS_KEY, items.map((item) => item.id === id ? { ...item, status, updatedAt: new Date().toISOString() } : item));
+    return schema.parse({ ok: true, status });
   }
 
   if (pathname === "/profile/notifications" && method === "GET") {
@@ -1908,6 +1997,23 @@ function getMockResponse<T>(
     return schema.parse(listMockComments(new URLSearchParams(queryString)));
   }
 
+  if (pathname === "/admin/content/posts" && method === "GET") {
+    const params = new URLSearchParams(queryString);
+    const q = params.get("q")?.toLocaleLowerCase("tr-TR");
+    const status = params.get("status");
+    return schema.parse(getMockSocialPosts().filter((post) => (!q || post.body.toLocaleLowerCase("tr-TR").includes(q)) && (!status || post.status === status)).map((post) => ({ ...post, reportCount: listMockReports().filter((report) => report.targetType === "post" && report.targetId === post.id).length })));
+  }
+
+  if (pathname.startsWith("/admin/content/posts/") && method === "GET") {
+    const id = pathname.slice("/admin/content/posts/".length);
+    const post = getMockSocialPosts().find((item) => item.id === id);
+    return post ? schema.parse({ ...post, reportCount: listMockReports().filter((report) => report.targetType === "post" && report.targetId === id).length }) : undefined;
+  }
+
+  if (pathname.startsWith("/admin/content/posts/") && method === "PATCH") {
+    return schema.parse(updateMockContentItem(MOCK_SOCIAL_POSTS_KEY, pathname.slice("/admin/content/posts/".length), parseBody<{ status: string }>(options)));
+  }
+
   if (pathname.startsWith("/admin/content/comments/") && method === "GET") {
     return schema.parse(
       getMockComment(pathname.slice("/admin/content/comments/".length)),
@@ -1989,6 +2095,20 @@ function getMockResponse<T>(
     return schema.parse(getMockDashboard());
   }
 
+  if (pathname === "/admin/activity-logs" && method === "GET") {
+    const now = new Date();
+    const actor = basicMockUser("88888888-8888-4888-8888-888888888888")!;
+    const items: AdminActivityLog[] = [
+      { id: "67000000-0000-4000-8000-000000000001", actorId: actor.id, actor, action: "view:/events/global-startup-demo-night", targetType: "events", targetId: "550e8400-e29b-41d4-a716-446655440001", metadata: { method: "GET", statusCode: 200, ip: "127.0.0.1", userAgent: "Demo browser", durationMs: 18 }, createdAt: now.toISOString() },
+      { id: "67000000-0000-4000-8000-000000000002", actorId: actor.id, actor, action: "update:/settings/privacy", targetType: "settings", targetId: actor.id, metadata: { method: "PATCH", statusCode: 200, ip: "127.0.0.1", userAgent: "Demo browser", durationMs: 34 }, createdAt: new Date(now.getTime() - 60_000).toISOString() },
+    ];
+    const params = new URLSearchParams(queryString);
+    const q = (params.get("q") ?? "").toLocaleLowerCase("tr-TR");
+    const category = params.get("category") ?? "";
+    const filtered = items.filter((item) => (!q || `${item.action} ${item.actor?.name ?? ""} ${item.actor?.email ?? ""}`.toLocaleLowerCase("tr-TR").includes(q)) && (!category || item.targetType === category));
+    return schema.parse({ items: filtered, total: filtered.length, page: 1, pageSize: 50, hasNextPage: false });
+  }
+
   if (pathname === "/admin/users" && method === "GET") {
     return schema.parse(listMockAdminUsers(new URLSearchParams(queryString)));
   }
@@ -2035,6 +2155,18 @@ function getMockResponse<T>(
         pathname.slice("/admin/role-groups/".length),
         parseBody<Partial<RoleGroupInput> & { status?: string }>(options),
       ),
+    );
+  }
+
+  if (pathname === "/support/categories" && method === "GET") {
+    const type = new URLSearchParams(queryString).get("type");
+    return schema.parse(
+      listMockCmsCategories()
+        .filter(
+          (category) =>
+            category.status === "active" && (!type || category.type === type),
+        )
+        .sort((a, b) => a.name.localeCompare(b.name, "tr")),
     );
   }
 
@@ -2354,6 +2486,27 @@ function getMockResponse<T>(
 
   if (
     pathname.startsWith("/places/") &&
+    pathname.endsWith("/check-in/preview") &&
+    method === "POST"
+  ) {
+    const placeId = pathname.slice("/places/".length, -"/check-in/preview".length);
+    const input = parseBody<{ payload: string; method: "qr" | "nfc" }>(options);
+    return schema.parse(previewMockPlaceCheckIn(placeId, input.payload, input.method));
+  }
+
+  const placePassportDecisionMatch = pathname.match(/^\/places\/([^/]+)\/check-in\/passport\/([^/]+)\/decision$/);
+  if (placePassportDecisionMatch && method === "POST") {
+    const input = parseBody<{ decision: "admit" | "decline"; method: "manual" | "qr" | "nfc" }>(options);
+    return schema.parse(decideMockPlaceCheckIn(placePassportDecisionMatch[1]!, placePassportDecisionMatch[2]!, input.decision, input.method));
+  }
+
+  const placePassportMatch = pathname.match(/^\/places\/([^/]+)\/check-in\/passport\/([^/]+)$/);
+  if (placePassportMatch && method === "GET") {
+    return schema.parse(getMockPlaceCheckInPassport(placePassportMatch[1]!, placePassportMatch[2]!));
+  }
+
+  if (
+    pathname.startsWith("/places/") &&
     pathname.endsWith("/check-in/scan") &&
     method === "POST"
   ) {
@@ -2387,11 +2540,12 @@ function getMockResponse<T>(
         .map((item) => ({
           id: item.user!.id,
           name: item.user!.name,
-          username: null,
-          city: null,
-          country: null,
+          username: item.user!.username ?? null,
+          city: item.user!.city ?? null,
+          country: item.user!.country ?? null,
           profileVerifiedAt: null,
           relation: item.role,
+          status: item.status,
           checkedIn: Boolean(item.checkedInAt),
         })),
     );
@@ -2563,6 +2717,26 @@ function getMockResponse<T>(
 
   if (
     pathname.startsWith("/events/") &&
+    pathname.endsWith("/check-in/preview") &&
+    method === "POST"
+  ) {
+    const input = parseBody<{ token: string; method: "qr" | "nfc" }>(options);
+    return schema.parse(previewMockEventCheckIn(pathname.slice("/events/".length, -"/check-in/preview".length), input.token, input.method));
+  }
+
+  const passportDecisionMatch = pathname.match(/^\/events\/([^/]+)\/check-in\/passport\/([^/]+)\/decision$/);
+  if (passportDecisionMatch && method === "POST") {
+    const input = parseBody<{ decision: "admit" | "decline"; method: "manual" | "qr" | "nfc" }>(options);
+    return schema.parse(decideMockEventCheckIn(passportDecisionMatch[1]!, passportDecisionMatch[2]!, input.decision, input.method));
+  }
+
+  const passportMatch = pathname.match(/^\/events\/([^/]+)\/check-in\/passport\/([^/]+)$/);
+  if (passportMatch && method === "GET") {
+    return schema.parse(getMockEventCheckInPassport(passportMatch[1]!, passportMatch[2]!));
+  }
+
+  if (
+    pathname.startsWith("/events/") &&
     pathname.endsWith("/check-in/scan") &&
     method === "POST"
   ) {
@@ -2602,11 +2776,12 @@ function getMockResponse<T>(
         .map((item) => ({
           id: item.user!.id,
           name: item.user!.name,
-          username: null,
-          city: null,
-          country: null,
+          username: item.user!.username ?? null,
+          city: item.user!.city ?? null,
+          country: item.user!.country ?? null,
           profileVerifiedAt: null,
           relation: item.role,
+          status: item.status,
           checkedIn: Boolean(item.checkedInAt),
         })),
     );
@@ -2633,13 +2808,7 @@ function getMockResponse<T>(
       pathname,
       "/participants/",
     );
-    return schema.parse(
-      updateMockParticipantStatus(
-        eventId,
-        userId,
-        parseBody<{ status: string }>(options).status,
-      ),
-    );
+    return schema.parse(updateMockParticipant(eventId, userId, parseBody<{ status?: string; role?: string }>(options)));
   }
 
   if (
@@ -2760,8 +2929,16 @@ function parseBody<T>(options: RequestOptions): T {
 function getStoredEvents(): Event[] {
   const storedEvents = readStorage<Event[]>(MOCK_EVENTS_KEY, []);
   const storedIds = new Set(storedEvents.map((event) => event.id));
+  const defaultsById = new Map(mockEvents.map((event) => [event.id, event]));
   return [
-    ...storedEvents,
+    ...storedEvents.map((event) => {
+      const current = defaultsById.get(event.id);
+      return {
+        ...event,
+        latitude: event.latitude ?? current?.latitude ?? null,
+        longitude: event.longitude ?? current?.longitude ?? null,
+      };
+    }),
     ...mockEvents.filter((event) => !storedIds.has(event.id)),
   ];
 }
@@ -2776,6 +2953,7 @@ function getStoredTags(): Tag[] {
 }
 
 function listMockEventFeed(params: URLSearchParams): EventList {
+  const scope = params.get("scope");
   const selectedTag = params.get("tag");
   const selectedFormat = params.get("format");
   const search = params.get("q")?.toLowerCase().trim();
@@ -2799,7 +2977,7 @@ function listMockEventFeed(params: URLSearchParams): EventList {
       .filter((block) => block.targetType === "tag")
       .map((block) => block.targetId),
   );
-  const events = getStoredEvents().filter(
+  let events = getStoredEvents().filter(
     (eventItem) =>
       eventItem.status === "published" &&
       !blockedEventIds.has(eventItem.id) &&
@@ -2822,6 +3000,27 @@ function listMockEventFeed(params: URLSearchParams): EventList {
       (!city || eventItem.city?.toLowerCase() === city) &&
       (!country || eventItem.country?.toLowerCase() === country),
   );
+  const user = getUserSession();
+  if (scope && user) {
+    const participations = readStorage<EventParticipant[]>(MOCK_PARTICIPANTS_KEY, []).filter((item) => item.userId === user.id);
+    const participationByEvent = new Map(participations.map((item) => [item.eventId, item.status]));
+    if (scope === "mine") {
+      const userEventIds = new Set(readStorage<Record<string, string[]>>(MOCK_USER_EVENT_IDS_KEY, {})[user.id] ?? []);
+      events = events.filter((item) => item.createdById === user.id || userEventIds.has(item.id) || ["accepted", "attended"].includes(participationByEvent.get(item.id) ?? ""));
+    } else if (scope === "invited") {
+      events = events.filter((item) => participationByEvent.get(item.id) === "invited");
+    } else if (scope === "following") {
+      const followingIds = new Set(listMockFollowing().map((item) => item.id));
+      events = events.filter((item) => item.createdById && followingIds.has(item.createdById));
+    } else if (scope === "for_you") {
+      const tagIds = new Set(getUserInterestTagIds());
+      events = events.filter((item) => item.tags.some((tag) => tagIds.has(tag.id)));
+    }
+  }
+  if (scope === "individual") {
+    const accountTypes = new Map(getAllMockUsers().map((item) => [item.id, item.accountType ?? "individual"]));
+    events = events.filter((item) => !item.createdById || accountTypes.get(item.createdById) !== "corporate");
+  }
   const start = (page - 1) * pageSize;
 
   return {
@@ -3087,15 +3286,20 @@ function defaultMockPlaces(): AdminPlace[] {
     {
       id: "60000000-6000-4000-8000-000000000001",
       name: "Konnektora Hub Berlin",
-      slug: "konnektora-hub-berlin",
+      slug: "konnektora-hub-berlin-310001",
       description: "Community meetup venue",
       status: "active",
-      coverImageUrl: null,
+      coverImageUrl:
+        "https://images.unsplash.com/photo-1497366754035-f200968a6e72",
       country: "Germany",
       city: "Berlin",
       address: "Mitte",
-      followerCount: 42,
-      inviteCount: 8,
+      latitude: 52.5208,
+      longitude: 13.4095,
+      placeType: "community",
+      visibility: "open",
+      followerCount: 1,
+      inviteCount: 0,
       createdById: "88888888-8888-4888-8888-888888888888",
       updatedById: null,
       createdAt: now,
@@ -3107,7 +3311,7 @@ function defaultMockPlaces(): AdminPlace[] {
     {
       id: "60000000-6000-4000-8000-000000000002",
       name: "Galata Product House",
-      slug: "galata-product-house",
+      slug: "galata-product-house-310002",
       description:
         "Ürün ekipleri, bağımsız geliştiriciler ve kurucular için çalışma ve etkinlik alanı.",
       status: "active",
@@ -3116,20 +3320,24 @@ function defaultMockPlaces(): AdminPlace[] {
       country: "Türkiye",
       city: "Istanbul",
       address: "Galata",
-      followerCount: 118,
-      inviteCount: 24,
-      createdById: "88888888-8888-4888-8888-888888888888",
+      latitude: 41.0256,
+      longitude: 28.9744,
+      placeType: "coworking",
+      visibility: "open",
+      followerCount: 1,
+      inviteCount: 0,
+      createdById: "72000000-0000-4000-8000-000000000003",
       updatedById: null,
       createdAt: now,
       updatedAt: now,
-      createdBy: basicMockUser("88888888-8888-4888-8888-888888888888"),
+      createdBy: basicMockUser("72000000-0000-4000-8000-000000000003"),
       updatedBy: null,
       reportCount: 0,
     },
     {
       id: "60000000-6000-4000-8000-000000000003",
       name: "Amsterdam Founder Loft",
-      slug: "amsterdam-founder-loft",
+      slug: "amsterdam-founder-loft-310003",
       description:
         "Founder breakfast, yatırımcı görüşmeleri ve küçük topluluk buluşmaları için sakin bir merkez.",
       status: "active",
@@ -3138,20 +3346,24 @@ function defaultMockPlaces(): AdminPlace[] {
       country: "Netherlands",
       city: "Amsterdam",
       address: "De Pijp",
-      followerCount: 86,
-      inviteCount: 16,
-      createdById: "88888888-8888-4888-8888-888888888888",
+      latitude: 52.3547,
+      longitude: 4.8936,
+      placeType: "venue",
+      visibility: "approval_required",
+      followerCount: 1,
+      inviteCount: 0,
+      createdById: "72000000-0000-4000-8000-000000000004",
       updatedById: null,
       createdAt: now,
       updatedAt: now,
-      createdBy: basicMockUser("88888888-8888-4888-8888-888888888888"),
+      createdBy: basicMockUser("72000000-0000-4000-8000-000000000004"),
       updatedBy: null,
       reportCount: 0,
     },
     {
       id: "60000000-6000-4000-8000-000000000004",
       name: "London Community Studio",
-      slug: "london-community-studio",
+      slug: "london-community-studio-310004",
       description:
         "Demo geceleri, yaratıcı atölyeler ve küratörlü networking oturumları için esnek stüdyo.",
       status: "active",
@@ -3160,16 +3372,67 @@ function defaultMockPlaces(): AdminPlace[] {
       country: "United Kingdom",
       city: "London",
       address: "Shoreditch",
-      followerCount: 154,
-      inviteCount: 31,
-      createdById: "88888888-8888-4888-8888-888888888888",
+      latitude: 51.5255,
+      longitude: -0.0786,
+      placeType: "gallery",
+      visibility: "invite_only",
+      followerCount: 1,
+      inviteCount: 0,
+      createdById: "99999999-9999-4999-8999-999999999999",
       updatedById: null,
       createdAt: now,
       updatedAt: now,
-      createdBy: basicMockUser("88888888-8888-4888-8888-888888888888"),
+      createdBy: basicMockUser("99999999-9999-4999-8999-999999999999"),
       updatedBy: null,
       reportCount: 0,
     },
+  ];
+}
+
+function defaultMockPlaceMembers(): PlaceMember[] {
+  const now = new Date().toISOString();
+  const memberships = [
+    { placeId: "60000000-6000-4000-8000-000000000001", userId: "88888888-8888-4888-8888-888888888888", role: "organizer" as const },
+    { placeId: "60000000-6000-4000-8000-000000000001", userId: "99999999-9999-4999-8999-999999999999", role: "member" as const },
+    { placeId: "60000000-6000-4000-8000-000000000002", userId: "72000000-0000-4000-8000-000000000003", role: "organizer" as const },
+    { placeId: "60000000-6000-4000-8000-000000000002", userId: "88888888-8888-4888-8888-888888888888", role: "member" as const },
+    { placeId: "60000000-6000-4000-8000-000000000003", userId: "72000000-0000-4000-8000-000000000004", role: "organizer" as const },
+    { placeId: "60000000-6000-4000-8000-000000000003", userId: "88888888-8888-4888-8888-888888888888", role: "member" as const },
+    { placeId: "60000000-6000-4000-8000-000000000004", userId: "99999999-9999-4999-8999-999999999999", role: "organizer" as const },
+    { placeId: "60000000-6000-4000-8000-000000000004", userId: "88888888-8888-4888-8888-888888888888", role: "member" as const },
+  ];
+
+  return memberships.map((membership) => {
+    const source = getAllMockUsers().find((user) => user.id === membership.userId)!;
+    return {
+      ...membership,
+      status: "accepted" as const,
+      createdAt: now,
+      updatedAt: now,
+      user: {
+        id: source.id,
+        email: source.email,
+        name: source.name,
+        username: source.username ?? null,
+        city: source.city ?? null,
+        country: source.country ?? null,
+        role: source.role ?? "user",
+        accountType: source.accountType === "corporate" ? "corporate" as const : "individual" as const,
+        status: source.status ?? "active",
+        avatarUrl: source.avatarUrl ?? null,
+        followerCount: source.followerCount ?? 0,
+      },
+    };
+  });
+}
+
+function getAllMockPlaceMembers(): PlaceMember[] {
+  const stored = readStorage<PlaceMember[]>(MOCK_PLACE_MEMBERS_KEY, []);
+  const defaults = defaultMockPlaceMembers();
+  const storedKeys = new Set(stored.map((member) => `${member.placeId}:${member.userId}`));
+  return [
+    ...stored,
+    ...defaults.filter((member) => !storedKeys.has(`${member.placeId}:${member.userId}`)),
   ];
 }
 
@@ -3188,8 +3451,34 @@ function filterMockAdminContent<T extends { status: string }>(
 
 function listMockPlaces(params: URLSearchParams): AdminPlace[] {
   const stored = readStorage<AdminPlace[]>(MOCK_PLACES_KEY, []);
+  const defaults = defaultMockPlaces();
+  const defaultsById = new Map(defaults.map((place) => [place.id, place]));
+  const merged = stored.length
+    ? [
+        ...stored.map((place) => ({ ...defaultsById.get(place.id), ...place } as AdminPlace)),
+        ...defaults.filter((place) => !stored.some((storedPlace) => storedPlace.id === place.id)),
+      ]
+    : defaults;
+  const cityCoordinates: Record<string, { latitude: number; longitude: number }> = {
+    Amsterdam: { latitude: 52.3676, longitude: 4.9041 },
+    Berlin: { latitude: 52.52, longitude: 13.405 },
+    Copenhagen: { latitude: 55.6761, longitude: 12.5683 },
+    Istanbul: { latitude: 41.0082, longitude: 28.9784 },
+    "İstanbul": { latitude: 41.0082, longitude: 28.9784 },
+    Lisbon: { latitude: 38.7223, longitude: -9.1393 },
+    London: { latitude: 51.5074, longitude: -0.1278 },
+    "New York": { latitude: 40.7128, longitude: -74.006 },
+    Paris: { latitude: 48.8566, longitude: 2.3522 },
+    "San Francisco": { latitude: 37.7749, longitude: -122.4194 },
+    Toronto: { latitude: 43.6532, longitude: -79.3832 },
+  };
   return filterMockAdminContent(
-    stored.length ? stored : defaultMockPlaces(),
+    merged.map((place) => {
+      const coordinates = place.city ? cityCoordinates[place.city] : undefined;
+      return place.latitude == null || place.longitude == null
+        ? { ...place, latitude: place.latitude ?? coordinates?.latitude ?? null, longitude: place.longitude ?? coordinates?.longitude ?? null }
+        : place;
+    }),
     params,
   );
 }
@@ -3213,10 +3502,8 @@ function mockPlaceViewer(place: AdminPlace): Place {
     MOCK_PLACE_FOLLOWS_KEY,
     [],
   );
-  const membership = readStorage<PlaceMember[]>(
-    MOCK_PLACE_MEMBERS_KEY,
-    [],
-  ).find((item) => item.placeId === place.id && item.userId === user?.id);
+  const members = listMockPlaceMembers(place.id);
+  const membership = members.find((item) => item.userId === user?.id);
   return {
     id: place.id,
     name: place.name,
@@ -3227,8 +3514,14 @@ function mockPlaceViewer(place: AdminPlace): Place {
     country: place.country,
     city: place.city,
     address: place.address,
+    latitude: place.latitude,
+    longitude: place.longitude,
+    placeType: place.placeType,
+    visibility: place.visibility,
+    memberCount: members.filter((item) => item.status === "accepted").length,
+    tags: place.tags,
     followerCount: place.followerCount,
-    inviteCount: place.inviteCount,
+    inviteCount: members.filter((item) => item.status === "invited").length,
     createdById: place.createdById,
     createdAt: place.createdAt,
     updatedAt: place.updatedAt,
@@ -3237,7 +3530,9 @@ function mockPlaceViewer(place: AdminPlace): Place {
     ),
     viewerMembership: membership
       ? { status: membership.status, role: membership.role }
-      : null,
+      : user && place.createdById === user.id
+        ? { status: "accepted", role: "organizer" }
+        : null,
   };
 }
 
@@ -3298,6 +3593,13 @@ function createMockPublicPlace(input: PlaceInput): Place {
     country: input.country?.trim() || null,
     city: input.city?.trim() || null,
     address: input.address?.trim() || null,
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
+    placeType: input.placeType ?? "community",
+    visibility:
+      input.visibility === "approval_required" || input.visibility === "invite_only"
+        ? input.visibility
+        : "open",
     followerCount: 0,
     inviteCount: 0,
     createdById: user.id,
@@ -3320,7 +3622,7 @@ function createMockPublicPlace(input: PlaceInput): Place {
   };
   writeStorage(MOCK_PLACE_MEMBERS_KEY, [
     member,
-    ...readStorage<PlaceMember[]>(MOCK_PLACE_MEMBERS_KEY, []),
+    ...getAllMockPlaceMembers(),
   ]);
   return mockPlaceViewer(place);
 }
@@ -3328,7 +3630,7 @@ function createMockPublicPlace(input: PlaceInput): Place {
 function listMockManagedPlaces(): Place[] {
   const user = getUserSession();
   const managedIds = new Set(
-    readStorage<PlaceMember[]>(MOCK_PLACE_MEMBERS_KEY, [])
+    getAllMockPlaceMembers()
       .filter(
         (item) =>
           item.userId === user?.id &&
@@ -3422,22 +3724,31 @@ function setMockPlaceFollow(placeId: string, following: boolean) {
 }
 
 function listMockPlaceMembers(placeId: string) {
-  return readStorage<PlaceMember[]>(MOCK_PLACE_MEMBERS_KEY, []).filter(
+  return getAllMockPlaceMembers().filter(
     (item) => item.placeId === placeId,
   );
 }
 
 function inviteMockPlaceMember(
   placeId: string,
-  input: { userId?: string; email?: string; role?: string },
+  input: { userId?: string; username?: string; email?: string; phone?: string; name?: string; role?: string },
 ): PlaceMember {
-  const target = getAllMockUsers().find((item) =>
+  const storedUsers = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  let target = getAllMockUsers().find((item) =>
     input.userId
       ? item.id === input.userId
-      : item.email === input.email?.toLowerCase(),
+      : input.username
+        ? item.username?.toLowerCase() === input.username.replace(/^@/, "").toLowerCase()
+        : input.phone
+          ? item.phone?.replace(/[\s()-]/g, "") === input.phone.replace(/[\s()-]/g, "")
+          : item.email === input.email?.toLowerCase(),
   );
+  if (!target && input.email) {
+    target = { id: createId(), email: input.email.toLowerCase(), name: input.name?.trim() || input.email.split("@")[0] || input.email, password: "", status: "invited", role: "user", accountType: "individual" };
+    writeStorage(MOCK_USERS_KEY, [target, ...storedUsers]);
+  }
   if (!target) throw new Error("Mock user not found");
-  const members = readStorage<PlaceMember[]>(MOCK_PLACE_MEMBERS_KEY, []);
+  const members = getAllMockPlaceMembers();
   const now = new Date().toISOString();
   const member: PlaceMember = {
     placeId,
@@ -3453,7 +3764,9 @@ function inviteMockPlaceMember(
       id: target.id,
       email: target.email,
       name: target.name,
+      username: target.username ?? null,
       role: target.role ?? "user",
+      accountType: target.accountType === "corporate" ? "corporate" : "individual",
       status: target.status ?? "active",
     },
   };
@@ -3471,7 +3784,7 @@ function updateMockPlaceMember(
   userId: string,
   input: { status?: string; role?: string },
 ): PlaceMember {
-  const members = readStorage<PlaceMember[]>(MOCK_PLACE_MEMBERS_KEY, []);
+  const members = getAllMockPlaceMembers();
   const current = members.find(
     (item) => item.placeId === placeId && item.userId === userId,
   );
@@ -3507,9 +3820,69 @@ function respondMockPlaceInvite(placeId: string, status: string) {
   return updateMockPlaceMember(placeId, user.id, { status });
 }
 function checkInMockPlaceMember(placeId: string, userId: string) {
-  return updateMockPlaceMember(placeId, userId, {
-    checkedInAt: new Date().toISOString(),
-  } as any);
+  return decideMockPlaceCheckIn(placeId, userId, "admit", "manual");
+}
+
+function getMockPlaceCheckInPassport(placeId: string, userId: string, method: "manual" | "qr" | "nfc" = "manual"): CheckInPassport {
+  const place = listMockPlaces(new URLSearchParams()).find((item) => item.id === placeId);
+  const membership = listMockPlaceMembers(placeId).find((item) => item.userId === userId);
+  if (!place || !membership) throw new Error("Mekân üyesi bulunamadı.");
+  const member = getAllMockUsers().find((item) => item.id === userId);
+  const identity = membership.user ?? member;
+  if (!identity) throw new Error("Kullanıcı bulunamadı.");
+  return {
+    targetType: "place",
+    targetId: place.id,
+    targetName: place.name,
+    user: {
+      id: identity.id,
+      email: identity.email,
+      name: identity.name,
+      username: identity.username ?? null,
+      role: identity.role ?? "user",
+      accountType: identity.accountType === "corporate" ? "corporate" : "individual",
+      status: identity.status ?? "active",
+      avatarUrl: identity.avatarUrl ?? null,
+      followerCount: member?.followerCount ?? 0,
+      profileVerifiedAt: member?.profileVerifiedAt ?? null,
+      media: [],
+    },
+    status: membership.status,
+    role: membership.role,
+    alreadyInside: Boolean(membership.checkedInAt),
+    checkedInAt: membership.checkedInAt ?? null,
+    checkInOrder: membership.checkInOrder ?? null,
+    checkInMethod: membership.checkInMethod ?? method,
+    invitedBy: [getUserSession()?.username ? `@${getUserSession()!.username}` : getUserSession()?.name ?? "Konnektora"],
+    relatedFollowerCount: 0,
+    guestLists: [],
+    tickets: [],
+  };
+}
+
+function previewMockPlaceCheckIn(placeId: string, payload: string, method: "qr" | "nfc") {
+  const candidate = listMockPlaceMembers(placeId).find((item) => payload.includes(item.userId)) ?? listMockPlaceMembers(placeId).find((item) => ["accepted", "invited"].includes(item.status));
+  if (!candidate) throw new Error("Check-in için uygun üye bulunamadı.");
+  return getMockPlaceCheckInPassport(placeId, candidate.userId, method);
+}
+
+function decideMockPlaceCheckIn(placeId: string, userId: string, decision: "admit" | "decline", method: "manual" | "qr" | "nfc") {
+  const members = getAllMockPlaceMembers();
+  const current = members.find((item) => item.placeId === placeId && item.userId === userId);
+  if (!current) throw new Error("Mekân üyesi bulunamadı.");
+  if (decision === "admit" && current.checkedInAt) throw new Error("Kullanıcı zaten check-in içeride.");
+  const now = new Date().toISOString();
+  const updated: PlaceMember = {
+    ...current,
+    status: decision === "admit" ? "accepted" : "declined",
+    checkedInAt: decision === "admit" ? now : null,
+    checkInDecisionAt: now,
+    checkInMethod: method,
+    checkInOrder: decision === "admit" ? members.filter((item) => item.placeId === placeId && item.checkedInAt).length + 1 : null,
+    updatedAt: now,
+  };
+  writeStorage(MOCK_PLACE_MEMBERS_KEY, [updated, ...members.filter((item) => !(item.placeId === placeId && item.userId === userId))]);
+  return updated;
 }
 
 function listMockMedia(params: URLSearchParams): AdminMedia[] {
@@ -3700,7 +4073,8 @@ function inviteMockParticipant(
     role?: string;
   },
 ): EventParticipant {
-  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  const storedUsers = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  const users = getAllMockUsers();
   const email = input.email?.toLowerCase().trim();
   const existingUser = input.userId
     ? users.find((user) => user.id === input.userId)
@@ -3722,7 +4096,7 @@ function inviteMockParticipant(
   };
 
   if (!existingUser) {
-    writeStorage(MOCK_USERS_KEY, [user, ...users]);
+    writeStorage(MOCK_USERS_KEY, [user, ...storedUsers]);
   }
 
   const participants = readStorage<EventParticipant[]>(
@@ -3747,8 +4121,10 @@ function inviteMockParticipant(
       id: user.id,
       email: user.email,
       name: user.name,
-      role: "user",
-      status: "invited",
+      username: user.username ?? null,
+      role: user.role ?? "user",
+      accountType: user.accountType === "corporate" ? "corporate" : "individual",
+      status: user.status ?? "invited",
     },
   };
 
@@ -3834,12 +4210,78 @@ function scanMockEventTicket(eventId: string, token: string): EventParticipant {
   );
 }
 
+function getMockEventCheckInPassport(eventId: string, userId: string, method: "manual" | "qr" | "nfc" = "manual"): CheckInPassport {
+  const event = getStoredEvents().find((item) => item.id === eventId);
+  const participant = listMockParticipants(eventId).find((item) => item.userId === userId);
+  if (!event || !participant) throw new Error("Katılımcı bulunamadı.");
+  const member = getAllMockUsers().find((item) => item.id === userId);
+  const identity = participant.user ?? member;
+  if (!identity) throw new Error("Kullanıcı bulunamadı.");
+  const media = member?.id === getUserSession()?.id ? listMockProfileMedia().map((item) => ({ id: item.id, url: item.url, type: item.type })) : [];
+  return {
+    targetType: "event",
+    targetId: event.id,
+    targetName: event.title,
+    user: {
+      id: identity.id,
+      email: identity.email,
+      name: identity.name,
+      username: identity.username ?? null,
+      role: identity.role ?? "user",
+      accountType: identity.accountType === "corporate" ? "corporate" : "individual",
+      status: identity.status ?? "active",
+      avatarUrl: identity.avatarUrl ?? null,
+      followerCount: member?.followerCount ?? 0,
+      profileVerifiedAt: member?.profileVerifiedAt ?? null,
+      media,
+    },
+    status: participant.status,
+    role: participant.role,
+    alreadyInside: participant.status === "attended" || Boolean(participant.checkedInAt),
+    checkedInAt: participant.checkedInAt,
+    checkInOrder: participant.checkInOrder ?? null,
+    checkInMethod: participant.checkInMethod ?? method,
+    invitedBy: [getUserSession()?.username ? `@${getUserSession()!.username}` : getUserSession()?.name ?? "Konnektora"],
+    relatedFollowerCount: 0,
+    guestLists: [],
+    tickets: [],
+  };
+}
+
+function previewMockEventCheckIn(eventId: string, token: string, method: "qr" | "nfc") {
+  const ticket = readStorage<MockEventTicket[]>(MOCK_EVENT_TICKETS_KEY, []).find((item) => item.eventId === eventId && item.token === token);
+  if (!ticket) throw new Error("QR bilet geçersiz.");
+  return getMockEventCheckInPassport(eventId, ticket.userId, method);
+}
+
+function decideMockEventCheckIn(eventId: string, userId: string, decision: "admit" | "decline", method: "manual" | "qr" | "nfc") {
+  const participants = readStorage<EventParticipant[]>(MOCK_PARTICIPANTS_KEY, []);
+  const participant = participants.find((item) => item.eventId === eventId && item.userId === userId);
+  if (!participant) throw new Error("Katılımcı bulunamadı.");
+  if (decision === "admit" && (participant.status === "attended" || participant.checkedInAt)) throw new Error("Kullanıcı zaten check-in içeride.");
+  const now = new Date().toISOString();
+  const updated: EventParticipant = {
+    ...participant,
+    status: decision === "admit" ? "attended" : "declined",
+    checkedInAt: decision === "admit" ? now : null,
+    checkInDecisionAt: now,
+    checkInMethod: method,
+    checkInOrder: decision === "admit" ? participants.filter((item) => item.eventId === eventId && item.checkedInAt).length + 1 : null,
+  };
+  writeStorage(MOCK_PARTICIPANTS_KEY, [updated, ...participants.filter((item) => !(item.eventId === eventId && item.userId === userId))]);
+  return updated;
+}
+
 function updateMockParticipantStatus(
   eventId: string,
   userId: string,
   status: string,
   checkedInAt: string | null = null,
 ): EventParticipant {
+  return updateMockParticipant(eventId, userId, { status, checkedInAt });
+}
+
+function updateMockParticipant(eventId: string, userId: string, changes: { status?: string; role?: string; checkedInAt?: string | null }): EventParticipant {
   const participants = readStorage<EventParticipant[]>(
     MOCK_PARTICIPANTS_KEY,
     [],
@@ -3854,8 +4296,9 @@ function updateMockParticipantStatus(
 
   const updatedParticipant: EventParticipant = {
     ...participant,
-    status: parseParticipantStatus(status),
-    checkedInAt,
+    ...(changes.status ? { status: parseParticipantStatus(changes.status) } : {}),
+    ...(changes.role ? { role: changes.role as EventParticipant["role"] } : {}),
+    ...(changes.checkedInAt !== undefined ? { checkedInAt: changes.checkedInAt } : {}),
   };
 
   writeStorage(MOCK_PARTICIPANTS_KEY, [
@@ -4585,6 +5028,30 @@ const DEFAULT_MOCK_FAQ_CATEGORIES: CmsCategory[] = [
     slug: "odemeler",
     description: "Ödeme, iade ve faturalandırma",
     type: "faq",
+    status: "active",
+  },
+  {
+    id: "10000000-0000-4000-8000-000000000011",
+    name: "Genel geri bildirim",
+    slug: "genel-geri-bildirim",
+    description: "Öneri, görüş ve genel mesajlar",
+    type: "write_to_us",
+    status: "active",
+  },
+  {
+    id: "10000000-0000-4000-8000-000000000012",
+    name: "İş birliği",
+    slug: "is-birligi",
+    description: "Marka, topluluk ve iş ortaklığı talepleri",
+    type: "write_to_us",
+    status: "active",
+  },
+  {
+    id: "10000000-0000-4000-8000-000000000013",
+    name: "Teknik sorun",
+    slug: "teknik-sorun",
+    description: "Ürün kullanımı sırasında karşılaşılan teknik sorunlar",
+    type: "write_to_us",
     status: "active",
   },
 ];
@@ -5496,6 +5963,7 @@ function registerMockUser(input: RegistrationInput): LoginResponse {
         input.accountType === "corporate" ? input.businessCategory : null,
       emailVerified: false,
       status: "pending",
+      onboardingCompletedAt: null,
     };
 
     writeStorage(MOCK_USERS_KEY, [
@@ -5518,6 +5986,7 @@ function registerMockUser(input: RegistrationInput): LoginResponse {
       input.accountType === "corporate" ? input.businessCategory : null,
     emailVerified: false,
     status: "pending",
+    onboardingCompletedAt: null,
   };
 
   writeStorage(MOCK_USERS_KEY, [user, ...users]);
@@ -5618,6 +6087,19 @@ function changeMockPassword(input: {
     ...users.filter((item) => item.id !== user.id),
   ]);
   return { ok: true };
+}
+
+function changeMockEmail(input: { email: string; currentPassword: string }) {
+  const session = getUserSession();
+  const users = readStorage<MockUser[]>(MOCK_USERS_KEY, []);
+  const user = users.find((item) => item.id === session?.id);
+  const email = input.email.toLowerCase().trim();
+  if (!user || user.password !== input.currentPassword)
+    throw new Error("Current password does not match");
+  if (users.some((item) => item.id !== user.id && item.email.toLowerCase() === email))
+    throw new Error("Email is already in use");
+  writeStorage(MOCK_USERS_KEY, [{ ...user, email, emailVerified: false }, ...users.filter((item) => item.id !== user.id)]);
+  return { ok: true, sent: true, email };
 }
 
 function deactivateMockAccount(input: {
@@ -5755,6 +6237,7 @@ function createMockLoginResponse(user: {
   accountType?: string;
   emailVerified?: boolean;
   status?: AdminManagedUser["status"];
+  onboardingCompletedAt?: string | null;
 }): LoginResponse {
   return {
     accessToken: `mock-user-token-${user.id}`,
@@ -5768,6 +6251,7 @@ function createMockLoginResponse(user: {
       emailVerified:
         "emailVerified" in user ? Boolean(user.emailVerified) : false,
       status: user.status ?? "active",
+      onboardingCompleted: user.onboardingCompletedAt === undefined ? true : user.onboardingCompletedAt !== null,
     },
   };
 }
@@ -5967,6 +6451,8 @@ function getMockDiscoveryFeed(params: URLSearchParams): DiscoveryFeed {
     ).length,
     scope: global ? "global" : "local",
     location: global ? null : city || country || null,
+    city: global ? null : city || null,
+    country: global ? null : country || null,
     activities: [
       ...getStoredEvents()
         .filter((event) => event.status === "published")
@@ -6058,6 +6544,27 @@ function getMockPublicProfile(identifier: string, byId = false): PublicProfile {
     )
     .slice(0, 12)
     .map(mockPlaceDiscoveryItem);
+  const commonInterests = interests.filter((item) => item.common);
+  const mutualism = viewer && viewer.id !== target.id ? {
+    total: commonInterests.length,
+    hiddenCount: 0,
+    sameSentimentTags: commonInterests,
+    events: [],
+    places: [],
+    people: [],
+    sharedReactionCount: 0,
+    sharedCommentTargetCount: 0,
+    scores: {
+      overall: Math.min(100, commonInterests.length * 8),
+      friendship: Math.min(100, commonInterests.length * 10),
+      networking: Math.min(100, commonInterests.length * 7),
+      eventPartner: Math.min(100, commonInterests.length * 8),
+      travel: Math.min(100, commonInterests.length * 5),
+      business: Math.min(100, commonInterests.length * 6),
+    },
+    explanation: commonInterests.length ? `${commonInterests.length} ortak ilgi sinyali bulundu.` : "Henüz doğrulanmış ortak bir sinyal bulunamadı.",
+    actions: commonInterests[0] ? [`${commonInterests[0].tag.name} ortak ilgi alanından bir sohbet açın.`] : [],
+  } : undefined;
   const media =
     target.id === viewer?.id
       ? listMockProfileMedia().map(
@@ -6086,6 +6593,7 @@ function getMockPublicProfile(identifier: string, byId = false): PublicProfile {
     media,
     interests,
     commonInterestCount: interests.filter((item) => item.common).length,
+    mutualism,
     relationship: {
       isSelf: viewer?.id === target.id,
       following: follows.includes(target.id),
@@ -6220,7 +6728,6 @@ function scanMockMember(input: {
     : undefined;
   if (!session || !target || target.id === session.id)
     throw new Error("Üye kartı geçersiz");
-  followMockUser(target.id);
   const item = memberScanSchema.parse({
     id: createId(),
     method: input.method,
@@ -6233,7 +6740,7 @@ function scanMockMember(input: {
       country: target.country,
       followerCount: target.followerCount,
     },
-    following: true,
+    following: false,
   });
   writeStorage(MOCK_MEMBER_SCANS_KEY, [item, ...listMockMemberScans()]);
   return item;
@@ -6356,7 +6863,7 @@ function updateMockProfile(input: ProfileUpdateInput): Profile {
   ]);
   setUserSession({
     accessToken: getUserToken() ?? `mock-user-token-${profile.id}`,
-    user: { ...getUserSession()!, name: updated.name },
+    user: { ...getUserSession()!, name: updated.name, username: updated.username ?? null, city: updated.city ?? null, country: updated.country ?? null },
   });
   return getMockProfile();
 }
@@ -7258,8 +7765,12 @@ function listMockUserEvents(): Event[] {
   );
   const eventIds = new Set(userEventIds[user.id] ?? []);
 
+  if (["admin", "super_admin", "curator"].includes(user.role)) {
+    return getStoredEvents().filter((event) => event.status !== "archived");
+  }
+
   return getStoredEvents().filter(
-    (event) => eventIds.has(event.id) || event.organizerName === user.name,
+    (event) => eventIds.has(event.id) || event.createdById === user.id || event.organizerName === user.name,
   );
 }
 
@@ -7567,6 +8078,18 @@ export function getProfileAffinities(): Promise<TagAffinity[]> {
   });
 }
 
+export function listProfileTagSuggestions(): Promise<ProfileTagSuggestion[]> {
+  return requestJson("/profile/tag-suggestions", profileTagSuggestionsSchema, { auth: "user" });
+}
+
+export function createProfileTagSuggestion(targetUserId: string, input: { tagId: string; sentiment: TagSentiment }): Promise<ProfileTagSuggestion> {
+  return requestJson(`/profile/tag-suggestions/${targetUserId}`, profileTagSuggestionSchema, { auth: "user", method: "POST", body: JSON.stringify(input) });
+}
+
+export function decideProfileTagSuggestion(id: string, action: "accept" | "decline" | "cancel") {
+  return requestJson(`/profile/tag-suggestions/${id}`, z.object({ ok: z.literal(true), status: z.string() }), { auth: "user", method: "PATCH", body: JSON.stringify({ action }) });
+}
+
 export function getMyProfile(): Promise<Profile> {
   return requestJson("/profile", profileSchema, { auth: "user" });
 }
@@ -7708,6 +8231,21 @@ export function uploadContentMedia(
     profileMediaSchema,
     { auth: "user", method: "POST", body: form },
   );
+}
+
+export function reorderContentMedia(targetType: "event" | "place", targetId: string, mediaIds: string[]): Promise<ProfileMedia[]> {
+  return requestJson(`/media/${targetType}/${targetId}/order`, profileMediaListSchema, {
+    auth: "user",
+    method: "PUT",
+    body: JSON.stringify({ mediaIds }),
+  });
+}
+
+export function deleteContentMedia(targetType: "event" | "place", targetId: string, mediaId: string): Promise<ProfileMedia[]> {
+  return requestJson(`/media/${targetType}/${targetId}/${mediaId}`, profileMediaListSchema, {
+    auth: "user",
+    method: "DELETE",
+  });
 }
 
 export function resolveMediaUrl(url: string) {
@@ -8340,6 +8878,10 @@ export function rotateMemberPass(): Promise<MemberPass> {
 export function listMemberScans(): Promise<MemberScan[]> {
   return requestJson("/me/member-scans", memberScansSchema, { auth: "user" });
 }
+
+export function listIncomingMemberScans(after: string): Promise<MemberScan[]> {
+  return requestJson(`/me/member-scans/incoming?after=${encodeURIComponent(after)}`, memberScansSchema, { auth: "user" });
+}
 export function scanMember(
   payload: string,
   method: "qr" | "nfc",
@@ -8390,32 +8932,10 @@ export function createTagComment(
     body: JSON.stringify({ body }),
   });
 }
-export function getTagStats(tagId: string): Promise<{
-  events: number;
-  places: number;
-  followers: number;
-  likes: number;
-  ok: number;
-  dislikes: number;
-  posts: number;
-  views: number;
-  reactions: number;
-  engagementRate: number;
-}> {
+export function getTagStats(tagId: string): Promise<Record<string, number>> {
   return requestJson(
     `/tags/${tagId}/stats`,
-    z.object({
-      events: z.number(),
-      places: z.number(),
-      followers: z.number(),
-      likes: z.number(),
-      ok: z.number(),
-      dislikes: z.number(),
-      posts: z.number(),
-      views: z.number(),
-      reactions: z.number(),
-      engagementRate: z.number(),
-    }),
+    z.record(z.number().nonnegative()),
     { auth: "user" },
   );
 }
@@ -8448,14 +8968,105 @@ export function uploadTagCommentMedia(
     body: form,
   });
 }
+const recentContentViewRecords = new Map<string, number>();
+
 export function recordContentView(
   targetType: string,
   targetId: string,
+  source?: string,
+  kind: "detail" | "impression" = "detail",
 ): Promise<unknown> {
+  const cacheKey = `${kind}:${targetType}:${targetId}:${window.location.pathname}:${window.location.search}`;
+  const lastRecordedAt = recentContentViewRecords.get(cacheKey) ?? 0;
+  if (Date.now() - lastRecordedAt < 2_000) return Promise.resolve({ deduplicated: true });
+  recentContentViewRecords.set(cacheKey, Date.now());
+  const referrer = document.referrer || undefined;
+  const recalledSource = kind === "detail" ? consumeRememberedContentSource(targetType, targetId) : undefined;
+  const resolvedSource = source || new URLSearchParams(window.location.search).get("source") || recalledSource || inferContentSource(referrer);
   return requestJson("/views", z.unknown(), {
+    auth: getUserToken() ? "user" : undefined,
     method: "POST",
-    body: JSON.stringify({ targetType, targetId }),
+    body: JSON.stringify({ targetType, targetId, source: resolvedSource, referrer, kind }),
   });
+}
+
+export function rememberContentSource(targetType: string, targetId: string, source?: string) {
+  sessionStorage.setItem(`konnektora:content-source:${targetType}:${targetId}`, JSON.stringify({ source: source ?? inferPageImpressionSource(), at: Date.now() }));
+}
+
+export function recordContentImpression(targetType: string, targetId: string, source?: string): Promise<unknown> {
+  return recordContentView(targetType, targetId, source ?? inferPageImpressionSource(), "impression");
+}
+
+export function recordContentShare(targetType: string, targetId: string, channel: string): Promise<unknown> {
+  return requestJson("/shares", z.unknown(), {
+    auth: getUserToken() ? "user" : undefined,
+    method: "POST",
+    body: JSON.stringify({ targetType, targetId, channel }),
+  });
+}
+
+export function recordContentAction(targetType: string, targetId: string, action: string): Promise<unknown> {
+  const cacheKey = `action:${targetType}:${targetId}:${action}:${window.location.pathname}`;
+  const lastRecordedAt = recentContentViewRecords.get(cacheKey) ?? 0;
+  if (Date.now() - lastRecordedAt < 2_000) return Promise.resolve({ deduplicated: true });
+  recentContentViewRecords.set(cacheKey, Date.now());
+  return requestJson("/actions", z.unknown(), {
+    auth: getUserToken() ? "user" : undefined,
+    method: "POST",
+    body: JSON.stringify({ targetType, targetId, action }),
+  });
+}
+
+export function updatePreferredLanguage(language: "tr" | "en"): Promise<{ preferredLanguage: string }> {
+  return requestJson("/profile/language", z.object({ preferredLanguage: z.string() }), {
+    auth: "user",
+    method: "PATCH",
+    body: JSON.stringify({ language }),
+  });
+}
+
+function inferContentSource(referrer?: string) {
+  if (!referrer) return "direct";
+  try {
+    const source = new URL(referrer);
+    if (source.origin !== window.location.origin) return source.hostname.includes("google") || source.hostname.includes("bing") ? "search_engine" : "external_referral";
+    if (source.pathname === "/" || source.pathname === "/feed") return "home_feed";
+    if (source.pathname.startsWith("/events")) return "event_page";
+    if (source.pathname.startsWith("/places")) return "place_page";
+    if (source.pathname.startsWith("/tags")) return "tag_page";
+    if (source.pathname.startsWith("/users")) return "profile_page";
+    if (source.pathname.startsWith("/search")) return "app_search";
+    return "internal";
+  } catch {
+    return "direct";
+  }
+}
+
+function inferPageImpressionSource() {
+  const path = window.location.pathname;
+  if (path === "/" || path === "/feed") return "home_feed";
+  if (path === "/events") return "listing_page";
+  if (path === "/places") return "listing_page";
+  if (path.startsWith("/events/")) return "event_page";
+  if (path.startsWith("/places/")) return "place_page";
+  if (path.startsWith("/tags/")) return "tag_page";
+  if (path.startsWith("/users/")) return "profile_page";
+  if (path.startsWith("/search")) return "app_search";
+  return "internal";
+}
+
+function consumeRememberedContentSource(targetType: string, targetId: string) {
+  const key = `konnektora:content-source:${targetType}:${targetId}`;
+  const raw = sessionStorage.getItem(key);
+  sessionStorage.removeItem(key);
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as { source?: string; at?: number };
+    return parsed.source && parsed.at && Date.now() - parsed.at < 120_000 ? parsed.source : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function deleteTagComment(
@@ -8551,7 +9162,7 @@ export function getInteractionStats(
 ): Promise<InteractionStats> {
   return requestJson(
     `/${targetType}-stats/${targetId}`,
-    z.record(z.number().int().nonnegative()),
+    z.record(z.number().nonnegative()),
     { auth: "user" },
   );
 }
@@ -8699,6 +9310,17 @@ export function changePassword(input: {
   });
 }
 
+export function changeEmail(input: {
+  email: string;
+  currentPassword: string;
+}): Promise<{ ok: boolean; sent: boolean; email: string }> {
+  return requestJson("/me/email", z.object({ ok: z.boolean(), sent: z.boolean(), email: z.string().email() }), {
+    auth: "user",
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
 export function deactivateAccount(input: {
   currentPassword: string;
   reason: string;
@@ -8769,6 +9391,11 @@ export function acceptInvite(input: {
 
 export function getAdminDashboard(): Promise<AdminDashboard> {
   return requestJson("/admin/dashboard", adminDashboardSchema, { auth: true });
+}
+
+export function listAdminActivityLogs(params?: URLSearchParams) {
+  const query = params?.toString();
+  return requestJson(`/admin/activity-logs${query ? `?${query}` : ""}`, adminActivityLogListSchema, { auth: true });
 }
 
 export function listAdminUsers(
@@ -8977,6 +9604,19 @@ export function listAdminComments(
   );
 }
 
+export function listAdminPosts(params?: URLSearchParams): Promise<AdminPost[]> {
+  const query = params?.toString();
+  return requestJson(`/admin/content/posts${query ? `?${query}` : ""}`, z.array(adminPostSchema), { auth: true });
+}
+
+export function getAdminPost(id: string): Promise<AdminPost> {
+  return requestJson(`/admin/content/posts/${id}`, adminPostSchema, { auth: true });
+}
+
+export function updateAdminPost(id: string, status: string): Promise<AdminPost> {
+  return requestJson(`/admin/content/posts/${id}`, adminPostSchema, { auth: true, method: "PATCH", body: JSON.stringify({ status }) });
+}
+
 export function getAdminComment(id: string): Promise<AdminComment> {
   return requestJson(`/admin/content/comments/${id}`, adminCommentSchema, {
     auth: true,
@@ -9030,6 +9670,15 @@ export function listAdminCmsCategories(): Promise<CmsCategory[]> {
   return requestJson("/admin/cms/categories", z.array(cmsCategorySchema), {
     auth: true,
   });
+}
+
+export function listPublicSupportCategories(
+  type: "faq" | "write_to_us",
+): Promise<CmsCategory[]> {
+  return requestJson(
+    `/support/categories?type=${encodeURIComponent(type)}`,
+    z.array(cmsCategorySchema),
+  );
 }
 
 export function createAdminCmsCategory(
@@ -9439,10 +10088,12 @@ export type OwnedTicketOrder = {
   totalAmount: number;
   currency: string;
   purchasedAt: string | null;
+  eventChanged: boolean;
   event: {
     id: string;
     title: string;
     slug: string;
+    status: string;
     startsAt: string;
     endsAt: string | null;
     city: string | null;
@@ -9760,7 +10411,6 @@ export function listEventRelatedUsers(eventId: string): Promise<RelatedUser[]> {
   return requestJson(
     `/events/${eventId}/related-users`,
     z.array(relatedUserSchema),
-    { auth: "user" },
   );
 }
 
@@ -9794,12 +10444,33 @@ export function scanEventTicket(
   );
 }
 
+export function previewEventCheckIn(eventId: string, token: string, method: "qr" | "nfc"): Promise<CheckInPassport> {
+  return requestJson(`/events/${eventId}/check-in/preview`, checkInPassportSchema, {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify({ token, method }),
+  });
+}
+
+export function getEventCheckInPassport(eventId: string, userId: string): Promise<CheckInPassport> {
+  return requestJson(`/events/${eventId}/check-in/passport/${userId}`, checkInPassportSchema, { auth: "user" });
+}
+
+export function decideEventCheckInPassport(eventId: string, userId: string, decision: "admit" | "decline", method: "manual" | "qr" | "nfc"): Promise<EventParticipant> {
+  return requestJson(`/events/${eventId}/check-in/passport/${userId}/decision`, eventParticipantSchema, {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify({ decision, method }),
+  });
+}
+
 export function inviteEventParticipant(
   eventId: string,
   input: {
     userId?: string;
     username?: string;
     email?: string;
+    phone?: string;
     name?: string;
     role?: string;
   },
@@ -9827,6 +10498,15 @@ export function updateEventParticipantStatus(
       body: JSON.stringify({ status }),
     },
   );
+}
+
+export function updateEventParticipant(
+  eventId: string,
+  userId: string,
+  changes: { status?: string; role?: string },
+  auth: AuthMode = true,
+): Promise<EventParticipant> {
+  return requestJson(`/events/${eventId}/participants/${userId}`, eventParticipantSchema, { auth, method: "PATCH", body: JSON.stringify(changes) });
 }
 
 export function checkInEventParticipant(
@@ -9950,7 +10630,7 @@ export function listPlaceMembers(id: string): Promise<PlaceMember[]> {
 }
 
 export function listPlaceRelatedUsers(id: string): Promise<RelatedUser[]> {
-  return requestJson(`/places/${id}/related-users`, z.array(relatedUserSchema), { auth: "user" });
+  return requestJson(`/places/${id}/related-users`, z.array(relatedUserSchema));
 }
 
 export function invitePlaceMember(
@@ -9993,6 +10673,26 @@ export function scanPlaceMemberPass(
     auth: "user",
     method: "POST",
     body: JSON.stringify({ payload }),
+  });
+}
+
+export function previewPlaceCheckIn(id: string, payload: string, method: "qr" | "nfc"): Promise<CheckInPassport> {
+  return requestJson(`/places/${id}/check-in/preview`, checkInPassportSchema, {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify({ payload, method }),
+  });
+}
+
+export function getPlaceCheckInPassport(id: string, userId: string): Promise<CheckInPassport> {
+  return requestJson(`/places/${id}/check-in/passport/${userId}`, checkInPassportSchema, { auth: "user" });
+}
+
+export function decidePlaceCheckInPassport(id: string, userId: string, decision: "admit" | "decline", method: "manual" | "qr" | "nfc"): Promise<PlaceMember> {
+  return requestJson(`/places/${id}/check-in/passport/${userId}/decision`, placeMemberSchema, {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify({ decision, method }),
   });
 }
 

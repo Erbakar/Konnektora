@@ -2,6 +2,16 @@ import { PlaceMemberRole, PlaceMemberStatus } from "@prisma/client";
 import { Type } from "class-transformer";
 import { ArrayMaxSize, IsArray, IsEmail, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUrl, IsUUID, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
 
+export class PlaceCheckInPreviewDto {
+  @IsString() @MinLength(8) @MaxLength(2000) payload!: string;
+  @IsIn(["qr", "nfc"]) method!: "qr" | "nfc";
+}
+
+export class PlaceCheckInDecisionDto {
+  @IsIn(["admit", "decline"]) decision!: "admit" | "decline";
+  @IsIn(["manual", "qr", "nfc"]) method!: "manual" | "qr" | "nfc";
+}
+
 export class PlaceQueryDto {
   @IsOptional() @IsIn(["near", "popular", "for_you", "following", "mine"]) scope?: "near" | "popular" | "for_you" | "following" | "mine";
   @IsOptional() @IsString() @MaxLength(120) q?: string;

@@ -9,6 +9,7 @@ import { resolve } from "path";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { OnboardingJwtAuthGuard } from "../auth/onboarding-jwt-auth.guard";
+import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 import { CreateCommentDto, CreateMediaDto, CreateReactionDto, ReorderProfileMediaDto, UpdateCommentDto } from "./content.dto";
 import { ContentService } from "./content.service";
 
@@ -48,6 +49,18 @@ export class ContentController {
     if (!file) throw new BadRequestException("Yüklenecek dosya bulunamadı.");
     try { return await this.contentService.createContentMedia(targetType, targetId, user, `/uploads/${file.filename}`, file.mimetype.startsWith("image/") ? "image" : "video"); }
     catch (error) { await unlink(file.path).catch(() => undefined); throw error; }
+  }
+
+  @Put("media/:targetType/:targetId/order")
+  @UseGuards(JwtAuthGuard)
+  reorderContentMedia(@Param("targetType") targetType: ReportTargetType, @Param("targetId") targetId: string, @Body() body: ReorderProfileMediaDto, @CurrentUser() user: User) {
+    return this.contentService.reorderContentMedia(targetType, targetId, body.mediaIds, user);
+  }
+
+  @Delete("media/:targetType/:targetId/:id")
+  @UseGuards(JwtAuthGuard)
+  deleteContentMedia(@Param("targetType") targetType: ReportTargetType, @Param("targetId") targetId: string, @Param("id") id: string, @CurrentUser() user: User) {
+    return this.contentService.deleteContentMedia(targetType, targetId, id, user);
   }
 
   @Get("profile/media")
@@ -133,7 +146,20 @@ export class ContentController {
   }
 
   @Post("views")
-  createView(@Body() body: { targetType: ReportTargetType; targetId: string }) {
-    return this.contentService.createView(body.targetType, body.targetId);
+  @UseGuards(OptionalJwtAuthGuard)
+  createView(@Body() body: { targetType: ReportTargetType; targetId: string; source?: string; referrer?: string; kind?: string }, @CurrentUser() user?: User) {
+    return this.contentService.createView(body.targetType, body.targetId, user, body.source, body.referrer, body.kind);
+  }
+
+  @Post("shares")
+  @UseGuards(OptionalJwtAuthGuard)
+  createShare(@Body() body: { targetType: ReportTargetType; targetId: string; channel: string }, @CurrentUser() user?: User) {
+    return this.contentService.createShare(body.targetType, body.targetId, body.channel, user);
+  }
+
+  @Post("actions")
+  @UseGuards(OptionalJwtAuthGuard)
+  createAction(@Body() body: { targetType: ReportTargetType; targetId: string; action: string }, @CurrentUser() user?: User) {
+    return this.contentService.createAction(body.targetType, body.targetId, body.action, user);
   }
 }

@@ -68,6 +68,29 @@ export class ContentAdminService {
     return this.prisma.mediaFile.update({ where: { id }, data: { status: input.status } });
   }
 
+  async listPosts(query: AdminContentQueryDto) {
+    const posts = await this.prisma.post.findMany({
+      where: {
+        status: query.status || undefined,
+        body: query.q ? { contains: query.q, mode: "insensitive" } : undefined,
+      },
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      include: { author: { select: USER_SELECT }, media: { orderBy: { sortOrder: "asc" } } },
+    });
+    return Promise.all(posts.map(async (post) => ({ ...post, reportCount: await this.reportCount("post", post.id) })));
+  }
+
+  async getPost(id: string) {
+    const post = await this.prisma.post.findUnique({ where: { id }, include: { author: { select: USER_SELECT }, media: { orderBy: { sortOrder: "asc" } } } });
+    if (!post) throw new NotFoundException("Post bulunamadı.");
+    return { ...post, reportCount: await this.reportCount("post", id) };
+  }
+
+  async updatePost(id: string, input: UpdateAdminContentStatusDto) {
+    await this.getPost(id);
+    return this.prisma.post.update({ where: { id }, data: { status: input.status }, include: { author: { select: USER_SELECT }, media: { orderBy: { sortOrder: "asc" } } } });
+  }
+
   listComments(query: AdminContentQueryDto) {
     return this.prisma.contentComment.findMany({
       where: {

@@ -17,6 +17,8 @@ import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 import {
   CreatePlaceDto,
   InvitePlaceMemberDto,
+  PlaceCheckInDecisionDto,
+  PlaceCheckInPreviewDto,
   PlaceQueryDto,
   RespondPlaceInviteDto,
   UpdatePlaceDto,
@@ -137,6 +139,37 @@ export class PlacesController {
     @CurrentUser() user: User,
   ) {
     return this.placesService.checkInMemberPass(id, body.payload, user);
+  }
+
+  @Post("places/:id/check-in/preview")
+  @UseGuards(JwtAuthGuard)
+  previewCheckIn(
+    @Param("id") id: string,
+    @Body() body: PlaceCheckInPreviewDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.placesService.previewMemberPass(id, body.payload, body.method, user);
+  }
+
+  @Get("places/:id/check-in/passport/:userId")
+  @UseGuards(JwtAuthGuard)
+  passport(
+    @Param("id") id: string,
+    @Param("userId") memberUserId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.placesService.getCheckInPassport(id, memberUserId, user);
+  }
+
+  @Post("places/:id/check-in/passport/:userId/decision")
+  @UseGuards(JwtAuthGuard)
+  decidePassport(
+    @Param("id") id: string,
+    @Param("userId") memberUserId: string,
+    @Body() body: PlaceCheckInDecisionDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.placesService.decideCheckInPassport(id, memberUserId, body, user);
   }
 
   @Put("places/:id/membership")

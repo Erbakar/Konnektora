@@ -64,6 +64,7 @@ export class ChatService {
   }
 
   async send(sender: User, input: SendPrivateMessageDto, file?: Express.Multer.File) {
+    if (!input.body.trim() && !file) throw new BadRequestException("Mesaj veya medya dosyası gerekli.");
     if (sender.id === input.recipientId) throw new BadRequestException("Kullanıcı kendisine mesaj gönderemez.");
     const recipient = await this.prisma.user.findUnique({ where: { id: input.recipientId }, select: peerSelect });
     if (!recipient || recipient.status !== UserStatus.active) throw new NotFoundException("Alıcı bulunamadı.");
@@ -83,7 +84,7 @@ export class ChatService {
       topic: "private_message",
       type: "private_message",
       title: `${sender.name} sana mesaj gönderdi`,
-      body: input.body.trim().slice(0, 160),
+      body: input.body.trim().slice(0, 160) || "Medya gönderdi",
       targetType: "user",
       targetId: sender.id
     });

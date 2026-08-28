@@ -113,6 +113,13 @@ export class ChangePasswordDto {
   newPassword!: string;
 }
 
+export class ChangeEmailDto extends EmailDto {
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  currentPassword!: string;
+}
+
 export class DeactivateAccountDto {
   @IsString()
   @MinLength(8)

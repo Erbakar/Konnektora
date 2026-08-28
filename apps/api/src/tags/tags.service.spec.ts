@@ -4,7 +4,7 @@ import { TagsService } from "./tags.service";
 describe("TagsService comments", () => {
   const createService = () => {
     const prisma = {
-      tag: { findFirst: jest.fn(), findMany: jest.fn() },
+      tag: { findFirst: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), count: jest.fn() },
       userBlock: { findUnique: jest.fn(), findMany: jest.fn() },
       contentComment: {
         findMany: jest.fn(),
@@ -21,10 +21,11 @@ describe("TagsService comments", () => {
         delete: jest.fn(),
       },
       mediaFile: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
-      eventTag: { count: jest.fn() },
+      eventTag: { count: jest.fn(), findMany: jest.fn() },
       placeTag: { count: jest.fn() },
       userInterestTag: { count: jest.fn(), groupBy: jest.fn(), findMany: jest.fn() },
-      contentView: { count: jest.fn() },
+      contentView: { count: jest.fn(), findMany: jest.fn(), groupBy: jest.fn() },
+      contentShare: { groupBy: jest.fn() },
       $transaction: jest.fn(async (operations: Promise<unknown>[]) =>
         Promise.all(operations),
       ),
@@ -35,6 +36,8 @@ describe("TagsService comments", () => {
   it("hides comments written by blocked users", async () => {
     const { service, prisma } = createService();
     prisma.tag.findFirst.mockResolvedValue({ id: "tag-1" });
+    prisma.tag.findUnique.mockResolvedValue({ usageCount: 10 });
+    prisma.tag.count.mockResolvedValue(2);
     prisma.userBlock.findUnique.mockResolvedValue(null);
     prisma.userBlock.findMany.mockResolvedValue([{ targetId: "blocked-user" }]);
     prisma.contentComment.findMany.mockResolvedValue([]);
@@ -63,8 +66,14 @@ describe("TagsService comments", () => {
     ]);
     prisma.contentComment.count.mockResolvedValue(5);
     prisma.contentComment.aggregate.mockResolvedValue({ _sum: { likeCount: 6 } });
+    prisma.contentComment.findMany.mockResolvedValue([]);
     prisma.contentView.count.mockResolvedValue(20);
-    await expect(service.getPublicStats("tag-1", { id: "curator-1", role: "curator" } as never)).resolves.toEqual({
+    prisma.contentView.findMany.mockResolvedValue([]);
+    prisma.contentView.groupBy.mockResolvedValue([]);
+    prisma.contentShare.groupBy.mockResolvedValue([]);
+    prisma.userInterestTag.findMany.mockResolvedValue([]);
+    prisma.eventTag.findMany.mockResolvedValue([]);
+    await expect(service.getPublicStats("tag-1", { id: "curator-1", role: "curator" } as never)).resolves.toEqual(expect.objectContaining({
       events: 4,
       places: 2,
       followers: 8,
@@ -75,7 +84,7 @@ describe("TagsService comments", () => {
       views: 20,
       reactions: 6,
       engagementRate: 55,
-    });
+    }));
   });
 
   it("toggles a post like and keeps the stored counter in sync", async () => {
@@ -203,6 +212,7 @@ describe("TagsService comments", () => {
     prisma.userBlock.findUnique.mockResolvedValue(null);
     prisma.userInterestTag.findMany.mockResolvedValue([
       {
+        sentiment: "like",
         user: {
           id: "user-1",
           name: "Member",
@@ -230,6 +240,7 @@ describe("TagsService comments", () => {
       expect.objectContaining({
         id: "user-1",
         relation: "ilgileniyor · paylaşım yaptı",
+        sentiment: "like",
       }),
     ]);
   });

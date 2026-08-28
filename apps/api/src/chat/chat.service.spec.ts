@@ -63,6 +63,20 @@ describe("ChatService", () => {
     await expect(service.send(sender, { recipientId: sender.id, body: "hello" })).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it("rejects an empty message when there is no attachment", async () => {
+    await expect(service.send(sender, { recipientId: peer.id, body: "   " })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("accepts a media-only message without adding placeholder text", async () => {
+    const file = { filename: "photo.jpg", mimetype: "image/jpeg", originalname: "photo.jpg", size: 128 } as Express.Multer.File;
+    const message = { id: "m-media", senderId: sender.id, recipientId: peer.id, body: "", attachmentUrl: "/uploads/photo.jpg" };
+    user.findUnique.mockResolvedValue(peer);
+    privateMessage.create.mockResolvedValue(message);
+
+    await expect(service.send(sender, { recipientId: peer.id, body: "" }, file)).resolves.toEqual(message);
+    expect(privateMessage.create).toHaveBeenCalledWith({ data: expect.objectContaining({ body: "", attachmentUrl: "/uploads/photo.jpg" }) });
+  });
+
   it("enforces the recipient's following-only message privacy", async () => {
     user.findUnique.mockResolvedValue(peer);
     privacySettings.findUnique.mockResolvedValue({ messageAudience: "following" });

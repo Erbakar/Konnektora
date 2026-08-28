@@ -1,9 +1,11 @@
 import { ArrowLeft, Home, SearchX } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useLanguage } from "../lib/i18n";
 
 type NotFoundKind = "event" | "place" | "page";
 
-const copy: Record<NotFoundKind, { eyebrow: string; title: string; body: string }> = {
+const copy: Record<"tr" | "en", Record<NotFoundKind, { eyebrow: string; title: string; body: string }>> = {
+  tr: {
   event: {
     eyebrow: "Etkinlik bulunamadı",
     title: "Bu etkinlik artık burada değil.",
@@ -19,10 +21,29 @@ const copy: Record<NotFoundKind, { eyebrow: string; title: string; body: string 
     title: "Aradığın sayfa burada değil.",
     body: "Bağlantı hatalı veya sayfa taşınmış olabilir. Ana sayfadan devam edebilirsin.",
   },
+  },
+  en: {
+    event: {
+      eyebrow: "Event not found",
+      title: "This event is no longer here.",
+      body: "The event may have been removed, archived or moved to a different address.",
+    },
+    place: {
+      eyebrow: "Place not found",
+      title: "This place cannot be reached.",
+      body: "The place may have been removed, hidden or moved to a different address.",
+    },
+    page: {
+      eyebrow: "404 · Page not found",
+      title: "The page you are looking for is not here.",
+      body: "The link may be incorrect or the page may have moved. You can continue from the home page.",
+    },
+  },
 };
 
 export function NotFoundPage({ kind = "page" }: { kind?: NotFoundKind }) {
-  const content = copy[kind];
+  const { language } = useLanguage();
+  const content = copy[language][kind];
 
   return (
     <section className="page not-found-page" role="status">
@@ -33,11 +54,11 @@ export function NotFoundPage({ kind = "page" }: { kind?: NotFoundKind }) {
       <div className="row-actions">
         {kind !== "page" ? (
           <Link className="secondary-action" to={kind === "event" ? "/events" : "/places"}>
-            <ArrowLeft size={17} /> Listeye dön
+            <ArrowLeft size={17} /> {language === "tr" ? "Listeye dön" : "Back to list"}
           </Link>
         ) : null}
         <Link className="primary-action" to="/">
-          <Home size={17} /> Ana sayfa
+          <Home size={17} /> {language === "tr" ? "Ana sayfa" : "Home"}
         </Link>
       </div>
     </section>

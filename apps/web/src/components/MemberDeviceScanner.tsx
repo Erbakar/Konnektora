@@ -11,8 +11,10 @@ import {
   X,
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { scanMember } from "../lib/api";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
+import { useLanguage } from "../lib/i18n";
 
 type NdefRecord = { data?: DataView; encoding?: string };
 type NdefReadingEvent = Event & { message: { records: NdefRecord[] } };
@@ -36,7 +38,10 @@ export function MemberDeviceScanner({
   userId: string;
   nfcPayload?: string;
 }) {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
   const qrControls = useRef<IScannerControls | null>(null);
   const nfcAbort = useRef<AbortController | null>(null);
@@ -52,18 +57,19 @@ export function MemberDeviceScanner({
       method: "qr" | "nfc";
     }) => scanMember(payload, method),
     onSuccess: (data) => {
-      setNotice(`${data.member.name} takip edildi.`);
+      setNotice(language === "tr" ? `${data.member.name} profili açılıyor.` : `Opening ${data.member.name}'s profile.`);
       stopDevices();
       void queryClient.invalidateQueries({
         queryKey: ["member-scans", userId],
       });
+      navigate(`/users/id/${data.member.id}`);
     },
     onError: (error) => {
       lastPayload.current = "";
       setNotice(
         getServiceErrorMessage(
           error,
-          "Kart geçersiz veya artık kullanılamıyor. Lütfen yeniden dene.",
+          t("Kart geçersiz veya artık kullanılamıyor. Lütfen yeniden dene.", "The card is invalid or no longer available. Please try again."),
         ),
       );
     },
@@ -117,8 +123,8 @@ export function MemberDeviceScanner({
       setMode("idle");
       setNotice(
         error instanceof Error && error.name === "NotAllowedError"
-          ? "Kamera izni verilmedi. Tarayıcı ayarlarından kameraya izin ver veya manuel girişi kullan."
-          : "QR kamerası başlatılamadı. HTTPS bağlantısını ve kamera desteğini kontrol et.",
+          ? t("Kamera izni verilmedi. Tarayıcı ayarlarından kameraya izin ver veya manuel girişi kullan.", "Camera permission was denied. Allow camera access in your browser settings or use manual entry.")
+          : t("QR kamerası başlatılamadı. HTTPS bağlantısını ve kamera desteğini kontrol et.", "The QR camera could not start. Check HTTPS and camera support."),
       );
     }
   }
@@ -130,7 +136,7 @@ export function MemberDeviceScanner({
       .NDEFReader;
     if (!Reader) {
       setNotice(
-        "Web NFC bu cihazda desteklenmiyor. Android Chrome veya QR taramayı kullanabilirsin.",
+        t("Web NFC bu cihazda desteklenmiyor. Android Chrome veya QR taramayı kullanabilirsin.", "Web NFC is not supported on this device. Use Android Chrome or QR scanning."),
       );
       return;
     }
@@ -141,24 +147,24 @@ export function MemberDeviceScanner({
       reader.addEventListener("reading", (event) => {
         const payload = decodeNdef(event.message.records);
         if (payload) submitPayload(payload, "nfc");
-        else setNotice("NFC etiketi Konnektora üye kartı içermiyor.");
+        else setNotice(t("NFC etiketi Konnektora üye kartı içermiyor.", "The NFC tag does not contain a Konnektora member card."));
       });
       reader.addEventListener("readingerror", () =>
         setNotice(
-          "NFC etiketi okunamadı; telefonu etikete yaklaştırıp tekrar dene.",
+          t("NFC etiketi okunamadı; telefonu etikete yaklaştırıp tekrar dene.", "The NFC tag could not be read. Move your phone closer and try again."),
         ),
       );
       await reader.scan({ signal: controller.signal });
       setMode("nfc");
       setNotice(
-        "NFC taraması hazır. Telefonu diğer üyenin etiketine yaklaştır.",
+        t("NFC taraması hazır. Telefonu diğer üyenin etiketine yaklaştır.", "NFC scanning is ready. Move your phone close to the other member's tag."),
       );
     } catch (error) {
       setMode("idle");
       setNotice(
         error instanceof Error && error.name === "NotAllowedError"
-          ? "NFC izni verilmedi."
-          : "NFC taraması başlatılamadı. HTTPS ve cihaz desteğini kontrol et.",
+          ? t("NFC izni verilmedi.", "NFC permission was denied.")
+          : t("NFC taraması başlatılamadı. HTTPS ve cihaz desteğini kontrol et.", "NFC scanning could not start. Check HTTPS and device support."),
       );
     }
   }
@@ -167,19 +173,19 @@ export function MemberDeviceScanner({
     const Reader = (window as unknown as { NDEFReader?: NdefReaderConstructor })
       .NDEFReader;
     if (!Reader || !nfcPayload) {
-      setNotice("NFC yazma bu cihazda kullanılamıyor.");
+      setNotice(t("NFC yazma bu cihazda kullanılamıyor.", "NFC writing is unavailable on this device."));
       return;
     }
     try {
       await new Reader().write({
         records: [{ recordType: "url", data: nfcPayload }],
       });
-      setNotice("Üye kartın NFC etiketine yazıldı.");
+      setNotice(t("Üye kartın NFC etiketine yazıldı.", "Your member card was written to the NFC tag."));
     } catch (error) {
       setNotice(
         error instanceof Error && error.name === "NotAllowedError"
-          ? "NFC yazma izni verilmedi."
-          : "NFC etiketi yazılamadı veya etiket salt okunur.",
+          ? t("NFC yazma izni verilmedi.", "NFC write permission was denied.")
+          : t("NFC etiketi yazılamadı veya etiket salt okunur.", "The NFC tag could not be written or is read-only."),
       );
     }
   }
@@ -188,11 +194,11 @@ export function MemberDeviceScanner({
     <section className="identity-panel device-scanner">
       <div className="section-header compact">
         <div>
-          <h2>QR / NFC tara</h2>
-          <p>Gerçek kamerayı veya telefonunun NFC okuyucusunu kullan.</p>
+          <h2>{t("QR / NFC tara", "Scan QR / NFC")}</h2>
+          <p>{t("Gerçek kamerayı veya telefonunun NFC okuyucusunu kullan.", "Use your camera or your phone's NFC reader.")}</p>
         </div>
         <span>
-          <ScanLine size={18} /> Hızlı takip
+          <ScanLine size={18} /> {t("Hızlı tanışma", "Quick introduction")}
         </span>
       </div>
       <div className="scanner-mode-grid">
@@ -202,8 +208,8 @@ export function MemberDeviceScanner({
           type="button"
         >
           <QrCode />
-          <strong>QR kamera</strong>
-          <small>Arka kamerayla otomatik tara</small>
+          <strong>{t("QR kamera", "QR camera")}</strong>
+          <small>{t("Arka kamerayla otomatik tara", "Scan automatically with the rear camera")}</small>
         </button>
         <button
           className={mode === "nfc" ? "scanner-mode is-active" : "scanner-mode"}
@@ -211,8 +217,8 @@ export function MemberDeviceScanner({
           type="button"
         >
           <Nfc />
-          <strong>NFC oku</strong>
-          <small>Telefonları veya etiketi yaklaştır</small>
+          <strong>{t("NFC oku", "Read NFC")}</strong>
+          <small>{t("Telefonları veya etiketi yaklaştır", "Move the phones or tag close together")}</small>
         </button>
         <button
           className={
@@ -225,8 +231,8 @@ export function MemberDeviceScanner({
           type="button"
         >
           <Keyboard />
-          <strong>Manuel</strong>
-          <small>Kart verisini yapıştır</small>
+          <strong>{t("Manuel", "Manual")}</strong>
+          <small>{t("Kart verisini yapıştır", "Paste the card data")}</small>
         </button>
       </div>
       {mode === "qr" ? (
@@ -239,10 +245,10 @@ export function MemberDeviceScanner({
             <i />
           </div>
           <span>
-            <Camera size={16} /> QR kodu çerçevenin içine getir
+            <Camera size={16} /> {t("QR kodu çerçevenin içine getir", "Place the QR code inside the frame")}
           </span>
           <button
-            aria-label="Kamerayı kapat"
+            aria-label={t("Kamerayı kapat", "Close camera")}
             onClick={stopDevices}
             type="button"
           >
@@ -253,10 +259,10 @@ export function MemberDeviceScanner({
       {mode === "nfc" ? (
         <div className="nfc-reading-state">
           <Nfc size={52} />
-          <strong>NFC etiketi bekleniyor</strong>
-          <span>Cihazını üye kartına birkaç santimetre yaklaştır.</span>
+          <strong>{t("NFC etiketi bekleniyor", "Waiting for NFC tag")}</strong>
+          <span>{t("Cihazını üye kartına birkaç santimetre yaklaştır.", "Move your device within a few centimetres of the member card.")}</span>
           <button className="ghost-action" onClick={stopDevices} type="button">
-            Taramayı durdur
+            {t("Taramayı durdur", "Stop scanning")}
           </button>
         </div>
       ) : null}
@@ -274,22 +280,22 @@ export function MemberDeviceScanner({
           }}
         >
           <textarea
-            aria-label="Üye kartı verisi"
+            aria-label={t("Üye kartı verisi", "Member card data")}
             name="payload"
-            placeholder="QR/NFC kart verisini yapıştır"
+            placeholder={t("QR/NFC kart verisini yapıştır", "Paste QR/NFC card data")}
             required
             rows={3}
           />
           <button className="primary-action" type="submit">
-            <Check size={18} /> Üyeyi bul ve takip et
+            <Check size={18} /> {t("Üyeyi bul ve takip et", "Find and follow member")}
           </button>
         </form>
       ) : null}
       <div className="nfc-write-row">
         <div>
-          <strong>Kendi NFC kartını oluştur</strong>
+          <strong>{t("Kendi NFC kartını oluştur", "Create your NFC card")}</strong>
           <span>
-            Üye kartını boş bir NFC etiketine güvenli bağlantı olarak yaz.
+            {t("Üye kartını boş bir NFC etiketine güvenli bağlantı olarak yaz.", "Write your member card to a blank NFC tag as a secure link.")}
           </span>
         </div>
         <button
@@ -298,13 +304,12 @@ export function MemberDeviceScanner({
           onClick={() => void writeNfc()}
           type="button"
         >
-          <Nfc size={17} /> NFC etikete yaz
+          <Nfc size={17} /> {t("NFC etikete yaz", "Write NFC tag")}
         </button>
       </div>
       {!window.isSecureContext ? (
         <p className="scanner-warning">
-          <WifiOff size={17} /> Kamera ve NFC production ortamında HTTPS
-          gerektirir.
+          <WifiOff size={17} /> {t("Kamera ve NFC canlı ortamda HTTPS gerektirir.", "Camera and NFC require HTTPS in production.")}
         </p>
       ) : null}
       {notice ? (

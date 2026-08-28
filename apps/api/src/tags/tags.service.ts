@@ -231,11 +231,13 @@ export class TagsService {
       });
     for (const post of posts) {
       if (!post.author) continue;
+      const existing = users.get(post.author.id);
       users.set(post.author.id, {
         ...present(post.author),
-        relation: users.has(post.author.id)
+        relation: existing
           ? "ilgileniyor · paylaşım yaptı"
           : "paylaşım yaptı",
+        sentiment: existing?.sentiment,
         checkedIn: false,
       });
     }
@@ -245,7 +247,10 @@ export class TagsService {
   async getPublicStats(tagId: string, user: User) {
     if (!["admin", "super_admin", "curator"].includes(user.role)) throw new ForbiddenException("Etiket istatistiklerini görüntüleme yetkiniz yok.");
     await this.ensureTagVisible(tagId, user.id);
-    const [events, places, sentiments, posts, views, reactionSummary] = await Promise.all([
+    const currentTag = await this.prisma.tag.findUnique({ where: { id: tagId }, select: { usageCount: true } });
+    const now = new Date();
+    const day = 86_400_000;
+    const [events, places, sentiments, posts, views, reactionSummary, interestDetails, viewDetails, taggedEvents, viewSources, sharesByChannel, popularAhead, commentDetails] = await Promise.all([
       this.prisma.eventTag.count({
         where: { tagId, event: { status: "published" } },
       }),
@@ -261,18 +266,97 @@ export class TagsService {
         where: { targetType: "tag", targetId: tagId, status: "active" },
       }),
       this.prisma.contentView.count({
-        where: { targetType: "tag", targetId: tagId },
+        where: { targetType: "tag", targetId: tagId, kind: "detail" },
       }),
       this.prisma.contentComment.aggregate({
         where: { targetType: "tag", targetId: tagId, status: "active" },
         _sum: { likeCount: true },
       }),
+      this.prisma.userInterestTag.findMany({
+        where: { tagId },
+        select: {
+          sentiment: true,
+          createdAt: true,
+          user: {
+            select: {
+              birthDate: true,
+              gender: true,
+              city: true,
+              country: true,
+              preferredLanguage: true,
+              interestTags: { where: { tagId: { not: tagId } }, select: { tag: { select: { name: true } } }, take: 25 },
+              _count: { select: { eventParticipations: { where: { status: { in: ["accepted", "attended"] } } }, sentPrivateMessages: true, scansMade: true, scansReceived: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.contentView.findMany({
+        where: { targetType: "tag", targetId: tagId, kind: "detail" },
+        select: { createdAt: true },
+        orderBy: { createdAt: "desc" },
+        take: 20_000,
+      }),
+      this.prisma.eventTag.findMany({
+        where: { tagId, event: { status: "published" } },
+        select: {
+          event: {
+            select: {
+              startsAt: true,
+              participants: { select: { status: true } },
+              ticketTypeRecords: { where: { status: "active" }, select: { soldCount: true, price: true } },
+              payments: { where: { status: "succeeded" }, select: { grossAmount: true } },
+              ticketRefunds: { select: { amount: true } },
+            },
+          },
+        },
+        take: 1_000,
+      }),
+      this.prisma.contentView.groupBy({
+        by: ["source"],
+        where: { targetType: "tag", targetId: tagId, kind: "detail" },
+        _count: { _all: true },
+      }),
+      this.prisma.contentShare.groupBy({
+        by: ["channel"],
+        where: { targetType: "tag", targetId: tagId },
+        _count: { _all: true },
+      }),
+      this.prisma.tag.count({ where: { status: "active", usageCount: { gt: currentTag?.usageCount ?? 0 } } }),
+      this.prisma.contentComment.findMany({ where: { targetType: "tag", targetId: tagId, status: "active" }, select: { createdAt: true }, take: 20_000 }),
     ]);
     const sentimentCount = (sentiment: string) => sentiments.find((item) => item.sentiment === sentiment)?._count._all ?? 0;
     const likes = sentimentCount("like");
     const ok = sentimentCount("ok");
     const dislikes = sentimentCount("dislike");
     const reactions = reactionSummary._sum.likeCount ?? 0;
+    const ageCounts = tagDistribution(interestDetails.map((item) => tagAgeBucket(item.user.birthDate)));
+    const genderCounts = tagDistribution(interestDetails.map((item) => item.user.gender || "belirtilmedi"));
+    const cityCounts = tagDistribution(interestDetails.map((item) => item.user.city || "belirtilmedi"), 10);
+    const countryCounts = tagDistribution(interestDetails.map((item) => item.user.country || "belirtilmedi"), 10);
+    const languageCounts = tagDistribution(interestDetails.map((item) => item.user.preferredLanguage || "belirtilmedi"));
+    const relatedInterestCounts = tagDistribution(interestDetails.flatMap((item) => item.user.interestTags.map((interest) => interest.tag.name)), 12);
+    const interestLast24h = interestDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= day).length;
+    const interestLast7d = interestDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 7 * day).length;
+    const interestLast30d = interestDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 30 * day).length;
+    const interestLast12m = interestDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 365 * day).length;
+    const viewsLast24h = viewDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= day).length;
+    const viewsLast7d = viewDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 7 * day).length;
+    const viewsLast30d = viewDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 30 * day).length;
+    const commentsLast24h = commentDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= day).length;
+    const commentsLast7d = commentDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 7 * day).length;
+    const commentsLast30d = commentDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 30 * day).length;
+    const commentsLast12m = commentDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 365 * day).length;
+    const attended = taggedEvents.reduce((sum, item) => sum + item.event.participants.filter((participant) => participant.status === "attended").length, 0);
+    const accepted = taggedEvents.reduce((sum, item) => sum + item.event.participants.filter((participant) => ["accepted", "attended"].includes(participant.status)).length, 0);
+    const invitedOrRequested = taggedEvents.reduce((sum, item) => sum + item.event.participants.filter((participant) => ["invited", "requested", "accepted", "attended", "declined"].includes(participant.status)).length, 0);
+    const ticketsSold = taggedEvents.reduce((sum, item) => sum + item.event.ticketTypeRecords.reduce((ticketSum, ticket) => ticketSum + ticket.soldCount, 0), 0);
+    const ticketRevenue = taggedEvents.reduce((sum, item) => sum + item.event.payments.reduce((paymentSum, payment) => paymentSum + Number(payment.grossAmount), 0), 0);
+    const refundAmount = taggedEvents.reduce((sum, item) => sum + item.event.ticketRefunds.reduce((refundSum, refund) => refundSum + Number(refund.amount), 0), 0);
+    const upcomingEvents = taggedEvents.filter((item) => item.event.startsAt >= now).length;
+    const opportunityScore = Math.min(100, Math.round((interestLast30d * 3 + viewsLast30d + Math.max(0, interestDetails.length - events * 5)) / Math.max(1, interestDetails.length + viewsLast30d) * 100));
+    const averageEventsPerInterestedUser = interestDetails.length ? Math.round(interestDetails.reduce((sum, item) => sum + item.user._count.eventParticipations, 0) / interestDetails.length * 10) / 10 : 0;
+    const averageConnectionsPerInterestedUser = interestDetails.length ? Math.round(interestDetails.reduce((sum, item) => sum + item.user._count.scansMade + item.user._count.scansReceived, 0) / interestDetails.length * 10) / 10 : 0;
+    const averageMessagesPerInterestedUser = interestDetails.length ? Math.round(interestDetails.reduce((sum, item) => sum + item.user._count.sentPrivateMessages, 0) / interestDetails.length * 10) / 10 : 0;
     return {
       events,
       places,
@@ -282,8 +366,42 @@ export class TagsService {
       dislikes,
       posts,
       views,
+      shares: sharesByChannel.reduce((sum, item) => sum + item._count._all, 0),
       reactions,
+      popularityRank: popularAhead + 1,
       engagementRate: views > 0 ? Math.round((posts + reactions) / views * 100) : 0,
+      interestLast24h,
+      interestLast7d,
+      interestLast30d,
+      interestLast12m,
+      viewsLast24h,
+      viewsLast7d,
+      viewsLast30d,
+      commentsLast24h,
+      commentsLast7d,
+      commentsLast30d,
+      commentsLast12m,
+      accepted,
+      attended,
+      attendanceRate: accepted > 0 ? Math.round(attended / accepted * 100) : 0,
+      averageRsvpRate: invitedOrRequested > 0 ? Math.round(accepted / invitedOrRequested * 100) : 0,
+      ticketsSold,
+      ticketRevenue: Math.round(ticketRevenue * 100) / 100,
+      refundAmount: Math.round(refundAmount * 100) / 100,
+      upcomingEvents,
+      opportunityScore,
+      averageEventsPerInterestedUser,
+      averageConnectionsPerInterestedUser,
+      averageMessagesPerInterestedUser,
+      ticketPurchaseRate: accepted > 0 ? Math.round(ticketsSold / accepted * 100) : 0,
+      ...tagPrefix("age", ageCounts),
+      ...tagPrefix("gender", genderCounts),
+      ...tagPrefix("city", cityCounts),
+      ...tagPrefix("country", countryCounts),
+      ...tagPrefix("language", languageCounts),
+      ...tagPrefix("relatedInterest", relatedInterestCounts),
+      ...tagPrefix("source", Object.fromEntries(viewSources.map((item) => [item.source || "direct", item._count._all]))),
+      ...tagPrefix("shareChannel", Object.fromEntries(sharesByChannel.map((item) => [item.channel, item._count._all]))),
     };
   }
 
@@ -786,4 +904,29 @@ export class TagsService {
       throw new ConflictException("Bu tag adı zaten kullanılıyor.");
     }
   }
+}
+
+function tagAgeBucket(birthDate: Date | null) {
+  if (!birthDate) return "belirtilmedi";
+  const now = new Date();
+  let age = now.getFullYear() - birthDate.getFullYear();
+  if (now.getMonth() < birthDate.getMonth() || now.getMonth() === birthDate.getMonth() && now.getDate() < birthDate.getDate()) age -= 1;
+  if (age < 25) return "18_24";
+  if (age < 35) return "25_34";
+  if (age < 45) return "35_44";
+  return "45_plus";
+}
+
+function tagDistribution(values: string[], limit = 100) {
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return Object.fromEntries([...counts.entries()].sort((left, right) => right[1] - left[1]).slice(0, limit));
+}
+
+function tagPrefix(prefix: string, values: Record<string, number>) {
+  return Object.fromEntries(Object.entries(values).map(([key, value]) => [`${prefix}_${tagMetricKey(key)}`, value]));
+}
+
+function tagMetricKey(value: string) {
+  return value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "belirtilmedi";
 }
