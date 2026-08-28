@@ -56,9 +56,16 @@ describe("PublicProfileService", () => {
     expect(user.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: ownerId }) }));
   });
 
-  it("rejects profiles blocked in either direction", async () => {
+  it("rejects a profile when its owner blocked the viewer", async () => {
     userBlock.findFirst.mockResolvedValue({ userId: ownerId });
     await expect(service.getByUsername("ada", viewerId)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("keeps the profile reachable so the viewer can remove their own block", async () => {
+    userBlock.findFirst.mockResolvedValue({ userId: viewerId });
+    await expect(service.getByUsername("ada", viewerId)).resolves.toMatchObject({
+      relationship: { blockedByViewer: true, canMessage: false },
+    });
   });
 
   it("hides owner content when the audience is following-only", async () => {

@@ -27,9 +27,11 @@ export class PublicProfileService {
       }
     });
     if (!profile) throw new NotFoundException("Kullanıcı profili bulunamadı.");
+    let blockedByViewer = false;
     if (viewerId && viewerId !== profile.id) {
       const blocked = await this.prisma.userBlock.findFirst({ where: { targetType: "user", OR: [{ userId: viewerId, targetId: profile.id }, { userId: profile.id, targetId: viewerId }] }, select: { userId: true } });
-      if (blocked) throw new ForbiddenException("Bu kullanıcı profili görüntülenemiyor.");
+      if (blocked?.userId === profile.id) throw new ForbiddenException("Bu kullanıcı profili görüntülenemiyor.");
+      blockedByViewer = blocked?.userId === viewerId;
     }
     const relationship = await this.relationship(profile.id, viewerId);
     const privacy = profile.privacySettings ?? { messageAudience: "everybody" as const, eventAudience: "everybody" as const, placeAudience: "everybody" as const, profileNameAudience: "everybody" as const, demographicsAudience: "everybody" as const, locationAudience: "everybody" as const, websiteAudience: "everybody" as const, businessAudience: "everybody" as const, addressAudience: "everybody" as const, tradeNameAudience: "everybody" as const };
@@ -207,7 +209,7 @@ export class PublicProfileService {
       businessCategory: this.canView(privacy.businessAudience ?? "everybody", relationship) ? profile.businessCategory : null,
       followerCount: profile.followerCount, followingCount: profile.followingCount, memberSince: profile.createdAt, verified: Boolean(profile.profileVerifiedAt),
       media, interests, commonInterestCount: interests.filter((item) => item.common).length, mutualism,
-      relationship: { isSelf: viewerId === profile.id, following: relationship.viewerFollowsOwner, canMessage: viewerId !== undefined && viewerId !== profile.id && this.canView(privacy.messageAudience, relationship) },
+      relationship: { isSelf: viewerId === profile.id, following: relationship.viewerFollowsOwner, blockedByViewer, canMessage: !blockedByViewer && viewerId !== undefined && viewerId !== profile.id && this.canView(privacy.messageAudience, relationship) },
       stats: profileStats,
       events: events.map((event) => ({ kind: "event" as const, id: event.id, title: event.title, subtitle: event.summary, href: `/events/${event.slug}`, imageUrl: event.coverImageUrl, meta: `${event.locationName ?? event.city ?? "Online"} · ${event.startsAt.toISOString()}`, latitude: event.latitude == null ? null : Number(event.latitude), longitude: event.longitude == null ? null : Number(event.longitude), attendeeCount: event._count.participants, organizer: event.createdById === profile.id })),
       places: places.map((place) => ({ kind: "place" as const, id: place.id, title: place.name, subtitle: place.description, href: `/places/${place.slug}`, imageUrl: place.coverImageUrl, meta: `${place.followerCount} members${place.city ? ` · ${place.city}` : ""}`, latitude: place.latitude == null ? null : Number(place.latitude), longitude: place.longitude == null ? null : Number(place.longitude), organizer: place.createdById === profile.id }))

@@ -3895,14 +3895,6 @@ select:focus-visible {
 .profile-interest small {
   color: var(--muted);
 }
-.profile-interest.is-common {
-  color: #fff;
-  background: var(--brand);
-  border-color: var(--brand);
-}
-.profile-interest.is-common small {
-  color: #dce8df;
-}
 .profile-website {
   display: flex;
   gap: 8px;
@@ -4331,6 +4323,24 @@ select:focus-visible {
   font-size: 13px;
   font-weight: 800;
   padding: 5px 9px;
+}
+
+.profile-tag-smart-suggestions {
+  background: #f5f8f3;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.profile-tag-smart-suggestions .profile-tag-row {
+  margin-top: 0;
+}
+
+.profile-tag-smart-suggestions .ghost-action {
+  min-height: 36px;
+  padding: 7px 11px;
 }
 
 .segmented-control {
@@ -6254,7 +6264,7 @@ div.form-error::before {
 }
 
 .content-comments .admin-list-row > div > strong a,
-.comment-replies article > strong {
+.comment-replies article > div > strong a {
   color: #17251e;
   text-decoration: none;
 }
@@ -6606,6 +6616,18 @@ div.form-error::before {
 }
 
 .comment-replies article {
+  align-items: start;
+  display: grid;
+  gap: 5px;
+  grid-template-columns: 34px minmax(0, 1fr);
+}
+
+.comment-replies .comment-author-avatar {
+  height: 34px;
+  width: 34px;
+}
+
+.comment-replies article > div {
   display: grid;
   gap: 5px;
 }

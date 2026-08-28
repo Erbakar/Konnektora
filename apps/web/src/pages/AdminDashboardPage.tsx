@@ -1328,7 +1328,7 @@ const policyTypes: Array<{ value: PolicyType; label: string; defaultTitle: strin
   }
 ];
 
-function CmsAdminPanel({
+export function CmsAdminPanel({
   announcements,
   categories,
   faqs,
@@ -1589,7 +1589,7 @@ function CmsAdminPanel({
                 </label>
                 <label>
                   Cevap
-                  <RichTextTextarea name="body" placeholder="Kullanıcının bu sorusuna net ve kısa bir cevap yaz..." required minLength={3} rows={4} />
+                  <RichTextTextarea ariaLabel="Cevap" name="body" placeholder="Kullanıcının bu sorusuna net ve kısa bir cevap yaz..." required minLength={3} rows={4} />
                 </label>
                 <button className="secondary-action" disabled={isPending} type="submit">
                   <Plus size={18} />
@@ -1715,7 +1715,7 @@ function CmsAdminPanel({
             </label>
             <label>
               İçerik
-              <RichTextTextarea name="body" placeholder="Duyurunun detaylarını buraya yaz..." required minLength={3} rows={4} />
+              <RichTextTextarea ariaLabel="Duyuru içeriği" name="body" placeholder="Duyurunun detaylarını buraya yaz..." required minLength={3} rows={4} />
             </label>
             <label>
               İngilizce başlık
@@ -1723,7 +1723,7 @@ function CmsAdminPanel({
             </label>
             <label>
               İngilizce içerik
-              <RichTextTextarea name="bodyEn" placeholder="Write the English announcement content here..." minLength={3} required rows={4} />
+              <RichTextTextarea ariaLabel="İngilizce duyuru içeriği" name="bodyEn" placeholder="Write the English announcement content here..." minLength={3} required rows={4} />
             </label>
             <div className="admin-form-grid">
               <label>
@@ -1849,6 +1849,7 @@ function CmsAdminPanel({
                 <label>
                   İçerik
                   <RichTextTextarea
+                    ariaLabel={`${policyType.label} içeriği`}
                     key={`${policyType.value}-${policy?.updatedAt ?? "new"}`}
                     name="body"
                     defaultValue={policy?.body ?? policyType.defaultBody}
@@ -1945,6 +1946,7 @@ function EmailTokenInfoPanel() {
 }
 
 function RichTextTextarea({
+  ariaLabel,
   defaultValue,
   maxLength,
   minLength,
@@ -1953,6 +1955,7 @@ function RichTextTextarea({
   required,
   rows = 4
 }: {
+  ariaLabel: string;
   defaultValue?: string;
   maxLength?: number;
   minLength?: number;
@@ -2062,6 +2065,7 @@ function RichTextTextarea({
         ref={editorRef}
         role="textbox"
         aria-multiline="true"
+        aria-label={ariaLabel}
         style={{ minHeight: `${rows * 24}px` }}
         suppressContentEditableWarning
       />
@@ -2324,7 +2328,7 @@ function UserMessageDetail({
   );
 }
 
-function RoleGroupAdminPanel({
+export function RoleGroupAdminPanel({
   isPending,
   onCreate,
   onUpdate,
@@ -3192,7 +3196,7 @@ function AdminContentPanel<T extends { id: string; status: string; createdAt?: s
   );
 }
 
-function PrivateMessageAdminPanel({ items, isPending, onStatusChange }: { items: AdminPrivateMessage[]; isPending: boolean; onStatusChange: (id: string, status: string) => void }) {
+export function PrivateMessageAdminPanel({ items, isPending, onStatusChange }: { items: AdminPrivateMessage[]; isPending: boolean; onStatusChange: (id: string, status: string) => void }) {
   const [usernameQuery, setUsernameQuery] = useState("");
   const [contentQuery, setContentQuery] = useState("");
   const [selectedKey, setSelectedKey] = useState("");
@@ -3242,7 +3246,7 @@ function adminUserLabel(user: AdminPrivateMessage["sender"]) {
   return user.username ? `@${user.username}` : user.name || user.email;
 }
 
-function ReportRuleAdminPanel({ rules, isPending, onCreate, onUpdate }: {
+export function ReportRuleAdminPanel({ rules, isPending, onCreate, onUpdate }: {
   rules: ReportRule[];
   isPending: boolean;
   onCreate: (input: ReportRuleInput) => void;
@@ -4312,7 +4316,7 @@ function GuestListRow({
   );
 }
 
-function ActivityLogAdminPanel() {
+export function ActivityLogAdminPanel() {
   const [filters, setFilters] = useState({ q: "", category: "", action: "", from: "", to: "" });
   const [applied, setApplied] = useState(filters);
   const [page, setPage] = useState(1);

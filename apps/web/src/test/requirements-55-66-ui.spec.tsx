@@ -12,6 +12,7 @@ import { SearchPage } from "../pages/SearchPage";
 import { SettingsSectionPage } from "../pages/SettingsCenterPage";
 
 const apiMocks = vi.hoisted(() => ({
+  createBlock: vi.fn(),
   getFinanceDashboard: vi.fn(),
   getMyProfile: vi.fn(),
   getNotificationPreferences: vi.fn(),
@@ -30,10 +31,12 @@ const apiMocks = vi.hoisted(() => ({
   listProfileTagSuggestions: vi.fn(),
   listSocialAccounts: vi.fn(),
   listTags: vi.fn(),
+  removeBlock: vi.fn(),
   recordContentAction: vi.fn(),
   recordContentView: vi.fn(),
   searchDiscovery: vi.fn(),
   submitCuratorApplication: vi.fn(),
+  updateProfileAffinities: vi.fn(),
   updatePrivacySettings: vi.fn(),
 }));
 
@@ -66,6 +69,7 @@ beforeEach(() => {
   window.localStorage.clear();
   window.sessionStorage.clear();
   apiMocks.getUserSession.mockReturnValue(null);
+  apiMocks.createBlock.mockResolvedValue({ ok: true });
   apiMocks.getFinanceDashboard.mockResolvedValue({ business: { plan: "starter" } });
   apiMocks.getMyProfile.mockResolvedValue({ city: "İstanbul", country: "Türkiye" });
   apiMocks.getNotificationPreferences.mockResolvedValue([]);
@@ -82,8 +86,10 @@ beforeEach(() => {
   apiMocks.listTags.mockResolvedValue([]);
   apiMocks.recordContentAction.mockResolvedValue(undefined);
   apiMocks.recordContentView.mockResolvedValue(undefined);
+  apiMocks.removeBlock.mockResolvedValue({ ok: true });
   apiMocks.submitCuratorApplication.mockResolvedValue({ id: "application-1" });
   apiMocks.updatePrivacySettings.mockResolvedValue({});
+  apiMocks.updateProfileAffinities.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -202,6 +208,95 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     expect(followers).toHaveClass("tooltip-open");
     expect(followers).toHaveAttribute("aria-expanded", "true");
     expect(document.querySelector(".profile-privacy-toast")).not.toBeInTheDocument();
+  });
+
+  it("profil ilgi alanlarını yeşil ortak kart olmadan ve etiket detayıyla aynı duygu ikonlarıyla gösterir", async () => {
+    apiMocks.getPublicProfile.mockResolvedValue({
+      id: "person-1",
+      name: "Ada Yılmaz",
+      username: "ada",
+      accountType: "individual",
+      verified: false,
+      followerCount: 42,
+      followingCount: 17,
+      city: "İstanbul",
+      country: "Türkiye",
+      media: [],
+      interests: [
+        { tag: { id: "tag-like", name: "Caz", slug: "caz" }, sentiment: "like", common: true, commentCount: 2 },
+        { tag: { id: "tag-neutral", name: "Seramik", slug: "seramik" }, sentiment: "ok", common: false, commentCount: 0 },
+        { tag: { id: "tag-dislike", name: "Gürültü", slug: "gurultu" }, sentiment: "dislike", common: false, commentCount: 0 },
+      ],
+      events: [],
+      places: [],
+      relationship: { isSelf: false, following: false, canMessage: true },
+    });
+
+    render(providers(
+      <Routes><Route path="/users/:username" element={<PublicProfilePage />} /></Routes>,
+      "/users/ada",
+    ));
+
+    const interests = (await screen.findByRole("heading", { name: "İlgi alanları" })).closest("section")!;
+    expect(interests.querySelector(".profile-interest.is-common")).not.toBeInTheDocument();
+    expect(within(interests).queryByText(/ortak ilgi/i)).not.toBeInTheDocument();
+    expect(within(interests).getByRole("link", { name: /Caz/ })).toHaveAttribute("href", "/tags/caz?authorId=person-1");
+    expect(within(interests).getByRole("link", { name: /Caz/ })).toHaveTextContent("2 gönderi");
+    expect(interests.querySelector('[data-sentiment-icon="like"]')).toBeInTheDocument();
+    expect(interests.querySelector('[data-sentiment-icon="ok"]')).toBeInTheDocument();
+    expect(interests.querySelector('[data-sentiment-icon="dislike"]')).toBeInTheDocument();
+    expect(within(interests).queryByText("#Caz")).not.toBeInTheDocument();
+  });
+
+  it("profil aksiyon menüsünde engelleme ve engeli kaldırmayı aynı yerden tamamlar", async () => {
+    const session = { id: "viewer-1", name: "Deniz", username: "deniz", role: "user", status: "active", accountType: "individual" };
+    const baseProfile = {
+      id: "person-1", name: "Ada Yılmaz", username: "ada", accountType: "individual", verified: false,
+      followerCount: 42, followingCount: 17, city: "İstanbul", country: "Türkiye", media: [], interests: [], events: [], places: [],
+      relationship: { isSelf: false, following: false, canMessage: true, blockedByViewer: false },
+    };
+    apiMocks.getUserSession.mockReturnValue(session);
+    apiMocks.getPublicProfile
+      .mockResolvedValueOnce(baseProfile)
+      .mockResolvedValue({ ...baseProfile, relationship: { ...baseProfile.relationship, canMessage: false, blockedByViewer: true } });
+
+    render(providers(<Routes><Route path="/users/:username" element={<PublicProfilePage />} /></Routes>, "/users/ada"));
+    await userEvent.click(await screen.findByRole("button", { name: "Profil aksiyonları" }));
+    await userEvent.click(screen.getByRole("button", { name: "Kullanıcıyı engelle" }));
+    await waitFor(() => expect(apiMocks.createBlock).toHaveBeenCalledWith("user", "person-1"));
+    expect(await screen.findByRole("button", { name: "Engeli kaldır" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Engeli kaldır" }));
+    await waitFor(() => expect(apiMocks.removeBlock).toHaveBeenCalledWith("user", "person-1"));
+  });
+
+  it("üçüncü etiket eklemesinden sonra profil sinyallerine göre seçilebilir akıllı öneriler gösterir", async () => {
+    const session = { id: "person-1", name: "Ada Yılmaz", username: "ada", role: "user", status: "active", accountType: "individual" };
+    apiMocks.getUserSession.mockReturnValue(session);
+    apiMocks.getPublicProfile.mockResolvedValue({
+      id: session.id, name: session.name, username: session.username, accountType: "individual", verified: false,
+      followerCount: 42, followingCount: 17, city: "İstanbul", country: "Türkiye", media: [], interests: [], events: [], places: [],
+      relationship: { isSelf: true, following: false, canMessage: false, blockedByViewer: false },
+    });
+    apiMocks.listTags.mockResolvedValue([
+      { id: "tag-1", name: "Caz", slug: "caz", usageCount: 30, status: "active" },
+      { id: "tag-2", name: "Seramik", slug: "seramik", usageCount: 20, status: "active" },
+      { id: "tag-3", name: "Kahve", slug: "kahve", usageCount: 10, status: "active" },
+      { id: "tag-4", name: "Fotoğraf", slug: "fotograf", usageCount: 40, status: "active" },
+    ]);
+
+    render(providers(<Routes><Route path="/users/:username" element={<PublicProfilePage />} /></Routes>, "/users/ada"));
+    await userEvent.click(await screen.findByRole("button", { name: /Kendine etiket ekle/ }));
+    const input = await screen.findByRole("combobox", { name: "Etiket" });
+    for (const tagName of ["Caz", "Seramik", "Kahve"]) {
+      await userEvent.clear(input);
+      await userEvent.type(input, tagName);
+      await userEvent.click(screen.getByRole("button", { name: "Profile ekle" }));
+      await waitFor(() => expect(apiMocks.updateProfileAffinities).toHaveBeenCalledTimes(["Caz", "Seramik", "Kahve"].indexOf(tagName) + 1));
+    }
+    const suggestions = await screen.findByRole("region", { name: "Akıllı etiket önerileri" });
+    expect(within(suggestions).getByText("Profil sinyallerine göre önerilen kategoriler")).toBeVisible();
+    await userEvent.click(within(suggestions).getByRole("button", { name: "Fotoğraf" }));
+    expect(input).toHaveValue("Fotoğraf");
   });
 
   it("kullanıcının kendi kimlik rotasında profilini kayıp saymadan açar", async () => {

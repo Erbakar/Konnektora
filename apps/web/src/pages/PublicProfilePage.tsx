@@ -5,17 +5,20 @@ import {
   CalendarDays,
   Flag,
   Globe2,
+  Heart,
   Mail,
   MapPin,
   MessageCircle,
+  Minus,
   MoreVertical,
   Settings,
   Share2,
+  ThumbsDown,
   UserCheck,
   UserPlus,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { DiscoveryCard } from "../components/DiscoveryCard";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
 import { ReportDialog } from "../components/ReportDialog";
@@ -35,6 +38,7 @@ import {
   addGuestListMember,
   listGuestLists,
   listProfileTagSuggestions,
+  removeBlock,
   setContentNotification,
   unfollowUser,
   resolveMediaUrl,
@@ -66,12 +70,16 @@ function publicUsername(username: string | null | undefined) {
     : null;
 }
 
+function SentimentIcon({ sentiment }: { sentiment: "like" | "ok" | "dislike" }) {
+  const Icon = sentiment === "like" ? Heart : sentiment === "dislike" ? ThumbsDown : Minus;
+  return <Icon aria-hidden="true" data-sentiment-icon={sentiment} size={17} />;
+}
+
 export function PublicProfilePage() {
   const { language } = useLanguage();
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const { username = "", userId = "" } = useParams();
   const user = getUserSession();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [reportOpen, setReportOpen] = useState(false);
   const [privacyNotice, setPrivacyNotice] = useState(false);
@@ -83,6 +91,7 @@ export function PublicProfilePage() {
   const [selectedTagId, setSelectedTagId] = useState("");
   const [tagName, setTagName] = useState("");
   const [addedTagCount, setAddedTagCount] = useState(0);
+  const [addedTagNames, setAddedTagNames] = useState<string[]>([]);
   const [selectedSentiment, setSelectedSentiment] = useState<
     "like" | "ok" | "dislike"
   >("like");
@@ -181,9 +190,11 @@ export function PublicProfilePage() {
       });
     },
     onSuccess: async () => {
+      const addedName = tagName.trim();
       setSelectedTagId("");
       setTagName("");
       setAddedTagCount((count) => count + 1);
+      if (addedName) setAddedTagNames((names) => [...new Set([...names, addedName])]);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["public-profile"] }),
         queryClient.invalidateQueries({ queryKey: ["profile-affinities"] }),
@@ -222,8 +233,12 @@ export function PublicProfilePage() {
       }),
   });
   const blockMutation = useMutation({
-    mutationFn: () => createBlock("user", profile!.id),
-    onSuccess: () => navigate("/search"),
+    mutationFn: () => profile!.relationship.blockedByViewer
+      ? removeBlock("user", profile!.id)
+      : createBlock("user", profile!.id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["public-profile"] });
+    },
   });
   if (profileQuery.isLoading)
     return (
@@ -245,6 +260,22 @@ export function PublicProfilePage() {
     profile.media.find(
       (item) => item.isProfilePicture && item.type === "image",
     ) ?? profile.media.find((item) => item.type === "image");
+  const addedTagNameSet = new Set(addedTagNames.map((name) => name.toLocaleLowerCase("tr-TR")));
+  const relevantCategoryIds = new Set([
+    ...profile.interests.map((interest) => interest.tag.categoryId),
+    ...(allTags.data ?? [])
+      .filter((tag) => addedTagNameSet.has(tag.name.toLocaleLowerCase("tr-TR")))
+      .map((tag) => tag.categoryId),
+  ].filter(Boolean));
+  const smartTagSuggestions = (allTags.data ?? [])
+    .filter((tag) => !profile.interests.some((interest) => interest.tag.id === tag.id))
+    .filter((tag) => !addedTagNameSet.has(tag.name.toLocaleLowerCase("tr-TR")))
+    .filter((tag) => !(tagSuggestions.data ?? []).some((suggestion) => suggestion.targetUserId === profile.id && suggestion.tagId === tag.id))
+    .sort((a, b) => {
+      const categoryDifference = Number(relevantCategoryIds.has(b.categoryId)) - Number(relevantCategoryIds.has(a.categoryId));
+      return categoryDifference || b.usageCount - a.usageCount || a.name.localeCompare(b.name, language);
+    })
+    .slice(0, 12);
 
   return (
     <section className="page public-profile-page">
@@ -339,7 +370,7 @@ export function PublicProfilePage() {
             </Link>
           ) : user ? (
             <>
-              <button
+              {!profile.relationship.blockedByViewer ? <button
                 className={
                   profile.relationship.following
                     ? "secondary-action"
@@ -355,7 +386,7 @@ export function PublicProfilePage() {
                   <UserPlus size={18} />
                 )}
                 {profile.relationship.following ? t("Takipte", "Following") : t("Takip et", "Follow")}
-              </button>
+              </button> : null}
               {profile.relationship.canMessage ? (
                 <Link
                   className="secondary-action"
@@ -365,7 +396,7 @@ export function PublicProfilePage() {
                 </Link>
               ) : null}
               <details className="action-menu profile-actions-menu">
-                <summary aria-label={t("Profil aksiyonları", "Profile actions")}>
+                <summary aria-label={t("Profil aksiyonları", "Profile actions")} role="button">
                   <MoreVertical size={20} />
                 </summary>
                 <div>
@@ -374,15 +405,12 @@ export function PublicProfilePage() {
                       <Mail size={18} /> {t("Mesaj gönder", "Send message")}
                     </Link>
                   ) : null}
-                  <button
-                    onClick={() => setNotificationOpen(true)}
-                    type="button"
-                  >
+                  {!profile.relationship.blockedByViewer ? <button onClick={() => setNotificationOpen(true)} type="button">
                     {notification.data?.enabled
                       ? t("Bildirimleri kapat", "Turn off notifications")
                       : t("Bildirim ayarla", "Set a notification")}
-                  </button>
-                  {canUseGuestLists ? <button onClick={() => setGuestOpen(true)} type="button">
+                  </button> : null}
+                  {canUseGuestLists && !profile.relationship.blockedByViewer ? <button onClick={() => setGuestOpen(true)} type="button">
                     <UserPlus size={18} /> {t("Misafir listesine ekle", "Add to guest list")}
                   </button> : null}
                   <Link to={`/stats/user/${profile.id}`}>
@@ -403,7 +431,9 @@ export function PublicProfilePage() {
                     onClick={() => blockMutation.mutate()}
                     type="button"
                   >
-                    <Ban size={18} /> {t("Kullanıcıyı engelle", "Block user")}
+                    <Ban size={18} /> {profile.relationship.blockedByViewer
+                      ? t("Engeli kaldır", "Unblock user")
+                      : t("Kullanıcıyı engelle", "Block user")}
                   </button>
                 </div>
               </details>
@@ -415,7 +445,7 @@ export function PublicProfilePage() {
           )}
           {profile.relationship.isSelf ? (
             <details className="action-menu profile-actions-menu">
-              <summary aria-label={t("Profil ayarları", "Profile settings")}>
+              <summary aria-label={t("Profil ayarları", "Profile settings")} role="button">
                 <MoreVertical size={20} />
               </summary>
               <div>
@@ -638,7 +668,7 @@ export function PublicProfilePage() {
       <section className="identity-panel" id="interests">
         <div className="section-header compact">
           <h2>{t("İlgi alanları", "Interests")}</h2>
-          {user ? (
+          {user && !profile.relationship.blockedByViewer ? (
             <button
               className="text-action"
               onClick={() => setTagDialogOpen(true)}
@@ -669,11 +699,7 @@ export function PublicProfilePage() {
                   <b
                     className={`interest-sentiment interest-sentiment-${item.sentiment}`}
                   >
-                    {item.sentiment === "like"
-                      ? "♡"
-                      : item.sentiment === "dislike"
-                        ? "⌄"
-                        : "−"}
+                    <SentimentIcon sentiment={item.sentiment} />
                   </b>{" "}
                   <Link to={`/tags/${item.tag.slug}`}>{item.tag.name}</Link>
                 </span>
@@ -726,11 +752,7 @@ export function PublicProfilePage() {
             ))}
           {profile.interests.map((interest) => (
             <Link
-              className={
-                interest.common
-                  ? "profile-interest is-common"
-                  : "profile-interest"
-              }
+              className="profile-interest"
               key={interest.tag.id}
               to={`/tags/${interest.tag.slug}?authorId=${profile.id}`}
             >
@@ -738,11 +760,7 @@ export function PublicProfilePage() {
                 <b
                   className={`interest-sentiment interest-sentiment-${interest.sentiment}`}
                 >
-                  {interest.sentiment === "like"
-                    ? "♡"
-                    : interest.sentiment === "dislike"
-                      ? "⌄"
-                      : "−"}
+                  <SentimentIcon sentiment={interest.sentiment} />
                 </b>{" "}
                 {interest.tag.name}
               </span>
@@ -801,9 +819,35 @@ export function PublicProfilePage() {
                     ? t("Herkes sevdiklerinden söz edebilir. Size tamamen uzak, eleştirel, hatta karanlık bir taraf?", "Everyone can talk about what they love. What about something distant, critical or even dark?")
                     : t("Profil için yeni etiket kategorileri ve yaratıcı öneriler keşfedin.", "Discover new tag categories and creative ideas for the profile.")}
             </p>
+            {addedTagCount >= 3 ? (
+              <section
+                aria-label={t("Akıllı etiket önerileri", "Smart tag suggestions")}
+                className="profile-tag-smart-suggestions"
+              >
+                <strong>
+                  {t("Profil sinyallerine göre önerilen kategoriler", "Categories suggested from profile signals")}
+                </strong>
+                <div className="profile-tag-row">
+                  {smartTagSuggestions.map((tag) => (
+                      <button
+                        className="ghost-action"
+                        key={tag.id}
+                        onClick={() => {
+                          setSelectedTagId(tag.id);
+                          setTagName(tag.name);
+                        }}
+                        type="button"
+                      >
+                        {tag.name}
+                      </button>
+                    ))}
+                </div>
+              </section>
+            ) : null}
             <label>
               {t("Etiket", "Tag")}
               <input
+                aria-label={t("Etiket", "Tag")}
                 list="profile-tag-options"
                 onChange={(event) => {
                   const value = event.target.value;

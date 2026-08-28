@@ -6613,6 +6613,9 @@ function getMockPublicProfile(identifier: string, byId = false): PublicProfile {
   );
   if (!target) throw new Error("Kullanıcı profili bulunamadı");
   const viewer = getUserSession();
+  const blockedByViewer = Boolean(
+    viewer && listMockBlocks().some((block) => block.targetType === "user" && block.targetId === target.id),
+  );
   const follows = mockFollowIds();
   const interestMap = readStorage<Record<string, string[]>>(
     USER_INTEREST_TAGS_KEY,
@@ -6695,7 +6698,8 @@ function getMockPublicProfile(identifier: string, byId = false): PublicProfile {
     relationship: {
       isSelf: viewer?.id === target.id,
       following: follows.includes(target.id),
-      canMessage: Boolean(viewer && viewer.id !== target.id),
+      canMessage: Boolean(viewer && viewer.id !== target.id && !blockedByViewer),
+      blockedByViewer,
     },
     events,
     places,

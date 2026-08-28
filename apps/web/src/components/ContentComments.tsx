@@ -259,52 +259,52 @@ export function ContentComments({
               {comment.replies?.length ? (
                 <div className="comment-replies">
                   {comment.replies.map((reply) => (
-                    <article key={reply.id}>
-                      <strong>
-                        {reply.author?.username
-                          ? `@${reply.author.username}`
-                          : (reply.author?.name ?? (language === "tr" ? "Silinmiş kullanıcı" : "Deleted user"))}
-                      </strong>
-                      <RichText hideEmbeddableUrls text={reply.body} />
-                      <EmbeddedMedia text={reply.body} />
-                      {reply.media?.length ? (
-                        <div className={`comment-media-grid media-count-${Math.min(reply.media.length, 5)}`}>
-                          {reply.media.map((item) =>
-                            item.type === "video" ? (
-                              <video
-                                controls
-                                key={item.id}
-                                src={resolveMediaUrl(item.url)}
-                              />
-                            ) : (
-                              <img
-                                alt=""
-                                key={item.id}
-                                src={resolveMediaUrl(item.url)}
-                              />
-                            ),
+                    <article className="comment-reply" key={reply.id}>
+                      {reply.author ? (
+                        <Link
+                          aria-label={language === "tr" ? `${reply.author.name} profilini aç` : `Open ${reply.author.name}'s profile`}
+                          className="comment-author-avatar-link"
+                          to={userProfilePath(reply.author)}
+                        >
+                          {reply.author.avatarUrl ? (
+                            <img className="comment-author-avatar" src={resolveMediaUrl(reply.author.avatarUrl)} alt="" />
+                          ) : (
+                            <span className="comment-author-avatar comment-author-fallback">{reply.author.name?.[0] ?? "?"}</span>
                           )}
-                        </div>
-                      ) : null}
-                      <CommentActions
-                        canManage={canManage}
-                        canAddGuest={canAddGuest}
-                        comment={reply}
-                        currentUserId={user?.id}
-                        following={Boolean(
-                          reply.authorId && followingIds.has(reply.authorId),
-                        )}
-                        targetType={targetType}
-                        onChanged={() =>
-                          void client.invalidateQueries({
-                            queryKey: [
-                              "content-comments",
-                              targetType,
-                              targetId,
-                            ],
-                          })
-                        }
-                      />
+                        </Link>
+                      ) : (
+                        <span className="comment-author-avatar comment-author-fallback">?</span>
+                      )}
+                      <div>
+                        <strong>
+                          {reply.author ? (
+                            <Link to={userProfilePath(reply.author)}>{reply.author.username ? `@${reply.author.username}` : reply.author.name}</Link>
+                          ) : language === "tr" ? "Silinmiş kullanıcı" : "Deleted user"}
+                        </strong>
+                        <RichText hideEmbeddableUrls text={reply.body} />
+                        <EmbeddedMedia text={reply.body} />
+                        {reply.media?.length ? (
+                          <div className={`comment-media-grid media-count-${Math.min(reply.media.length, 5)}`}>
+                            {reply.media.map((item) =>
+                              item.type === "video" ? (
+                                <video controls key={item.id} src={resolveMediaUrl(item.url)} />
+                              ) : (
+                                <img alt="" key={item.id} src={resolveMediaUrl(item.url)} />
+                              ),
+                            )}
+                          </div>
+                        ) : null}
+                        <small>{new Date(reply.createdAt).toLocaleString(language === "tr" ? "tr-TR" : "en-GB")}</small>
+                        <CommentActions
+                          canManage={canManage}
+                          canAddGuest={canAddGuest}
+                          comment={reply}
+                          currentUserId={user?.id}
+                          following={Boolean(reply.authorId && followingIds.has(reply.authorId))}
+                          targetType={targetType}
+                          onChanged={() => void client.invalidateQueries({ queryKey: ["content-comments", targetType, targetId] })}
+                        />
+                      </div>
                     </article>
                   ))}
                 </div>
@@ -490,7 +490,7 @@ function CommentActions({
           </button>
         ) : null}
         <details className="action-menu comment-action-menu">
-          <summary aria-label={language === "tr" ? "Yorum aksiyonları" : "Comment actions"}>
+          <summary aria-label={language === "tr" ? "Yorum aksiyonları" : "Comment actions"} role="button">
             <MoreVertical size={16} />
           </summary>
           <div>

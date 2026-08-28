@@ -592,6 +592,7 @@ export const publicProfileSchema = z.object({
     isSelf: z.boolean(),
     following: z.boolean(),
     canMessage: z.boolean(),
+    blockedByViewer: z.boolean().optional(),
   }),
   events: z.array(discoveryItemSchema),
   places: z.array(discoveryItemSchema),

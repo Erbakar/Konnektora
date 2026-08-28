@@ -24,6 +24,7 @@ const apiMocks = vi.hoisted(() => ({
   uploadContentMedia: vi.fn(),
   recordContentShare: vi.fn(),
 }));
+const guestEntitlement = vi.hoisted(() => ({ canUseGuestLists: false }));
 
 vi.mock("qrcode", () => ({
   default: { toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,cXI=") },
@@ -34,7 +35,7 @@ vi.mock("../lib/api", async () => {
   return { ...actual, ...apiMocks };
 });
 vi.mock("../lib/useGuestListEntitlement", () => ({
-  useGuestListEntitlement: () => ({ canUseGuestLists: false }),
+  useGuestListEntitlement: () => guestEntitlement,
 }));
 
 function providers(children: ReactNode, initialEntry: string) {
@@ -52,6 +53,7 @@ function providers(children: ReactNode, initialEntry: string) {
 
 beforeEach(() => {
   window.localStorage.clear();
+  guestEntitlement.canUseGuestLists = false;
   apiMocks.getUserSession.mockReturnValue(null);
   apiMocks.listPublicFaqs.mockResolvedValue([]);
   apiMocks.listReportRules.mockResolvedValue([]);
@@ -171,7 +173,11 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
     apiMocks.listContentComments.mockResolvedValue([{
       id: "post-1", targetId: "place-1", targetType: "place", parentId: null, authorId: "member-2",
       author: { id: "member-2", name: "Deniz", username: "deniz" }, body: "Topluluk buluşması için güzel bir post.",
-      likeCount: 2, createdAt: "2026-08-28T00:00:00.000Z", replies: [], media: [],
+      likeCount: 2, createdAt: "2026-08-28T00:00:00.000Z", media: [], replies: [{
+        id: "reply-1", targetId: "place-1", targetType: "place", parentId: "post-1", authorId: "member-3",
+        author: { id: "member-3", name: "Ece", username: "ece", avatarUrl: "/uploads/ece.webp" }, body: "Ben de katılacağım.",
+        likeCount: 0, createdAt: "2026-08-28T00:05:00.000Z", replies: [], media: [],
+      }],
     }]);
     render(providers(<ContentComments targetId="place-1" targetType="place" title="Mekân postları" />, "/places/demo"));
 
@@ -179,6 +185,45 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
     expect(screen.getByRole("dialog", { name: "Paylaş" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Bağlantıyı kopyala" })).toBeVisible();
     expect(screen.getByRole("button", { name: "QR kodu" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Ece profilini aç" })).toHaveAttribute("href", "/users/ece");
+    expect(screen.getByRole("link", { name: "@ece" })).toHaveAttribute("href", "/users/ece");
+    expect(screen.getByText("Ben de katılacağım.")).toBeVisible();
+    expect(within(screen.getByText("Ben de katılacağım.").closest("article")!).queryByRole("button", { name: "Paylaş" })).not.toBeInTheDocument();
+  });
+
+  it("yönetici post aksiyonlarında mesaj, yasaklama, Guest List, rapor ve silmeyi; yanıtta paylaşım olmadan sunar", async () => {
+    guestEntitlement.canUseGuestLists = true;
+    apiMocks.getUserSession.mockReturnValue({ id: "manager-1", name: "Ada", username: "ada", role: "user", status: "active" });
+    apiMocks.listGuestLists.mockResolvedValue([{ id: "list-1", name: "VIP", members: [] }]);
+    apiMocks.listContentComments.mockResolvedValue([{
+      id: "post-actions", targetId: "event-1", targetType: "event", parentId: null, authorId: "member-2",
+      author: { id: "member-2", name: "Deniz", username: "deniz" }, body: "Etkinlik postu", likeCount: 3,
+      createdAt: "2026-08-28T00:00:00.000Z", media: [], replies: [{
+        id: "reply-actions", targetId: "event-1", targetType: "event", parentId: "post-actions", authorId: "member-3",
+        author: { id: "member-3", name: "Ece", username: "ece" }, body: "Alt yorum", likeCount: 0,
+        createdAt: "2026-08-28T00:05:00.000Z", media: [], replies: [],
+      }],
+    }]);
+    const { container } = render(providers(
+      <ContentComments canManage organizerId="manager-1" targetId="event-1" targetType="event" title="Etkinlik postları" />,
+      "/events/demo",
+    ));
+
+    await screen.findByText("Etkinlik postu");
+    const post = container.querySelector<HTMLElement>("#post-post-actions")!;
+    const postActions = post.querySelector<HTMLElement>(":scope > div > .comment-actions")!;
+    expect(within(postActions).getByRole("button", { name: "Paylaş" })).toBeVisible();
+    await userEvent.click(within(postActions).getByRole("button", { name: "Yorum aksiyonları" }));
+    expect(within(postActions).getByRole("link", { name: "Mesaj gönder" })).toHaveAttribute("href", "/messages?peer=member-2");
+    expect(within(postActions).getByRole("button", { name: "Etkinliğe yasakla" })).toBeVisible();
+    expect(within(postActions).getByRole("button", { name: "Rapor et" })).toBeVisible();
+    expect(within(postActions).getByRole("button", { name: "Sil" })).toBeVisible();
+    await userEvent.click(within(postActions).getByRole("button", { name: "Misafir listesine ekle" }));
+    const guestDialog = await screen.findByRole("dialog", { name: "Misafir listesine ekle" });
+    expect(await within(guestDialog).findByRole("button", { name: /VIP/ })).toHaveTextContent("0 kişi");
+
+    const reply = post.querySelector<HTMLElement>(".comment-reply")!;
+    expect(within(reply).queryByRole("button", { name: "Paylaş" })).not.toBeInTheDocument();
   });
 });
 
