@@ -6,8 +6,8 @@ Bu matris kaynak listedeki her ana maddeyi ayrı satırda tutar. Kod/UI/test ve 
 
 | No | Kısa gereksinim | Durum | Birincil kanıt |
 | ---: | --- | --- | --- |
-| 1 | 1- Login kullanicilarin headerindaki Diger menusunun altindaki “Uye karti” ve “Biletlerim"" de | Kod/UI doğrulandı; deploy edildi | `apps/web/src/components/AppLayout.tsx`, `apps/web/src/styles.css` |
-| 2 | Login kullanicilarin headerindaki ""Ara"" butonunun yanindaki ""dil secenekleri"" kaldirilacak. | Kod/UI doğrulandı; deploy edildi | `apps/web/src/components/AppLayout.tsx`, `apps/web/src/styles.css` |
+| 1 | 1- Login kullanicilarin headerindaki Diger menusunun altindaki “Uye karti” ve “Biletlerim"" de | Kesin UI testi doğrulandı; deploy edildi | `requirements-ui.spec.tsx`: masaüstü navigasyon sırası Akış/Etkinlikler/İlgi alanları/Mekânlar/Üyeler/Mesajlar; “Diğer” yok; Üye kartı ve Biletlerim profil menüsünde; mobilde “Üyeler ve Listeler” doğrulanır |
+| 2 | Login kullanicilarin headerindaki ""Ara"" butonunun yanindaki ""dil secenekleri"" kaldirilacak. | Kesin UI testi doğrulandı; deploy edildi | `requirements-ui.spec.tsx`: oturumlu masaüstü üst aksiyonlarında dil seçici yok; dil seçimi profil menüsünde ve mobil menüde korunur |
 | 3 | https://konnektora.com/community sayfasinda "Populer" sekmesinden once "New members" sekmesi olsun.  | UI + API testi doğrulandı; deploy edildi | `CommunityPage.tsx`, `social.service.ts`; `community-related-users-ui.spec.tsx` sekme sırasını/kart aksiyonlarını, `social.service.spec.ts` en yeni 200 aktif üye sırasını, engel hariç tutmayı, takip ve ortak ilgi bağlamını doğrular |
 | 4 | Illgi Alani Detay Sayfasindan Erisiilen "Etiket ile ilgili kullanicilar sayfasinda"ki filtreleme ele | UI testi doğrulandı; deploy edildi | `RelatedUsersPage.tsx`, `community-related-users-ui.spec.tsx`: filtrelerin kapalı “Filtrele” alanında olması ve etiket sayfasında yönetici/check-in sekmelerinin bulunmaması |
 | 5 | Illgi Alani Detay Sayfasindan Erisiilen "Etiket ile ilgili kullanicilar sayfasinda"ki kullanici adi  | UI testi doğrulandı; deploy edildi | `RelatedUsersPage.tsx`, `community-related-users-ui.spec.tsx`: username bağlantısı ve kart aksiyonları |

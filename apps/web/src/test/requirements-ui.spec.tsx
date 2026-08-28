@@ -283,6 +283,15 @@ describe("157 maddelik listenin kritik web davranışları", () => {
     const desktopIdentity = document.querySelector(".corp-user-links");
     expect(desktopIdentity?.querySelector(".corp-user-identity")?.textContent).toContain("@kadir");
     expect(desktopIdentity?.querySelector(".corp-topbar-notifications")?.textContent).toContain("Bildirimler");
+    const desktopNavLinks = [...document.querySelectorAll<HTMLAnchorElement>(".corp-nav > a")].map((link) => link.getAttribute("href"));
+    expect(desktopNavLinks).toEqual(["/feed", "/events", "/tags", "/places", "/community", "/messages"]);
+    expect(document.querySelector(".corp-topbar-actions > .language-switch")).not.toBeInTheDocument();
+    expect(document.querySelector(".corp-nav")?.textContent).not.toContain("Diğer");
+    await userEvent.click(screen.getByLabelText("Profil menüsünü aç"));
+    expect(screen.getAllByRole("link", { name: "Üye kartı" }).some((link) => link.getAttribute("href") === "/identity")).toBe(true);
+    expect(screen.getAllByRole("link", { name: "Biletlerim" }).some((link) => link.getAttribute("href") === "/tickets")).toBe(true);
+    const mobileMenu = document.querySelector(".corp-mobile-menu-panel");
+    expect(mobileMenu?.querySelector('a[href="/community"]')?.textContent).toContain("Üyeler ve Listeler");
 
     scrollTo.mockClear();
     await userEvent.click(screen.getAllByRole("link", { name: /Etkinlikler/ })[0]!);
