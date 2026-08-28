@@ -18,6 +18,7 @@ const apiMocks = vi.hoisted(() => ({
   getPrivacySettings: vi.fn(),
   getProfileAffinities: vi.fn(),
   getPublicProfile: vi.fn(),
+  getPublicProfileById: vi.fn(),
   getUserSession: vi.fn(),
   listBlocks: vi.fn(),
   listFollowing: vi.fn(),
@@ -201,6 +202,45 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     expect(followers).toHaveClass("tooltip-open");
     expect(followers).toHaveAttribute("aria-expanded", "true");
     expect(document.querySelector(".profile-privacy-toast")).not.toBeInTheDocument();
+  });
+
+  it("kullanıcının kendi kimlik rotasında profilini kayıp saymadan açar", async () => {
+    const session = {
+      id: "member-self",
+      name: "Ada Yılmaz",
+      username: "ada",
+      role: "user",
+      status: "active",
+      accountType: "individual",
+      onboardingCompleted: true,
+    };
+    apiMocks.getUserSession.mockReturnValue(session);
+    apiMocks.getPublicProfileById.mockResolvedValue({
+      id: session.id,
+      name: session.name,
+      username: session.username,
+      accountType: "individual",
+      verified: false,
+      followerCount: 42,
+      followingCount: 17,
+      city: "İstanbul",
+      country: "Türkiye",
+      media: [],
+      interests: [],
+      events: [],
+      places: [],
+      relationship: { isSelf: true, following: false, canMessage: false },
+    });
+
+    render(providers(
+      <Routes><Route path="/users/id/:userId" element={<PublicProfilePage />} /></Routes>,
+      `/users/id/${session.id}`,
+    ));
+
+    expect(await screen.findByRole("heading", { name: session.name })).toBeVisible();
+    expect(apiMocks.getPublicProfileById).toHaveBeenCalledWith(session.id);
+    expect(screen.queryByRole("heading", { name: "Profil bulunamadı" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "İlgi alanları" }).closest("section")).toHaveAttribute("id", "interests");
   });
 
   it("sonuç bulunamadığında etiket oluşturma açıklamasını ve doğrudan oluşturma bağlantısını gösterir", async () => {

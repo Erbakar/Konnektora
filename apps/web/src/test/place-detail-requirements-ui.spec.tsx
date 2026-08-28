@@ -118,4 +118,46 @@ describe("mekân detay gereksinimleri", () => {
     await userEvent.click(screen.getByRole("button", { name: "Gönder" }));
     await waitFor(() => expect(apiMocks.createContentComment).toHaveBeenCalledWith("place", "place-1", "Harika mekân"));
   });
+
+  it("diğer mekân önerilerini aşağı taşırmadan yatay alanda en fazla sekiz kartla sınırlar", async () => {
+    const relatedPlaces = Array.from({ length: 10 }, (_, index) => ({
+      id: `related-${index + 1}`,
+      name: `Önerilen Mekân ${index + 1}`,
+      slug: `onerilen-mekan-${index + 1}`,
+      description: "Topluluk mekânı",
+      placeType: "community",
+      visibility: "open",
+      status: "active",
+      coverImageUrl: null,
+      country: "Türkiye",
+      city: "İstanbul",
+      address: "Beyoğlu",
+      latitude: 41.03,
+      longitude: 28.98,
+      followerCount: 10 - index,
+      inviteCount: 0,
+      memberCount: 10 - index,
+      followingMemberCount: 0,
+      upcomingEventCount: 0,
+      tags: [],
+    }));
+    apiMocks.listPlaces.mockResolvedValue({ items: relatedPlaces, page: 1, pageSize: 20, total: 10, hasNextPage: false });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <LanguageProvider>
+          <MemoryRouter initialEntries={["/places/konnektora-studio-310001"]}>
+            <Routes><Route path="/places/:slug" element={<PlaceDetailPage />} /></Routes>
+          </MemoryRouter>
+        </LanguageProvider>
+      </QueryClientProvider>,
+    );
+
+    const recommendations = (await screen.findByRole("heading", { name: "İlginizi çekebilecek diğer mekânlar" })).closest("section")!;
+    const carousel = recommendations.querySelector(".recommendation-carousel")!;
+    expect(carousel).toHaveClass("event-grid", "place-grid", "recommendation-carousel");
+    expect(carousel.children).toHaveLength(8);
+    expect(within(carousel as HTMLElement).getByRole("link", { name: "Önerilen Mekân 8" })).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Önerilen Mekân 9" })).not.toBeInTheDocument();
+  });
 });

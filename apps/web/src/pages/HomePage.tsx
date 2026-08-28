@@ -220,24 +220,24 @@ export function HomePage() {
     : language === "tr"
       ? user.accountType === "corporate"
         ? [
-            <><Link to={`/users/id/${user.id}`}>Profiline etiketler ekle</Link>yerek devam et; çalıştığın sanatçı ve markaların <Link to="/tags">etiket sayfalarına</Link> içerik yazmayı unutma.</>,
+            <>Profiline <Link to={`/users/id/${user.id}#interests`}>etiketler ekleyerek</Link> devam et; çalıştığın sanatçı ve markaların <Link to="/tags">etiket sayfalarına</Link> içerik yazmayı unutma.</>,
             <>Mekânlarını oluştur, ayarlarını kişiselleştir ve <Link to="/contacts">bağlantılarını buraya taşı</Link>.</>,
             <><Link to="/finance/kyc">Kimliğini güvenle doğrula</Link>, doğrulanmış simgesini kazan ve sunduğumuz hizmetler için <Link to="/business">İşletmeler için</Link> sayfasını incele.</>,
           ]
         : [
-            <>Üyesin; şimdi içerideki <Link to="/contacts">arkadaşlarını bul ve diğerlerini davet et</Link>.</>,
-            <>Kendin ile arkadaşlarının profillerine <Link to={`/users/id/${user.id}`}>etiketler ekle</Link>yerek tarzınızı ifade edin; sevdiğiniz mekânları takip edin.</>,
+            <>Üyesin; şimdi içerideki <Link to="/contacts">arkadaşlarını bul ve davet et</Link>.</>,
+            <>Kendin ile arkadaşlarının profillerine <Link to={`/users/id/${user.id}#interests`}>etiketler ekleyerek</Link> kendini ve tarzlarınızı ifade edin; sevdiğiniz mekânları takip edin.</>,
             <><Link to="/settings">Ayarlarını kişiselleştirerek</Link> tercihlerine göre sosyalleşmeye başla.</>,
           ]
       : user.accountType === "corporate"
         ? [
-            <>Start by <Link to={`/users/id/${user.id}`}>adding tags to your profile</Link>, and contribute to the <Link to="/tags">tag pages</Link> for the artists and brands you work with.</>,
+            <>Start by <Link to={`/users/id/${user.id}#interests`}>adding tags to your profile</Link>, and contribute to the <Link to="/tags">tag pages</Link> for the artists and brands you work with.</>,
             <>Create your venues, personalize their settings and <Link to="/contacts">bring your connections here</Link>.</>,
             <><Link to="/finance/kyc">Verify your identity securely</Link>, earn the verified badge and explore our <Link to="/business">For business</Link> services.</>,
           ]
         : [
             <>You are in; now <Link to="/contacts">find friends already here and invite others</Link>.</>,
-            <>Express your style by <Link to={`/users/id/${user.id}`}>adding tags</Link> to your profile and your friends' profiles, and follow the venues you like.</>,
+            <>Express your style by <Link to={`/users/id/${user.id}#interests`}>adding tags</Link> to your profile and your friends' profiles, and follow the venues you like.</>,
             <>Personalize your <Link to="/settings">settings</Link> and start connecting based on your preferences.</>,
           ];
 
@@ -607,7 +607,7 @@ export function HomePage() {
         </div>
         <div className="corp-cta-memberships"><button className="corp-btn corp-btn-light" onClick={() => user ? setSignupChoice("individual") : navigateToSignup("individual")} type="button">{language === "tr" ? "Bireysel üyelik" : "Individual membership"}<ArrowRight size={18}/></button><button className="corp-btn corp-btn-light" onClick={() => user ? setSignupChoice("corporate") : navigateToSignup("corporate")} type="button">{language === "tr" ? "Kurumsal üyelik" : "Business membership"}<ArrowRight size={18}/></button></div>
       </section>
-      {signupChoice ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setSignupChoice(null)}><section aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><h2>{language === "tr" ? "Zaten üyesiniz" : "You are already a member"}</h2><p>{language === "tr" ? "Farklı bir üyelik için çıkış yapmak ister misiniz?" : "Would you like to log out and choose a different membership?"}</p><div className="row-actions"><button aria-label={language === "tr" ? "Kapat" : "Close"} className="ghost-action" onClick={() => setSignupChoice(null)} type="button">{language === "tr" ? "Vazgeç" : "Cancel"}</button><button className="primary-action" onClick={() => { const choice = signupChoice; clearUserSession(); navigateToSignup(choice); }} type="button">{language === "tr" ? "Çıkış yap" : "Log out"}</button></div></section></div> : null}
+      {signupChoice ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setSignupChoice(null)}><section aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><h2>{language === "tr" ? "Zaten üyesiniz" : "You are already a member"}</h2><p>{language === "tr" ? "Farklı bir üyelik için çıkış yapmak ister misiniz?" : "Would you like to log out and choose a different membership?"}</p><div className="row-actions"><button aria-label={language === "tr" ? "Vazgeç" : "Cancel"} className="ghost-action" onClick={() => setSignupChoice(null)} type="button">{language === "tr" ? "Vazgeç" : "Cancel"}</button><button className="primary-action" onClick={() => { const choice = signupChoice; clearUserSession(); navigateToSignup(choice); }} type="button">{language === "tr" ? "Çıkış yap" : "Log out"}</button></div></section></div> : null}
     </div>
   );
 }

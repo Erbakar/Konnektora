@@ -217,6 +217,45 @@ describe("157 maddelik listenin kritik web davranışları", () => {
     expect(screen.queryByText("Eski üye alanı")).not.toBeInTheDocument();
   });
 
+  it("oturumlu başlıkta yalnız kullanıcı adını gösterir, bildirimleri altında tutar ve rota değişince sayfanın başına döner", async () => {
+    window.sessionStorage.setItem("konnektora:location-intro", "seen");
+    const scrollTo = vi.spyOn(window, "scrollTo");
+    apiMocks.getUserSession.mockReturnValue({
+      id: "member-1",
+      name: "Kadir Erbakar",
+      username: "kadir",
+      email: "kadir@example.com",
+      role: "user",
+      status: "active",
+      accountType: "individual",
+      onboardingCompleted: true,
+    });
+
+    render(providers(
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route path="/feed" element={<div>Akış içeriği</div>} />
+          <Route path="/events" element={<div>Etkinlik içeriği</div>} />
+        </Route>
+      </Routes>,
+      ["/feed"],
+    ));
+
+    expect((await screen.findAllByText("@kadir")).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("Kadir Erbakar")).not.toBeInTheDocument();
+    expect(screen.queryByText("kadir@example.com")).not.toBeInTheDocument();
+    const desktopIdentity = document.querySelector(".corp-user-links");
+    expect(desktopIdentity?.querySelector(".corp-user-identity")?.textContent).toContain("@kadir");
+    expect(desktopIdentity?.querySelector(".corp-topbar-notifications")?.textContent).toContain("Bildirimler");
+
+    scrollTo.mockClear();
+    await userEvent.click(screen.getAllByRole("link", { name: /Etkinlikler/ })[0]!);
+    expect(await screen.findByText("Etkinlik içeriği")).toBeVisible();
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: "auto" });
+    expect(screen.queryByRole("link", { name: "Etkinlikleri keşfet" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Topluluğa katıl" })).not.toBeInTheDocument();
+  });
+
   it("etkinlik kartında görünürlük, zaman, konum ve topluluk özetini birlikte gösterir", async () => {
     const event: Event = {
       ...mockEvents[0]!,
