@@ -252,6 +252,23 @@ export class ContentService {
   }
 
   async createReaction(input: CreateReactionDto, user: User) {
+    if (input.reaction.startsWith("rating_")) {
+      if (!["event", "place"].includes(input.targetType)) throw new BadRequestException("Puanlama yalnız etkinlik ve mekânlar için kullanılabilir.");
+      if (!/^rating_[1-5]$/.test(input.reaction)) throw new BadRequestException("Puan 1 ile 5 arasında olmalıdır.");
+      const targetExists = input.targetType === ReportTargetType.event
+        ? await this.prisma.event.findUnique({ where: { id: input.targetId }, select: { id: true } })
+        : await this.prisma.place.findUnique({ where: { id: input.targetId }, select: { id: true } });
+      if (!targetExists) throw new NotFoundException(input.targetType === ReportTargetType.event ? "Etkinlik bulunamadı." : "Mekân bulunamadı.");
+      await this.prisma.$transaction([
+        this.prisma.contentReaction.deleteMany({
+          where: { targetType: input.targetType, targetId: input.targetId, userId: user.id, reaction: { startsWith: "rating_" } },
+        }),
+        this.prisma.contentReaction.create({
+          data: { targetType: input.targetType, targetId: input.targetId, user: { connect: { id: user.id } }, reaction: input.reaction },
+        }),
+      ]);
+      return { targetType: input.targetType, targetId: input.targetId, reaction: input.reaction };
+    }
     return this.prisma.contentReaction.upsert({
       where: {
         targetType_targetId_userId_reaction: {

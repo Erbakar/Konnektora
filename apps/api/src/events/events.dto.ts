@@ -28,8 +28,8 @@ import { Type } from "class-transformer";
 
 export class EventQueryDto {
   @IsOptional()
-  @IsIn(["popular", "following", "for_you", "mine", "invited", "individual"])
-  scope?: "popular" | "following" | "for_you" | "mine" | "invited" | "individual";
+  @IsIn(["near", "popular", "following", "for_you", "mine", "invited", "individual"])
+  scope?: "near" | "popular" | "following" | "for_you" | "mine" | "invited" | "individual";
 
   @IsOptional()
   @IsString()

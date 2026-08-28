@@ -24,8 +24,6 @@ import {
   getUserSession,
   listFollowing,
   listGuestLists,
-  listMyEvents,
-  listMyPlaces,
   listContentComments,
   uploadContentMedia,
   toggleContentCommentLike,
@@ -42,6 +40,7 @@ import { userProfilePath } from "./UserIdentityLink";
 import { ReportDialog } from "./ReportDialog";
 import { ComposerTips } from "./ComposerTips";
 import { useLanguage } from "../lib/i18n";
+import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
 export function ContentComments({
   targetType,
@@ -73,23 +72,7 @@ export function ContentComments({
     queryKey: ["content-comments", targetType, targetId],
     queryFn: () => listContentComments(targetType, targetId),
   });
-  const managedEvents = useQuery({
-    queryKey: ["my-events", user?.id, "comment-guest-permission"],
-    queryFn: listMyEvents,
-    enabled: Boolean(user && targetType === "tag_comment"),
-  });
-  const managedPlaces = useQuery({
-    queryKey: ["my-places", user?.id, "comment-guest-permission"],
-    queryFn: listMyPlaces,
-    enabled: Boolean(user && targetType === "tag_comment"),
-  });
-  const canAddGuest = Boolean(
-    user && (
-      canManage ||
-      ["admin", "super_admin", "curator"].includes(user.role) ||
-      (targetType === "tag_comment" && ((managedEvents.data?.length ?? 0) > 0 || (managedPlaces.data?.length ?? 0) > 0))
-    ),
-  );
+  const { canUseGuestLists: canAddGuest } = useGuestListEntitlement(canManage);
   useEffect(() => {
     if (!comments.data || !window.location.hash.startsWith("#post-")) return;
     window.requestAnimationFrame(() =>
@@ -459,7 +442,7 @@ function CommentActions({
         await updateEventParticipantStatus(
           comment.targetId,
           comment.authorId!,
-          banned ? "accepted" : "rejected",
+          banned ? "accepted" : "banned",
           "user",
         );
     },

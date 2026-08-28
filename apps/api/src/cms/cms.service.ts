@@ -206,6 +206,8 @@ export class CmsService {
       data: {
         title: input.title.trim(),
         body: input.body.trim(),
+        titleEn: input.titleEn.trim(),
+        bodyEn: input.bodyEn.trim(),
         target: input.target ?? "all",
         targetLastLoginFrom: input.targetLastLoginFrom ? new Date(input.targetLastLoginFrom) : null,
         targetLastLoginTo: input.targetLastLoginTo ? new Date(input.targetLastLoginTo) : null,
@@ -231,6 +233,8 @@ export class CmsService {
       data: {
         title: input.title?.trim(),
         body: input.body?.trim(),
+        titleEn: input.titleEn === undefined ? undefined : input.titleEn.trim() || null,
+        bodyEn: input.bodyEn === undefined ? undefined : input.bodyEn.trim() || null,
         target: input.target,
         targetLastLoginFrom:
           input.targetLastLoginFrom === undefined ? undefined : input.targetLastLoginFrom ? new Date(input.targetLastLoginFrom) : null,

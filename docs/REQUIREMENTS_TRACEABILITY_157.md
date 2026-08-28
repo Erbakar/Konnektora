@@ -1,6 +1,8 @@
 # 157 madde izlenebilirlik matrisi
 
-Bu matris kaynak listedeki her ana maddeyi ayrı satırda tutar. “Yerel doğrulandı” ifadesi yalnız kod, veri modeli, otomatik test veya yerel tarayıcı kanıtını ifade eder; deploy ve canlı kabul testi yapılmadan madde nihai olarak kapatılmaz.
+> **Geçici denetim kaydı — tamamlanma beyanı değildir.** Bu tablodaki “yerel doğrulandı” satırları canlı sağlayıcı, migration, mobil cihaz ve üretim kabul testleri tamamlanmadan kapalı sayılamaz. Google Contacts OAuth, gerçek SMS gönderimi ve fiziksel QR/NFC iki-cihaz kabulü açık kalemlerdir. Kaynak listenin 133. maddesindeki finans modülü kapsamı ise dokümanda açıkça “içeriği belli değil” olarak bırakılmıştır.
+
+Bu matris kaynak listedeki her ana maddeyi ayrı satırda tutar. “Yerel doğrulandı” ifadesi yalnız kod, veri modeli, otomatik test veya yerel tarayıcı kanıtını ifade eder; deploy ve canlı kabul testi yapılmadan madde nihai olarak kapatılmaz. Bir arayüz elemanının görünmesi tek başına kanıt sayılmaz; servis davranışı ve yetki testi de gerekir.
 
 | No | Kısa gereksinim | Durum | Birincil kanıt |
 | ---: | --- | --- | --- |

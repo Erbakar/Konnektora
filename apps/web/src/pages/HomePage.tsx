@@ -208,7 +208,7 @@ export function HomePage() {
     void announcementRevision;
     return announcement.target === "all" && !localStorage.getItem(`konnektora_announcement_done_${announcement.id}`) && !sessionStorage.getItem(`konnektora_announcement_later_${announcement.id}`);
   });
-  const announcementCopy = activeAnnouncement ? localizeAnnouncement(activeAnnouncement.title, activeAnnouncement.body, language) : null;
+  const announcementCopy = activeAnnouncement ? localizeAnnouncement(activeAnnouncement.title, activeAnnouncement.body, language, activeAnnouncement.titleEn, activeAnnouncement.bodyEn) : null;
   const dismissAnnouncement = (mode: "done" | "later") => {
     if (!activeAnnouncement) return;
     const storage = mode === "done" ? localStorage : sessionStorage;
@@ -616,7 +616,7 @@ function navigateToSignup(account: "individual" | "corporate") {
   window.location.assign(publicSiteHref(`/onboarding?account=${account}`));
 }
 
-function localizeAnnouncement(title: string, body: string, language: "tr" | "en") {
+function localizeAnnouncement(title: string, body: string, language: "tr" | "en", titleEn?: string | null, bodyEn?: string | null) {
   const normalizedTitle = title
     .toLocaleLowerCase("tr-TR")
     .replaceAll("ı", "i")
@@ -651,8 +651,8 @@ function localizeAnnouncement(title: string, body: string, language: "tr" | "en"
   }
   return {
     eyebrow: language === "tr" ? "Topluluk duyurusu" : "Community update",
-    title,
-    body,
+    title: language === "en" ? titleEn?.trim() || title : title,
+    body: language === "en" ? bodyEn?.trim() || body : body,
     primaryLabel: language === "tr" ? "Anladım" : "Got it",
     primaryHref: null,
     highlights: null,

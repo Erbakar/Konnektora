@@ -46,8 +46,6 @@ import {
   likeTagComment,
   listFollowing,
   listEvents,
-  listMyEvents,
-  listMyPlaces,
   listGuestLists,
   listTagComments,
   listTagRelatedUsers,
@@ -61,6 +59,7 @@ import {
   uploadTagCommentMedia,
 } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
+import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
 export function TagsPage() {
   const { language } = useLanguage();
@@ -71,6 +70,7 @@ export function TagsPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const user = getUserSession();
+  const { canUseGuestLists } = useGuestListEntitlement();
   const client = useQueryClient();
   const [query, setQuery] = useState(() => searchParams.get("create") ?? "");
   const [directoryFilters, setDirectoryFilters] = useState({
@@ -134,20 +134,10 @@ export function TagsPage() {
     queryFn: listFollowing,
     enabled: Boolean(user),
   });
-  const managedEvents = useQuery({
-    queryKey: ["my-events", user?.id],
-    queryFn: listMyEvents,
-    enabled: Boolean(user),
-  });
-  const managedPlaces = useQuery({
-    queryKey: ["my-places", user?.id, "tag-post-guest-permission"],
-    queryFn: listMyPlaces,
-    enabled: Boolean(user),
-  });
   const namedGuestLists = useQuery({
     queryKey: ["guest-lists", user?.id, "tag-post"],
     queryFn: listGuestLists,
-    enabled: Boolean(user && guestAuthor),
+    enabled: Boolean(user && canUseGuestLists && guestAuthor),
   });
   const notificationQuery = useQuery({
     queryKey: ["content-notification", "tag", tag?.id],
@@ -254,13 +244,6 @@ export function TagsPage() {
   );
   const followingIds = new Set(
     (following.data ?? []).map((member) => member.id),
-  );
-  const canUseGuestLists = Boolean(
-    user && (
-      ["admin", "super_admin", "curator"].includes(user.role) ||
-      (managedEvents.data?.length ?? 0) > 0 ||
-      (managedPlaces.data?.length ?? 0) > 0
-    ),
   );
   const visibleComments = [...(comments.data ?? [])]
     .filter((comment) => {
@@ -442,7 +425,7 @@ export function TagsPage() {
             {t("Paylaş", "Share")}
           </button>
           <details className="detail-action-menu"><summary aria-label={t("Etiket işlemleri", "Tag actions")}><MoreVertical size={20}/></summary><div>
-            {user && ["admin", "super_admin", "curator"].includes(user.role) ? <Link to={`/stats/tag/${tag.id}`}><Eye size={17}/>{t("Etkileşim istatistikleri", "Engagement statistics")}</Link> : null}
+            <Link to={user ? `/stats/tag/${tag.id}` : `/login?next=${encodeURIComponent(`/stats/tag/${tag.id}`)}`}><Eye size={17}/>{t("Etkileşim istatistikleri", "Engagement statistics")}</Link>
             {user ? <button onClick={() => setReportTarget({ type: "tag", id: tag.id })}><Flag size={17}/>{t("Etiketi rapor et", "Report tag")}</button> : null}
           </div></details>
         </div>

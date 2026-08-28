@@ -667,6 +667,8 @@ model Announcement {
   id                  String    @id @default(uuid())
   title               String
   body                String
+  titleEn             String?   @map("title_en")
+  bodyEn              String?   @map("body_en")
   target              String    @default("all")
   targetLastLoginFrom DateTime? @map("target_last_login_from")
   targetLastLoginTo   DateTime? @map("target_last_login_to")

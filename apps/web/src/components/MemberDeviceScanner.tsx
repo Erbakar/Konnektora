@@ -2,15 +2,13 @@ import type { IScannerControls } from "@zxing/browser";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Camera,
-  Check,
-  Keyboard,
   Nfc,
   QrCode,
   ScanLine,
   WifiOff,
   X,
 } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { scanMember } from "../lib/api";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
@@ -46,7 +44,7 @@ export function MemberDeviceScanner({
   const qrControls = useRef<IScannerControls | null>(null);
   const nfcAbort = useRef<AbortController | null>(null);
   const lastPayload = useRef("");
-  const [mode, setMode] = useState<"idle" | "qr" | "nfc" | "manual">("idle");
+  const [mode, setMode] = useState<"idle" | "qr" | "nfc">("idle");
   const [notice, setNotice] = useState("");
   const scan = useMutation({
     mutationFn: ({
@@ -123,7 +121,7 @@ export function MemberDeviceScanner({
       setMode("idle");
       setNotice(
         error instanceof Error && error.name === "NotAllowedError"
-          ? t("Kamera izni verilmedi. Tarayıcı ayarlarından kameraya izin ver veya manuel girişi kullan.", "Camera permission was denied. Allow camera access in your browser settings or use manual entry.")
+          ? t("Kamera izni verilmedi. Tarayıcı ayarlarından kameraya izin ver veya NFC taramasını kullan.", "Camera permission was denied. Allow camera access in your browser settings or use NFC scanning.")
           : t("QR kamerası başlatılamadı. HTTPS bağlantısını ve kamera desteğini kontrol et.", "The QR camera could not start. Check HTTPS and camera support."),
       );
     }
@@ -220,20 +218,6 @@ export function MemberDeviceScanner({
           <strong>{t("NFC oku", "Read NFC")}</strong>
           <small>{t("Telefonları veya etiketi yaklaştır", "Move the phones or tag close together")}</small>
         </button>
-        <button
-          className={
-            mode === "manual" ? "scanner-mode is-active" : "scanner-mode"
-          }
-          onClick={() => {
-            stopDevices();
-            setMode("manual");
-          }}
-          type="button"
-        >
-          <Keyboard />
-          <strong>{t("Manuel", "Manual")}</strong>
-          <small>{t("Kart verisini yapıştır", "Paste the card data")}</small>
-        </button>
       </div>
       {mode === "qr" ? (
         <div className="qr-camera-shell">
@@ -265,31 +249,6 @@ export function MemberDeviceScanner({
             {t("Taramayı durdur", "Stop scanning")}
           </button>
         </div>
-      ) : null}
-      {mode === "manual" ? (
-        <form
-          className="identity-scan-form"
-          onSubmit={(event: FormEvent<HTMLFormElement>) => {
-            event.preventDefault();
-            const form = event.currentTarget;
-            submitPayload(
-              String(new FormData(form).get("payload") ?? ""),
-              "qr",
-            );
-            form.reset();
-          }}
-        >
-          <textarea
-            aria-label={t("Üye kartı verisi", "Member card data")}
-            name="payload"
-            placeholder={t("QR/NFC kart verisini yapıştır", "Paste QR/NFC card data")}
-            required
-            rows={3}
-          />
-          <button className="primary-action" type="submit">
-            <Check size={18} /> {t("Üyeyi bul ve takip et", "Find and follow member")}
-          </button>
-        </form>
       ) : null}
       <div className="nfc-write-row">
         <div>

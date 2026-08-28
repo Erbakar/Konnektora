@@ -7,8 +7,9 @@ import { UserIdentityLink, userProfilePath } from "../components/UserIdentityLin
 import { ReportDialog } from "../components/ReportDialog";
 import { AnnouncementPopup } from "../components/AnnouncementPopup";
 import type { DiscoveryFeed, ReportTargetType, SocialPost } from "@konnektora/shared";
-import { addGuestListMember, archiveMyEvent, archiveMyPlace, createGuestList, createSocialPostComment, deleteSocialPost, followUser, getDiscoveryFeed, getUserSession, listAnnouncements, listFollowing, listGuestLists, listMyEvents, listMyPlaces, listSocialPostComments, listSocialPosts, resolveMediaUrl, toggleSocialPostLike, unfollowUser, updateMyEvent, updateMyPlace, updateSocialPost } from "../lib/api";
+import { addGuestListMember, archiveMyEvent, archiveMyPlace, createGuestList, createSocialPostComment, deleteSocialPost, followUser, getDiscoveryFeed, getUserSession, listAnnouncements, listFollowing, listGuestLists, listSocialPostComments, listSocialPosts, resolveMediaUrl, toggleSocialPostLike, unfollowUser, updateMyEvent, updateMyPlace, updateSocialPost } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
+import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
 const visibilityLabels = {
   tr: { everybody: "Herkes", following: "Takip ettiklerim", network: "Ağım" },
@@ -31,13 +32,7 @@ export function FeedPage() {
     user && (announcement.target === "members" || announcement.target === (user.accountType === "corporate" ? "corporate_members" : "individual_members")),
   );
   const discovery = useQuery({ queryKey: ["discovery-feed", user?.id, time], queryFn: () => getDiscoveryFeed(range) });
-  const managedEvents = useQuery({ queryKey: ["my-events", user?.id, "feed-guest-list-permission"], queryFn: listMyEvents, enabled: Boolean(user) });
-  const managedPlaces = useQuery({ queryKey: ["my-places", user?.id, "feed-guest-list-permission"], queryFn: listMyPlaces, enabled: Boolean(user) });
-  const canUseGuestLists = Boolean(user && (
-    ["admin", "super_admin", "curator"].includes(user.role) ||
-    (managedEvents.data ?? []).some((event) => event.createdById === user.id || ["manager", "organizer"].includes(event.viewerParticipation?.role ?? "")) ||
-    (managedPlaces.data ?? []).some((place) => place.createdById === user.id || ["manager", "organizer"].includes(place.viewerMembership?.role ?? ""))
-  ));
+  const { canUseGuestLists } = useGuestListEntitlement();
   const visiblePosts = feed.data?.items ?? [];
   const activities = (discovery.data?.activities ?? []).filter((item) => contentType === "all" || (contentType === "events" && item.kind === "event") || (contentType === "places" && item.kind === "place") || (contentType === "tags" && item.kind === "tag"));
   const timeline = [

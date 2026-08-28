@@ -33,8 +33,6 @@ import {
   getContentNotification,
   getUserSession,
   addGuestListMember,
-  listMyEvents,
-  listMyPlaces,
   listGuestLists,
   listProfileTagSuggestions,
   setContentNotification,
@@ -45,6 +43,7 @@ import {
   updateProfileAffinities,
 } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
+import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
 function ageFrom(value: string | Date) {
   const birth = new Date(value);
@@ -112,16 +111,7 @@ export function PublicProfilePage() {
     queryFn: () => getContentNotification("user", profile!.id),
     enabled: Boolean(user && profile && !profile.relationship.isSelf),
   });
-  const managedEvents = useQuery({
-    queryKey: ["my-events", user?.id, "profile-guest-list"],
-    queryFn: listMyEvents,
-    enabled: Boolean(user),
-  });
-  const managedPlaces = useQuery({
-    queryKey: ["my-places", user?.id, "profile-guest-list"],
-    queryFn: listMyPlaces,
-    enabled: Boolean(user),
-  });
+  const { canUseGuestLists } = useGuestListEntitlement();
   const namedGuestLists = useQuery({
     queryKey: ["guest-lists", user?.id],
     queryFn: listGuestLists,
@@ -166,11 +156,6 @@ export function PublicProfilePage() {
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["guest-lists", user?.id] }),
   });
-  const canUseGuestLists = Boolean(user && (
-    ["admin", "super_admin", "curator"].includes(user.role) ||
-    (managedEvents.data ?? []).some((event) => event.createdById === user.id || ["manager", "organizer"].includes(event.viewerParticipation?.role ?? "")) ||
-    (managedPlaces.data ?? []).some((place) => place.createdById === user.id || ["manager", "organizer"].includes(place.viewerMembership?.role ?? ""))
-  ));
   const addTagMutation = useMutation({
     mutationFn: async () => {
       let tagId = selectedTagId;
@@ -397,11 +382,9 @@ export function PublicProfilePage() {
                   {canUseGuestLists ? <button onClick={() => setGuestOpen(true)} type="button">
                     <UserPlus size={18} /> {t("Misafir listesine ekle", "Add to guest list")}
                   </button> : null}
-                  {profile.stats ? (
-                    <Link to={`/stats/user/${profile.id}`}>
-                      {t("Etkileşim istatistikleri", "Interaction statistics")}
-                    </Link>
-                  ) : null}
+                  <Link to={`/stats/user/${profile.id}`}>
+                    {t("Etkileşim istatistikleri", "Interaction statistics")}
+                  </Link>
                   <button onClick={() => setShareOpen(true)} type="button">
                     <Share2 size={18} /> {t("Paylaş", "Share")}
                   </button>

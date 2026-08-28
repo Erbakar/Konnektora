@@ -85,6 +85,15 @@ export class CreateAnnouncementDto {
   @MinLength(3)
   body!: string;
 
+  @IsString()
+  @MinLength(3)
+  @MaxLength(160)
+  titleEn!: string;
+
+  @IsString()
+  @MinLength(3)
+  bodyEn!: string;
+
   @IsOptional()
   @IsString()
   @IsIn(["all", "members", "individual_members", "corporate_members", "admins"])
@@ -136,6 +145,17 @@ export class UpdateAnnouncementDto {
   @IsString()
   @MinLength(3)
   body?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(160)
+  titleEn?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  bodyEn?: string;
 
   @IsOptional()
   @IsString()

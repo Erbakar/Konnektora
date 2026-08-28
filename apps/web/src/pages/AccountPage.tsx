@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
-  ClipboardCheck,
   GripVertical,
   LogOut,
   Plus,
@@ -48,7 +47,6 @@ import {
   type RegistrationInput,
   archiveMyEvent,
   checkAvailability,
-  checkInEventParticipant,
   changeEmail,
   changePassword,
   connectSocialAccount,
@@ -91,7 +89,6 @@ import {
   requestPasswordReset,
   reorderProfileMedia,
   resolveMediaUrl,
-  scanEventTicket,
   setUserSession,
   updateEventParticipantStatus,
   updateMyEvent,
@@ -2975,7 +2972,7 @@ function MyEventsPanel({
               </div>
             </div>
             {guestListEventId === event.id ? (
-              <OrganizerGuestList eventId={event.id} />
+              <OrganizerGuestList eventId={event.id} eventSlug={event.slug} />
             ) : null}
           </div>
         ))}
@@ -2989,7 +2986,7 @@ function MyEventsPanel({
   );
 }
 
-function OrganizerGuestList({ eventId }: { eventId: string }) {
+function OrganizerGuestList({ eventId, eventSlug }: { eventId: string; eventSlug: string }) {
   const { language } = useLanguage();
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const queryClient = useQueryClient();
@@ -3025,32 +3022,6 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
       });
     },
   });
-  const checkInMutation = useMutation({
-    mutationFn: (userId: string) =>
-      checkInEventParticipant(eventId, userId, "user"),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["event-participants", eventId, "organizer"],
-      });
-    },
-  });
-  const ticketScanMutation = useMutation({
-    mutationFn: (token: string) => scanEventTicket(eventId, token),
-    onSuccess: () => {
-      setNotice({
-        tone: "success",
-        message: t("QR bilet doğrulandı; katılımcı giriş yaptı.", "The QR ticket was verified and the attendee checked in."),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["event-participants", eventId, "organizer"],
-      });
-    },
-    onError: () =>
-      setNotice({
-        tone: "error",
-        message: t("QR bilet geçersiz, uygun değil veya daha önce kullanılmış.", "The QR ticket is invalid, ineligible or has already been used."),
-      }),
-  });
   const participants = participantsQuery.data ?? [];
 
   function handleInviteSubmit(event: FormEvent<HTMLFormElement>) {
@@ -3062,21 +3033,6 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
       role: String(form.get("role") || "attendee"),
     });
     event.currentTarget.reset();
-  }
-
-  function handleTicketScan(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const rawValue = String(
-      new FormData(formElement).get("ticket") || "",
-    ).trim();
-    let token = rawValue;
-    try {
-      token = new URL(rawValue).searchParams.get("token") ?? rawValue;
-    } catch {
-      // Fiziksel tarayıcı yalnız token döndürüyorsa değer doğrudan kullanılabilir.
-    }
-    ticketScanMutation.mutate(token, { onSuccess: () => formElement.reset() });
   }
 
   return (
@@ -3107,7 +3063,7 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
           {t("Rol", "Role")}
           <select name="role" defaultValue="attendee">
             <option value="attendee">{t("Katılımcı", "Attendee")}</option>
-            <option value="manager">{t("Yönetici", "Manager")}</option>
+            <option value="manager">{t("Sahip", "Owner")}</option>
           </select>
         </label>
         <button
@@ -3119,33 +3075,22 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
           {t("Davet et", "Invite")}
         </button>
       </form>
-      <form className="guest-invite-form" onSubmit={handleTicketScan}>
-        <label>
-          {t("QR bilet verisi", "QR ticket data")}
-          <input
-            name="ticket"
-            placeholder={t("QR kodunu tara veya içeriğini yapıştır", "Scan the QR code or paste its contents")}
-            required
-          />
-        </label>
-        <button
-          className="secondary-action"
-          disabled={ticketScanMutation.isPending}
-          type="submit"
-        >
-          <ClipboardCheck size={16} />
-          {ticketScanMutation.isPending ? t("Doğrulanıyor", "Verifying") : t("QR ile giriş", "Check in with QR")}
-        </button>
-      </form>
+      <div className="guest-invite-form">
+        <p className="form-help">
+          {t("Giriş işlemleri kamera veya NFC taramasıyla açılan Pasaport Kontrol ekranından yapılır.", "Entry decisions are completed in Passport Check after scanning with the camera or NFC.")}
+        </p>
+        <Link className="secondary-action" to={`/events/${eventSlug}/invites#check-in`}>
+          {t("Check-in kontrolünü aç", "Open check-in control")}
+        </Link>
+      </div>
       {notice ? (
         <ServiceFeedback compact message={notice.message} tone={notice.tone} />
       ) : null}
       <div className="guest-list">
         {participants.map((participant) => (
           <OrganizerGuestListRow
-            isPending={statusMutation.isPending || checkInMutation.isPending}
+            isPending={statusMutation.isPending}
             key={participant.id}
-            onCheckIn={() => checkInMutation.mutate(participant.userId)}
             onStatusChange={(status) =>
               statusMutation.mutate({ userId: participant.userId, status })
             }
@@ -3160,13 +3105,11 @@ function OrganizerGuestList({ eventId }: { eventId: string }) {
 
 function OrganizerGuestListRow({
   isPending,
-  onCheckIn,
   onStatusChange,
   participant,
   language,
 }: {
   isPending: boolean;
-  onCheckIn: () => void;
   onStatusChange: (status: string) => void;
   participant: EventParticipant;
   language: "tr" | "en";
@@ -3205,19 +3148,6 @@ function OrganizerGuestListRow({
             </button>
           </>
         ) : null}
-        {(participant.status === "accepted" ||
-          participant.status === "invited") &&
-        !participant.checkedInAt ? (
-          <button
-            className="secondary-action"
-            disabled={isPending}
-            onClick={onCheckIn}
-            type="button"
-          >
-            <ClipboardCheck size={16} />
-            {t("Giriş yap", "Check in")}
-          </button>
-        ) : null}
         {participant.status !== "banned" &&
         participant.status !== "attended" ? (
           <button
@@ -3244,7 +3174,7 @@ function translateParticipationStatus(status: string, language: "tr" | "en") {
 
 function translateParticipationRole(role: string, language: "tr" | "en") {
   const labels: Record<string, [string, string]> = {
-    attendee: ["Katılımcı", "Attendee"], member: ["Üye", "Member"], manager: ["Yönetici", "Manager"],
+    attendee: ["Katılımcı", "Attendee"], member: ["Üye", "Member"], manager: ["Sahip", "Owner"],
     organizer: ["Organizatör", "Organiser"], owner: ["Sahip", "Owner"],
   };
   return labels[role]?.[language === "tr" ? 0 : 1] ?? role;

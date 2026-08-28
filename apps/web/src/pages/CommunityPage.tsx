@@ -3,9 +3,10 @@ import type { MemberCard } from "@konnektora/shared";
 import { CalendarCheck, Mail, MapPin, MoreVertical, Sparkles, UserPlus, UserRound, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { addGuestListMember, createGuestList, followUser, getUserSession, listFollowing, listGuestLists, listMemberSuggestions, listMyEvents, listMyPlaces, listNewMembers, unfollowUser } from "../lib/api";
+import { addGuestListMember, createGuestList, followUser, getUserSession, listFollowing, listGuestLists, listMemberSuggestions, listNewMembers, unfollowUser } from "../lib/api";
 import { UserIdentityLink, userProfilePath } from "../components/UserIdentityLink";
 import { useLanguage } from "../lib/i18n";
+import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
 type DirectoryTab = "new" | "popular" | "following" | "guests" | "mutual";
 function memberAge(value: string | Date) { const birth = new Date(value); const now = new Date(); let age = now.getFullYear() - birth.getFullYear(); if (now.getMonth() < birth.getMonth() || now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate()) age -= 1; return Math.max(0, age); }
@@ -28,14 +29,8 @@ export function CommunityPage() {
   const suggestions = useQuery({ queryKey: ["member-suggestions", user?.id], queryFn: listMemberSuggestions, enabled: Boolean(user) });
   const newMembers = useQuery({ queryKey: ["new-members", user?.id], queryFn: listNewMembers, enabled: Boolean(user) });
   const following = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
-  const managedEvents = useQuery({ queryKey: ["my-events", user?.id, "community-guest-list-permission"], queryFn: listMyEvents, enabled: Boolean(user) });
-  const managedPlaces = useQuery({ queryKey: ["my-places", user?.id, "community-guest-list-permission"], queryFn: listMyPlaces, enabled: Boolean(user) });
-  const guestLists = useQuery({ queryKey: ["guest-lists", user?.id], queryFn: listGuestLists, enabled: Boolean(user && (tab === "guests" || guestTarget)) });
-  const canUseGuestLists = Boolean(user && (
-    ["admin", "super_admin", "curator"].includes(user.role) ||
-    (managedEvents.data ?? []).some((event) => event.createdById === user.id || ["manager", "organizer"].includes(event.viewerParticipation?.role ?? "")) ||
-    (managedPlaces.data ?? []).some((place) => place.createdById === user.id || ["manager", "organizer"].includes(place.viewerMembership?.role ?? ""))
-  ));
+  const { canUseGuestLists } = useGuestListEntitlement();
+  const guestLists = useQuery({ queryKey: ["guest-lists", user?.id], queryFn: listGuestLists, enabled: Boolean(user && canUseGuestLists && (tab === "guests" || guestTarget)) });
   const followingIds = useMemo(() => new Set((following.data ?? []).map((member) => member.id)), [following.data]);
   const guestMembers = useMemo(() => deduplicateGuests(guestLists.data ?? [], followingIds), [guestLists.data, followingIds]);
   const members: GuestMember[] = tab === "new"
@@ -63,10 +58,10 @@ export function CommunityPage() {
       <button className={tab === "new" ? "active" : ""} onClick={() => setTab("new")}><Sparkles size={17}/> {c.new}</button>
       <button className={tab === "popular" ? "active" : ""} onClick={() => setTab("popular")}><Users size={17}/> {c.popular}</button>
       <button className={tab === "following" ? "active" : ""} onClick={() => setTab("following")}><UserRound size={17}/> {c.following}</button>
-      <button className={tab === "guests" ? "active" : ""} onClick={() => setTab("guests")}><CalendarCheck size={17}/> {c.guests}</button>
+      {canUseGuestLists ? <button className={tab === "guests" ? "active" : ""} onClick={() => setTab("guests")}><CalendarCheck size={17}/> {c.guests}</button> : null}
       <button className={tab === "mutual" ? "active" : ""} onClick={() => setTab("mutual")}><Sparkles size={17}/> {c.mutual}</button>
     </div>
-    {pending ? <div className="feed-state">{c.loading}</div> : members.length ? <section className="community-grid">{members.map((member) => <article className="community-card" key={member.id}>
+    {tab === "guests" && !canUseGuestLists ? <div className="feed-state"><strong>{language === "tr" ? "Guest List erişimi için uygun paket gerekli." : "An eligible plan is required for Guest Lists."}</strong><Link className="primary-action" to="/store">{language === "tr" ? "Paketleri incele" : "View plans"}</Link></div> : pending ? <div className="feed-state">{c.loading}</div> : members.length ? <section className="community-grid">{members.map((member) => <article className="community-card" key={member.id}>
       <UserIdentityLink user={member} avatarClassName="post-avatar" showName={false}/>
       <div className="community-card-body"><Link to={userProfilePath(member)}><strong>{member.username ? `@${member.username}` : member.name}</strong></Link>{tab === "new" && member.createdAt ? <span>{new Intl.RelativeTimeFormat(language === "tr" ? "tr" : "en", { numeric: "auto" }).format(Math.ceil((new Date(member.createdAt).getTime() - Date.now()) / 86_400_000), "day")} {c.joined}</span> : null}{member.birthDate ? <span>{memberAge(member.birthDate)} {c.age}</span> : null}<span><MapPin size={14}/>{member.city || member.country ? language === "tr" ? `${member.city || member.country} ${c.located}` : `${c.located} ${member.city || member.country}` : c.noLocation}</span><small>{member.followerCount} {c.followers} · {member.commonTagCount} {c.shared}</small>{tab === "guests" && member.guestEvents ? <small>{member.guestEvents}</small> : null}</div>
       <div className="community-card-actions"><button className={member.following ? "secondary-action" : "primary-action"} disabled={toggle.isPending} onClick={() => toggle.mutate(member)}>{member.following ? c.followingStatus : c.follow}</button>{canUseGuestLists ? <button className="secondary-action" onClick={() => setGuestTarget(member)}><UserPlus size={16}/> {c.guestList}</button> : null}<details className="action-menu"><summary aria-label={c.actions}><MoreVertical size={18}/></summary><div><Link to={`/messages?peer=${member.id}`}><Mail size={17}/> {c.message}</Link></div></details></div>

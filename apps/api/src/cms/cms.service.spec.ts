@@ -16,7 +16,7 @@ describe("CmsService category and FAQ management", () => {
     update: jest.fn(),
     delete: jest.fn(),
   };
-  const announcement = { findMany: jest.fn() };
+  const announcement = { findMany: jest.fn(), create: jest.fn() };
   const service = new CmsService({ cmsCategory, faq, announcement } as never);
 
   beforeEach(() => jest.clearAllMocks());
@@ -95,6 +95,24 @@ describe("CmsService category and FAQ management", () => {
         }),
       }),
     );
+  });
+
+  it("stores both Turkish and English announcement content", async () => {
+    announcement.create.mockResolvedValue({ id: "announcement-bilingual" });
+    await service.createAnnouncement({
+      title: "Yeni keşif deneyimi",
+      body: "Etkinlikleri daha kolay keşfedin.",
+      titleEn: "A new discovery experience",
+      bodyEn: "Discover events more easily.",
+    });
+    expect(announcement.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        title: "Yeni keşif deneyimi",
+        body: "Etkinlikleri daha kolay keşfedin.",
+        titleEn: "A new discovery experience",
+        bodyEn: "Discover events more easily.",
+      }),
+    }));
   });
 
   it("applies last-login, join-date and app-version filters before returning an announcement", async () => {

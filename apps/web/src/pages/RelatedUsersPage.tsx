@@ -26,14 +26,13 @@ import {
   followUser,
   listGuestLists,
   listFollowing,
-  listMyEvents,
-  listMyPlaces,
   unfollowUser,
   updatePlaceMember,
   updateEventParticipant,
 } from "../lib/api";
 import { getUserSession } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
+import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
 export function RelatedUsersPage({
   kind,
@@ -128,26 +127,12 @@ export function RelatedUsersPage({
     queryFn: listFollowing,
     enabled: Boolean(session),
   });
-  const managedEvents = useQuery({
-    queryKey: ["my-events", session?.id, "related-users-permission"],
-    queryFn: listMyEvents,
-    enabled: Boolean(session),
-  });
-  const managedPlaces = useQuery({
-    queryKey: ["my-places", session?.id, "related-users-permission"],
-    queryFn: listMyPlaces,
-    enabled: Boolean(session),
-  });
+  const { canUseGuestLists } = useGuestListEntitlement(Boolean(kind !== "tag" && target.data?.canManage));
   const guestLists = useQuery({
     queryKey: ["guest-lists", session?.id],
     queryFn: listGuestLists,
     enabled: Boolean(session && guestTarget),
   });
-  const canUseGuestLists = Boolean(session && (
-    ["admin", "super_admin", "curator"].includes(session.role) ||
-    (managedEvents.data ?? []).some((event) => event.createdById === session.id || ["manager", "organizer"].includes(event.viewerParticipation?.role ?? "")) ||
-    (managedPlaces.data ?? []).some((place) => place.createdById === session.id || ["manager", "organizer"].includes(place.viewerMembership?.role ?? ""))
-  ));
   const followingIds = useMemo(
     () => new Set((following.data ?? []).map((item) => item.id)),
     [following.data],
@@ -407,11 +392,7 @@ export function RelatedUsersPage({
             >
               {t("Davetliler", "Invited")} (
               {
-                (users.data ?? []).filter((item) =>
-                  kind === "event"
-                    ? ["invited", "requested"].includes(item.status ?? "")
-                    : item.status === "invited",
-                ).length
+                (users.data ?? []).filter((item) => item.status === "invited").length
               }
               )
             </button>
@@ -443,7 +424,7 @@ export function RelatedUsersPage({
               Check-in
             </button>
           ) : null}
-          {kind === "place" && target.data?.canManage ? (
+          {kind !== "tag" && target.data?.canManage ? (
             <button
               className={filter === "declined" ? "active" : ""}
               onClick={() => setFilter("declined")}
@@ -451,7 +432,7 @@ export function RelatedUsersPage({
               {t("Reddedilenler", "Declined")}
             </button>
           ) : null}
-          {kind === "place" && target.data?.canManage ? (
+          {kind !== "tag" && target.data?.canManage ? (
             <button
               className={filter === "banned" ? "active" : ""}
               onClick={() => setFilter("banned")}
@@ -747,7 +728,7 @@ function localizeRelation(relation: string, language: "tr" | "en") {
   const labelsTr: Record<string, string> = {
     member: "Üye",
     organizer: "Organizatör",
-    manager: "Yönetici",
+    manager: "Sahip",
     owner: "Sahip",
     creator: "Kurucu",
     attendee: "Katılımcı",
@@ -755,7 +736,7 @@ function localizeRelation(relation: string, language: "tr" | "en") {
     follower: "Takipçi",
   };
   const labelsEn: Record<string, string> = {
-    member: "Member", organizer: "Organiser", manager: "Manager", owner: "Owner", creator: "Creator", attendee: "Attendee", invited: "Invited", follower: "Follower",
+    member: "Member", organizer: "Organiser", manager: "Owner", owner: "Owner", creator: "Creator", attendee: "Attendee", invited: "Invited", follower: "Follower",
   };
   const labels = language === "tr" ? labelsTr : labelsEn;
   return labels[relation.trim().toLocaleLowerCase("en-US")] ?? relation;

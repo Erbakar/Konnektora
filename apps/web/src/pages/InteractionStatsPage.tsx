@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Download, Lightbulb, TrendingUp, Users, WalletCards } from "lucide-react";
 import type { TableCell, TDocumentDefinitions } from "pdfmake/interfaces";
 import { type CSSProperties, type ReactNode } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { getInteractionStats, getPublicProfileById, getTagStats } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
 
@@ -40,6 +40,13 @@ const labels: Record<string, string> = {
   averageMessagesPerInterestedUser: "İlgilenen kişi başına mesaj", ticketPurchaseRate: "Bilet satın alma oranı", invites: "Davet",
   websiteClicks: "Web sitesi tıklaması", locationViews: "Konum görüntülenmesi", followersLast7d: "Son 7 günde yeni takipçi",
   followersLast30d: "Son 30 günde yeni takipçi", followersLast90d: "Son 90 günde yeni takipçi",
+  viewsLast12m: "Son 12 ayda görüntülenme", averageCancellationRate: "Ortalama iptal oranı", cancellationRate: "İptal oranı",
+  eventCancellationRate: "Etkinlik iptal oranı", eventOccupancyRate: "Etkinlik doluluk oranı", averageEventRating: "Ortalama etkinlik puanı",
+  averageRating: "Ortalama puan", ratingCount: "Değerlendirme adedi", ownedEvents: "Yönetilen etkinlik", eventDeclined: "İptal edilen katılım",
+  taxAmount: "Vergi", totalConnections: "Toplam bağlantı", averageAppMinutesPerInterestedUser: "İlgilenen kişi başına uygulama süresi (30 gün, dakika)",
+  likeLast24h: "Olumlu · son 24 saat", likeLast7d: "Olumlu · son 7 gün", likeLast30d: "Olumlu · son 30 gün", likeLast12m: "Olumlu · son 12 ay",
+  okLast24h: "Nötr · son 24 saat", okLast7d: "Nötr · son 7 gün", okLast30d: "Nötr · son 30 gün", okLast12m: "Nötr · son 12 ay",
+  dislikeLast24h: "Olumsuz · son 24 saat", dislikeLast7d: "Olumsuz · son 7 gün", dislikeLast30d: "Olumsuz · son 30 gün", dislikeLast12m: "Olumsuz · son 12 ay",
 };
 
 const labelsEn: Record<string, string> = {
@@ -70,6 +77,13 @@ const labelsEn: Record<string, string> = {
   averageMessagesPerInterestedUser: "Messages per interested member", ticketPurchaseRate: "Ticket purchase rate", invites: "Invitations",
   websiteClicks: "Website clicks", locationViews: "Location views", followersLast7d: "New followers in 7 days",
   followersLast30d: "New followers in 30 days", followersLast90d: "New followers in 90 days",
+  viewsLast12m: "Views in 12 months", averageCancellationRate: "Average cancellation rate", cancellationRate: "Cancellation rate",
+  eventCancellationRate: "Event cancellation rate", eventOccupancyRate: "Event occupancy", averageEventRating: "Average event rating",
+  averageRating: "Average rating", ratingCount: "Ratings", ownedEvents: "Managed events", eventDeclined: "Cancelled participation",
+  taxAmount: "Tax", totalConnections: "Total connections", averageAppMinutesPerInterestedUser: "App time per interested member (30 days, minutes)",
+  likeLast24h: "Positive · 24 hours", likeLast7d: "Positive · 7 days", likeLast30d: "Positive · 30 days", likeLast12m: "Positive · 12 months",
+  okLast24h: "Neutral · 24 hours", okLast7d: "Neutral · 7 days", okLast30d: "Neutral · 30 days", okLast12m: "Neutral · 12 months",
+  dislikeLast24h: "Negative · 24 hours", dislikeLast7d: "Negative · 7 days", dislikeLast30d: "Negative · 30 days", dislikeLast12m: "Negative · 12 months",
 };
 
 const overviewKeys: Record<string, string[]> = {
@@ -79,10 +93,10 @@ const overviewKeys: Record<string, string[]> = {
   user: ["profileViews", "shares", "followers", "events", "places", "profileConversionRate"],
 };
 
-const trendKeys = ["profileViewsLast7d", "profileViewsLast30d", "profileViewsLast90d", "followersLast7d", "followersLast30d", "followersLast90d", "interestLast24h", "interestLast7d", "interestLast30d", "interestLast12m", "viewsLast24h", "viewsLast7d", "viewsLast30d", "commentsLast24h", "commentsLast7d", "commentsLast30d", "commentsLast12m", "visitorsLast6m", "visitorsLast12m"];
+const trendKeys = ["profileViewsLast7d", "profileViewsLast30d", "profileViewsLast90d", "followersLast7d", "followersLast30d", "followersLast90d", "interestLast24h", "interestLast7d", "interestLast30d", "interestLast12m", "likeLast24h", "likeLast7d", "likeLast30d", "likeLast12m", "okLast24h", "okLast7d", "okLast30d", "okLast12m", "dislikeLast24h", "dislikeLast7d", "dislikeLast30d", "dislikeLast12m", "viewsLast24h", "viewsLast7d", "viewsLast30d", "viewsLast12m", "commentsLast24h", "commentsLast7d", "commentsLast30d", "commentsLast12m", "visitorsLast6m", "visitorsLast12m"];
 const moneyKeys = ["ticketRevenue", "refundAmount", "averageTicketPrice", "platformCommission", "platformFees", "organizerRevenue"];
-const conversionKeys = ["rsvpRate", "averageRsvpRate", "attendanceRate", "eventAttendanceRate", "engagementRate", "ticketConversionRate", "ticketOccupancyRate", "ticketPurchaseRate", "freeTicketRate", "checkInRate", "socialConnectionRate", "profileConversionRate", "searchClickRate", "repeatVisitorRate"];
-const distributionPrefixes = ["age_", "gender_", "language_", "location_", "interest_", "city_", "country_", "relatedInterest_", "visitorCountry_", "visitorAge_", "visitorGender_", "visitorInterest_", "followerCountry_", "followerAge_", "followerGender_", "followerLanguage_", "followerInterest_", "day_", "hour_", "decision_", "source_", "shareChannel_", "ticketTypeSold_", "ticketTypeRevenue_", "ticketSaleDay_", "ticketSaleHour_", "ticketGroup_", "checkInHour_", "fullEvent_", "emptyEvent_", "organizerEvents_", "organizerAttendanceRate_", "topVisitor_"];
+const conversionKeys = ["rsvpRate", "averageRsvpRate", "attendanceRate", "eventAttendanceRate", "engagementRate", "ticketConversionRate", "ticketOccupancyRate", "ticketPurchaseRate", "freeTicketRate", "checkInRate", "socialConnectionRate", "profileConversionRate", "searchClickRate", "repeatVisitorRate", "cancellationRate", "averageCancellationRate", "eventCancellationRate", "eventOccupancyRate"];
+const distributionPrefixes = ["age_", "gender_", "language_", "location_", "interest_", "city_", "country_", "relatedInterest_", "viewerCountry_", "visitorCountry_", "visitorAge_", "visitorGender_", "visitorInterest_", "followerCountry_", "followerCity_", "followerAge_", "followerGender_", "followerLanguage_", "followerInterest_", "networkCity_", "networkCountry_", "likeAge_", "likeGender_", "likeCity_", "likeCountry_", "likeLanguage_", "likeRelatedInterest_", "okAge_", "okGender_", "okCity_", "okCountry_", "okLanguage_", "okRelatedInterest_", "dislikeAge_", "dislikeGender_", "dislikeCity_", "dislikeCountry_", "dislikeLanguage_", "dislikeRelatedInterest_", "day_", "hour_", "decision_", "source_", "shareChannel_", "ticketTypeSold_", "ticketTypeRevenue_", "ticketSaleDay_", "ticketSaleHour_", "ticketGroup_", "checkInHour_", "monthlyOccupancyRate_", "monthlyOccupancyPeople_", "fullEvent_", "emptyEvent_", "organizerEvents_", "organizerAttendanceRate_", "topVisitor_"];
 
 const distributionTitles: Record<string, string> = {
   age_: "Yaş dağılımı", gender_: "Cinsiyet dağılımı", location_: "Konum dağılımı", interest_: "İlgi alanları",
@@ -95,6 +109,11 @@ const distributionTitles: Record<string, string> = {
   ticketSaleDay_: "Bilet satış zaman çizgisi", ticketSaleHour_: "Satış saatleri", ticketGroup_: "Grup satışları", checkInHour_: "Check-in saatleri",
   fullEvent_: "En dolu etkinlikler", emptyEvent_: "En düşük doluluklu etkinlikler", organizerEvents_: "Organizatörlere göre etkinlik sayısı",
   organizerAttendanceRate_: "Organizatör katılım oranı", topVisitor_: "En sık gelen ziyaretçiler",
+  viewerCountry_: "Görüntüleyenlerin ülkeleri", followerCity_: "Takipçi şehirleri", networkCity_: "Bağlantı şehirleri", networkCountry_: "Bağlantı ülkeleri",
+  likeAge_: "Olumlu · yaş", likeGender_: "Olumlu · cinsiyet", likeCity_: "Olumlu · şehir", likeCountry_: "Olumlu · ülke", likeLanguage_: "Olumlu · dil", likeRelatedInterest_: "Olumlu · ilişkili ilgi alanları",
+  okAge_: "Nötr · yaş", okGender_: "Nötr · cinsiyet", okCity_: "Nötr · şehir", okCountry_: "Nötr · ülke", okLanguage_: "Nötr · dil", okRelatedInterest_: "Nötr · ilişkili ilgi alanları",
+  dislikeAge_: "Olumsuz · yaş", dislikeGender_: "Olumsuz · cinsiyet", dislikeCity_: "Olumsuz · şehir", dislikeCountry_: "Olumsuz · ülke", dislikeLanguage_: "Olumsuz · dil", dislikeRelatedInterest_: "Olumsuz · ilişkili ilgi alanları",
+  monthlyOccupancyRate_: "Aylara göre doluluk oranı", monthlyOccupancyPeople_: "Aylara göre biletli ziyaretçi",
 };
 
 const distributionTitlesEn: Record<string, string> = {
@@ -108,6 +127,11 @@ const distributionTitlesEn: Record<string, string> = {
   ticketSaleDay_: "Ticket sales timeline", ticketSaleHour_: "Sales by time", ticketGroup_: "Group purchases", checkInHour_: "Check-in times",
   fullEvent_: "Highest occupancy events", emptyEvent_: "Lowest occupancy events", organizerEvents_: "Events by organiser",
   organizerAttendanceRate_: "Organiser attendance rate", topVisitor_: "Most frequent visitors",
+  viewerCountry_: "Viewer countries", followerCity_: "Follower cities", networkCity_: "Connection cities", networkCountry_: "Connection countries",
+  likeAge_: "Positive · age", likeGender_: "Positive · gender", likeCity_: "Positive · city", likeCountry_: "Positive · country", likeLanguage_: "Positive · language", likeRelatedInterest_: "Positive · related interests",
+  okAge_: "Neutral · age", okGender_: "Neutral · gender", okCity_: "Neutral · city", okCountry_: "Neutral · country", okLanguage_: "Neutral · language", okRelatedInterest_: "Neutral · related interests",
+  dislikeAge_: "Negative · age", dislikeGender_: "Negative · gender", dislikeCity_: "Negative · city", dislikeCountry_: "Negative · country", dislikeLanguage_: "Negative · language", dislikeRelatedInterest_: "Negative · related interests",
+  monthlyOccupancyRate_: "Monthly occupancy rate", monthlyOccupancyPeople_: "Ticketed visitors by month",
 };
 
 function prettyKey(key: string, language: "tr" | "en") {
@@ -144,7 +168,7 @@ function BarList({ entries, prefix }: { entries: Array<[string, number]>; prefix
   return <div className="stats-bar-list">{entries.map(([key, value]) => {
     const rawLabel = prefix ? key.slice(prefix.length) : key;
     return <div key={key} className="stats-bar-row">
-      <div><span>{prettyKey(rawLabel, language)}</span><strong>{prefix === "ticketTypeRevenue_" ? displayValue("ticketRevenue", value, language) : value.toLocaleString(locale)}</strong></div>
+      <div><span>{prettyKey(rawLabel, language)}</span><strong>{prefix === "ticketTypeRevenue_" ? displayValue("ticketRevenue", value, language) : prefix?.toLowerCase().includes("rate") ? `${value.toLocaleString(locale)}%` : value.toLocaleString(locale)}</strong></div>
       <span className="stats-bar-track"><span style={{ "--bar-width": `${value / maximum * 100}%` } as CSSProperties}/></span>
     </div>;
   })}</div>;
@@ -311,12 +335,14 @@ export function InteractionStatsPage() {
   for (const group of distributions) for (const [key] of group.entries) used.add(key);
   const remaining = Object.entries(data).filter(([key]) => !used.has(key));
   const insights = buildInsights(data, targetType, language);
+  const hasMetrics = Object.keys(data).length > 0;
 
   return <section className="page interaction-stats-page">
     <header className="section-header stats-page-header"><div><p className="eyebrow">{t("Analiz merkezi", "Analytics centre")}</p><h1>{title} {t("istatistikleri", "analytics")}</h1><p>{t("Topluluk, erişim, dönüşüm ve gelir metriklerinin güncel görünümü.", "A current view of community, reach, conversion and revenue metrics.")}</p></div><div className="stats-header-actions"><button className="secondary-action" disabled={!stats.data} onClick={() => { void downloadStatsPdf(`${title} ${t("istatistikleri", "analytics")}`, data, insights, language); }} type="button"><Download size={17}/> {t("PDF indir", "Download PDF")}</button><button className="secondary-action" onClick={() => navigate(-1)} type="button">{t("Geri dön", "Go back")}</button></div></header>
     {stats.isLoading ? <p className="empty-state">{t("İstatistikler hazırlanıyor…", "Preparing analytics…")}</p> : null}
-    {stats.isError ? <p className="form-error">{t("Bu istatistikleri görüntüleme yetkiniz olmayabilir veya veriler yüklenemedi.", "You may not have permission to view these analytics, or the data could not be loaded.")}</p> : null}
-    {stats.data ? <>
+    {stats.isError ? <section className="stats-access-gate"><h2>{t("Gelişmiş analiz erişimi gerekli", "Advanced analytics access required")}</h2><p>{t("Bu rapor yalnız içerik yöneticileri ile admin, küratör veya uygun paket sahipleri tarafından kullanılabilir.", "This report is available only to content managers and admins, curators or members with an eligible plan.")}</p><Link className="primary-action" to="/store">{t("Paketleri incele", "View plans")}</Link></section> : null}
+    {stats.data && !hasMetrics ? <section className="stats-access-gate"><h2>{t("Bu rapora erişiminiz yok", "You do not have access to this report")}</h2><p>{t("Kendi profil istatistikleriniz uygun paketle; başka profillerin istatistikleri yalnız yetkili rollerle görüntülenebilir.", "Your own profile analytics require an eligible plan; analytics for other profiles are restricted to authorised roles.")}</p><Link className="primary-action" to="/store">{t("Paketleri incele", "View plans")}</Link></section> : null}
+    {stats.data && hasMetrics ? <>
       <StatsSection title={t("Genel bakış", "Overview")} description={t("En önemli performans göstergeleri", "The most important performance indicators")} icon={<BarChart3 size={21}/>}><MetricGrid entries={overview}/></StatsSection>
       {funnel.length > 1 ? <StatsSection title={t("Dönüşüm hunisi", "Conversion funnel")} description={t("İlk temastan gerçek katılıma kadar kullanıcı akışı", "The user journey from first contact to real participation")} icon={<TrendingUp size={21}/>}><BarList entries={funnel}/></StatsSection> : null}
       {conversions.length ? <StatsSection title={t("Dönüşüm ve etkileşim", "Conversion and engagement")} icon={<TrendingUp size={21}/>}><MetricGrid entries={conversions}/></StatsSection> : null}

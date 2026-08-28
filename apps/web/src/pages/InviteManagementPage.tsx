@@ -30,7 +30,6 @@ import {
   deleteGuestList,
   getEvent,
   getEventCheckInPassport,
-  getFinanceDashboard,
   getPlace,
   getPlaceCheckInPassport,
   getUserSession,
@@ -53,6 +52,7 @@ import {
 } from "../lib/api";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
 import { useLanguage } from "../lib/i18n";
+import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
 type InviteMethod =
   | "following"
@@ -114,18 +114,7 @@ export function EventInviteManagementPage() {
     queryFn: listMyEvents,
     enabled: canManage,
   });
-  const finance = useQuery({
-    queryKey: ["finance", user?.id, "invite-entitlement"],
-    queryFn: getFinanceDashboard,
-    enabled: Boolean(user?.accountType === "corporate"),
-  });
-  const canUseGuestLists = Boolean(
-    canManage &&
-    user &&
-    (["admin", "super_admin", "curator"].includes(user.role) ||
-      (user.accountType === "corporate" &&
-        finance.data?.business.plan !== "starter")),
-  );
+  const { canUseGuestLists } = useGuestListEntitlement(canManage);
   const guestLists = useQuery({
     queryKey: ["guest-lists", user?.id],
     queryFn: listGuestLists,
@@ -420,7 +409,9 @@ export function EventInviteManagementPage() {
             <PermissionState />
           ) : (
             <EventGuestList
-              items={participants.data ?? []}
+              items={(participants.data ?? []).filter((item) =>
+                ["accepted", "attended"].includes(item.status) || Boolean(item.tickets?.length),
+              )}
               pending={status.isPending || passportLoad.isPending}
               guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
               onStatus={(userId, value) => status.mutate({ userId, value })}
@@ -510,18 +501,7 @@ export function PlaceInviteManagementPage() {
     queryFn: listFollowing,
     enabled: Boolean(user),
   });
-  const finance = useQuery({
-    queryKey: ["finance", user?.id, "place-invite-entitlement"],
-    queryFn: getFinanceDashboard,
-    enabled: Boolean(user?.accountType === "corporate"),
-  });
-  const canUseGuestLists = Boolean(
-    canManage &&
-    user &&
-    (["admin", "super_admin", "curator"].includes(user.role) ||
-      (user.accountType === "corporate" &&
-        finance.data?.business.plan !== "starter")),
-  );
+  const { canUseGuestLists } = useGuestListEntitlement(canManage);
   const guestLists = useQuery({
     queryKey: ["guest-lists", user?.id],
     queryFn: listGuestLists,
@@ -761,7 +741,9 @@ export function PlaceInviteManagementPage() {
             <PermissionState />
           ) : (
             <PlaceMemberList
-              items={members.data ?? []}
+              items={(members.data ?? []).filter((item) =>
+                item.status === "accepted" || Boolean(item.checkedInAt),
+              )}
               pending={update.isPending || passportLoad.isPending}
               guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
               onUpdate={(userId, input) => update.mutate({ userId, input })}
@@ -1392,7 +1374,7 @@ function InviteForm({
                     ? "Katılımcı"
                     : "Attendee"}
               </option>
-              <option value="manager">{tr ? "Yönetici" : "Manager"}</option>
+              <option value="manager">{tr ? "Sahip" : "Owner"}</option>
               <option value="organizer">{tr ? "Organizatör" : "Organizer"}</option>
             </select>
           </label>
@@ -1762,7 +1744,7 @@ function PlaceMemberList({
                     }
                   >
                     <option value="member">{tr ? "Üye" : "Member"}</option>
-                    <option value="manager">{tr ? "Yönetici" : "Manager"}</option>
+                    <option value="manager">{tr ? "Sahip" : "Owner"}</option>
                     <option value="organizer">{tr ? "Organizatör" : "Organizer"}</option>
                   </select>
                   <button
@@ -1992,7 +1974,8 @@ function CheckInPassportDialog({
                   ? "Mekân pasaportu"
                   : "Place passport"}
             </p>
-            <h2>{passport.targetName}</h2>
+            <h2>{tr ? "Pasaport Kontrol" : "Passport Check"}</h2>
+            <small>{passport.targetName}</small>
           </div>
           <button
             aria-label={tr ? "Pasaportu kapat" : "Close passport"}
@@ -2057,7 +2040,7 @@ function CheckInPassportDialog({
         </div>
         {passport.alreadyInside ? (
           <div className="passport-warning">
-            {tr ? "Bu kullanıcı daha önce giriş yaptı" : "This user has already checked in"}
+            {tr ? "Kullanıcı zaten check-in içeride" : "The user is already checked in"}
             {passport.checkedInAt
               ? `: ${new Date(passport.checkedInAt).toLocaleString(locale)}`
               : "."}
@@ -2167,8 +2150,8 @@ function CheckInPassportDialog({
                 ? "Kaydediliyor…"
                 : "Saving…"
               : tr
-                ? "Girişi onayla"
-                : "Approve entry"}
+                ? "İçeri al"
+                : "Come in"}
           </button>
         </footer>
       </section>
@@ -2208,7 +2191,7 @@ function translateRole(role: string, language: "tr" | "en") {
   const labels: Record<string, [string, string]> = {
     attendee: ["Katılımcı", "Attendee"],
     member: ["Üye", "Member"],
-    manager: ["Yönetici", "Manager"],
+    manager: ["Sahip", "Owner"],
     organizer: ["Organizatör", "Organizer"],
     owner: ["Sahip", "Owner"],
   };

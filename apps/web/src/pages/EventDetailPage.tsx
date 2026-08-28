@@ -18,6 +18,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
 import { ContentComments } from "../components/ContentComments";
 import { ContentMediaGallery } from "../components/ContentMediaGallery";
+import { ContentRating } from "../components/ContentRating";
 import { EventCard } from "../components/EventCard";
 import { LocationMap } from "../components/LocationMap";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
@@ -32,7 +33,6 @@ import {
   createEventPayment,
   getContentNotification,
   getEvent,
-  getInteractionStats,
   getUserSession,
   listEventTicketTypes,
   listEventParticipants,
@@ -88,11 +88,6 @@ export function EventDetailPage() {
   const relatedUsersQuery = useQuery({ queryKey: ["event", event?.id, "related-users"], queryFn: () => listEventRelatedUsers(event!.id), enabled: Boolean(event) });
   const followingQuery = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
   const recommendationsQuery = useQuery({ queryKey: ["event-recommendations", event?.id], queryFn: () => listEvents(new URLSearchParams({ pageSize: "20" })), enabled: Boolean(event) });
-  const statsQuery = useQuery({
-    queryKey: ["interaction-stats", "event", event?.id],
-    queryFn: () => getInteractionStats("event", event!.id),
-    enabled: canManage,
-  });
   const notificationQuery = useQuery({
     queryKey: ["content-notification", "event", event?.id],
     queryFn: () => getContentNotification("event", event!.id),
@@ -197,7 +192,7 @@ export function EventDetailPage() {
   const inviteAllowed = canManage || event.viewerParticipation?.status === "accepted" || event.viewerParticipation?.status === "attended" || event.viewerParticipation?.status === "invited";
   const invitedPreviewCount = canManage
     ? participantsQuery.data?.filter((item) => item.status === "invited").length ?? 0
-    : event.invitedCount ?? 0;
+    : (relatedUsersQuery.data ?? []).filter((item) => item.status === "invited").length;
   const recommendedEvents = (recommendationsQuery.data?.items ?? []).filter((item) => item.id !== event.id).map((item) => ({ item, score: item.tags.filter((tag) => eventTagIds.has(tag.id)).length * 5 + Number(item.organizerName === event.organizerName) * 3 + Number(Boolean(item.city && item.city === event.city)) * 2 + Math.min(item.attendeeCount ?? 0, 100) / 100 })).sort((a, b) => b.score - a.score).map(({ item }) => item).slice(0, 8);
 
   return (
@@ -286,7 +281,7 @@ export function EventDetailPage() {
             }} type="button"><ShieldCheck size={18}/>{language === "tr" ? "Check-in kontrolü" : "Check-in control"}</button> : null}
             {canManage ? <Link to={`/events/create?edit=${event.id}`}><ExternalLink size={18}/>{language === "tr" ? "Etkinliği düzenle" : "Edit event"}</Link> : null}
             {canManage ? <button disabled={archiveMutation.isPending} onClick={() => window.confirm(language === "tr" ? "Etkinlik silinsin mi? Satılmış tüm biletler otomatik olarak iade edilecek ve bu işlem geri alınamayacaktır." : "Delete this event? All sold tickets will be refunded automatically and this action cannot be undone.") && archiveMutation.mutate()}><Flag size={18}/>{language === "tr" ? "Etkinliği sil" : "Delete event"}</button> : null}
-            {statsQuery.data ? <Link to={`/stats/event/${event.id}`}><ShieldCheck size={18}/>{language === "tr" ? "Etkileşim istatistikleri" : "Interaction analytics"}</Link> : null}
+            <Link to={user ? `/stats/event/${event.id}` : `/login?next=${encodeURIComponent(`/stats/event/${event.id}`)}`}><ShieldCheck size={18}/>{language === "tr" ? "Etkileşim istatistikleri" : "Interaction analytics"}</Link>
             {user && !canManage ? <button onClick={() => setReportOpen((current) => !current)}><Flag size={18}/>{language === "tr" ? "Etkinliği rapor et" : "Report event"}</button> : null}
             {user && !canManage ? <button disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()}><Ban size={18}/>{language === "tr" ? "Etkinliği engelle" : "Block event"}</button> : null}
           </div>
@@ -419,6 +414,7 @@ export function EventDetailPage() {
         <RichText text={!overviewExpanded && event.description.length > 650 ? `${event.description.slice(0, 650).trim()}…` : event.description} />
         {event.description.length > 650 ? <button className="text-action" onClick={() => setOverviewExpanded((expanded) => !expanded)} type="button">{overviewExpanded ? language === "tr" ? "Daha az göster" : "Show less" : language === "tr" ? "Devamını göster" : "Show more"}</button> : null}
       </section>
+      {user ? <ContentRating targetId={event.id} targetType="event"/> : null}
       {moreInfoOpen ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setMoreInfoOpen(false)}><section aria-modal="true" aria-labelledby="event-more-title" className="content-dialog event-more-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><div className="section-header"><div><p className="eyebrow">{language === "tr" ? "Etkinlik ve mekân" : "Event and place"}</p><h2 id="event-more-title">{event.title}</h2></div><button onClick={() => setMoreInfoOpen(false)} type="button">{language === "tr" ? "Kapat" : "Close"}</button></div><div className="event-more-description"><RichText text={event.description}/></div>{event.format !== "online" && event.latitude != null && event.longitude != null ? <LocationMap items={[{ id: event.id, title: event.place?.name ?? event.locationName ?? event.title, latitude: event.latitude, longitude: event.longitude, location: [event.place?.address, event.locationAddress, localizeCityName(event.city ?? event.place?.city, language), localizeCountryName(event.country ?? event.place?.country, language)].filter(Boolean).join(", ") }]} /> : null}<dl className="event-more-facts"><div><dt>{language === "tr" ? "Zaman" : "Time"}</dt><dd>{formatEventDateRange(event.startsAt, event.endsAt, { withDuration: true, locale })}</dd></div><div><dt>Format</dt><dd>{event.format === "online" ? language === "tr" ? "Çevrim içi" : "Online" : event.format === "hybrid" ? language === "tr" ? "Hibrit" : "Hybrid" : language === "tr" ? "Yüz yüze" : "In person"}</dd></div><div><dt>{language === "tr" ? "Katılım" : "Access"}</dt><dd>{event.visibility === "open" ? language === "tr" ? "Herkese açık" : "Open to everyone" : event.visibility === "approval_required" ? language === "tr" ? "Onay gerekli" : "Approval required" : language === "tr" ? "Sadece davetli" : "Invite only"}</dd></div>{event.format !== "online" ? <><div><dt>{language === "tr" ? "Etkinlik yeri" : "Event location"}</dt><dd>{event.place ? <Link to={`/places/${event.place.slug}`}>{event.place.name}</Link> : event.locationName || (language === "tr" ? "Konum adı belirtilmedi" : "Location name not provided")}</dd></div><div><dt>{language === "tr" ? "Adres" : "Address"}</dt><dd>{[event.place?.address, event.locationAddress, localizeCityName(event.city ?? event.place?.city, language), localizeCountryName(event.country ?? event.place?.country, language)].filter(Boolean).join(", ") || (event.latitude != null && event.longitude != null ? `${event.latitude}, ${event.longitude}` : language === "tr" ? "Adres belirtilmedi" : "Address not provided")}</dd></div></> : null}{event.format !== "offline" && event.liveUrl ? <div><dt>{language === "tr" ? "Canlı etkinlik bağlantısı" : "Live event URL"}</dt><dd><a href={event.liveUrl} rel="noreferrer" target="_blank">{event.liveUrl}<ExternalLink size={14}/></a></dd></div> : null}</dl></section></div> : null}
       {event.timeline ? (
         <section className="admin-form">

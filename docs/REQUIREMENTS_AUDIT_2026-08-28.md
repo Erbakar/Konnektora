@@ -1,5 +1,7 @@
 # 157 maddelik gereksinim denetimi
 
+> **Durum: devam ediyor.** Bu belge nihai “tamamlandı” raporu değildir. Sağlayıcı/cihaz kabulü bekleyen maddeler kapalı gösterilemez ve kapsamı kaynak dokümanda henüz tanımlanmamış 133. madde tamamlanmış sayılamaz.
+
 Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbirinden ayırmak için tutulur. Bir madde ancak ilgili arayüz, servis/veri modeli, hata davranışı ve uygulanabilir doğrulamalar birlikte karşılandığında tamamlanmış sayılır.
 
 ## Durum anahtarı
@@ -26,7 +28,7 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 
 ## Otomatik kontroller
 
-- API testleri: **32 suite / 225 test geçti**.
+- API testleri: **33 suite / 243 test geçti**.
 - Shared, API ve web TypeScript kontrolleri: geçti.
 - API ve web lint: geçti.
 - Shared, API ve web production build: geçti.

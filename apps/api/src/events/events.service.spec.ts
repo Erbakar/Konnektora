@@ -9,6 +9,9 @@ describe("EventsService", () => {
     name: "User",
     role: "user",
     status: "active",
+    accountType: "corporate",
+    businessPlan: "growth",
+    memberPlan: "free",
   };
 
   const createService = () => {
@@ -25,6 +28,7 @@ describe("EventsService", () => {
       tag: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
       userBlock: { findMany: jest.fn() },
       user: { findUnique: jest.fn(), create: jest.fn() },
+      userInterestTag: { findMany: jest.fn() },
       userFollow: { count: jest.fn() },
       guestList: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
       guestListMember: { upsert: jest.fn(), deleteMany: jest.fn() },
@@ -94,6 +98,23 @@ describe("EventsService", () => {
     prisma.guestList.findUnique.mockResolvedValue({ ownerId: "another-user" });
     await expect(service.renameGuestList("list-1", "New name", actor as never)).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.guestList.update).not.toHaveBeenCalled();
+  });
+
+  it("allows custom Guest Lists for a manager with an active paid event", async () => {
+    const { service, prisma } = createService();
+    const freeManager = { ...actor, accountType: "individual", businessPlan: "starter", memberPlan: "free" };
+    prisma.event.findFirst.mockResolvedValue({ id: "paid-event" });
+    prisma.guestList.findMany.mockResolvedValue([]);
+    await expect(service.listGuestLists(freeManager as never)).resolves.toEqual([]);
+    expect(prisma.event.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ status: "published" }) }));
+  });
+
+  it("rejects custom Guest Lists without a qualifying plan or paid event", async () => {
+    const { service, prisma } = createService();
+    const freeMember = { ...actor, accountType: "individual", businessPlan: "starter", memberPlan: "free" };
+    prisma.event.findFirst.mockResolvedValue(null);
+    await expect(service.listGuestLists(freeMember as never)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.guestList.findMany).not.toHaveBeenCalled();
   });
 
   it("returns full editable event data for managers", async () => {
@@ -379,6 +400,22 @@ describe("EventsService", () => {
         orderBy: [{ participants: { _count: "desc" } }, { startsAt: "asc" }],
       }),
     );
+  });
+
+  it("sorts nearby events by real geographic distance", async () => {
+    const { service, prisma } = createService();
+    prisma.userInterestTag.findMany.mockResolvedValue([]);
+    prisma.event.count.mockResolvedValue(2);
+    const base = { price: 0, endsAt: null, tags: [], participants: [], _count: { participants: 0 } };
+    prisma.event.findMany.mockResolvedValue([
+      { ...base, id: "far", title: "Far", startsAt: new Date("2027-01-01"), latitude: 41.5, longitude: 29.5 },
+      { ...base, id: "near", title: "Near", startsAt: new Date("2027-01-01"), latitude: 41.001, longitude: 29.001 },
+    ]);
+
+    const result = await service.listPublicEvents({ scope: "near", latitude: 41, longitude: 29, pageSize: 15 });
+
+    expect(prisma.event.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 200 }));
+    expect(result.items.map((item) => item.id)).toEqual(["near", "far"]);
   });
 
   it("builds My events from actual ticket ownership and keeps text search as an additional filter", async () => {
@@ -778,6 +815,54 @@ describe("EventsService", () => {
     );
   });
 
+  it("shows a member only the event invitations they sent", async () => {
+    const { service, prisma } = createService();
+    prisma.event.findFirst.mockResolvedValue({ id: "event-1", createdById: "owner-1", participants: [{ role: "attendee", status: "accepted" }] });
+    prisma.eventInvitation.findMany.mockResolvedValue([{ inviteeId: "user-2" }]);
+    prisma.eventParticipant.findMany.mockResolvedValue([]);
+    prisma.userInterestTag.findMany.mockResolvedValue([]);
+
+    await service.listRelatedUsers("event-1", actor as never);
+
+    expect(prisma.eventInvitation.findMany).toHaveBeenCalledWith({
+      where: { eventId: "event-1", inviterId: actor.id },
+      select: { inviteeId: true },
+    });
+    expect(prisma.eventParticipant.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          eventId: "event-1",
+          OR: [
+            { status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] } },
+            { status: EventParticipantStatus.invited, userId: { in: ["user-2"] } },
+          ],
+        },
+      }),
+    );
+  });
+
+  it("keeps declined and banned participants visible to event managers", async () => {
+    const { service, prisma } = createService();
+    prisma.event.findFirst.mockResolvedValue({ id: "event-1", createdById: actor.id, participants: [] });
+    prisma.eventParticipant.findMany.mockResolvedValue([]);
+    prisma.userInterestTag.findMany.mockResolvedValue([]);
+
+    await service.listRelatedUsers("event-1", actor as never);
+
+    expect(prisma.eventParticipant.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: {
+            in: expect.arrayContaining([
+              EventParticipantStatus.declined,
+              EventParticipantStatus.banned,
+            ]),
+          },
+        }),
+      }),
+    );
+  });
+
   it("lets the event creator promote a participant to the owner role", async () => {
     const { service, prisma } = createService();
     prisma.event.findUnique.mockResolvedValue({ createdById: actor.id });
@@ -787,6 +872,19 @@ describe("EventsService", () => {
     await service.updateParticipant("event-1", "user-2", { role: EventParticipantRole.manager }, actor as never);
 
     expect(prisma.eventParticipant.update).toHaveBeenCalledWith(expect.objectContaining({ data: { role: EventParticipantRole.manager } }));
+  });
+
+  it("prevents an organiser from removing the event owner role", async () => {
+    const { service, prisma } = createService();
+    prisma.event.findUnique
+      .mockResolvedValueOnce({ createdById: "creator-1" })
+      .mockResolvedValueOnce({ createdById: "creator-1" });
+    prisma.eventParticipant.findUnique
+      .mockResolvedValueOnce({ userId: actor.id, role: EventParticipantRole.organizer, status: EventParticipantStatus.accepted })
+      .mockResolvedValueOnce({ userId: "owner-2", role: EventParticipantRole.manager, status: EventParticipantStatus.accepted });
+
+    await expect(service.updateParticipant("event-1", "owner-2", { role: EventParticipantRole.attendee }, actor as never)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.eventParticipant.update).not.toHaveBeenCalled();
   });
 
   it("keeps the stable numeric event code when the title changes", async () => {

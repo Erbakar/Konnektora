@@ -144,7 +144,7 @@ export class PlacesController {
     @Body() body: { payload: string },
     @CurrentUser() user: User,
   ) {
-    return this.placesService.checkInMemberPass(id, body.payload, user);
+    return this.placesService.previewMemberPass(id, body.payload, "qr", user);
   }
 
   @Post("places/:id/check-in/preview")

@@ -23,6 +23,7 @@ import { toSlug } from "../common/slug";
 import { MailService } from "../mail/mail.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { canUseAdvancedAnalytics, canUseGuestListPlan } from "../common/analytics-access";
 import { SmsService } from "../sms/sms.service";
 import {
   CreateEventDto,
@@ -53,6 +54,11 @@ export class EventsService {
           : { gte: new Date(Date.now() - 1000 * 60 * 60 * 24) },
     };
     const andFilters: Prisma.EventWhereInput[] = [];
+    const nearInterestTagIds = new Set(
+      query.scope === "near" && userId
+        ? ((await this.prisma.userInterestTag.findMany({ where: { userId, sentiment: { in: ["like", "ok"] } }, select: { tagId: true }, take: 100 })) ?? []).map((item) => item.tagId)
+        : [],
+    );
     if (userId) {
       const blocks = await this.prisma.userBlock.findMany({
         where: { userId },
@@ -196,13 +202,13 @@ export class EventsService {
         ? [{ participants: { _count: "desc" } }, { startsAt: "asc" }]
         : [{ startsAt: "asc" }];
 
-    const [total, events] = await Promise.all([
+    const [total, foundEvents] = await Promise.all([
       this.prisma.event.count({ where }),
       this.prisma.event.findMany({
         where,
         orderBy,
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        skip: query.scope === "near" ? 0 : (page - 1) * pageSize,
+        take: query.scope === "near" ? 200 : pageSize,
         include: {
           tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
           participants: {
@@ -219,6 +225,11 @@ export class EventsService {
         },
       }),
     ]);
+    const events = query.scope === "near" && query.latitude != null && query.longitude != null
+      ? [...foundEvents]
+          .sort((left, right) => eventNearScore(right, nearInterestTagIds, query.latitude!, query.longitude!) - eventNearScore(left, nearInterestTagIds, query.latitude!, query.longitude!))
+          .slice((page - 1) * pageSize, page * pageSize)
+      : foundEvents;
 
     return {
       items: events.map(this.mapEvent),
@@ -319,13 +330,16 @@ export class EventsService {
   }
 
   async getInteractionStats(eventId: string, actor?: User) {
-    if (actor) await this.ensureCanManageParticipants(eventId, actor, true);
+    if (actor) {
+      await this.ensureCanManageParticipants(eventId, actor, true);
+      if (!canUseAdvancedAnalytics(actor)) throw new ForbiddenException("Gelişmiş istatistikler admin, küratör ve uygun paket sahipleri tarafından kullanılabilir.");
+    }
     const exists = await this.prisma.event.findUnique({
       where: { id: eventId },
       select: { id: true, startsAt: true, endsAt: true },
     });
     if (!exists) throw new NotFoundException("Etkinlik bulunamadı.");
-    const [participants, participantDetails, comments, reactions, views, detailViews, viewSources, sharesByChannel, ticketOrders, orderDetails, refunds, ticketTypes, payments] = await Promise.all([
+    const [participants, participantDetails, comments, reactions, ratingRows, views, detailViews, viewSources, sharesByChannel, ticketOrders, orderDetails, refunds, ticketTypes, payments] = await Promise.all([
       this.prisma.eventParticipant.groupBy({
         by: ["status"],
         where: { eventId },
@@ -353,7 +367,12 @@ export class EventsService {
         where: { targetType: "event", targetId: eventId, status: "active" },
       }),
       this.prisma.contentReaction.count({
-        where: { targetType: "event", targetId: eventId },
+        where: { targetType: "event", targetId: eventId, NOT: { reaction: { startsWith: "rating_" } } },
+      }),
+      this.prisma.contentReaction.findMany({
+        where: { targetType: "event", targetId: eventId, reaction: { startsWith: "rating_" } },
+        select: { reaction: true },
+        take: 50_000,
       }),
       this.prisma.contentView.count({
         where: { targetType: "event", targetId: eventId, kind: "impression" },
@@ -387,7 +406,7 @@ export class EventsService {
     const ageCounts = distributionCount(participantDetails.map((item) => ageBucket(item.user.birthDate, now)));
     const genderCounts = distributionCount(participantDetails.map((item) => item.user.gender || "belirtilmedi"));
     const countryCounts = distributionCount(participantDetails.map((item) => item.user.country || item.user.city || "belirtilmedi"), 9);
-    const interestCounts = distributionCount(participantDetails.flatMap((item) => item.user.interestTags.map((interest) => interest.tag.name)), 12);
+    const interestCounts = distributionCount(participantDetails.flatMap((item) => item.user.interestTags.map((interest) => interest.tag.name)), 100);
     const languageCounts = distributionCount(participantDetails.map((item) => item.user.preferredLanguage || "belirtilmedi"));
     const decisionBuckets = { "15_gun_once": 0, "7_gun_once": 0, "3_gun_once": 0, "etkinlik_gunu": 0 };
     for (const participant of participantDetails) {
@@ -412,6 +431,9 @@ export class EventsService {
     const ticketSaleHour = distributionCount(orderDetails.map((order) => hourBucket(order.purchasedAt ?? order.createdAt)));
     const ticketGroup = distributionCount(orderDetails.map((order) => order.quantity === 1 ? "tekli" : order.quantity === 2 ? "2_kisilik" : "3_plus"));
     const checkInHour = distributionCount(participantDetails.filter((item) => item.checkedInAt).map((item) => hourBucket(item.checkedInAt!)));
+    const ratingValues = ratingRows.map((row) => Number(row.reaction.slice("rating_".length))).filter((value) => Number.isInteger(value) && value >= 1 && value <= 5);
+    const averageRating = ratingValues.length ? Math.round(ratingValues.reduce((sum, value) => sum + value, 0) / ratingValues.length * 10) / 10 : 0;
+    const declined = count("declined");
     return {
       accepted,
       attended,
@@ -433,12 +455,15 @@ export class EventsService {
       organizerRevenue: Number(payments._sum.netAmount ?? 0),
       rsvpRate: invited + requested > 0 ? Math.round((accepted + attended) / (invited + requested + accepted + attended) * 100) : 0,
       attendanceRate: accepted + attended > 0 ? Math.round(attended / (accepted + attended) * 100) : 0,
+      cancellationRate: accepted + attended + declined > 0 ? Math.round(declined / (accepted + attended + declined) * 100) : 0,
       engagementRate: detailViews > 0 ? Math.round((comments + reactions) / detailViews * 100) : 0,
       detailViews,
       socialConnections,
       socialConnectionRate: attended > 0 ? Math.round(socialConnections / attended * 100) : 0,
       ticketConversionRate: detailViews > 0 ? Math.round((ticketOrders._sum.quantity ?? ticketSold) / detailViews * 100) : 0,
       averageConnectionsPerAttendee: attended > 0 ? Math.round(socialConnections / attended * 10) / 10 : 0,
+      averageRating,
+      ratingCount: ratingValues.length,
       ...prefixMetrics("source", Object.fromEntries(viewSources.map((item) => [item.source || "direct", item._count._all]))),
       ...prefixMetrics("shareChannel", Object.fromEntries(sharesByChannel.map((item) => [item.channel, item._count._all]))),
       ...prefixMetrics("age", ageCounts),
@@ -653,11 +678,26 @@ export class EventsService {
     });
     if (!event) throw new NotFoundException("Etkinlik bulunamadı.");
     const viewerParticipant = event.participants?.[0];
-    const canSeeInvites = Boolean(actor && (["admin", "super_admin", "curator"].includes(actor.role) || event.createdById === actor.id || viewerParticipant?.status === "accepted" && ["organizer", "manager"].includes(viewerParticipant.role)));
+    const canManage = Boolean(actor && (["admin", "super_admin", "curator"].includes(actor.role) || event.createdById === actor.id || viewerParticipant?.status === "accepted" && ["organizer", "manager"].includes(viewerParticipant.role)));
+    const ownInvitedUserIds = actor && !canManage
+      ? (await this.prisma.eventInvitation.findMany({
+          where: { eventId, inviterId: actor.id },
+          select: { inviteeId: true },
+        })).map((invitation) => invitation.inviteeId)
+      : [];
     const [participants, viewerInterests] = await Promise.all([this.prisma.eventParticipant.findMany({
       where: {
         eventId,
-        status: { in: canSeeInvites ? [EventParticipantStatus.accepted, EventParticipantStatus.attended, EventParticipantStatus.invited, EventParticipantStatus.requested] : [EventParticipantStatus.accepted, EventParticipantStatus.attended] },
+        ...(canManage
+          ? { status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended, EventParticipantStatus.invited, EventParticipantStatus.requested, EventParticipantStatus.declined, EventParticipantStatus.banned] } }
+          : ownInvitedUserIds.length
+            ? {
+                OR: [
+                  { status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] } },
+                  { status: EventParticipantStatus.invited, userId: { in: ownInvitedUserIds } },
+                ],
+              }
+            : { status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] } }),
       },
       orderBy: [{ role: "desc" }, { createdAt: "asc" }],
       take: 100,
@@ -1118,7 +1158,12 @@ export class EventsService {
       throw new NotFoundException("Katılımcı bulunamadı.");
     }
 
-    if (input.role === EventParticipantRole.manager && event?.createdById !== actor.id && !["admin", "super_admin"].includes(actor.role)) throw new ForbiddenException("Etkinlik sahibi rolünü yalnızca etkinlik kurucusu değiştirebilir.");
+    if (
+      input.role &&
+      (input.role === EventParticipantRole.manager || participant.role === EventParticipantRole.manager) &&
+      event?.createdById !== actor.id &&
+      !["admin", "super_admin"].includes(actor.role)
+    ) throw new ForbiddenException("Etkinlik sahibi rolünü yalnızca etkinlik kurucusu değiştirebilir.");
     return this.prisma.eventParticipant.update({
       where: { eventId_userId: { eventId, userId } },
       data: { ...(input.status ? { status: input.status } : {}), ...(input.role ? { role: input.role } : {}) },
@@ -1587,6 +1632,7 @@ export class EventsService {
   }
 
   async listGuestLists(user: User) {
+    await this.ensureCanUseGuestLists(user);
     return this.prisma.guestList.findMany({
       where: { ownerId: user.id },
       orderBy: { updatedAt: "desc" },
@@ -1599,21 +1645,25 @@ export class EventsService {
     });
   }
 
-  createGuestList(name: string, user: User) {
+  async createGuestList(name: string, user: User) {
+    await this.ensureCanUseGuestLists(user);
     return this.prisma.guestList.create({ data: { ownerId: user.id, name: name.trim() }, include: { members: true } });
   }
 
   async renameGuestList(id: string, name: string, user: User) {
+    await this.ensureCanUseGuestLists(user);
     await this.ensureOwnGuestList(id, user);
     return this.prisma.guestList.update({ where: { id }, data: { name: name.trim() } });
   }
 
   async deleteGuestList(id: string, user: User) {
+    await this.ensureCanUseGuestLists(user);
     await this.ensureOwnGuestList(id, user);
     return this.prisma.guestList.delete({ where: { id } });
   }
 
   async addGuestListMember(id: string, memberId: string, user: User) {
+    await this.ensureCanUseGuestLists(user);
     await this.ensureOwnGuestList(id, user);
     const member = await this.prisma.user.findFirst({ where: { id: memberId, status: "active" }, select: { id: true } });
     if (!member) throw new NotFoundException("Guest list'e eklenecek kullanıcı bulunamadı.");
@@ -1625,6 +1675,7 @@ export class EventsService {
   }
 
   async removeGuestListMember(id: string, memberId: string, user: User) {
+    await this.ensureCanUseGuestLists(user);
     await this.ensureOwnGuestList(id, user);
     return this.prisma.guestListMember.deleteMany({ where: { guestListId: id, userId: memberId } });
   }
@@ -1633,6 +1684,25 @@ export class EventsService {
     const list = await this.prisma.guestList.findUnique({ where: { id }, select: { ownerId: true } });
     if (!list) throw new NotFoundException("Guest list bulunamadı.");
     if (list.ownerId !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu guest list'i yönetme yetkiniz yok.");
+  }
+
+  private async ensureCanUseGuestLists(user: User) {
+    if (canUseGuestListPlan(user)) return;
+    const paidManagedEvent = await this.prisma.event.findFirst({
+      where: {
+        status: "published",
+        OR: [
+          { createdById: user.id },
+          { participants: { some: { userId: user.id, status: "accepted", role: { in: ["organizer", "manager"] } } } },
+        ],
+        AND: [
+          { OR: [{ endsAt: { gte: new Date() } }, { endsAt: null, startsAt: { gte: new Date() } }] },
+          { OR: [{ price: { gt: 0 } }, { ticketTypeRecords: { some: { price: { gt: 0 }, status: "active" } } }] },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!paidManagedEvent) throw new ForbiddenException("Özel Guest List özelliği uygun işletme paketi veya devam eden ücretli bir etkinlik gerektirir.");
   }
 
   private async ensureCanManageParticipants(eventId: string, user: User, allowCurator = false) {
@@ -1691,4 +1761,24 @@ function prefixMetrics(prefix: string, values: Record<string, number>) {
 
 function metricKey(value: string) {
   return value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "belirtilmedi";
+}
+
+function eventDistance(event: { latitude: unknown; longitude: unknown }, latitude: number, longitude: number) {
+  if (event.latitude == null || event.longitude == null) return Number.POSITIVE_INFINITY;
+  const toRadians = (value: number) => value * Math.PI / 180;
+  const lat = Number(event.latitude);
+  const lon = Number(event.longitude);
+  const a = Math.sin(toRadians(lat - latitude) / 2) ** 2 + Math.cos(toRadians(latitude)) * Math.cos(toRadians(lat)) * Math.sin(toRadians(lon - longitude) / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function eventNearScore(event: any, interestTagIds: Set<string>, latitude: number, longitude: number) {
+  const distance = eventDistance(event, latitude, longitude);
+  const proximity = Number.isFinite(distance) ? Math.max(0, 80 - distance) : 0;
+  const commonInterests = (event.tags ?? []).filter((item: any) => interestTagIds.has(item.tagId ?? item.tag?.id)).length;
+  const followedAttendees = (event.participants ?? []).filter((item: any) => item.status !== "invited" && item.user?.followers?.length).length;
+  const attendeeCount = Number(event._count?.participants ?? 0);
+  const hoursAway = Math.max(0, (new Date(event.startsAt).getTime() - Date.now()) / 3_600_000);
+  const timing = Math.max(0, 18 - Math.min(hoursAway / 6, 18));
+  return proximity + commonInterests * 24 + followedAttendees * 12 + Math.min(attendeeCount, 50) * 0.4 + timing;
 }

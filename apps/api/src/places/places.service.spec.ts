@@ -90,6 +90,29 @@ describe("PlacesService", () => {
     userInterestTag.findMany.mockResolvedValue([]);
   });
 
+  it("ranks nearby places using distance and shared interests before paginating", async () => {
+    userInterestTag.findMany.mockResolvedValue([{ tagId: "music" }]);
+    const base = {
+      status: "active",
+      visibility: "open",
+      followerCount: 0,
+      followers: [],
+      members: [],
+      _count: { members: 0, followers: 0, events: 0 },
+    };
+    place.findMany.mockResolvedValue([
+      { ...base, id: "far", name: "Far", slug: "far-100001", latitude: 42, longitude: 30, tags: [] },
+      { ...base, id: "relevant", name: "Relevant", slug: "relevant-100002", latitude: 41.01, longitude: 29.01, tags: [{ tagId: "music", tag: { id: "music", name: "Music", slug: "music", status: "active" } }] },
+    ]);
+    place.count.mockResolvedValue(2);
+
+    const result = await service.list({ scope: "near", latitude: 41, longitude: 29, page: 1, pageSize: 1 } as never, actor.id);
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.id).toBe("relevant");
+    expect(place.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 200 }));
+  });
+
   it("creates the owner as an accepted organizer", async () => {
     place.create.mockResolvedValue({
       id: "22222222-2222-4222-8222-222222222222",
@@ -207,6 +230,41 @@ describe("PlacesService", () => {
     await expect(
       service.updateMember("place-1", "member-1", { role: "manager" }, actor),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("allows an organiser to promote a regular member to organiser", async () => {
+    place.findUnique.mockResolvedValue({
+      id: "place-1",
+      createdById: "creator-1",
+      members: [{ role: "organizer" }],
+    });
+    placeMember.findUnique.mockResolvedValue({
+      placeId: "place-1",
+      userId: "member-1",
+      role: "member",
+      status: "accepted",
+    });
+    placeMember.update.mockResolvedValue({ userId: "member-1", role: "organizer" });
+
+    await service.updateMember("place-1", "member-1", { role: "organizer" as never }, actor);
+
+    expect(placeMember.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ role: "organizer" }) }));
+  });
+
+  it("prevents an organiser from removing the place owner role", async () => {
+    place.findUnique.mockResolvedValue({
+      id: "place-1",
+      createdById: "creator-1",
+      members: [{ role: "organizer" }],
+    });
+    placeMember.findUnique.mockResolvedValue({
+      placeId: "place-1",
+      userId: "owner-2",
+      role: "manager",
+      status: "accepted",
+    });
+
+    await expect(service.updateMember("place-1", "owner-2", { role: "member" as never }, actor)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it("only accepts accepted or declined invitation responses", async () => {

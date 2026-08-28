@@ -17,6 +17,7 @@ import { toSlug } from "../common/slug";
 import { createHash, randomInt, randomUUID } from "crypto";
 import { hash } from "bcryptjs";
 import { PrismaService } from "../prisma/prisma.service";
+import { canUseAdvancedAnalytics } from "../common/analytics-access";
 import {
   CreatePlaceDto,
   InvitePlaceMemberDto,
@@ -64,7 +65,7 @@ export class PlacesService {
       : [];
     let popularCity: string | undefined;
     let popularCountry: string | undefined;
-    const personalTagIds = query.scope === "for_you" && viewerId ? (await this.prisma.userInterestTag.findMany({ where: { userId: viewerId, sentiment: { in: ["like", "ok"] } }, select: { tagId: true }, take: 100 })).map((item) => item.tagId) : [];
+    const personalTagIds = (query.scope === "for_you" || query.scope === "near") && viewerId ? (await this.prisma.userInterestTag.findMany({ where: { userId: viewerId, sentiment: { in: ["like", "ok"] } }, select: { tagId: true }, take: 100 })).map((item) => item.tagId) : [];
     if (query.scope === "popular" && viewerId && !query.city && !query.country) {
       const viewer = await this.prisma.user.findUnique({ where: { id: viewerId }, select: { city: true, country: true } });
       if (viewer?.city && await this.prisma.place.count({ where: { status: "active", city: { equals: viewer.city, mode: "insensitive" } } })) popularCity = viewer.city;
@@ -114,7 +115,7 @@ export class PlacesService {
       this.prisma.place.count({ where }),
     ]);
     const items = query.scope === "near" && query.latitude != null && query.longitude != null
-      ? [...foundItems].sort((a, b) => placeDistance(a, query.latitude!, query.longitude!) - placeDistance(b, query.latitude!, query.longitude!)).slice((page - 1) * pageSize, page * pageSize)
+      ? [...foundItems].sort((left, right) => placeNearScore(right, new Set(personalTagIds), query.latitude!, query.longitude!) - placeNearScore(left, new Set(personalTagIds), query.latitude!, query.longitude!)).slice((page - 1) * pageSize, page * pageSize)
       : foundItems;
     return {
       items: items.map((place) => this.toPublicPlace(place)),
@@ -166,12 +167,13 @@ export class PlacesService {
 
   async getInteractionStats(placeId: string, actor?: User) {
     if (actor && !["admin", "super_admin", "curator"].includes(actor.role)) await this.ensureCanManage(placeId, actor);
+    if (actor && !canUseAdvancedAnalytics(actor)) throw new ForbiddenException("Gelişmiş istatistikler admin, küratör ve uygun paket sahipleri tarafından kullanılabilir.");
     const place = await this.prisma.place.findUnique({
       where: { id: placeId },
       select: { id: true, followerCount: true, inviteCount: true },
     });
     if (!place) throw new NotFoundException("Mekân bulunamadı.");
-    const [members, memberDetails, placeCheckedIn, comments, reactions, views, detailViews, viewSources, sharesByChannel, events, eventDetails, ticketSummary, paymentSummary, refundSummary] = await Promise.all([
+    const [members, memberDetails, placeCheckedIn, comments, reactions, ratingRows, views, detailViews, viewSources, sharesByChannel, events, eventDetails, ticketSummary, paymentSummary, refundSummary] = await Promise.all([
       this.prisma.placeMember.count({ where: { placeId, status: "accepted" } }),
       this.prisma.placeMember.findMany({
         where: { placeId, status: "accepted" },
@@ -196,7 +198,12 @@ export class PlacesService {
         where: { targetType: "place", targetId: placeId, status: "active" },
       }),
       this.prisma.contentReaction.count({
-        where: { targetType: "place", targetId: placeId },
+        where: { targetType: "place", targetId: placeId, NOT: { reaction: { startsWith: "rating_" } } },
+      }),
+      this.prisma.contentReaction.findMany({
+        where: { targetType: "place", targetId: placeId, reaction: { startsWith: "rating_" } },
+        select: { reaction: true },
+        take: 50_000,
       }),
       this.prisma.contentView.count({
         where: { targetType: "place", targetId: placeId, kind: "impression" },
@@ -219,7 +226,7 @@ export class PlacesService {
     const ageCounts = placeDistributionCount(memberDetails.map((item) => placeAgeBucket(item.user.birthDate)));
     const genderCounts = placeDistributionCount(memberDetails.map((item) => item.user.gender || "belirtilmedi"));
     const locationCounts = placeDistributionCount(memberDetails.map((item) => item.user.country || item.user.city || "belirtilmedi"), 9);
-    const interestCounts = placeDistributionCount(memberDetails.flatMap((item) => item.user.interestTags.map((interest) => interest.tag.name)), 12);
+    const interestCounts = placeDistributionCount(memberDetails.flatMap((item) => item.user.interestTags.map((interest) => interest.tag.name)), 100);
     const attendeeRows = eventDetails.flatMap((event) => event.participants);
     const languageCounts = placeDistributionCount([...memberDetails.map((item) => item.user.preferredLanguage || "belirtilmedi"), ...attendeeRows.map((item) => item.user.preferredLanguage || "belirtilmedi")]);
     const checkInTimes = [...memberDetails.map((item) => item.checkedInAt).filter((item): item is Date => Boolean(item)), ...attendeeRows.map((item) => item.checkedInAt).filter((item): item is Date => Boolean(item))];
@@ -248,6 +255,16 @@ export class PlacesService {
     }).filter((item) => item.rate > 0);
     const fullEvents = Object.fromEntries([...occupancyByEvent].sort((a, b) => b.rate - a.rate).slice(0, 5).map((item) => [item.name, item.rate]));
     const emptyEvents = Object.fromEntries([...occupancyByEvent].sort((a, b) => a.rate - b.rate).slice(0, 5).map((item) => [item.name, item.rate]));
+    const monthlyOccupancyRows = new Map<string, { sold: number; capacity: number }>();
+    for (const event of eventDetails) {
+      const key = event.startsAt.toISOString().slice(0, 7);
+      const current = monthlyOccupancyRows.get(key) ?? { sold: 0, capacity: 0 };
+      current.sold += event.ticketTypeRecords.reduce((sum, ticket) => sum + ticket.soldCount, 0);
+      current.capacity += event.ticketTypeRecords.reduce((sum, ticket) => sum + ticket.capacity, 0);
+      monthlyOccupancyRows.set(key, current);
+    }
+    const monthlyOccupancyRate = Object.fromEntries([...monthlyOccupancyRows.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([month, value]) => [month, value.capacity > 0 ? Math.round(value.sold / value.capacity * 100) : 0]));
+    const monthlyOccupancyPeople = Object.fromEntries([...monthlyOccupancyRows.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([month, value]) => [month, value.sold]));
     const organizerRows = new Map<string, { label: string; events: number; accepted: number; attended: number }>();
     for (const event of eventDetails) {
       const id = event.createdBy?.id ?? "unknown";
@@ -261,6 +278,7 @@ export class PlacesService {
     for (const member of memberDetails) visitorLabels.set(member.userId, member.user.username ? `@${member.user.username}` : member.userId);
     const topVisitors = Object.fromEntries([...visitCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([id, count]) => [visitorLabels.get(id) ?? id, count]));
     const freeSold = eventDetails.reduce((sum, event) => sum + event.ticketTypeRecords.filter((ticket) => Number(ticket.price) === 0).reduce((ticketSum, ticket) => ticketSum + ticket.soldCount, 0), 0);
+    const ratingValues = ratingRows.map((row) => Number(row.reaction.slice("rating_".length))).filter((value) => Number.isInteger(value) && value >= 1 && value <= 5);
     return {
       followers: place.followerCount,
       invites: place.inviteCount,
@@ -277,6 +295,8 @@ export class PlacesService {
       engagementRate: detailViews > 0 ? Math.round((comments + reactions) / detailViews * 100) : 0,
       eventAttendance,
       averageEventAttendance: events > 0 ? Math.round(eventAttendance / events * 10) / 10 : 0,
+      averageEventRating: ratingValues.length ? Math.round(ratingValues.reduce((sum, value) => sum + value, 0) / ratingValues.length * 10) / 10 : 0,
+      ratingCount: ratingValues.length,
       ticketCapacity: capacity,
       ticketsSold: sold,
       ticketsRemaining: Math.max(0, capacity - sold),
@@ -306,6 +326,8 @@ export class PlacesService {
       ...placePrefixMetrics("hour", hourCounts),
       ...placePrefixMetrics("fullEvent", fullEvents),
       ...placePrefixMetrics("emptyEvent", emptyEvents),
+      ...placePrefixMetrics("monthlyOccupancyRate", monthlyOccupancyRate),
+      ...placePrefixMetrics("monthlyOccupancyPeople", monthlyOccupancyPeople),
       ...placePrefixMetrics("organizerEvents", organizerEvents),
       ...placePrefixMetrics("organizerAttendanceRate", organizerAttendanceRate),
       ...placePrefixMetrics("topVisitor", topVisitors),
@@ -684,19 +706,14 @@ export class PlacesService {
         "Mekân sahibinin organizatör üyeliği kaldırılamaz.",
       );
     }
-    if (input.role && actor.role === "user" && place.createdById !== actor.id) {
-      throw new ForbiddenException(
-        "Üye rollerini yalnız mekân sahibi değiştirebilir.",
-      );
-    }
-    const actorMembership = place.members[0];
     if (
+      input.role &&
       actor.role === "user" &&
-      actorMembership?.role === PlaceMemberRole.manager &&
-      member.role !== PlaceMemberRole.member
+      place.createdById !== actor.id &&
+      (input.role === PlaceMemberRole.manager || member.role === PlaceMemberRole.manager)
     ) {
       throw new ForbiddenException(
-        "Yöneticiler diğer yönetici veya organizatörleri değiştiremez.",
+        "Mekân sahibi rolünü yalnız mekân kurucusu değiştirebilir.",
       );
     }
     return this.prisma.placeMember.update({
@@ -1021,6 +1038,15 @@ function placeDistance(place: { latitude: unknown; longitude: unknown }, latitud
   const lat = Number(place.latitude); const lon = Number(place.longitude);
   const a = Math.sin(toRadians(lat - latitude) / 2) ** 2 + Math.cos(toRadians(latitude)) * Math.cos(toRadians(lat)) * Math.sin(toRadians(lon - longitude) / 2) ** 2;
   return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function placeNearScore(place: any, interestTagIds: Set<string>, latitude: number, longitude: number) {
+  const distance = placeDistance(place, latitude, longitude);
+  const proximity = Number.isFinite(distance) ? Math.max(0, 80 - distance) : 0;
+  const commonInterests = (place.tags ?? []).filter((item: any) => interestTagIds.has(item.tagId ?? item.tag?.id)).length;
+  const followedMembers = Number(place._count?.followers ?? 0);
+  const popularity = Number(place.followerCount ?? 0);
+  return proximity + commonInterests * 24 + followedMembers * 12 + Math.min(popularity, 100) * 0.25;
 }
 
 function placeAgeBucket(birthDate: Date | null) {

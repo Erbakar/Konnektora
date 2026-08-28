@@ -144,7 +144,7 @@ export class EventsController {
     @Body() body: ScanCheckInTicketDto,
     @CurrentUser() user: User,
   ) {
-    return this.eventsService.checkInWithTicket(id, body.token, user);
+    return this.eventsService.previewCheckInWithTicket(id, body.token, "qr", user);
   }
 
   @Post("events/:id/check-in/preview")

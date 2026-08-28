@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrivacyAudience } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { canUseAdvancedAnalytics } from "../common/analytics-access";
 
 @Injectable()
 export class PublicProfileService {
@@ -19,7 +20,7 @@ export class PublicProfileService {
     const profile = await this.prisma.user.findFirst({
       where: { ...identifier, status: "active", role: { in: ["user", "curator"] } },
       select: {
-        id: true, name: true, username: true, accountType: true, website: true, city: true, country: true, district: true, address: true, gender: true, birthDate: true, companyName: true, tradeName: true, companyType: true, businessCategory: true,
+        id: true, name: true, username: true, accountType: true, businessPlan: true, memberPlan: true, website: true, city: true, country: true, district: true, address: true, gender: true, birthDate: true, companyName: true, tradeName: true, companyType: true, businessCategory: true,
         followerCount: true, followingCount: true, createdAt: true, profileVerifiedAt: true,
         privacySettings: { select: { messageAudience: true, eventAudience: true, placeAudience: true, profileNameAudience: true, demographicsAudience: true, locationAudience: true, websiteAudience: true, businessAudience: true, addressAudience: true, tradeNameAudience: true } },
         interestTags: { where: { tag: { status: "active" } }, include: { tag: true }, orderBy: { createdAt: "desc" } }
@@ -32,8 +33,8 @@ export class PublicProfileService {
     }
     const relationship = await this.relationship(profile.id, viewerId);
     const privacy = profile.privacySettings ?? { messageAudience: "everybody" as const, eventAudience: "everybody" as const, placeAudience: "everybody" as const, profileNameAudience: "everybody" as const, demographicsAudience: "everybody" as const, locationAudience: "everybody" as const, websiteAudience: "everybody" as const, businessAudience: "everybody" as const, addressAudience: "everybody" as const, tradeNameAudience: "everybody" as const };
-    const canViewStats = viewerId === profile.id || ["admin", "super_admin", "curator"].includes(viewerRole ?? "");
-    const [media, ownInterests, events, places, profileViews, authoredComments, sentMessages, profileViewDetails, followerDetails, ownedEventStats, scans, profileViewSources, profileSharesByChannel, profileActions] = await Promise.all([
+    const canViewStats = ["admin", "super_admin", "curator"].includes(viewerRole ?? "") || viewerId === profile.id && canUseAdvancedAnalytics({ role: viewerRole ?? "user", accountType: profile.accountType, businessPlan: profile.businessPlan, memberPlan: profile.memberPlan });
+    const [media, ownInterests, events, places, profileViews, authoredComments, sentMessages, profileViewDetails, followerDetails, connectionDetails, ownedEventStats, scans, profileViewSources, profileSharesByChannel, profileActions] = await Promise.all([
       this.prisma.mediaFile.findMany({ where: { contentType: "user", contentId: profile.id, status: "active" }, select: { id: true, url: true, type: true, sortOrder: true, isProfilePicture: true }, orderBy: { sortOrder: "asc" }, take: 50 }),
       viewerId ? this.prisma.userInterestTag.findMany({ where: { userId: viewerId }, select: { tagId: true, sentiment: true } }) : [],
       this.canView(privacy.eventAudience, relationship) ? this.prisma.event.findMany({ where: { status: "published", OR: [{ createdById: profile.id }, { participants: { some: { userId: profile.id, status: { in: ["accepted", "attended"] } } } }] }, orderBy: { startsAt: "desc" }, take: 24, include: { _count: { select: { participants: { where: { status: { in: ["accepted", "attended"] } } } } } } }) : [],
@@ -55,13 +56,23 @@ export class PublicProfileService {
         select: { createdAt: true, follower: { select: { birthDate: true, gender: true, city: true, country: true, preferredLanguage: true, interestTags: { select: { tag: { select: { name: true } } }, take: 25 } } } },
         take: 20_000,
       }) : [],
+      canViewStats ? this.prisma.userFollow.findMany({
+        where: { OR: [{ followingId: profile.id }, { followerId: profile.id }] },
+        select: {
+          followerId: true,
+          followingId: true,
+          follower: { select: { id: true, city: true, country: true } },
+          following: { select: { id: true, city: true, country: true } },
+        },
+        take: 20_000,
+      }) : [],
       canViewStats ? this.prisma.event.findMany({
         where: { createdById: profile.id },
         select: {
           id: true,
           startsAt: true,
-          participants: { where: { status: { in: ["accepted", "attended"] } }, select: { status: true } },
-          ticketTypeRecords: { select: { soldCount: true } },
+          participants: { where: { status: { in: ["accepted", "attended", "declined"] } }, select: { status: true } },
+          ticketTypeRecords: { select: { soldCount: true, capacity: true } },
           payments: { where: { status: "succeeded" }, select: { grossAmount: true, platformFee: true, netAmount: true } },
           ticketRefunds: { select: { amount: true } },
         },
@@ -87,6 +98,7 @@ export class PublicProfileService {
     const visitorGenderCounts = profileDistribution(profileViewDetails.map((item) => item.user?.gender || "belirtilmedi"));
     const visitorInterestCounts = profileDistribution(profileViewDetails.flatMap((item) => item.user?.interestTags.map((interest) => interest.tag.name) ?? []), 12);
     const followerCountryCounts = profileDistribution(followerDetails.map((item) => item.follower.country || "belirtilmedi"), 10);
+    const followerCityCounts = profileDistribution(followerDetails.map((item) => item.follower.city || "belirtilmedi"), 10);
     const followerAgeCounts = profileDistribution(followerDetails.map((item) => profileAgeBucket(item.follower.birthDate)));
     const followerGenderCounts = profileDistribution(followerDetails.map((item) => item.follower.gender || "belirtilmedi"));
     const followerInterestCounts = profileDistribution(followerDetails.flatMap((item) => item.follower.interestTags.map((interest) => interest.tag.name)), 12);
@@ -95,20 +107,31 @@ export class PublicProfileService {
     const followersLast7d = followerDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 7 * day).length;
     const followersLast30d = followerDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 30 * day).length;
     const followersLast90d = followerDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 90 * day).length;
-    const eventAccepted = ownedEventStats.reduce((sum, event) => sum + event.participants.length, 0);
+    const eventAccepted = ownedEventStats.reduce((sum, event) => sum + event.participants.filter((participant) => ["accepted", "attended"].includes(participant.status)).length, 0);
     const eventAttended = ownedEventStats.reduce((sum, event) => sum + event.participants.filter((participant) => participant.status === "attended").length, 0);
+    const eventDeclined = ownedEventStats.reduce((sum, event) => sum + event.participants.filter((participant) => participant.status === "declined").length, 0);
     const ticketsSold = ownedEventStats.reduce((sum, event) => sum + event.ticketTypeRecords.reduce((ticketSum, ticket) => ticketSum + ticket.soldCount, 0), 0);
+    const ticketCapacity = ownedEventStats.reduce((sum, event) => sum + event.ticketTypeRecords.reduce((ticketSum, ticket) => ticketSum + ticket.capacity, 0), 0);
     const ticketRevenue = ownedEventStats.reduce((sum, event) => sum + event.payments.reduce((paymentSum, payment) => paymentSum + Number(payment.grossAmount), 0), 0);
     const platformFees = ownedEventStats.reduce((sum, event) => sum + event.payments.reduce((paymentSum, payment) => paymentSum + Number(payment.platformFee), 0), 0);
     const organizerRevenue = ownedEventStats.reduce((sum, event) => sum + event.payments.reduce((paymentSum, payment) => paymentSum + Number(payment.netAmount), 0), 0);
     const refundAmount = ownedEventStats.reduce((sum, event) => sum + event.ticketRefunds.reduce((refundSum, refund) => refundSum + Number(refund.amount), 0), 0);
     const ownedEventIds = ownedEventStats.map((event: any) => event.id).filter(Boolean);
-    const [searchImpressions, searchClicks, ownedEventViews, ownedEventShares] = canViewStats ? await Promise.all([
+    const [searchImpressions, searchClicks, ownedEventViews, ownedEventShares, ownedEventRatings] = canViewStats ? await Promise.all([
       this.prisma.contentView.count({ where: { targetType: "user", targetId: profile.id, kind: "impression", source: "app_search" } }),
       this.prisma.contentView.count({ where: { targetType: "user", targetId: profile.id, kind: "detail", source: "app_search" } }),
       ownedEventIds.length ? this.prisma.contentView.count({ where: { targetType: "event", targetId: { in: ownedEventIds }, kind: "detail" } }) : 0,
       ownedEventIds.length ? this.prisma.contentShare.count({ where: { targetType: "event", targetId: { in: ownedEventIds } } }) : 0,
-    ]) : [0, 0, 0, 0];
+      ownedEventIds.length ? this.prisma.contentReaction.findMany({ where: { targetType: "event", targetId: { in: ownedEventIds }, reaction: { startsWith: "rating_" } }, select: { reaction: true }, take: 50_000 }) : [],
+    ]) : [0, 0, 0, 0, []];
+    const eventRatingValues = ownedEventRatings.map((item) => Number(item.reaction.slice("rating_".length))).filter((value) => Number.isInteger(value) && value >= 1 && value <= 5);
+    const networkPeople = new Map<string, { city: string | null; country: string | null }>();
+    for (const connection of connectionDetails) {
+      const other = connection.followerId === profile.id ? connection.following : connection.follower;
+      if (other.id !== profile.id) networkPeople.set(other.id, { city: other.city, country: other.country });
+    }
+    const networkCityCounts = profileDistribution([...networkPeople.values()].map((person) => person.city || "belirtilmedi"), 10);
+    const networkCountryCounts = profileDistribution([...networkPeople.values()].map((person) => person.country || "belirtilmedi"), 10);
     const actionCount = (action: string) => profileActions.find((item) => item.action === action)?._count._all ?? 0;
     const profileStats = canViewStats ? {
       followers: profile.followerCount,
@@ -138,22 +161,33 @@ export class PublicProfileService {
       ownedEventShares,
       eventAccepted,
       eventAttended,
+      eventDeclined,
       eventAttendanceRate: eventAccepted > 0 ? Math.round(eventAttended / eventAccepted * 100) : 0,
+      eventCancellationRate: eventAccepted + eventDeclined > 0 ? Math.round(eventDeclined / (eventAccepted + eventDeclined) * 100) : 0,
+      eventOccupancyRate: ticketCapacity > 0 ? Math.round(ticketsSold / ticketCapacity * 100) : 0,
+      averageEventRating: eventRatingValues.length ? Math.round(eventRatingValues.reduce((sum, value) => sum + value, 0) / eventRatingValues.length * 10) / 10 : 0,
+      ownedEvents: ownedEventStats.length,
       ticketsSold,
       ticketRevenue: Math.round(ticketRevenue * 100) / 100,
       platformFees: Math.round(platformFees * 100) / 100,
       organizerRevenue: Math.round(organizerRevenue * 100) / 100,
       refundAmount: Math.round(refundAmount * 100) / 100,
+      averageTicketPrice: ticketsSold > 0 ? Math.round(ticketRevenue / ticketsSold * 100) / 100 : 0,
+      taxAmount: 0,
+      totalConnections: networkPeople.size,
       profileConversionRate: profileViews > 0 ? Math.round(profile.followerCount / profileViews * 100) : 0,
       ...profilePrefix("visitorCountry", visitorCountryCounts),
       ...profilePrefix("visitorAge", visitorAgeCounts),
       ...profilePrefix("visitorGender", visitorGenderCounts),
       ...profilePrefix("visitorInterest", visitorInterestCounts),
       ...profilePrefix("followerCountry", followerCountryCounts),
+      ...profilePrefix("followerCity", followerCityCounts),
       ...profilePrefix("followerAge", followerAgeCounts),
       ...profilePrefix("followerGender", followerGenderCounts),
       ...profilePrefix("followerInterest", followerInterestCounts),
       ...profilePrefix("followerLanguage", followerLanguageCounts),
+      ...profilePrefix("networkCity", networkCityCounts),
+      ...profilePrefix("networkCountry", networkCountryCounts),
       ...profilePrefix("source", Object.fromEntries(profileViewSources.map((item) => [item.source || "direct", item._count._all]))),
       ...profilePrefix("shareChannel", Object.fromEntries(profileSharesByChannel.map((item) => [item.channel, item._count._all]))),
     } : undefined;

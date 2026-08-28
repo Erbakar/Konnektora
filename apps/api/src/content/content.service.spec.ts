@@ -21,6 +21,7 @@ describe("ContentService profile media", () => {
     contentView: { create: jest.fn() },
     contentShare: { create: jest.fn() },
     contentAction: { create: jest.fn() },
+    contentReaction: { findUnique: jest.fn(), upsert: jest.fn(), deleteMany: jest.fn(), create: jest.fn() },
     $transaction: jest.fn(async (operation: unknown) => {
       if (typeof operation === "function") return operation({ mediaFile });
       return Promise.all(operation as Promise<unknown>[]);
@@ -140,5 +141,18 @@ describe("ContentService profile media", () => {
       action: "website_click",
       user: { connect: { id: "user-1" } },
     } });
+  });
+
+  it("replaces an earlier event rating so each member has one current score", async () => {
+    prisma.event.findUnique.mockResolvedValue({ id: "event-1" });
+    prisma.contentReaction.deleteMany.mockResolvedValue({ count: 1 });
+    prisma.contentReaction.create.mockResolvedValue({ id: "rating-1" });
+    await expect(service.createReaction({ targetType: ReportTargetType.event, targetId: "event-1", reaction: "rating_5" }, { id: "user-1" } as never)).resolves.toEqual({ targetType: "event", targetId: "event-1", reaction: "rating_5" });
+    expect(prisma.contentReaction.deleteMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ userId: "user-1", reaction: { startsWith: "rating_" } }) }));
+    expect(prisma.contentReaction.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ reaction: "rating_5" }) }));
+  });
+
+  it("rejects ratings outside the supported range", async () => {
+    await expect(service.createReaction({ targetType: ReportTargetType.place, targetId: "place-1", reaction: "rating_7" }, { id: "user-1" } as never)).rejects.toBeInstanceOf(BadRequestException);
   });
 });

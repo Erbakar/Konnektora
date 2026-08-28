@@ -1395,6 +1395,8 @@ function CmsAdminPanel({
     onCreateAnnouncement({
       title: String(form.get("title")),
       body: String(form.get("body")),
+      titleEn: String(form.get("titleEn")),
+      bodyEn: String(form.get("bodyEn")),
       target: String(form.get("target") || "all"),
       targetLastLoginFrom: dateInputToIso(String(form.get("targetLastLoginFrom") || "")),
       targetLastLoginTo: dateInputToIso(String(form.get("targetLastLoginTo") || "")),
@@ -1714,6 +1716,14 @@ function CmsAdminPanel({
             <label>
               İçerik
               <RichTextTextarea name="body" placeholder="Duyurunun detaylarını buraya yaz..." required minLength={3} rows={4} />
+            </label>
+            <label>
+              İngilizce başlık
+              <input name="titleEn" placeholder="Example: A better event discovery experience" minLength={3} maxLength={160} required />
+            </label>
+            <label>
+              İngilizce içerik
+              <RichTextTextarea name="bodyEn" placeholder="Write the English announcement content here..." minLength={3} required rows={4} />
             </label>
             <div className="admin-form-grid">
               <label>

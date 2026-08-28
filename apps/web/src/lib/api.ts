@@ -224,6 +224,7 @@ const MOCK_PROFILE_TAG_SUGGESTIONS_KEY = "konnektora_mock_profile_tag_suggestion
 const MOCK_SOCIAL_COMMENTS_KEY = "konnektora_mock_social_comments";
 const MOCK_CONTENT_THREAD_COMMENTS_KEY =
   "konnektora_mock_content_thread_comments";
+const MOCK_CONTENT_RATINGS_KEY = "konnektora_mock_content_ratings";
 const MOCK_MEMBER_SCANS_KEY = "konnektora_mock_member_scans";
 const MOCK_SOCIAL_ACCOUNTS_KEY = "konnektora_mock_social_accounts";
 const MOCK_PROFILE_VERIFICATIONS_KEY = "konnektora_mock_profile_verifications";
@@ -2708,6 +2709,11 @@ function getMockResponse<T>(
       pathname.startsWith("/place-stats/")) &&
     method === "GET"
   ) {
+    const analyticsUser = getUserSession();
+    const memberPlan = analyticsUser ? readStorage<Record<string, { plan: "free" | "plus" | "premium" }>>(MOCK_MEMBER_PLANS_KEY, {})[analyticsUser.id]?.plan ?? "free" : "free";
+    const businessPlan = analyticsUser ? readStorage<Record<string, { plan: "starter" | "growth" | "scale" }>>(MOCK_BUSINESS_PLANS_KEY, {})[analyticsUser.id]?.plan ?? "starter" : "starter";
+    const hasAnalyticsAccess = Boolean(analyticsUser && (["admin", "super_admin", "curator"].includes(analyticsUser.role) || (analyticsUser.accountType === "corporate" ? businessPlan !== "starter" : memberPlan !== "free")));
+    if (!hasAnalyticsAccess) return undefined;
     const targetType = pathname.startsWith("/event-stats/") ? "event" : "place";
     const targetId = pathname.slice(
       targetType === "event" ? "/event-stats/".length : "/place-stats/".length,
@@ -2718,6 +2724,8 @@ function getMockResponse<T>(
     ).filter(
       (item) => item.targetType === targetType && item.targetId === targetId,
     ).length;
+    const ratings = Object.entries(readStorage<Record<string, number>>(MOCK_CONTENT_RATINGS_KEY, {})).filter(([key]) => key.includes(`:${targetType}:${targetId}`)).map(([, value]) => value);
+    const averageRating = ratings.length ? Math.round(ratings.reduce((sum, value) => sum + value, 0) / ratings.length * 10) / 10 : 0;
     if (targetType === "event") {
       const participants = readStorage<EventParticipant[]>(
         MOCK_PARTICIPANTS_KEY,
@@ -2735,6 +2743,8 @@ function getMockResponse<T>(
         comments,
         reactions: 0,
         views: 0,
+        averageRating,
+        ratingCount: ratings.length,
       });
     }
     const place = listMockPlaces(new URLSearchParams()).find(
@@ -2747,7 +2757,20 @@ function getMockResponse<T>(
       comments,
       reactions: 0,
       views: 0,
+      averageEventRating: averageRating,
+      ratingCount: ratings.length,
     });
+  }
+
+  if (pathname === "/reactions" && method === "POST" && options.auth === "user") {
+    const input = parseBody<{ targetType: "event" | "place"; targetId: string; reaction: string }>(options);
+    const score = Number(input.reaction.replace("rating_", ""));
+    if (!["event", "place"].includes(input.targetType) || !Number.isInteger(score) || score < 1 || score > 5) return undefined;
+    const session = getUserSession();
+    const ratings = readStorage<Record<string, number>>(MOCK_CONTENT_RATINGS_KEY, {});
+    ratings[`${session?.id ?? "anonymous"}:${input.targetType}:${input.targetId}`] = score;
+    writeStorage(MOCK_CONTENT_RATINGS_KEY, ratings);
+    return schema.parse(input);
   }
 
   if (
@@ -5322,6 +5345,8 @@ function listMockAnnouncements(): Announcement[] {
       id: "81000000-0000-4000-8000-000000000001",
       title: "Yeni dönem etkinlik takvimi açıldı",
       body: "Startup, networking, yatırım ve founder kategorilerindeki yeni buluşmaları keşfedin.",
+      titleEn: "The new season event calendar is open",
+      bodyEn: "Discover new gatherings across startup, networking, investment and founder communities.",
       target: "all",
       targetLastLoginFrom: null,
       targetLastLoginTo: null,
@@ -5339,6 +5364,8 @@ function listMockAnnouncements(): Announcement[] {
       id: "81000000-0000-4000-8000-000000000002",
       title: "Topluluk buluşmaları büyüyor",
       body: "Berlin, İstanbul, Amsterdam ve Londra'daki yeni Konnektora mekânları yayında.",
+      titleEn: "Community gatherings are growing",
+      bodyEn: "New Konnektora places in Berlin, Istanbul, Amsterdam and London are now live.",
       target: "all",
       targetLastLoginFrom: null,
       targetLastLoginTo: null,
@@ -5356,6 +5383,8 @@ function listMockAnnouncements(): Announcement[] {
       id: "81000000-0000-4000-8000-000000000003",
       title: "Profilini tamamla, doğru kişilerle eşleş",
       body: "İlgi alanlarını ve şehir bilgini ekleyerek daha ilgili öneriler alabilirsin.",
+      titleEn: "Complete your profile and meet the right people",
+      bodyEn: "Add your interests and city to receive more relevant recommendations.",
       target: "all",
       targetLastLoginFrom: null,
       targetLastLoginTo: null,
@@ -5402,6 +5431,8 @@ function createMockAnnouncement(input: AnnouncementInput): Announcement {
     id: createId(),
     title: input.title.trim(),
     body: input.body.trim(),
+    titleEn: input.titleEn?.trim() || null,
+    bodyEn: input.bodyEn?.trim() || null,
     target: parseAnnouncementTarget(input.target),
     targetLastLoginFrom: input.targetLastLoginFrom || null,
     targetLastLoginTo: input.targetLastLoginTo || null,
@@ -5432,6 +5463,8 @@ function updateMockAnnouncement(
           ...announcement,
           title: input.title?.trim() ?? announcement.title,
           body: input.body?.trim() ?? announcement.body,
+          titleEn: input.titleEn === undefined ? announcement.titleEn : input.titleEn.trim() || null,
+          bodyEn: input.bodyEn === undefined ? announcement.bodyEn : input.bodyEn.trim() || null,
           target: input.target
             ? parseAnnouncementTarget(input.target)
             : announcement.target,
@@ -9083,6 +9116,14 @@ export function recordContentAction(targetType: string, targetId: string, action
   });
 }
 
+export function rateContent(targetType: "event" | "place", targetId: string, score: number): Promise<unknown> {
+  return requestJson("/reactions", z.unknown(), {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify({ targetType, targetId, reaction: `rating_${score}` }),
+  });
+}
+
 export function updatePreferredLanguage(language: "tr" | "en"): Promise<{ preferredLanguage: string }> {
   return requestJson("/profile/language", z.object({ preferredLanguage: z.string() }), {
     auth: "user",
@@ -10078,6 +10119,8 @@ export type FaqInput = {
 export type AnnouncementInput = {
   title: string;
   body: string;
+  titleEn: string;
+  bodyEn: string;
   target?: string;
   targetLastLoginFrom?: string;
   targetLastLoginTo?: string;
@@ -10615,10 +10658,10 @@ export function getMyEventTicket(eventId: string): Promise<EventTicket> {
 export function scanEventTicket(
   eventId: string,
   token: string,
-): Promise<EventParticipant> {
+): Promise<CheckInPassport> {
   return requestJson(
     `/events/${eventId}/check-in/scan`,
-    eventParticipantSchema,
+    checkInPassportSchema,
     {
       auth: "user",
       method: "POST",
@@ -10851,8 +10894,8 @@ export function checkInPlaceMember(
 export function scanPlaceMemberPass(
   id: string,
   payload: string,
-): Promise<PlaceMember> {
-  return requestJson(`/places/${id}/check-in/scan`, placeMemberSchema, {
+): Promise<CheckInPassport> {
+  return requestJson(`/places/${id}/check-in/scan`, checkInPassportSchema, {
     auth: "user",
     method: "POST",
     body: JSON.stringify({ payload }),

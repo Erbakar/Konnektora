@@ -17,6 +17,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
 import { ContentComments } from "../components/ContentComments";
 import { ContentMediaGallery } from "../components/ContentMediaGallery";
+import { ContentRating } from "../components/ContentRating";
 import { DistanceLabel } from "../components/DistanceLabel";
 import { LocationMap } from "../components/LocationMap";
 import { EventCard } from "../components/EventCard";
@@ -66,12 +67,6 @@ export function PlaceDetailPage() {
     retry: false,
   });
   const place = placeQuery.data;
-  const canViewStats = Boolean(
-    place &&
-      (place.viewerMembership?.status === "accepted" &&
-        ["manager", "organizer"].includes(place.viewerMembership.role) ||
-        ["admin", "super_admin", "curator"].includes(user?.role ?? "")),
-  );
   const canManage = Boolean(place?.viewerMembership?.status === "accepted" && ["manager", "organizer"].includes(place.viewerMembership.role) || ["admin", "super_admin", "curator"].includes(user?.role ?? ""));
   const membersQuery = useQuery({
     queryKey: ["place-members", place?.id],
@@ -162,10 +157,13 @@ export function PlaceDetailPage() {
   }
   if (!place) return <NotFoundPage kind="place" />;
   const placeEvents = place.events ?? [];
-  const visiblePlaceEvents = placeEvents.filter((event) => placeEventTab === "future" ? new Date(event.startsAt) >= new Date() : new Date(event.startsAt) < new Date()).slice(0, 8);
+  const visiblePlaceEvents = placeEvents.filter((event) => {
+    const eventFinished = new Date(event.endsAt ?? event.startsAt).getTime() < Date.now();
+    return placeEventTab === "future" ? !eventFinished : eventFinished;
+  }).slice(0, 8);
   const invitedPreviewCount = canManage
     ? (relatedUsersQuery.data ?? []).filter((member) => member.status === "invited").length
-    : place.inviteCount;
+    : (relatedUsersQuery.data ?? []).filter((member) => member.status === "invited").length;
 
   return (
     <article className="page detail-page">
@@ -219,7 +217,7 @@ export function PlaceDetailPage() {
           <div>
             {user ? <button onClick={() => setNotificationOpen(true)} type="button"><Bell size={17}/> {language === "tr" ? "Bildirim ayarla" : "Set notifications"}</button> : null}
             <Link to={`/places/${place.slug}/users`}><Users size={17}/> {language === "tr" ? "İlgili kullanıcılar" : "Related people"}</Link>
-            {canViewStats ? <Link to={`/stats/place/${place.id}`}><BarChart3 size={17}/> {language === "tr" ? "Mekân istatistikleri" : "Place analytics"}</Link> : null}
+            <Link to={user ? `/stats/place/${place.id}` : `/login?next=${encodeURIComponent(`/stats/place/${place.id}`)}`}><BarChart3 size={17}/> {language === "tr" ? "Mekân istatistikleri" : "Place analytics"}</Link>
             {canManage ? <><a href="#place-edit">{language === "tr" ? "Mekânı düzenle" : "Edit place"}</a><Link to={`/places/${place.slug}/invites#check-in`}><UserPlus size={17}/> {language === "tr" ? "Check-in kontrolü" : "Check-in control"}</Link></> : null}
             {user && !canManage ? <button onClick={() => setReportOpen(true)} type="button"><Flag size={17}/> {language === "tr" ? "Mekânı rapor et" : "Report place"}</button> : null}
             {user && !canManage ? <button disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()} type="button"><Ban size={17}/> {language === "tr" ? "Mekânı engelle" : "Block place"}</button> : null}
@@ -252,6 +250,7 @@ export function PlaceDetailPage() {
           text={place.description || (language === "tr" ? "Bu mekân için henüz açıklama eklenmemiş." : "No description has been added for this place yet.")}
         />
       </p>
+      {user ? <ContentRating targetId={place.id} targetType="place"/> : null}
       {place.latitude != null && place.longitude != null ? (
         <LocationMap items={[{ id: place.id, title: place.name, latitude: place.latitude, longitude: place.longitude, location: [place.address, localizeCityName(place.city, language), localizeCountryName(place.country, language)].filter(Boolean).join(", ") }]} />
       ) : null}

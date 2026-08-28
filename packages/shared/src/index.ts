@@ -477,6 +477,8 @@ export const announcementSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(3).max(160),
   body: z.string().min(3),
+  titleEn: z.string().min(3).max(160).nullable().optional(),
+  bodyEn: z.string().min(3).nullable().optional(),
   target: z.enum(["all", "members", "individual_members", "corporate_members", "admins"]),
   targetLastLoginFrom: z.string().datetime().or(z.date()).nullable().optional(),
   targetLastLoginTo: z.string().datetime().or(z.date()).nullable().optional(),
