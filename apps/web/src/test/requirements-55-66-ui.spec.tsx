@@ -9,6 +9,7 @@ import { AccountPage } from "../pages/AccountPage";
 import { CuratorsPage } from "../pages/CuratorsPage";
 import { PublicProfilePage } from "../pages/PublicProfilePage";
 import { SearchPage } from "../pages/SearchPage";
+import { SettingsSectionPage } from "../pages/SettingsCenterPage";
 
 const apiMocks = vi.hoisted(() => ({
   getFinanceDashboard: vi.fn(),
@@ -32,6 +33,7 @@ const apiMocks = vi.hoisted(() => ({
   recordContentView: vi.fn(),
   searchDiscovery: vi.fn(),
   submitCuratorApplication: vi.fn(),
+  updatePrivacySettings: vi.fn(),
 }));
 
 vi.mock("../lib/api", async () => {
@@ -77,6 +79,7 @@ beforeEach(() => {
   apiMocks.recordContentAction.mockResolvedValue(undefined);
   apiMocks.recordContentView.mockResolvedValue(undefined);
   apiMocks.submitCuratorApplication.mockResolvedValue({ id: "application-1" });
+  apiMocks.updatePrivacySettings.mockResolvedValue({});
 });
 
 afterEach(() => {
@@ -145,6 +148,16 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     await userEvent.click(within(rowsBefore[0]!).getByRole("button", { name: "Aşağı" }));
     const rowsAfter = within(programme).getAllByRole("group");
     expect(within(rowsAfter[0]!).getByRole("textbox", { name: "Başlık" })).toHaveValue("Bora Trio");
+
+    await userEvent.click(screen.getByRole("button", { name: "Adım 6" }));
+    const tickets = document.querySelector<HTMLElement>('[data-event-step="6"]')!;
+    const platform = within(tickets).getByRole("combobox", { name: "Satış platformu" });
+    expect(within(tickets).getByRole("spinbutton", { name: "Kişi başına maksimum bilet" })).not.toBeRequired();
+    await userEvent.selectOptions(platform, "konnektora");
+    expect(within(tickets).getByRole("alert")).toHaveTextContent('Sadece kurumsal üyeler "Konnektora online satış" ayarını tercih edebilir.');
+    expect(platform).toHaveValue("door");
+    await userEvent.selectOptions(platform, "external");
+    expect(within(tickets).getByRole("textbox", { name: "Dış satış URL'si" })).toHaveAttribute("type", "url");
   });
 
   it("takipçi gizlilik açıklamasını sayfa içi bildirim yerine düğmeye bağlı tooltip olarak açar", async () => {
@@ -204,5 +217,42 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     expect(apiMocks.submitCuratorApplication.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
       cvUrl: "https://portfolio.example.com/ada",
     }));
+  });
+
+  it("gizlilik alanlarını bireysel ve kurumsal hesaba göre ayırır; yalnız iletişim/davet alanlarından Hiç kimse seçeneğini kaldırır", async () => {
+    const privacy = {
+      directoryDiscoverable: true,
+      messageAudience: "everybody",
+      eventAudience: "everybody",
+      eventInviteAudience: "everybody",
+      placeAudience: "everybody",
+      placeInviteAudience: "everybody",
+      profileNameAudience: "everybody",
+      demographicsAudience: "everybody",
+      locationAudience: "everybody",
+      websiteAudience: "everybody",
+      businessAudience: "everybody",
+      addressAudience: "everybody",
+      tradeNameAudience: "everybody",
+    };
+    apiMocks.getPrivacySettings.mockResolvedValue(privacy);
+    apiMocks.getUserSession.mockReturnValue({ id: "person-1", accountType: "individual", role: "user" });
+    const individual = render(providers(<SettingsSectionPage section="privacy" />, "/settings/privacy"));
+
+    expect(await screen.findByRole("checkbox", { name: "Arkadaşlarım beni aramada bulabilsin" })).toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Profil ayarlarımda kayıtlı şehri kim görebilir?" })).toBeVisible();
+    expect(screen.queryByRole("combobox", { name: "Profil ayarlarımda kayıtlı adresimi kim görebilir?" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Kurumsal bilgi görünürlüğü")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("combobox", { name: "Etkinliklerimi kim görebilir?" })).getByRole("option", { name: "Hiç kimse" })).toBeInTheDocument();
+    expect(within(screen.getByRole("combobox", { name: "Kimler mesaj gönderebilir?" })).queryByRole("option", { name: "Hiç kimse" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("combobox", { name: "Kimler etkinliğe davet edebilir?" })).queryByRole("option", { name: "Hiç kimse" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("combobox", { name: "Kimler mekâna davet edebilir?" })).queryByRole("option", { name: "Hiç kimse" })).not.toBeInTheDocument();
+
+    individual.unmount();
+    apiMocks.getUserSession.mockReturnValue({ id: "business-1", accountType: "corporate", role: "user" });
+    render(providers(<SettingsSectionPage section="privacy" />, "/settings/privacy"));
+    expect(await screen.findByRole("combobox", { name: "Profil ayarlarımda kayıtlı adresimi kim görebilir?" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Ticari unvanımı kim görebilir?" })).toBeVisible();
+    expect(screen.queryByRole("combobox", { name: "Profil ayarlarımda kayıtlı şehri kim görebilir?" })).not.toBeInTheDocument();
   });
 });

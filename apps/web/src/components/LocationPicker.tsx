@@ -1,6 +1,6 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { geocodeAddress } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
 
@@ -15,6 +15,7 @@ type Props = {
 
 export function LocationPicker({ addressName, latitudeName = "latitude", longitudeName = "longitude", defaultAddress = "", defaultLatitude, defaultLongitude }: Props) {
   const { language } = useLanguage();
+  const addressId = useId();
   const initialLat = defaultLatitude ?? 41.0082;
   const initialLon = defaultLongitude ?? 28.9784;
   const [address, setAddress] = useState(defaultAddress);
@@ -69,5 +70,5 @@ export function LocationPicker({ addressName, latitudeName = "latitude", longitu
     finally { setSearching(false); }
   }
 
-  return <div className="location-picker"><label>{language === "tr" ? "Adres (veya enlem boylam)" : "Address (or latitude, longitude)"}<span className="location-picker-address"><input maxLength={240} name={addressName} onBlur={() => { if (!parseCoordinates(address)) void locateAddress(); }} onChange={(event) => setAddress(event.target.value)} placeholder={language === "tr" ? "Adres veya 41.0082, 28.9784" : "Address or 41.0082, 28.9784"} value={address}/><button disabled={searching} onClick={() => void locateAddress()} type="button">{searching ? language === "tr" ? "Aranıyor…" : "Searching…" : language === "tr" ? "Haritada bul" : "Find on map"}</button></span></label><div className="location-picker-map" ref={mapElement}/><input name={latitudeName} type="hidden" value={latitude}/><input name={longitudeName} type="hidden" value={longitude}/><small>{message || (language === "tr" ? "Adresten otomatik konum bulabilir, haritaya tıklayabilir veya pini sürükleyebilirsiniz." : "Find the location from the address automatically, click the map or drag the pin.")}</small></div>;
+  return <div className="location-picker"><label htmlFor={addressId}>{language === "tr" ? "Adres (veya enlem boylam)" : "Address (or latitude, longitude)"}</label><span className="location-picker-address"><input id={addressId} maxLength={240} name={addressName} onBlur={() => { if (!parseCoordinates(address)) void locateAddress(); }} onChange={(event) => setAddress(event.target.value)} placeholder={language === "tr" ? "Adres veya 41.0082, 28.9784" : "Address or 41.0082, 28.9784"} value={address}/><button disabled={searching} onClick={() => void locateAddress()} type="button">{searching ? language === "tr" ? "Aranıyor…" : "Searching…" : language === "tr" ? "Haritada bul" : "Find on map"}</button></span><div className="location-picker-map" ref={mapElement}/><input name={latitudeName} type="hidden" value={latitude}/><input name={longitudeName} type="hidden" value={longitude}/><small>{message || (language === "tr" ? "Adresten otomatik konum bulabilir, haritaya tıklayabilir veya pini sürükleyebilirsiniz." : "Find the location from the address automatically, click the map or drag the pin.")}</small></div>;
 }
