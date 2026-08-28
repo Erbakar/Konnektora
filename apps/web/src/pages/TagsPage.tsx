@@ -592,7 +592,7 @@ export function TagsPage() {
                 </time>
               </header>
               <p>
-                <RichText text={comment.body} />
+                <RichText hideEmbeddableUrls text={comment.body} />
               </p>
               <EmbeddedMedia text={comment.body}/>
               {comment.media?.length ? (

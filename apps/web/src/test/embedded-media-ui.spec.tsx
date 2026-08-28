@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EmbeddedMedia } from "../components/EmbeddedMedia";
+import { RichText } from "../components/RichText";
 import { LanguageProvider } from "../lib/i18n";
 
 afterEach(() => {
@@ -9,6 +10,14 @@ afterEach(() => {
 });
 
 describe("post içi YouTube ve SoundCloud oynatıcıları", () => {
+  it("oynatıcı varken uzun medya URL'sini post metninde tekrar göstermez", () => {
+    render(<LanguageProvider><p><RichText hideEmbeddableUrls text="Önerim: https://youtu.be/AbCdEf12345 ve https://on.soundcloud.com/Konnektora123" /></p></LanguageProvider>);
+
+    expect(screen.getByText(/Önerim:/)).toBeInTheDocument();
+    expect(screen.queryByText("https://youtu.be/AbCdEf12345")).not.toBeInTheDocument();
+    expect(screen.queryByText("https://on.soundcloud.com/Konnektora123")).not.toBeInTheDocument();
+  });
+
   it("YouTube başlığını gösterir, önizlemeyi oynatıcıya çevirir ve live URL'sini destekler", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
