@@ -25,6 +25,18 @@ describe("ContactsService", () => {
     expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ privacySettings: { directoryDiscoverable: true } }) }));
   });
 
+  it("searches only by username in an event or place invite flow", async () => {
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.userInterestTag.findMany.mockResolvedValue([]);
+
+    await service.search("me", { query: "@ece", type: "username" });
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ username: { contains: "ece", mode: "insensitive" } }),
+    }));
+    expect(prisma.user.findMany.mock.calls[0][0].where).not.toHaveProperty("OR");
+  });
+
   it("returns only discoverable database matches and keeps other contacts as invitees", async () => {
     prisma.user.findMany.mockResolvedValue([
       {

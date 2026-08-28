@@ -52,6 +52,7 @@ export class EventsService {
           ? undefined
           : { gte: new Date(Date.now() - 1000 * 60 * 60 * 24) },
     };
+    const andFilters: Prisma.EventWhereInput[] = [];
     if (userId) {
       const blocks = await this.prisma.userBlock.findMany({
         where: { userId },
@@ -76,12 +77,14 @@ export class EventsService {
     }
 
     if (query.q) {
-      where.OR = [
-        { title: { contains: query.q, mode: "insensitive" } },
-        { summary: { contains: query.q, mode: "insensitive" } },
-        { description: { contains: query.q, mode: "insensitive" } },
-        { organizerName: { contains: query.q, mode: "insensitive" } },
-      ];
+      andFilters.push({
+        OR: [
+          { title: { contains: query.q, mode: "insensitive" } },
+          { summary: { contains: query.q, mode: "insensitive" } },
+          { description: { contains: query.q, mode: "insensitive" } },
+          { organizerName: { contains: query.q, mode: "insensitive" } },
+        ],
+      });
     }
 
     if (query.format) {
@@ -101,11 +104,13 @@ export class EventsService {
     }
 
     if (query.scope === "mine") {
-      where.OR = [
-        { createdById: userId ?? "" },
-        { participants: { some: { userId: userId ?? "", status: { in: ["accepted", "attended"] } } } },
-        { ticketOrders: { some: { buyerId: userId ?? "", status: "paid" } } },
-      ];
+      andFilters.push({
+        OR: [
+          { createdById: userId ?? "" },
+          { participants: { some: { userId: userId ?? "", status: { in: ["accepted", "attended"] } } } },
+          { ownedTickets: { some: { ownerId: userId ?? "", status: { in: [OwnedTicketStatus.active, OwnedTicketStatus.used] } } } },
+        ],
+      });
     } else if (query.scope === "invited") {
       where.participants = { some: { userId: userId ?? "", status: "invited" } };
     } else if (query.scope === "individual") {
@@ -124,6 +129,8 @@ export class EventsService {
         },
       };
     }
+
+    if (andFilters.length) where.AND = andFilters;
 
     if (query.scope === "popular" && (query.city || query.country)) {
       const localCount = await this.prisma.event.count({ where });
@@ -611,6 +618,30 @@ export class EventsService {
     });
   }
 
+  async listSentInvitations(eventId: string, inviterId: string) {
+    const invitations = await this.prisma.eventInvitation.findMany({
+      where: { eventId, inviterId },
+      orderBy: { createdAt: "asc" },
+      include: {
+        invitee: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
+          },
+        },
+      },
+    });
+    return invitations.map((invitation) => ({
+      id: invitation.invitee.id,
+      name: invitation.invitee.name,
+      username: invitation.invitee.username,
+      avatarUrl: invitation.invitee.uploadedMedia[0]?.url ?? null,
+      invitedAt: invitation.createdAt,
+    }));
+  }
+
   async listRelatedUsers(eventId: string, actor?: User) {
     const event = await this.prisma.event.findFirst({
       where: { id: eventId, status: "published" },
@@ -1002,6 +1033,10 @@ export class EventsService {
     }
 
     const invitee = await this.resolveInvitee(input);
+    const existingParticipant = await this.prisma.eventParticipant.findUnique({
+      where: { eventId_userId: { eventId, userId: invitee.id } },
+      select: { status: true },
+    });
 
     if (invitee.status === "active") {
       const existingInvitation = await this.prisma.eventInvitation.findUnique({
@@ -1015,7 +1050,9 @@ export class EventsService {
     const participant = await this.prisma.eventParticipant.upsert({
       where: { eventId_userId: { eventId, userId: invitee.id } },
       update: {
-        status: EventParticipantStatus.invited,
+        status: existingParticipant && (existingParticipant.status === EventParticipantStatus.accepted || existingParticipant.status === EventParticipantStatus.attended)
+          ? undefined
+          : EventParticipantStatus.invited,
         role: canManage ? input.role ?? EventParticipantRole.attendee : EventParticipantRole.attendee,
       },
       create: {

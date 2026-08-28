@@ -117,6 +117,16 @@ export class MailService {
     });
   }
 
+  async sendTicketTransferEmail(input: { to: string; name: string; eventTitle: string; invitedByName: string; quantity: number; acceptToken: string }) {
+    const acceptUrl = `${this.getAppUrl()}/accept-invite?token=${encodeURIComponent(input.acceptToken)}`;
+    await this.send({
+      to: input.to,
+      subject: `${input.eventTitle} için biletin var`,
+      text: `Merhaba ${input.name}, ${input.invitedByName} sana ${input.eventTitle} etkinliği için ${input.quantity} bilet devretti. Biletlerini almak için hesabını oluştur: ${acceptUrl}`,
+      html: `<p>Merhaba ${this.escapeHtml(input.name)},</p><p><strong>${this.escapeHtml(input.invitedByName)}</strong> sana <strong>${this.escapeHtml(input.eventTitle)}</strong> etkinliği için ${input.quantity} bilet devretti.</p><p><a href="${acceptUrl}">Hesabını oluştur ve biletlerini al</a></p>`,
+    });
+  }
+
   async sendPlaceInviteEmail(input: { to: string; name: string; placeName: string; placeSlug: string; invitedByName: string; acceptToken?: string }) {
     const appUrl = this.getAppUrl();
     const placeUrl = `${appUrl}/places/${input.placeSlug}`;

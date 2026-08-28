@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Download, Lightbulb, TrendingUp, Users, WalletCards } from "lucide-react";
+import type { TableCell, TDocumentDefinitions } from "pdfmake/interfaces";
 import { type CSSProperties, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getInteractionStats, getPublicProfileById, getTagStats } from "../lib/api";
@@ -164,6 +165,124 @@ function buildInsights(stats: Stats, targetType: string, language: "tr" | "en") 
   return insights.length ? insights : [language === "tr" ? "Anlamlı bir öneri üretmek için henüz yeterli ölçüm bulunmuyor. Etkileşim oluştuğunda veri temelli öneriler burada görünecek." : "There is not enough data for a meaningful recommendation yet. Data-driven insights will appear as engagement grows."];
 }
 
+function pdfMetricLabel(key: string, language: "tr" | "en") {
+  const titles = language === "tr" ? distributionTitles : distributionTitlesEn;
+  const prefix = distributionPrefixes.find((candidate) => key.startsWith(candidate));
+  if (!prefix) return prettyKey(key, language);
+  return `${titles[prefix] ?? prettyKey(prefix, language)} · ${prettyKey(key.slice(prefix.length), language)}`;
+}
+
+async function downloadStatsPdf(
+  title: string,
+  data: Stats,
+  insights: string[],
+  language: "tr" | "en",
+) {
+  const [pdfMake, fontModule] = await Promise.all([
+    import("pdfmake/build/pdfmake"),
+    import("pdfmake/build/vfs_fonts"),
+  ]);
+  const virtualFonts = fontModule.default as unknown as Record<string, string>;
+  const metricRows: TableCell[][] = Object.entries(data)
+    .sort(([left], [right]) =>
+      pdfMetricLabel(left, language).localeCompare(
+        pdfMetricLabel(right, language),
+        language === "tr" ? "tr" : "en",
+      ),
+    )
+    .map(([key, value]) => [
+      { text: pdfMetricLabel(key, language), margin: [4, 4, 4, 4] },
+      {
+        text: displayValue(key, value, language),
+        alignment: "right",
+        margin: [4, 4, 4, 4],
+      },
+    ]);
+  const document: TDocumentDefinitions = {
+    pageSize: "A4",
+    pageMargins: [38, 42, 38, 42],
+    defaultStyle: { font: "Roboto", fontSize: 9, color: "#17231d" },
+    footer: (currentPage, pageCount) => ({
+      text: `${currentPage} / ${pageCount}`,
+      alignment: "center",
+      color: "#687870",
+      fontSize: 8,
+      margin: [0, 14, 0, 0],
+    }),
+    content: [
+      { text: title, style: "title" },
+      {
+        text:
+          language === "tr"
+            ? `Konnektora analiz raporu · ${new Date().toLocaleString("tr-TR")}`
+            : `Konnektora analytics report · ${new Date().toLocaleString("en-GB")}`,
+        color: "#5c6d64",
+        margin: [0, 3, 0, 18],
+      },
+      {
+        text: language === "tr" ? "Tüm ölçümler" : "All metrics",
+        style: "section",
+      },
+      {
+        table: {
+          headerRows: 1,
+          widths: ["*", 110],
+          body: [
+            [
+              {
+                text: language === "tr" ? "Ölçüm" : "Metric",
+                bold: true,
+                color: "#174d36",
+                fillColor: "#edf6f0",
+                margin: [4, 5, 4, 5],
+              },
+              {
+                text: language === "tr" ? "Değer" : "Value",
+                bold: true,
+                color: "#174d36",
+                fillColor: "#edf6f0",
+                alignment: "right",
+                margin: [4, 5, 4, 5],
+              },
+            ],
+            ...metricRows,
+          ],
+        },
+        layout: "lightHorizontalLines",
+      },
+      {
+        text: language === "tr" ? "Veriye dayalı içgörüler" : "Data-driven insights",
+        style: "section",
+        margin: [0, 22, 0, 8],
+      },
+      {
+        ul: insights,
+        color: "#33443b",
+      },
+      {
+        text:
+          language === "tr"
+            ? "Not: Bu raporda tahmini veya örnek rakam kullanılmaz; yalnızca Konnektora içinde kaydedilen ölçümler yer alır."
+            : "Note: This report contains no estimated or sample figures; it only includes measurements recorded in Konnektora.",
+        italics: true,
+        color: "#687870",
+        margin: [0, 18, 0, 0],
+      },
+    ],
+    styles: {
+      title: { fontSize: 20, bold: true, color: "#174d36" },
+      section: { fontSize: 13, bold: true, color: "#174d36" },
+    },
+  };
+  const filename = `${title
+    .toLocaleLowerCase(language === "tr" ? "tr-TR" : "en-GB")
+    .normalize("NFKD")
+    .replace(/[^\p{Letter}\p{Number}\s-]/gu, "")
+    .trim()
+    .replace(/\s+/g, "-") || "analytics"}.pdf`;
+  pdfMake.createPdf(document, undefined, undefined, virtualFonts).download(filename);
+}
+
 export function InteractionStatsPage() {
   const { language } = useLanguage();
   const t = (tr: string, en: string) => (language === "tr" ? tr : en);
@@ -194,7 +313,7 @@ export function InteractionStatsPage() {
   const insights = buildInsights(data, targetType, language);
 
   return <section className="page interaction-stats-page">
-    <header className="section-header stats-page-header"><div><p className="eyebrow">{t("Analiz merkezi", "Analytics centre")}</p><h1>{title} {t("istatistikleri", "analytics")}</h1><p>{t("Topluluk, erişim, dönüşüm ve gelir metriklerinin güncel görünümü.", "A current view of community, reach, conversion and revenue metrics.")}</p></div><div className="stats-header-actions"><button className="secondary-action" onClick={() => window.print()} type="button"><Download size={17}/> {t("PDF indir", "Download PDF")}</button><button className="secondary-action" onClick={() => navigate(-1)} type="button">{t("Geri dön", "Go back")}</button></div></header>
+    <header className="section-header stats-page-header"><div><p className="eyebrow">{t("Analiz merkezi", "Analytics centre")}</p><h1>{title} {t("istatistikleri", "analytics")}</h1><p>{t("Topluluk, erişim, dönüşüm ve gelir metriklerinin güncel görünümü.", "A current view of community, reach, conversion and revenue metrics.")}</p></div><div className="stats-header-actions"><button className="secondary-action" disabled={!stats.data} onClick={() => { void downloadStatsPdf(`${title} ${t("istatistikleri", "analytics")}`, data, insights, language); }} type="button"><Download size={17}/> {t("PDF indir", "Download PDF")}</button><button className="secondary-action" onClick={() => navigate(-1)} type="button">{t("Geri dön", "Go back")}</button></div></header>
     {stats.isLoading ? <p className="empty-state">{t("İstatistikler hazırlanıyor…", "Preparing analytics…")}</p> : null}
     {stats.isError ? <p className="form-error">{t("Bu istatistikleri görüntüleme yetkiniz olmayabilir veya veriler yüklenemedi.", "You may not have permission to view these analytics, or the data could not be loaded.")}</p> : null}
     {stats.data ? <>

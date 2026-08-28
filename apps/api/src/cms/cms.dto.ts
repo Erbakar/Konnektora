@@ -139,7 +139,7 @@ export class UpdateAnnouncementDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(["all", "members", "admins"])
+  @IsIn(["all", "members", "individual_members", "corporate_members", "admins"])
   target?: string;
 
   @IsOptional()

@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { User } from "@prisma/client";
+import { Announcement, User } from "@prisma/client";
 import { toSlug } from "../common/slug";
 import { PrismaService } from "../prisma/prisma.service";
 import {
@@ -32,7 +32,7 @@ export class CmsService {
     });
   }
 
-  listPublicAnnouncements(user?: User) {
+  async listPublicAnnouncements(user?: User, appVersion?: string) {
     const now = new Date();
     const targets = user
       ? [
@@ -43,7 +43,7 @@ export class CmsService {
         ]
       : ["all"];
 
-    return this.prisma.announcement.findMany({
+    const announcements = await this.prisma.announcement.findMany({
       where: {
         status: "active",
         target: { in: targets },
@@ -52,6 +52,7 @@ export class CmsService {
       },
       orderBy: [{ publishAt: "desc" }, { createdAt: "desc" }]
     });
+    return announcements.filter((announcement) => this.matchesAnnouncementAudience(announcement, user, appVersion));
   }
 
   async getPublicPolicy(type: string) {
@@ -134,7 +135,7 @@ export class CmsService {
   }
 
   async createFaq(input: CreateFaqDto) {
-    await this.ensureCategoryExists(input.categoryId);
+    await this.ensureCategoryExists(input.categoryId, "faq");
 
     return this.prisma.faq.create({
       data: {
@@ -154,7 +155,7 @@ export class CmsService {
     }
 
     if (input.categoryId) {
-      await this.ensureCategoryExists(input.categoryId);
+      await this.ensureCategoryExists(input.categoryId, "faq");
     }
 
     return this.prisma.faq.update({
@@ -184,6 +185,20 @@ export class CmsService {
     return this.prisma.announcement.findMany({
       orderBy: [{ status: "asc" }, { publishAt: "desc" }, { createdAt: "desc" }]
     });
+  }
+
+  async listActiveAdminAnnouncements(user: User, appVersion?: string) {
+    const now = new Date();
+    const announcements = await this.prisma.announcement.findMany({
+      where: {
+        status: "active",
+        target: "admins",
+        publishAt: { lte: now },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      orderBy: [{ publishAt: "desc" }, { createdAt: "desc" }],
+    });
+    return announcements.filter((announcement) => this.matchesAnnouncementAudience(announcement, user, appVersion));
   }
 
   createAnnouncement(input: CreateAnnouncementDto) {
@@ -269,11 +284,42 @@ export class CmsService {
     }
   }
 
-  private async ensureCategoryExists(id: string) {
-    const existing = await this.prisma.cmsCategory.findUnique({ where: { id }, select: { id: true } });
+  private matchesAnnouncementAudience(announcement: Announcement, user?: User, appVersion?: string) {
+    const constrained = Boolean(
+      announcement.targetLastLoginFrom ||
+      announcement.targetLastLoginTo ||
+      announcement.targetJoinedFrom ||
+      announcement.targetJoinedTo ||
+      announcement.targetAppVersion,
+    );
+    if (!user && constrained) return false;
+    if (announcement.targetAppVersion && announcement.targetAppVersion !== appVersion?.trim()) return false;
+    if (!user) return true;
+    return this.isWithinRange(user.lastOnlineAt, announcement.targetLastLoginFrom, announcement.targetLastLoginTo) &&
+      this.isWithinRange(user.createdAt, announcement.targetJoinedFrom, announcement.targetJoinedTo);
+  }
+
+  private isWithinRange(value: Date | null | undefined, from: Date | null, to: Date | null) {
+    if (!from && !to) return true;
+    if (!value) return false;
+    return (!from || value >= from) && (!to || value <= to);
+  }
+
+  private async ensureCategoryExists(id: string, type?: "faq" | "write_to_us") {
+    const existing = await this.prisma.cmsCategory.findUnique({
+      where: { id },
+      select: { id: true, type: true },
+    });
 
     if (!existing) {
       throw new NotFoundException("CMS kategorisi bulunamadı.");
+    }
+    if (type && existing.type !== type) {
+      throw new NotFoundException(
+        type === "faq"
+          ? "SSS yalnızca bir SSS kategorisine bağlanabilir."
+          : "Kategori türü eşleşmiyor.",
+      );
     }
   }
 }

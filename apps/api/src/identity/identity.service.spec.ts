@@ -30,6 +30,31 @@ describe("IdentityService", () => {
     await expect(service.onboardingStatus(id)).resolves.toMatchObject({ progress: 80, completed: false, currentStep: { key: "people" } });
   });
 
+  it("removes the community step from corporate onboarding", async () => {
+    user.findUnique.mockResolvedValue({
+      phoneVerified: true,
+      accountType: "corporate",
+      username: "firma",
+      country: "Türkiye",
+      birthDate: null,
+      onboardingCompletedAt: null,
+    });
+    mediaFile.count.mockResolvedValue(1);
+    userInterestTag.count.mockResolvedValue(2);
+    userFollow.count.mockResolvedValue(0);
+
+    const status = await service.onboardingStatus(id);
+
+    expect(status.steps.map((step) => step.key)).toEqual([
+      "phone",
+      "personal_info",
+      "photo",
+      "interests",
+    ]);
+    expect(status.currentStep).toBeNull();
+    expect(status.progress).toBe(100);
+  });
+
   it("requires the mandatory onboarding steps before completion", async () => {
     user.findUnique.mockResolvedValue({ phoneVerified: false, username: null, country: null, birthDate: null, onboardingCompletedAt: null });
     mediaFile.count.mockResolvedValue(0);

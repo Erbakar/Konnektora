@@ -2,14 +2,23 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { OwnedTicketStatus, PaymentStatus, TicketOrderStatus, User } from "@prisma/client";
 import { hash } from "bcryptjs";
 import { createHash, randomUUID } from "crypto";
+import { AuthService } from "../auth/auth.service";
+import { MailService } from "../mail/mail.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { SmsService } from "../sms/sms.service";
 import { RefundTicketOrderDto, TransferTicketsDto } from "./tickets.dto";
 import { ManageTicketTypeDto } from "./tickets.dto";
 
 @Injectable()
 export class TicketsService {
-  constructor(private readonly prisma: PrismaService, private readonly notifications: NotificationsService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+    private readonly auth: AuthService,
+    private readonly mail: MailService,
+    private readonly sms: SmsService,
+  ) {}
 
   listEventTypes(eventId: string) { return this.prisma.eventTicketType.findMany({ where: { eventId, status: { not: "inactive" } }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }).then((items) => items.map(this.presentType)); }
   async createType(eventId: string, input: ManageTicketTypeDto, actor: User) { await this.ensureManager(eventId, actor.id); this.validatePlatform(input, actor); const type = await this.prisma.eventTicketType.create({ data: { eventId, ...this.typeData(input) } }); return this.presentType(type); }
@@ -54,7 +63,19 @@ export class TicketsService {
     const tickets = await this.prisma.ownedEventTicket.findMany({ where: { id: { in: input.ticketIds }, ownerId: from.id, status: OwnedTicketStatus.active } });
     if (tickets.length !== input.ticketIds.length || new Set(tickets.map((item) => item.eventId)).size !== 1) throw new BadRequestException("Devredilecek aktif biletler bulunamadı.");
     await this.prisma.$transaction(async (tx) => { for (const ticket of tickets) { await tx.ticketTransfer.create({ data: { ticketId: ticket.id, fromUserId: from.id, toUserId: target.id } }); await tx.ownedEventTicket.update({ where: { id: ticket.id }, data: { ownerId: target.id, transferredAt: new Date() } }); } await tx.eventParticipant.upsert({ where: { eventId_userId: { eventId: tickets[0]!.eventId, userId: target.id } }, create: { eventId: tickets[0]!.eventId, userId: target.id, status: "accepted", role: "attendee" }, update: { status: "accepted" } }); });
-    await this.notifications.dispatch({ userId: target.id, topic: "event_invite", type: "ticket_transfer", title: "Sana bilet devredildi", body: `${from.name} sana ${tickets.length} bilet devretti.`, targetType: "event", targetId: tickets[0]!.eventId });
+    if (target.status === "invited") {
+      const [acceptToken, event] = await Promise.all([
+        this.auth.createInviteAcceptToken(target.id),
+        this.prisma.event.findUnique({ where: { id: tickets[0]!.eventId }, select: { title: true } }),
+      ]);
+      if (input.phone && target.phone) {
+        await this.sms.sendTicketTransfer(target.phone, from.name, event?.title ?? "Konnektora", tickets.length, acceptToken);
+      } else if (!target.email.endsWith("@invite.konnektora.local")) {
+        await this.mail.sendTicketTransferEmail({ to: target.email, name: target.name, eventTitle: event?.title ?? "Konnektora", invitedByName: from.name, quantity: tickets.length, acceptToken });
+      }
+    } else {
+      await this.notifications.dispatch({ userId: target.id, topic: "event_invite", type: "ticket_transfer", title: "Sana bilet devredildi", body: `${from.name} sana ${tickets.length} bilet devretti.`, targetType: "event", targetId: tickets[0]!.eventId });
+    }
     return { transferred: tickets.length, recipient: { id: target.id, name: target.name, username: target.username } };
   }
 
@@ -75,7 +96,18 @@ export class TicketsService {
     const updated = await this.prisma.ownedEventTicket.update({ where: { id: ticket.id }, data: { status: OwnedTicketStatus.used, usedAt: new Date() } }); return { ...updated, owner: ticket.owner, ticketType: this.presentType(ticket.ticketType), eventTitle: ticket.event.title };
   }
 
-  private async resolveTarget(input: TransferTicketsDto) { const OR = [...(input.username ? [{ username: input.username.toLowerCase() }] : []), ...(input.email ? [{ email: input.email.toLowerCase() }] : []), ...(input.phone ? [{ phone: input.phone }] : [])]; if (!OR.length) throw new BadRequestException("Alıcı kullanıcı adı, e-posta veya telefonla belirtilmelidir."); const found = await this.prisma.user.findFirst({ where: { OR } }); if (found) return found; if (!input.email) throw new NotFoundException("Alıcı bulunamadı; üye olmayan alıcı için e-posta gerekir."); return this.prisma.user.create({ data: { email: input.email.toLowerCase(), name: input.name?.trim() || input.email.split("@")[0]!, phone: input.phone, passwordHash: await hash(randomUUID(), 10), status: "invited" } }); }
+  private async resolveTarget(input: TransferTicketsDto) {
+    const username = input.username?.trim().replace(/^@/, "").toLowerCase();
+    const email = input.email?.trim().toLowerCase();
+    const phone = input.phone?.trim();
+    const OR = [...(username ? [{ username }] : []), ...(email ? [{ email }] : []), ...(phone ? [{ phone }] : [])];
+    if (!OR.length) throw new BadRequestException("Alıcı kullanıcı adı, e-posta veya telefonla belirtilmelidir.");
+    const found = await this.prisma.user.findFirst({ where: { OR } });
+    if (found) return found;
+    if (!email && !phone) throw new NotFoundException("Alıcı bulunamadı. Üye olmayan alıcı için e-posta veya telefon gerekir.");
+    const placeholderEmail = email ?? `phone-${this.hashToken(phone!).slice(0, 24)}@invite.konnektora.local`;
+    return this.prisma.user.create({ data: { email: placeholderEmail, name: input.name?.trim() || email?.split("@")[0] || phone!, phone, passwordHash: await hash(randomUUID(), 10), status: "invited" } });
+  }
   private hashToken(value: string) { return createHash("sha256").update(value).digest("hex"); }
   private eventLocationSignature(event: { format?: unknown; locationName?: unknown; locationAddress?: unknown; city?: unknown; country?: unknown; liveUrl?: unknown }) { return JSON.stringify([event.format ?? null, event.locationName ?? null, event.locationAddress ?? null, event.city ?? null, event.country ?? null, event.liveUrl ?? null]); }
   private validatePlatform(input: ManageTicketTypeDto, actor: User) { if (input.salesPlatform === "konnektora" && actor.accountType !== "corporate" && !["admin", "super_admin"].includes(actor.role)) throw new BadRequestException('Sadece kurumsal üyeler "Konnektora online satış" ayarını tercih edebilir.'); if (input.salesPlatform === "external") { try { new URL(input.externalSalesUrl ?? ""); } catch { throw new BadRequestException("Geçerli bir dış satış URL'si girin."); } } }

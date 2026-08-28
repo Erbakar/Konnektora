@@ -100,6 +100,12 @@ export class PlacesController {
     return this.placesService.listMembers(id, user);
   }
 
+  @Get("places/:id/invitations/sent")
+  @UseGuards(JwtAuthGuard)
+  sentInvitations(@Param("id") id: string, @CurrentUser() user: User) {
+    return this.placesService.listSentInvitations(id, user.id);
+  }
+
   @Post("places/:id/invite")
   @UseGuards(JwtAuthGuard)
   invite(

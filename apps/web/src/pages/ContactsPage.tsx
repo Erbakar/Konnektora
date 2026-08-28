@@ -1,7 +1,7 @@
 import type { Contact } from "@konnektora/shared";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { BookUser, MailPlus, Search, Smartphone, UserPlus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ServiceFeedback } from "../components/ServiceFeedback";
 import { UserIdentityLink, userProfilePath } from "../components/UserIdentityLink";
@@ -12,6 +12,8 @@ import {
   inviteEventParticipant,
   invitePlaceMember,
   inviteContacts,
+  listSentEventInvitations,
+  listSentPlaceInvitations,
   searchContacts,
 } from "../lib/api";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
@@ -29,9 +31,19 @@ export function ContactsPage() {
   const autoStarted = useRef(false);
   const [notice, setNotice] = useState("");
   const [noticeTone, setNoticeTone] = useState<"error" | "success">("success");
-  const [manualType, setManualType] = useState<"name" | "email" | "phone">("name");
+  const [manualType, setManualType] = useState<"username" | "name" | "email" | "phone">(targetType ? "username" : "name");
   const [manualQuery, setManualQuery] = useState("");
   const [selectedInvitees, setSelectedInvitees] = useState<Set<number>>(new Set());
+  const sentInvitations = useQuery({
+    queryKey: ["sent-target-invitations", targetType, targetId, user?.id],
+    queryFn: () => targetType === "event"
+      ? listSentEventInvitations(targetId!)
+      : targetType === "place"
+        ? listSentPlaceInvitations(targetId!)
+        : Promise.resolve([]),
+    enabled: Boolean(user && targetType && targetId),
+  });
+  const alreadyInvitedIds = new Set((sentInvitations.data ?? []).map((item) => item.id));
   const showError = (error: unknown, fallback: string) => {
     setNoticeTone("error");
     setNotice(getServiceErrorMessage(error, fallback));
@@ -103,6 +115,10 @@ export function ContactsPage() {
     importMutation.mutate({ source, contacts });
   }
   const result = importMutation.data;
+  const manualMembers = [...(searchMutation.data ?? [])].sort((left, right) => Number(alreadyInvitedIds.has(left.id)) - Number(alreadyInvitedIds.has(right.id)));
+  const manualAlreadyStartsAt = manualMembers.findIndex((member) => alreadyInvitedIds.has(member.id));
+  const importedMatches = [...(result?.matches ?? [])].sort((left, right) => Number(alreadyInvitedIds.has(left.member.id)) - Number(alreadyInvitedIds.has(right.member.id)));
+  const importedAlreadyStartsAt = importedMatches.findIndex((item) => alreadyInvitedIds.has(item.member.id));
   return (
     <section className="page contacts-page">
       <header className="section-header">
@@ -122,9 +138,9 @@ export function ContactsPage() {
       <form className="admin-form contact-manual-search" onSubmit={(event) => { event.preventDefault(); setNotice(""); if (manualQuery.trim().length >= 2) searchMutation.mutate(); }}>
         <h2>{t("Manuel arama", "Manual search")}</h2>
         <p className="form-help">{t("Yalnızca “arkadaşlarım beni bulabilir” seçeneği açık üyeler sonuçlarda gösterilir.", "Only members who allow friends to find them appear in results.")}</p>
-        <div className="form-grid"><label>{t("Arama türü", "Search type")}<select value={manualType} onChange={(event) => setManualType(event.target.value as typeof manualType)}><option value="name">{t("Kullanıcı adı veya Ad Soyad", "Username or full name")}</option><option value="email">{t("E-posta adresi", "Email address")}</option><option value="phone">{t("Telefon numarası", "Phone number")}</option></select></label><label>{manualType === "name" ? t("Kullanıcı adı veya Ad Soyad", "Username or full name") : manualType === "email" ? t("E-posta", "Email") : t("Telefon", "Phone")}<input inputMode={manualType === "phone" ? "tel" : "text"} minLength={2} onChange={(event) => setManualQuery(event.target.value)} placeholder={manualType === "name" ? t("@kullanici veya Ad Soyad", "@username or Full name") : manualType === "email" ? "member@example.com" : "+905551234567"} required type={manualType === "email" ? "email" : "text"} value={manualQuery}/>{manualType === "phone" ? <span className="form-help">{t("Numarayı + ve ülke koduyla yazın (ör. +90 555 123 45 67).", "Enter the number with + and country code (e.g. +44 7700 900123).")}</span> : null}</label></div>
+        <div className="form-grid"><label>{t("Arama türü", "Search type")}<select value={manualType} onChange={(event) => setManualType(event.target.value as typeof manualType)}>{targetType ? <option value="username">{t("Kullanıcı adı", "Username")}</option> : <option value="name">{t("Kullanıcı adı veya Ad Soyad", "Username or full name")}</option>}<option value="email">{t("E-posta adresi", "Email address")}</option><option value="phone">{t("Telefon numarası", "Phone number")}</option></select></label><label>{manualType === "username" ? t("Kullanıcı adı", "Username") : manualType === "name" ? t("Kullanıcı adı veya Ad Soyad", "Username or full name") : manualType === "email" ? t("E-posta", "Email") : t("Telefon", "Phone")}<input inputMode={manualType === "phone" ? "tel" : "text"} minLength={2} onChange={(event) => setManualQuery(event.target.value)} placeholder={manualType === "username" ? "@kullanici" : manualType === "name" ? t("@kullanici veya Ad Soyad", "@username or Full name") : manualType === "email" ? "member@example.com" : "+905551234567"} required type={manualType === "email" ? "email" : "text"} value={manualQuery}/>{manualType === "phone" ? <span className="form-help">{t("Numarayı + ve ülke koduyla yazın (ör. +90 555 123 45 67).", "Enter the number with + and country code (e.g. +44 7700 900123).")}</span> : null}</label></div>
         <button className="primary-action" disabled={searchMutation.isPending}><Search size={17}/>{searchMutation.isPending ? t("Aranıyor…", "Searching…") : t("Ara", "Search")}</button>
-        {searchMutation.data?.length ? <div className="onboarding-people">{searchMutation.data.map((member) => <article key={member.id}><UserIdentityLink user={member} avatarClassName="conversation-avatar" showName={false}/><div><strong><Link to={userProfilePath(member)}>{member.username ? `@${member.username}` : member.name}</Link></strong><small>{member.commonTagCount} {t("ortak ilgi alanı", "shared interests")} · {member.followerCount} {t("takipçi", "followers")}</small></div>{targetType && targetId ? <button className="secondary-action" disabled={matchedInviteMutation.isPending} onClick={() => matchedInviteMutation.mutate(member.id)} type="button"><MailPlus size={17}/>{targetType === "event" ? t("Etkinliğe davet et", "Invite to event") : t("Mekâna davet et", "Invite to place")}</button> : <button className="secondary-action" onClick={() => void followUser(member.id)} type="button"><UserPlus size={17}/>{t("Takip et", "Follow")}</button>}</article>)}</div> : null}
+        {manualMembers.length ? <div className="onboarding-people">{manualMembers.map((member, index) => <Fragment key={member.id}>{index === manualAlreadyStartsAt ? <h3>{t("Zaten davet ettikleriniz", "Already invited")}</h3> : null}<article><UserIdentityLink user={member} avatarClassName="conversation-avatar" showName={false}/><div><strong><Link to={userProfilePath(member)}>{member.username ? `@${member.username}` : member.name}</Link></strong><small>{member.commonTagCount} {t("ortak ilgi alanı", "shared interests")} · {member.followerCount} {t("takipçi", "followers")}</small></div>{targetType && targetId ? <button className="secondary-action" disabled={matchedInviteMutation.isPending || alreadyInvitedIds.has(member.id)} onClick={() => matchedInviteMutation.mutate(member.id)} type="button"><MailPlus size={17}/>{alreadyInvitedIds.has(member.id) ? t("Davet edildi", "Invited") : targetType === "event" ? t("Etkinliğe davet et", "Invite to event") : t("Mekâna davet et", "Invite to place")}</button> : <button className="secondary-action" onClick={() => void followUser(member.id)} type="button"><UserPlus size={17}/>{t("Takip et", "Follow")}</button>}</article></Fragment>)}</div> : null}
         {searchMutation.isSuccess && !searchMutation.data.length ? <div className="empty-state compact"><strong>{t("Bulunabilir bir üye eşleşmedi.", "No discoverable member matched.")}</strong><p>{t("Üye olmayan veya bulunmak istemeyen kişiye ücretsiz Konnektora daveti gönderebilirsin.", "You can send a free Konnektora invitation to a non-member.")}</p>{manualType !== "name" ? <button className="secondary-action" disabled={inviteMutation.isPending} onClick={() => inviteMutation.mutate([{ name: manualQuery.trim(), ...(manualType === "email" ? { email: manualQuery.trim() } : { phone: manualQuery.trim() }) }])} type="button"><MailPlus size={17}/>{t("Üyeliğe davet et", "Invite to join")}</button> : null}</div> : null}
       </form>
       <div className="contact-source-grid">
@@ -161,8 +177,10 @@ export function ContactsPage() {
             <h2>{language === "tr" ? `Bulunan ${result.matches.length} üye` : `${result.matches.length} members found`}</h2>
             {result.matches.length ? (
               <div className="onboarding-people">
-                {result.matches.map(({ contactName, member }) => (
-                  <article key={member.id}>
+                {importedMatches.map(({ contactName, member }, index) => (
+                  <Fragment key={member.id}>
+                    {index === importedAlreadyStartsAt ? <h3>{t("Zaten davet ettikleriniz", "Already invited")}</h3> : null}
+                  <article>
                     <UserIdentityLink user={member} avatarClassName="conversation-avatar" showName={false}/>
                     <div>
                       <strong><Link to={userProfilePath(member)}>{member.username ? `@${member.username}` : member.name}</Link></strong>
@@ -170,8 +188,9 @@ export function ContactsPage() {
                         {contactName} · {member.followerCount} {t("takipçi", "followers")}
                       </small>
                     </div>
-                    {targetType && targetId ? <button className="secondary-action" disabled={matchedInviteMutation.isPending} onClick={() => matchedInviteMutation.mutate(member.id)} type="button"><MailPlus size={17}/>{targetType === "event" ? t("Etkinliğe davet et", "Invite to event") : t("Mekâna davet et", "Invite to place")}</button> : <button className="secondary-action" onClick={() => void followUser(member.id)} type="button"><UserPlus size={17} /> {t("Takip et", "Follow")}</button>}
+                    {targetType && targetId ? <button className="secondary-action" disabled={matchedInviteMutation.isPending || alreadyInvitedIds.has(member.id)} onClick={() => matchedInviteMutation.mutate(member.id)} type="button"><MailPlus size={17}/>{alreadyInvitedIds.has(member.id) ? t("Davet edildi", "Invited") : targetType === "event" ? t("Etkinliğe davet et", "Invite to event") : t("Mekâna davet et", "Invite to place")}</button> : <button className="secondary-action" onClick={() => void followUser(member.id)} type="button"><UserPlus size={17} /> {t("Takip et", "Follow")}</button>}
                   </article>
+                  </Fragment>
                 ))}
               </div>
             ) : (

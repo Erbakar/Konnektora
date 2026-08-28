@@ -106,7 +106,7 @@ export function AcceptInvitePage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") ?? "";
   const mutation = useMutation({
-    mutationFn: (input: { name?: string; password: string }) => acceptInvite({ token, ...input }),
+    mutationFn: (input: { name?: string; email?: string; password: string }) => acceptInvite({ token, ...input }),
     onSuccess: (response) => setUserSession(response)
   });
 
@@ -115,6 +115,7 @@ export function AcceptInvitePage() {
     const form = new FormData(event.currentTarget);
     mutation.mutate({
       name: String(form.get("name") || "") || undefined,
+      email: String(form.get("email") || "") || undefined,
       password: String(form.get("password"))
     });
   }
@@ -129,8 +130,13 @@ export function AcceptInvitePage() {
           <input name="name" minLength={2} />
         </label>
         <label>
+          {t("E-posta", "Email")}
+          <input name="email" type="email" />
+          <span className="form-help">{t("Davet telefonuna geldiyse hesabına giriş yapabilmek için e-posta adresini yaz.", "If the invitation arrived by phone, enter your email so you can log in to your account.")}</span>
+        </label>
+        <label>
           {t("Şifre", "Password")}
-          <input maxLength={128} minLength={8} name="password" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" required title={t("En az 8 karakter, bir büyük harf, bir küçük harf ve bir özel karakter kullanın.", "Use at least 8 characters with an uppercase letter, a lowercase letter and a special character.")} type="password" />
+          <input maxLength={128} minLength={8} name="password" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required title={t("En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam kullanın.", "Use at least 8 characters with an uppercase letter, a lowercase letter and a number.")} type="password" />
         </label>
         <button className="primary-action" disabled={mutation.isPending || !token} type="submit">
           {t("Daveti kabul et", "Accept invitation")}

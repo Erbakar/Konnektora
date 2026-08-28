@@ -576,6 +576,13 @@ export class PlacesService {
     if (user.id === place.createdById)
       throw new BadRequestException("Mekân sahibi yeniden davet edilemez.");
     await this.ensureCanReceiveInvite(user.id, actor.id);
+    const existing = await this.prisma.placeMember.findUnique({
+      where: { placeId_userId: { placeId, userId: user.id } },
+    });
+    if (existing?.status === PlaceMemberStatus.accepted)
+      throw new BadRequestException(
+        "Kullanıcı zaten bu mekânın aktif üyesidir.",
+      );
     if (user.status === "active") {
       const existingInvitation = await this.prisma.placeInvitation.findUnique({
         where: { placeId_inviterId_inviteeId: { placeId, inviterId: actor.id, inviteeId: user.id } },
@@ -594,13 +601,6 @@ export class PlacesService {
         "Organizatör rolünü yalnız mekân sahibi verebilir.",
       );
     }
-    const existing = await this.prisma.placeMember.findUnique({
-      where: { placeId_userId: { placeId, userId: user.id } },
-    });
-    if (existing?.status === PlaceMemberStatus.accepted)
-      throw new BadRequestException(
-        "Kullanıcı zaten bu mekânın aktif üyesidir.",
-      );
     const member = await this.prisma.$transaction(async (tx) => {
       const saved = await tx.placeMember.upsert({
         where: { placeId_userId: { placeId, userId: user.id } },
@@ -637,6 +637,30 @@ export class PlacesService {
       await this.mailService.sendPlaceInviteEmail({ to: user.email, name: user.name, placeName: place.name, placeSlug: place.slug, invitedByName: actor.name, acceptToken });
     }
     return { ...member, user: this.pickUser(user) };
+  }
+
+  async listSentInvitations(placeId: string, inviterId: string) {
+    const invitations = await this.prisma.placeInvitation.findMany({
+      where: { placeId, inviterId },
+      orderBy: { createdAt: "asc" },
+      include: {
+        invitee: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
+          },
+        },
+      },
+    });
+    return invitations.map((invitation) => ({
+      id: invitation.invitee.id,
+      name: invitation.invitee.name,
+      username: invitation.invitee.username,
+      avatarUrl: invitation.invitee.uploadedMedia[0]?.url ?? null,
+      invitedAt: invitation.createdAt,
+    }));
   }
 
   async updateMember(

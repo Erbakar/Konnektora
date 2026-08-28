@@ -26,12 +26,12 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 
 ## Otomatik kontroller
 
-- API testleri: **29 suite / 198 test geçti**.
-- API ve web TypeScript kontrolleri: geçti.
-- Web lint: geçti.
-- API ve web production build: geçti.
+- API testleri: **32 suite / 225 test geçti**.
+- Shared, API ve web TypeScript kontrolleri: geçti.
+- API ve web lint: geçti.
+- Shared, API ve web production build: geçti.
 - Prisma şema doğrulaması: geçti.
-- Web paketleri rota ve sağlayıcı bazında bölündü; önceki yaklaşık 604 KB ana paket kaldırıldı.
+- Web paketleri rota ve sağlayıcı bazında bölündü; önceki yaklaşık 604 KB ana paket kaldırıldı. Güncel ana uygulama paketi yaklaşık **46 KB** (gzip yaklaşık **14 KB**); QR ve PDF kütüphaneleri yalnız ilgili işlem açıldığında yüklenir.
 - Yerel ana rotalar TR ve EN olarak tarandı; kaçak arayüz dili bulunmadı. İngilizce görünümde kalan Türkçe satırlar yalnız demo içerikleridir.
 - `/events` 15 kart/sayfa, masaüstü üç kolon ve ikinci sayfadaki tek kartın sabit genişliği tarayıcıda doğrulandı.
 - Güncel etkinlik ve mekân kartı bağlantıları detay sayfalarını açtı.

@@ -1,6 +1,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState } from "react";
+import { geocodeAddress } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
 
 type Props = {
@@ -60,10 +61,9 @@ export function LocationPicker({ addressName, latitudeName = "latitude", longitu
     if (!address.trim() || parseCoordinates(address)) return;
     setSearching(true); setMessage("");
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(address.trim())}`, { headers: { "Accept-Language": language } });
-      const results = await response.json() as Array<{ lat: string; lon: string }>;
-      if (!results[0]) { setMessage(language === "tr" ? "Adres bulunamadı; pini elle taşıyabilirsiniz." : "Address not found; you can move the pin manually."); return; }
-      move(Number(results[0].lat), Number(results[0].lon));
+      const result = await geocodeAddress(address.trim(), language);
+      if (!result.found || result.latitude === undefined || result.longitude === undefined) { setMessage(language === "tr" ? "Adres bulunamadı; pini elle taşıyabilirsiniz." : "Address not found; you can move the pin manually."); return; }
+      move(result.latitude, result.longitude);
       setMessage(language === "tr" ? "Adres haritada işaretlendi; gerekirse pini taşıyabilirsiniz." : "Address marked on the map; move the pin if needed.");
     } catch { setMessage(language === "tr" ? "Adres aranamadı; pini elle taşıyabilirsiniz." : "The address could not be searched; move the pin manually."); }
     finally { setSearching(false); }

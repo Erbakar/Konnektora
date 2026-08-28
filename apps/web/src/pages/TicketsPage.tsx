@@ -7,6 +7,7 @@ import {
   UserRoundPlus,
 } from "lucide-react";
 import QRCode from "qrcode";
+import type { Content, TDocumentDefinitions } from "pdfmake/interfaces";
 import { type FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -218,7 +219,7 @@ function TicketOrderCard({
         >
           <Undo2 size={16} /> {t("İade et", "Refund")}
         </button>
-        <button onClick={() => void printTicket(order, language)}>
+        <button onClick={() => void downloadTicketPdf(order, language)}>
           <Download size={16} /> {t("PDF indir", "Download PDF")}
         </button>
       </div>
@@ -318,38 +319,84 @@ function TransferDialog({
   );
 }
 
-function escapeHtml(value: string | number) {
-  return String(value).replace(
-    /[&<>"']/g,
-    (character) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      })[character] ?? character,
-  );
-}
-async function printTicket(order: OwnedTicketOrder, language: "tr" | "en") {
+async function downloadTicketPdf(order: OwnedTicketOrder, language: "tr" | "en") {
   const images = await Promise.all(
     order.tickets.map((ticket) =>
-      QRCode.toDataURL(ticket.qrPayload, { width: 180, margin: 1 }),
+      QRCode.toDataURL(ticket.qrPayload, { width: 420, margin: 1 }),
     ),
   );
-  const win = window.open("", "_blank");
-  if (!win) return;
-  const title = escapeHtml(order.event.title);
-  const ticketName = escapeHtml(order.ticketType.name);
-  const date = escapeHtml(
-    new Date(order.event.startsAt).toLocaleString(language === "tr" ? "tr-TR" : "en-GB"),
-  );
-  const amount = escapeHtml(order.totalAmount);
-  const currency = escapeHtml(order.currency);
-  win.document.write(
-    `<html><head><title>${title} - ${language === "tr" ? "Bilet" : "Ticket"}</title><style>body{font-family:Arial;padding:40px}article{border:2px solid #222;padding:24px;max-width:720px}h1{margin:0 0 16px}.meta{margin:8px 0}.qrs{display:flex;flex-wrap:wrap;gap:16px}.qr{text-align:center}.qr img{width:180px}</style></head><body><article><h1>${title}</h1><div class="meta">${ticketName} · ${order.quantity} ${language === "tr" ? "adet" : "tickets"}</div><div class="meta">${date}</div><div class="meta">${amount} ${currency}</div><div class="qrs">${images.map((src, index) => `<div class="qr"><img src="${src}"/><div>${language === "tr" ? "Bilet" : "Ticket"} ${index + 1}</div></div>`).join("")}</div></article><script>window.onload=()=>window.print();</script></body></html>`,
-  );
-  win.document.close();
+  const [pdfMake, fontModule] = await Promise.all([
+    import("pdfmake/build/pdfmake"),
+    import("pdfmake/build/vfs_fonts"),
+  ]);
+  const virtualFonts = fontModule.default as unknown as Record<string, string>;
+  const locale = language === "tr" ? "tr-TR" : "en-GB";
+  const content: Content[] = images.map((image, index) => ({
+    pageBreak: index ? "before" : undefined,
+    table: {
+      widths: ["*", 190],
+      body: [[
+        {
+          stack: [
+            { text: "KONNEKTORA", color: "#1d7a50", bold: true, fontSize: 11, characterSpacing: 1.3 },
+            { text: order.event.title, style: "title", margin: [0, 12, 0, 12] },
+            { text: order.ticketType.name, bold: true, fontSize: 15, color: "#174d36" },
+            {
+              text: new Date(order.event.startsAt).toLocaleString(locale, { dateStyle: "full", timeStyle: "short" }),
+              margin: [0, 10, 0, 4],
+            },
+            { text: [order.event.city, order.event.country].filter(Boolean).join(", ") || (language === "tr" ? "Çevrim içi" : "Online") },
+            {
+              text: new Intl.NumberFormat(locale, { style: "currency", currency: order.currency }).format(order.unitPrice),
+              bold: true,
+              margin: [0, 14, 0, 0],
+            },
+            { text: `${language === "tr" ? "Bilet" : "Ticket"} ${index + 1} / ${images.length}`, color: "#687870", margin: [0, 8, 0, 0] },
+          ],
+          border: [false, false, false, false],
+          margin: [12, 14, 16, 14],
+        },
+        {
+          stack: [
+            { image, width: 172, alignment: "center" },
+            { text: language === "tr" ? "Girişte bu QR kodunu gösterin" : "Show this QR code at entry", alignment: "center", fontSize: 9, color: "#5c6d64", margin: [0, 8, 0, 0] },
+            { text: order.tickets[index]?.id ?? "", alignment: "center", fontSize: 7, color: "#87958e", margin: [0, 5, 0, 0] },
+          ],
+          border: [true, false, false, false],
+          borderColor: ["#d9e8df", "#d9e8df", "#d9e8df", "#d9e8df"],
+          margin: [12, 12, 8, 12],
+        },
+      ]],
+    },
+    layout: {
+      fillColor: () => "#f7fbf8",
+      hLineColor: () => "#d9e8df",
+      vLineColor: () => "#d9e8df",
+    },
+  }));
+  const document: TDocumentDefinitions = {
+    pageSize: "A4",
+    pageOrientation: "landscape",
+    pageMargins: [42, 58, 42, 58],
+    defaultStyle: { font: "Roboto", fontSize: 11, color: "#17231d" },
+    content,
+    styles: { title: { fontSize: 24, bold: true, color: "#10281d" } },
+    footer: (currentPage, pageCount) => ({
+      text: `${language === "tr" ? "Bilet" : "Ticket"} ${currentPage} / ${pageCount}`,
+      alignment: "center",
+      fontSize: 8,
+      color: "#687870",
+      margin: [0, 18, 0, 0],
+    }),
+  };
+  pdfMake.default.vfs = virtualFonts;
+  const safeTitle = order.event.title
+    .toLocaleLowerCase(locale)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "etkinlik";
+  pdfMake.default.createPdf(document).download(`${safeTitle}-${language === "tr" ? "biletler" : "tickets"}.pdf`);
 }
 function eventStatusText(order: OwnedTicketOrder, language: "tr" | "en") {
   const now = Date.now(),

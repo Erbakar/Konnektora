@@ -47,14 +47,20 @@ export class AuthService {
       throw new UnauthorizedException("Admin yetkisi gerekli.");
     }
 
-    return this.createLoginResponse(user);
+    const loggedInUser = await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastOnlineAt: new Date() },
+    });
+    return this.createLoginResponse(loggedInUser);
   }
 
   async register(input: RegisterDto) {
     const email = input.email.toLowerCase().trim();
-    const existing = await this.prisma.user.findUnique({ where: { email } });
-    const phoneOwner = await this.prisma.user.findFirst({ where: { phone: input.phone, email: { not: email } }, select: { id: true } });
-    if (phoneOwner) throw new ConflictException("Bu telefon numarası zaten kullanılıyor.");
+    const emailOwner = await this.prisma.user.findUnique({ where: { email } });
+    const phoneOwner = await this.prisma.user.findFirst({ where: { phone: input.phone, email: { not: email } } });
+    if (phoneOwner && phoneOwner.status !== "invited") throw new ConflictException("Bu telefon numarası zaten kullanılıyor.");
+    if (emailOwner && phoneOwner && emailOwner.id !== phoneOwner.id) throw new ConflictException("E-posta ve telefon farklı hesaplara ait.");
+    const existing = emailOwner ?? phoneOwner;
 
     if (existing) {
       if (existing.status === "active") {
@@ -64,6 +70,7 @@ export class AuthService {
       const pendingUser = await this.prisma.user.update({
         where: { id: existing.id },
         data: {
+          email,
           name: input.name.trim(),
           phone: input.phone,
           phoneVerified: false,
@@ -558,15 +565,30 @@ export class AuthService {
   }
 
   async acceptInvite(input: AcceptInviteDto) {
-    const token = await this.consumeEmailToken(input.token, "invite_accept");
-    const user = await this.prisma.user.update({
-      where: { id: token.userId },
-      data: {
-        name: input.name?.trim() || undefined,
-        passwordHash: await hash(input.password, 10),
-        status: "active",
-      },
-    });
+    const token = await this.findValidEmailToken(input.token, "invite_accept");
+    const invitedUser = await this.prisma.user.findUnique({ where: { id: token.userId } });
+    if (!invitedUser) throw new NotFoundException("Davet hesabı bulunamadı.");
+    const phoneInvitation = invitedUser.email.endsWith("@invite.konnektora.local");
+    const email = input.email?.trim().toLowerCase();
+    if (phoneInvitation && !email) throw new BadRequestException("Telefon davetini tamamlamak için e-posta adresi gereklidir.");
+    if (email && email !== invitedUser.email) {
+      const emailOwner = await this.prisma.user.findUnique({ where: { email } });
+      if (emailOwner && emailOwner.id !== invitedUser.id) throw new ConflictException("Bu email adresi zaten kullanılıyor.");
+    }
+    const [user] = await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: token.userId },
+        data: {
+          email: email ?? invitedUser.email,
+          name: input.name?.trim() || undefined,
+          passwordHash: await hash(input.password, 10),
+          emailVerified: phoneInvitation ? false : true,
+          phoneVerified: phoneInvitation && Boolean(invitedUser.phone) ? true : invitedUser.phoneVerified,
+          status: "active",
+        },
+      }),
+      (this.prisma as any).emailToken.update({ where: { id: token.id }, data: { consumedAt: new Date() } }),
+    ]);
 
     await this.sendAccountActivatedEmailSafely({
       to: user.email,
@@ -592,18 +614,22 @@ export class AuthService {
   }
 
   private async consumeEmailToken(rawToken: string, type: keyof typeof EMAIL_TOKEN_TTL_MS) {
-    const token = await (this.prisma as any).emailToken.findUnique({
-      where: { tokenHash: this.hashToken(rawToken) },
-    });
-
-    if (!token || token.type !== type || token.consumedAt || new Date(token.expiresAt).getTime() < Date.now()) {
-      throw new NotFoundException("Token geçersiz veya süresi dolmuş.");
-    }
+    const token = await this.findValidEmailToken(rawToken, type);
 
     return (this.prisma as any).emailToken.update({
       where: { id: token.id },
       data: { consumedAt: new Date() },
     });
+  }
+
+  private async findValidEmailToken(rawToken: string, type: keyof typeof EMAIL_TOKEN_TTL_MS) {
+    const token = await (this.prisma as any).emailToken.findUnique({
+      where: { tokenHash: this.hashToken(rawToken) },
+    });
+    if (!token || token.type !== type || token.consumedAt || new Date(token.expiresAt).getTime() < Date.now()) {
+      throw new NotFoundException("Token geçersiz veya süresi dolmuş.");
+    }
+    return token;
   }
 
   private hashToken(token: string) {

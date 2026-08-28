@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
+import type { TableCell, TDocumentDefinitions } from "pdfmake/interfaces";
 import { QrCheckInScanner } from "../components/QrCheckInScanner";
 import {
   addGuestListMember,
@@ -37,9 +38,11 @@ import {
   invitePlaceMember,
   listGuestLists,
   listEventParticipants,
+  listSentEventInvitations,
   listFollowing,
   listMyEvents,
   listPlaceMembers,
+  listSentPlaceInvitations,
   removeGuestListMember,
   renameGuestList,
   previewEventCheckIn,
@@ -96,6 +99,11 @@ export function EventInviteManagementPage() {
     enabled: canManage,
     retry: false,
   });
+  const sentInvitations = useQuery({
+    queryKey: ["event-invitations-sent", event.data?.id, user?.id],
+    queryFn: () => listSentEventInvitations(event.data!.id),
+    enabled: Boolean(event.data?.id && user),
+  });
   const following = useQuery({
     queryKey: ["following", user?.id],
     queryFn: listFollowing,
@@ -124,7 +132,7 @@ export function EventInviteManagementPage() {
     enabled: Boolean(user && canUseGuestLists),
   });
   const oldEvents = (managedEvents.data ?? [])
-    .filter((item) => item.id !== event.data?.id)
+    .filter((item) => item.id !== event.data?.id && new Date(item.endsAt ?? item.startsAt).getTime() < Date.now())
     .sort(
       (a, b) =>
         new Date(b.endsAt ?? b.startsAt).getTime() -
@@ -135,6 +143,7 @@ export function EventInviteManagementPage() {
     queryFn: () => listEventParticipants(oldEventId, "user"),
     enabled: Boolean(oldEventId),
   });
+  const invitedUserIds = new Set((sentInvitations.data ?? []).map((item) => item.id));
   const refresh = () => {
     void client.invalidateQueries({
       queryKey: ["event-participants", event.data?.id],
@@ -168,9 +177,7 @@ export function EventInviteManagementPage() {
     mutationFn: async (listId: string) => {
       const source =
         guestLists.data?.find((item) => item.id === listId)?.members ?? [];
-      const invited = new Set(
-        (participants.data ?? []).map((item) => item.userId),
-      );
+      const invited = invitedUserIds;
       await Promise.all(
         source
           .filter((item) => !invited.has(item.userId))
@@ -296,9 +303,7 @@ export function EventInviteManagementPage() {
           <InviteUserCards
             title={tr ? "Takip ettiklerim" : "People I follow"}
             users={following.data ?? []}
-            invitedUserIds={
-              new Set((participants.data ?? []).map((item) => item.userId))
-            }
+            invitedUserIds={invitedUserIds}
             pending={invite.isPending || inviteUsers.isPending}
             guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
             onInvite={(userId) => invite.mutate({ userId, role: "attendee" })}
@@ -312,9 +317,7 @@ export function EventInviteManagementPage() {
           <>
             <GuestListInviteSource
               lists={guestLists.data ?? []}
-              invitedUserIds={
-                new Set((participants.data ?? []).map((item) => item.userId))
-              }
+              invitedUserIds={invitedUserIds}
               pending={invite.isPending || inviteUsers.isPending}
               onInvite={(userId) => invite.mutate({ userId, role: "attendee" })}
               onInviteAll={(userIds) => inviteUsers.mutate(userIds)}
@@ -360,11 +363,9 @@ export function EventInviteManagementPage() {
             {oldEventId ? (
               <InviteUserCards
                 users={(previousAttendees.data ?? []).flatMap((participant) =>
-                  participant.user ? [participant.user] : [],
+                  participant.user && ["accepted", "attended"].includes(participant.status) ? [participant.user] : [],
                 )}
-                invitedUserIds={
-                  new Set((participants.data ?? []).map((item) => item.userId))
-                }
+                invitedUserIds={invitedUserIds}
                 pending={invite.isPending || inviteUsers.isPending}
                 guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
                 onInvite={(userId) =>
@@ -499,6 +500,11 @@ export function PlaceInviteManagementPage() {
     enabled: Boolean(place.data && user),
     retry: false,
   });
+  const sentInvitations = useQuery({
+    queryKey: ["place-invitations-sent", place.data?.id, user?.id],
+    queryFn: () => listSentPlaceInvitations(place.data!.id),
+    enabled: Boolean(place.data?.id && user),
+  });
   const following = useQuery({
     queryKey: ["following", user?.id],
     queryFn: listFollowing,
@@ -521,6 +527,7 @@ export function PlaceInviteManagementPage() {
     queryFn: listGuestLists,
     enabled: Boolean(user && canUseGuestLists),
   });
+  const invitedUserIds = new Set((sentInvitations.data ?? []).map((item) => item.id));
   const refresh = () => {
     void client.invalidateQueries({
       queryKey: ["place-members", place.data?.id],
@@ -550,7 +557,7 @@ export function PlaceInviteManagementPage() {
     mutationFn: async (listId: string) => {
       const source =
         guestLists.data?.find((item) => item.id === listId)?.members ?? [];
-      const invited = new Set((members.data ?? []).map((item) => item.userId));
+      const invited = invitedUserIds;
       await Promise.all(
         source
           .filter((item) => !invited.has(item.userId))
@@ -682,9 +689,7 @@ export function PlaceInviteManagementPage() {
           <InviteUserCards
             title={tr ? "Takip ettiklerim" : "People I follow"}
             users={following.data ?? []}
-            invitedUserIds={
-              new Set((members.data ?? []).map((item) => item.userId))
-            }
+            invitedUserIds={invitedUserIds}
             pending={invite.isPending || invitePlaceUsers.isPending}
             guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
             onInvite={(userId) => invite.mutate({ userId, role: "member" })}
@@ -698,9 +703,7 @@ export function PlaceInviteManagementPage() {
           <>
             <GuestListInviteSource
               lists={guestLists.data ?? []}
-              invitedUserIds={
-                new Set((members.data ?? []).map((item) => item.userId))
-              }
+              invitedUserIds={invitedUserIds}
               pending={invite.isPending || invitePlaceUsers.isPending}
               onInvite={(userId) => invite.mutate({ userId, role: "member" })}
               onInviteAll={(userIds) => invitePlaceUsers.mutate(userIds)}
@@ -989,7 +992,7 @@ function InviteUserCards({
   const tr = language === "tr";
   const unique = users.filter(
     (item, index, all) =>
-      all.findIndex((other) => other.id === item.id) === index,
+      Boolean(item.username) && all.findIndex((other) => other.id === item.id) === index,
   );
   const available = unique.filter((item) => !invitedUserIds.has(item.id));
   const invited = unique.filter((item) => invitedUserIds.has(item.id));
@@ -1451,10 +1454,12 @@ function EventGuestList({
     username: item.user?.username ?? "",
     status: translateStatus(item.status, language),
     role: translateRole(item.role, language),
-    joinedAt: item.createdAt
-      ? new Date(item.createdAt).toLocaleString(locale)
+    joinedAt: item.createdAt || item.checkedInAt
+      ? new Date(item.createdAt ?? item.checkedInAt!).toLocaleString(locale)
       : "",
-    order: item.joinOrder ? String(item.joinOrder) : "",
+    order: item.joinOrder || item.checkInOrder
+      ? String(item.joinOrder ?? item.checkInOrder)
+      : "",
     details: (item.tickets ?? [])
       .map(
         (ticket) =>
@@ -1483,13 +1488,13 @@ function EventGuestList({
         </label>
         <button
           className="create-inline-link"
-          onClick={() =>
-            exportGuestList(
+          onClick={() => {
+            void exportGuestList(
               tr ? "Etkinlik misafir listesi" : "Event guest list",
               exportData,
               language,
-            )
-          }
+            );
+          }}
           type="button"
         >
           {tr ? "Dışa aktar" : "Export"}
@@ -1672,13 +1677,13 @@ function PlaceMemberList({
         </label>
         <button
           className="create-inline-link"
-          onClick={() =>
-            exportGuestList(
+          onClick={() => {
+            void exportGuestList(
               tr ? "Mekân üye listesi" : "Place member list",
               exportData,
               language,
-            )
-          }
+            );
+          }}
           type="button"
         >
           {tr ? "Dışa aktar" : "Export"}
@@ -2219,7 +2224,7 @@ function translatePlan(plan: string, language: "tr" | "en") {
   return plan.replace(/^Kurumsal\s+/i, "Corporate ");
 }
 
-function exportGuestList(
+async function exportGuestList(
   title: string,
   rows: Array<{
     name: string;
@@ -2232,20 +2237,11 @@ function exportGuestList(
   }>,
   language: "tr" | "en",
 ) {
-  const escape = (value: string) =>
-    value.replace(
-      /[&<>"']/g,
-      (character) =>
-        ({
-          "&": "&amp;",
-          "<": "&lt;",
-          ">": "&gt;",
-          '"': "&quot;",
-          "'": "&#39;",
-        })[character]!,
-    );
-  const popup = window.open("", "_blank", "noopener,noreferrer");
-  if (!popup) return;
+  const [pdfMake, fontModule] = await Promise.all([
+    import("pdfmake/build/pdfmake"),
+    import("pdfmake/build/vfs_fonts"),
+  ]);
+  const virtualFonts = fontModule.default as unknown as Record<string, string>;
   const headings =
     language === "tr"
       ? [
@@ -2255,7 +2251,7 @@ function exportGuestList(
           "Durum",
           "Katılım tarihi",
           "Sıra",
-          "Bilet / Gate",
+          "Bilet / Kapı",
         ]
       : [
           "Surname / Name",
@@ -2266,10 +2262,69 @@ function exportGuestList(
           "Order",
           "Ticket / Gate",
         ];
-  popup.document.write(
-    `<html lang="${language}"><head><title>${escape(title)}</title><style>@page{size:A4 landscape;margin:10mm}body{font-family:Arial,sans-serif;color:#17231d}h1{font-size:20px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #ccd7d0;padding:6px;text-align:left;vertical-align:top}th{background:#eef4f0}td:last-child{max-width:360px}</style></head><body><h1>${escape(title)}</h1><table><thead><tr>${headings.map((heading) => `<th>${escape(heading)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr><td>${escape(row.name)}</td><td>${escape(row.username ? `@${row.username}` : "")}</td><td>${escape(row.role)}</td><td>${escape(row.status)}</td><td>${escape(row.joinedAt)}</td><td>${escape(row.order)}</td><td>${escape(row.details)}</td></tr>`).join("")}</tbody></table><script>window.onload=()=>window.print()</script></body></html>`,
-  );
-  popup.document.close();
+  const body: TableCell[][] = [
+    headings.map((heading) => ({
+      text: heading,
+      bold: true,
+      color: "#174d36",
+      fillColor: "#edf6f0",
+      margin: [3, 4, 3, 4],
+    })),
+    ...rows.map((row) =>
+      [
+        row.name,
+        row.username ? `@${row.username}` : "",
+        row.role,
+        row.status,
+        row.joinedAt,
+        row.order,
+        row.details,
+      ].map((value) => ({ text: value, margin: [3, 3, 3, 3] }) as TableCell),
+    ),
+  ];
+  const document: TDocumentDefinitions = {
+    pageSize: "A4",
+    pageOrientation: "landscape",
+    pageMargins: [28, 32, 28, 32],
+    defaultStyle: {
+      font: "Roboto",
+      fontSize: 7.5,
+      color: "#17231d",
+    },
+    content: [
+      { text: title, style: "title" },
+      {
+        text:
+          language === "tr"
+            ? `${rows.length} kayıt · ${new Date().toLocaleString("tr-TR")}`
+            : `${rows.length} records · ${new Date().toLocaleString("en-GB")}`,
+        color: "#5c6d64",
+        margin: [0, 2, 0, 14],
+      },
+      {
+        table: {
+          headerRows: 1,
+          widths: ["auto", "auto", "auto", "auto", "auto", "auto", "*"],
+          body,
+        },
+        layout: "lightHorizontalLines",
+      },
+    ],
+    styles: {
+      title: {
+        fontSize: 17,
+        bold: true,
+        color: "#174d36",
+      },
+    },
+  };
+  const filename = `${title
+    .toLocaleLowerCase(language === "tr" ? "tr-TR" : "en-GB")
+    .normalize("NFKD")
+    .replace(/[^\p{Letter}\p{Number}\s-]/gu, "")
+    .trim()
+    .replace(/\s+/g, "-") || "guest-list"}.pdf`;
+  pdfMake.createPdf(document, undefined, undefined, virtualFonts).download(filename);
 }
 
 function LoginState() {

@@ -153,6 +153,76 @@ describe("AuthService", () => {
     });
   });
 
+  it("claims a phone-only invited account during registration so its tickets and invitations stay attached", async () => {
+    const { service, prisma } = createService();
+    const invitedUser = {
+      id: "phone-invite-1",
+      email: "phone-placeholder@invite.konnektora.local",
+      phone: "+905551112233",
+      name: "+905551112233",
+      passwordHash: "temporary-hash",
+      role: "user",
+      accountType: "individual",
+      emailVerified: false,
+      status: "invited",
+    };
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.findFirst.mockResolvedValue(invitedUser);
+    prisma.user.update.mockImplementation(({ data }) => Promise.resolve({ ...invitedUser, ...data }));
+
+    await service.register({
+      email: "deniz@example.com",
+      name: "Deniz Kaya",
+      phone: "+905551112233",
+      password: "StrongerPass123!",
+    });
+
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "phone-invite-1" },
+      data: expect.objectContaining({ email: "deniz@example.com", phone: "+905551112233", status: "pending" }),
+    }));
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("turns a phone invitation into a reusable account without losing attached tickets or memberships", async () => {
+    const { service, prisma, mailService } = createService();
+    const invitedUser = {
+      id: "phone-invite-2",
+      email: "phone-placeholder@invite.konnektora.local",
+      phone: "+905551112233",
+      phoneVerified: false,
+      name: "+905551112233",
+      role: "user",
+      accountType: "individual",
+      status: "invited",
+    };
+    prisma.emailToken.findUnique.mockResolvedValue({ id: "token-1", userId: invitedUser.id, type: "invite_accept", expiresAt: new Date(Date.now() + 60_000), consumedAt: null });
+    prisma.user.findUnique.mockImplementation(({ where }) => Promise.resolve(where.id ? invitedUser : null));
+    prisma.user.update.mockImplementation(({ data }) => Promise.resolve({ ...invitedUser, ...data }));
+    prisma.emailToken.update.mockResolvedValue({});
+
+    const result = await service.acceptInvite({ token: "raw-token", name: "Deniz Kaya", email: "DENIZ@example.com", password: "StrongerPass123!" });
+
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: invitedUser.id },
+      data: expect.objectContaining({ email: "deniz@example.com", phoneVerified: true, emailVerified: false, status: "active" }),
+    }));
+    expect(prisma.emailToken.update).toHaveBeenCalledWith({ where: { id: "token-1" }, data: { consumedAt: expect.any(Date) } });
+    expect(result.user.email).toBe("deniz@example.com");
+    expect(mailService.sendAccountActivatedEmail).toHaveBeenCalledWith({ to: "deniz@example.com", name: "Deniz Kaya" });
+  });
+
+  it("does not consume a phone invitation token before the required real email is supplied", async () => {
+    const { service, prisma } = createService();
+    prisma.emailToken.findUnique.mockResolvedValue({ id: "token-2", userId: "phone-invite-3", type: "invite_accept", expiresAt: new Date(Date.now() + 60_000), consumedAt: null });
+    prisma.user.findUnique.mockResolvedValue({ id: "phone-invite-3", email: "phone-placeholder@invite.konnektora.local", phone: "+905551112233", status: "invited" });
+
+    await expect(service.acceptInvite({ token: "raw-token", password: "StrongerPass123!" })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.emailToken.update).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
   it("rejects registration when the email already belongs to an active user", async () => {
     const { service, prisma } = createService();
 

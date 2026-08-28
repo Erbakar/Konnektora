@@ -41,6 +41,6 @@ export class SearchContactsDto {
   query!: string;
 
   @IsOptional()
-  @IsIn(["name", "email", "phone"])
-  type?: "name" | "email" | "phone";
+  @IsIn(["username", "name", "email", "phone"])
+  type?: "username" | "name" | "email" | "phone";
 }

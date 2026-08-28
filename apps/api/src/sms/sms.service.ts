@@ -55,6 +55,11 @@ export class SmsService {
     return this.sendInviteMessage(phone, `${invitedByName} seni ${eventTitle} etkinliğine davet etti: ${targetUrl}`);
   }
 
+  async sendTicketTransfer(phone: string, invitedByName: string, eventTitle: string, quantity: number, acceptToken: string) {
+    const acceptUrl = `${this.config.get<string>("PUBLIC_APP_URL") ?? "https://konnektora.com"}/accept-invite?token=${encodeURIComponent(acceptToken)}`;
+    return this.sendInviteMessage(phone, `${invitedByName} sana ${eventTitle} etkinliği için ${quantity} bilet devretti. Biletlerini al: ${acceptUrl}`);
+  }
+
   async sendPlaceInvite(phone: string, invitedByName: string, placeName: string, placeSlug: string, acceptToken?: string) {
     const appUrl = this.config.get<string>("PUBLIC_APP_URL") ?? "https://konnektora.com";
     const targetUrl = acceptToken ? `${appUrl}/accept-invite?token=${encodeURIComponent(acceptToken)}` : `${appUrl}/places/${placeSlug}`;

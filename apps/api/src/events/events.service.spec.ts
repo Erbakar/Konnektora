@@ -381,6 +381,35 @@ describe("EventsService", () => {
     );
   });
 
+  it("builds My events from actual ticket ownership and keeps text search as an additional filter", async () => {
+    const { service, prisma } = createService();
+    prisma.userBlock.findMany.mockResolvedValue([]);
+    prisma.event.count.mockResolvedValue(0);
+    prisma.event.findMany.mockResolvedValue([]);
+
+    await service.listPublicEvents({ scope: "mine", q: "startup" }, actor.id);
+
+    const call = prisma.event.findMany.mock.calls[0][0];
+    expect(call.where.AND).toEqual([
+      {
+        OR: [
+          { title: { contains: "startup", mode: "insensitive" } },
+          { summary: { contains: "startup", mode: "insensitive" } },
+          { description: { contains: "startup", mode: "insensitive" } },
+          { organizerName: { contains: "startup", mode: "insensitive" } },
+        ],
+      },
+      {
+        OR: [
+          { createdById: actor.id },
+          { participants: { some: { userId: actor.id, status: { in: ["accepted", "attended"] } } } },
+          { ownedTickets: { some: { ownerId: actor.id, status: { in: ["active", "used"] } } } },
+        ],
+      },
+    ]);
+    expect(JSON.stringify(call.where)).not.toContain("ticketOrders");
+  });
+
   it("returns attendee, invited and followed-attendee counts for event cards", async () => {
     const { service, prisma } = createService();
     prisma.userBlock.findMany.mockResolvedValue([]);
@@ -544,6 +573,51 @@ describe("EventsService", () => {
     await expect(service.inviteParticipant("event-1", { username: "member" }, actor as never)).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.eventInvitation.create).not.toHaveBeenCalled();
     expect(prisma.eventParticipant.upsert).not.toHaveBeenCalled();
+  });
+
+  it("lists only invitations sent by the current visitor for Already invited grouping", async () => {
+    const { service, prisma } = createService();
+    prisma.eventInvitation.findMany.mockResolvedValue([{
+      id: "invite-1",
+      createdAt: new Date("2026-08-01T12:00:00Z"),
+      invitee: { id: "member-2", name: "Ece", username: "ece", uploadedMedia: [{ url: "/ece.jpg" }] },
+    }]);
+
+    await expect(service.listSentInvitations("event-1", actor.id)).resolves.toEqual([{
+      id: "member-2",
+      name: "Ece",
+      username: "ece",
+      avatarUrl: "/ece.jpg",
+      invitedAt: new Date("2026-08-01T12:00:00Z"),
+    }]);
+    expect(prisma.eventInvitation.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { eventId: "event-1", inviterId: actor.id },
+    }));
+  });
+
+  it("does not downgrade an accepted participant when another attendee sends an invitation", async () => {
+    const { service, prisma } = createService();
+    const invitee = { id: "member-2", email: "member@example.com", name: "Member", username: "member", status: "active" };
+    prisma.event.findUnique.mockResolvedValue({
+      id: "event-1",
+      title: "Community Night",
+      slug: "community-night",
+      startsAt: new Date(Date.now() + 86_400_000),
+      endsAt: null,
+      status: "published",
+      participants: [{ status: "accepted" }],
+    });
+    prisma.user.findUnique.mockResolvedValue(invitee);
+    prisma.eventInvitation.findUnique.mockResolvedValue(null);
+    prisma.eventParticipant.findUnique.mockResolvedValue({ status: EventParticipantStatus.accepted });
+    prisma.eventParticipant.upsert.mockResolvedValue({ userId: invitee.id, status: "accepted" });
+
+    await service.inviteParticipant("event-1", { userId: invitee.id }, actor as never);
+
+    expect(prisma.eventInvitation.create).toHaveBeenCalled();
+    expect(prisma.eventParticipant.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      update: expect.objectContaining({ status: undefined }),
+    }));
   });
 
   it("allows an accepted attendee to invite another member without assigning a management role", async () => {

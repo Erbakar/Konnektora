@@ -30,6 +30,7 @@ import { CuratorsModule } from "./curators/curators.module";
 import { AutomationsModule } from "./automations/automations.module";
 import { validateEnvironment } from "./config/validate-environment";
 import { ActivityLogInterceptor } from "./admin/activity-log.interceptor";
+import { LocationsModule } from "./locations/locations.module";
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { ActivityLogInterceptor } from "./admin/activity-log.interceptor";
     EventsModule,
     FinanceModule,
     IdentityModule,
+    LocationsModule,
     MessagesModule,
     NotificationsModule,
     ProfileModule,

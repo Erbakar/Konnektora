@@ -29,8 +29,16 @@ export class ActivityLogInterceptor implements NestInterceptor {
       const forwardedFor = request.headers["x-forwarded-for"];
       const ip = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor?.split(",")[0]?.trim() || request.ip || null;
       const segments = path.split("/").filter(Boolean);
-      const category = this.categoryFor(segments[0] ?? "system");
+      const category = this.categoryFor(segments);
       const targetId = segments.find((segment) => /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(segment)) ?? request.user?.id ?? "public";
+      const header = (...names: string[]) => {
+        for (const name of names) {
+          const value = request.headers[name];
+          const resolved = Array.isArray(value) ? value[0] : value;
+          if (resolved) return resolved.slice(0, 500);
+        }
+        return null;
+      };
       void this.prisma.adminActivityLog.create({
         data: {
           actorId: request.user?.id ?? null,
@@ -44,6 +52,11 @@ export class ActivityLogInterceptor implements NestInterceptor {
             durationMs: Date.now() - startedAt,
             ip,
             userAgent: Array.isArray(userAgent) ? userAgent[0] : userAgent ?? null,
+            language: header("accept-language"),
+            referer: header("referer", "referrer"),
+            country: header("x-vercel-ip-country", "cf-ipcountry"),
+            city: header("x-vercel-ip-city", "cf-ipcity"),
+            requestId: header("x-request-id", "cf-ray"),
             queryFields: Object.keys(request.query ?? {}),
           },
         },
@@ -59,12 +72,19 @@ export class ActivityLogInterceptor implements NestInterceptor {
     return ({ GET: "view", POST: "create", PUT: "replace", PATCH: "update", DELETE: "delete" } as Record<string, string>)[method] ?? method.toLowerCase();
   }
 
-  private categoryFor(segment: string) {
-    if (["finance", "tickets", "payments", "billing", "corporate-kyc"].includes(segment)) return "finance";
-    if (["auth", "identity", "profile-verification"].includes(segment)) return "identity";
-    if (["profile", "users", "me", "public-profile"].includes(segment)) return "user";
-    if (["reports", "content-admin", "admin"].includes(segment)) return "moderation";
-    if (["cms", "privacy", "notifications", "contacts"].includes(segment)) return "settings";
-    return segment;
+  private categoryFor(segments: string[]) {
+    const includes = (...candidates: string[]) =>
+      segments.some((segment) => candidates.includes(segment));
+    if (includes("finance", "tickets", "ticket-types", "ticket-orders", "payments", "billing", "corporate-kyc", "payouts", "refund")) return "finance";
+    if (includes("reports", "report-groups", "report-rules", "moderation", "content-admin")) return "moderation";
+    if (includes("privacy", "notifications", "contacts", "cms", "policies", "faqs", "support")) return "settings";
+    if (includes("auth", "identity", "profile-verification", "onboarding", "member-pass", "member-scans")) return "identity";
+    if (includes("messages", "private-messages", "conversations", "chat")) return "messages";
+    if (includes("events")) return "events";
+    if (includes("places")) return "places";
+    if (includes("tags")) return "tags";
+    if (includes("profile", "users", "me", "public-profile", "social")) return "user";
+    if (includes("admin")) return "admin";
+    return segments[0] ?? "system";
   }
 }

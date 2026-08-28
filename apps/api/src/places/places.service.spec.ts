@@ -287,6 +287,38 @@ describe("PlacesService", () => {
     expect(placeMember.upsert).not.toHaveBeenCalled();
   });
 
+  it("lists only invitations sent by the current visitor for Already invited grouping", async () => {
+    placeInvitation.findMany.mockResolvedValue([{
+      id: "invite-1",
+      createdAt: new Date("2026-08-02T12:00:00Z"),
+      invitee: { id: "member-2", name: "Ece", username: "ece", uploadedMedia: [{ url: "/ece.jpg" }] },
+    }]);
+
+    await expect(service.listSentInvitations("place-1", actor.id)).resolves.toEqual([{
+      id: "member-2",
+      name: "Ece",
+      username: "ece",
+      avatarUrl: "/ece.jpg",
+      invitedAt: new Date("2026-08-02T12:00:00Z"),
+    }]);
+    expect(placeInvitation.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { placeId: "place-1", inviterId: actor.id },
+    }));
+  });
+
+  it("rejects an existing active member before writing an orphan invitation record", async () => {
+    const invitedUser = { id: "33333333-3333-4333-8333-333333333333", email: "member@example.com", name: "Member", role: "user", status: "active" };
+    place.findUnique.mockResolvedValue({ id: "place-1", name: "Hub", createdById: actor.id, members: [] });
+    user.findFirst.mockResolvedValue(invitedUser);
+    placeMember.findUnique.mockResolvedValue({ status: PlaceMemberStatus.accepted });
+
+    await expect(service.invite("place-1", { userId: invitedUser.id }, actor)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(placeInvitation.findUnique).not.toHaveBeenCalled();
+    expect(placeInvitation.create).not.toHaveBeenCalled();
+    expect(placeMember.upsert).not.toHaveBeenCalled();
+  });
+
   it("creates an invited account and emails a non-member place invite", async () => {
     const external = { id: "44444444-4444-4444-8444-444444444444", email: "new@example.com", name: "New", role: "user", status: "invited" };
     place.findUnique.mockResolvedValue({ id: "place-1", name: "Hub", slug: "hub", createdById: actor.id, members: [] });

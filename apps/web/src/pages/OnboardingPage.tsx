@@ -84,8 +84,16 @@ export function OnboardingPage() {
   });
 
   useEffect(() => {
-    if (onboarding.data && !onboarding.data.completed) setStep(statusStep[onboarding.data.currentStep?.key ?? "people"] ?? 5);
-  }, [onboarding.data]);
+    if (onboarding.data && !onboarding.data.completed) {
+      setStep(
+        onboarding.data.currentStep
+          ? (statusStep[onboarding.data.currentStep.key] ?? 5)
+          : isCorporate
+            ? 4
+            : 5,
+      );
+    }
+  }, [isCorporate, onboarding.data]);
   useEffect(() => {
     if (affinities.data) setSentiments(Object.fromEntries(affinities.data.map((item) => [item.tag.id, item.sentiment])));
   }, [affinities.data]);

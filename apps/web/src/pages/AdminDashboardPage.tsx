@@ -55,6 +55,7 @@ import {
   listEventParticipants,
   getAdminUser,
   listAdminAnnouncements,
+  listActiveAdminAnnouncements,
   listAdminActivityLogs,
   listAdminCmsCategories,
   listAdminEvents,
@@ -427,6 +428,11 @@ export function AdminDashboardPage() {
     queryFn: listAdminAnnouncements,
     enabled: Boolean(token)
   });
+  const activeAdminAnnouncementsQuery = useQuery({
+    queryKey: ["admin-announcements-active"],
+    queryFn: listActiveAdminAnnouncements,
+    enabled: Boolean(token)
+  });
   const policiesQuery = useQuery({
     queryKey: ["admin-policies"],
     queryFn: listAdminPolicies,
@@ -752,7 +758,7 @@ export function AdminDashboardPage() {
   const cmsCategories = cmsCategoriesQuery.data ?? [];
   const faqs = faqsQuery.data ?? [];
   const announcements = announcementsQuery.data ?? [];
-  const activeAdminAnnouncements = announcements.filter((announcement) => announcement.target === "admins" && announcement.status === "active" && new Date(announcement.publishAt).getTime() <= Date.now() && (!announcement.expiresAt || new Date(announcement.expiresAt).getTime() > Date.now()));
+  const activeAdminAnnouncements = activeAdminAnnouncementsQuery.data ?? [];
   const policies = policiesQuery.data ?? [];
 
   const openReports = reports.filter((r) => r.status === "open").length;
@@ -1651,13 +1657,45 @@ function CmsAdminPanel({
           <span>{writeToUsCategories.length} kategori</span>
         </div>
         <p className="admin-section-desc" style={{ margin: "0 0 14px" }}>
-          Dokümandaki Hata, Oneriler, Sikayet, Reklam, Is birligi ve Diger başlıkları kullanıcı mesajları filtrelerinde kullanılır.
+          Burada oluşturulan aktif kategoriler kullanıcıların “Bize yazın” formunda gösterilir.
         </p>
-        <div className="profile-tag-row">
-          {USER_MESSAGE_TYPE_META.write_to_us.categories.map((category) => (
-            <span key={category}>{category}</span>
-          ))}
-        </div>
+        {writeToUsCategories.length ? (
+          <div className="admin-list">
+            {writeToUsCategories.map((category) => (
+              <div className="admin-list-row" key={category.id}>
+                <div>
+                  <strong>{category.name}</strong>
+                  <span>{category.description || "Açıklama yok"} · {category.status}</span>
+                </div>
+                <button
+                  className={category.status === "active" ? "ghost-action" : "secondary-action"}
+                  disabled={isPending}
+                  onClick={() => onUpdateCategory(category.id, { status: category.status === "active" ? "passive" : "active" })}
+                  type="button"
+                >
+                  {category.status === "active" ? "Pasif yap" : "Aktif yap"}
+                </button>
+                <button
+                  className="danger-action"
+                  disabled={isPending}
+                  onClick={() => {
+                    if (window.confirm("Bu Write to us kategorisi kaldırılacak. Devam edilsin mi?")) {
+                      onDeleteCategory(category.id);
+                    }
+                  }}
+                  type="button"
+                >
+                  Kaldır
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="admin-empty-state">
+            <strong>Henüz Write to us kategorisi yok</strong>
+            <p>Yukarıdaki kategori formundan türü “Write to us kategorisi” seçerek ilk kaydı ekleyin.</p>
+          </div>
+        )}
       </div>
 
       {/* ── 3. Duyurular ── */}

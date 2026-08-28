@@ -185,6 +185,7 @@ const MOCK_TAGS_KEY = "konnektora_mock_tags";
 const MOCK_USERS_KEY = "konnektora_mock_users";
 const MOCK_PARTICIPANTS_KEY = "konnektora_mock_participants";
 const MOCK_EVENT_TICKETS_KEY = "konnektora_mock_event_tickets";
+const MOCK_OWNED_TICKET_ORDERS_KEY = "konnektora_mock_owned_ticket_orders";
 const MOCK_REPORTS_KEY = "konnektora_mock_reports";
 const MOCK_REPORT_RULES_KEY = "konnektora_mock_report_rules";
 const MOCK_REPORT_GROUP_NOTES_KEY = "konnektora_mock_report_group_notes";
@@ -403,6 +404,19 @@ export function setUserSession(response: LoginResponse) {
 
 export function getUserSession() {
   return readStorage<LoginResponse["user"] | null>(USER_KEY, null);
+}
+
+export function geocodeAddress(query: string, language: "tr" | "en") {
+  return requestJson(
+    `/locations/geocode?q=${encodeURIComponent(query)}`,
+    z.object({
+      found: z.boolean(),
+      latitude: z.number().optional(),
+      longitude: z.number().optional(),
+      displayName: z.string().optional(),
+    }),
+    { headers: { "Accept-Language": language } },
+  );
 }
 
 export function updateUserSession(user: LoginResponse["user"]) {
@@ -845,6 +859,7 @@ async function requestJson<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const headers = new Headers(options.headers);
+  headers.set("X-App-Version", import.meta.env.VITE_APP_VERSION ?? "web");
   const timeoutController = options.signal ? null : new AbortController();
   const timeoutId = timeoutController
     ? window.setTimeout(() => timeoutController.abort(), 8_000)
@@ -2220,6 +2235,20 @@ function getMockResponse<T>(
     return schema.parse(listMockAnnouncements());
   }
 
+  if (pathname === "/admin/announcements/active" && method === "GET") {
+    const now = Date.now();
+    return schema.parse(
+      listMockAnnouncements().filter(
+        (announcement) =>
+          announcement.target === "admins" &&
+          announcement.status === "active" &&
+          new Date(announcement.publishAt).getTime() <= now &&
+          (!announcement.expiresAt ||
+            new Date(announcement.expiresAt).getTime() > now),
+      ),
+    );
+  }
+
   if (pathname === "/admin/cms/announcements" && method === "POST") {
     return schema.parse(
       createMockAnnouncement(parseBody<AnnouncementInput>(options)),
@@ -2420,16 +2449,16 @@ function getMockResponse<T>(
   if (/^\/events\/[^/]+\/ticket-types$/.test(pathname) && method === "GET")
     return schema.parse([]);
   if (pathname === "/me/owned-tickets" && method === "GET")
-    return schema.parse([]);
+    return schema.parse(listMockOwnedTicketOrders());
   if (/^\/ticket-types\/[^/]+\/purchase$/.test(pathname) && method === "POST")
     return schema.parse({ success: true });
   if (pathname === "/me/tickets/transfer" && method === "POST")
-    return schema.parse({ transferred: 1 });
+    return schema.parse(transferMockOwnedTickets(parseBody<{ ticketIds: string[] }>(options)));
   if (
     /^\/me\/ticket-orders\/[^/]+\/refund$/.test(pathname) &&
     method === "POST"
   )
-    return schema.parse({ status: "refunded" });
+    return schema.parse(refundMockTicketOrder(pathname.split("/")[3]!));
 
   if (pathname === "/places" && method === "GET") {
     return schema.parse(listMockPublicPlaces(new URLSearchParams(queryString)));
@@ -2547,6 +2576,24 @@ function getMockResponse<T>(
           relation: item.role,
           status: item.status,
           checkedIn: Boolean(item.checkedInAt),
+        })),
+    );
+  }
+
+  if (
+    pathname.startsWith("/places/") &&
+    pathname.endsWith("/invitations/sent") &&
+    method === "GET"
+  ) {
+    return schema.parse(
+      listMockPlaceMembers(pathname.slice("/places/".length, -"/invitations/sent".length))
+        .filter((item) => item.status === "invited" && item.user)
+        .map((item) => ({
+          id: item.user!.id,
+          name: item.user!.name,
+          username: item.user!.username ?? null,
+          avatarUrl: item.user!.avatarUrl ?? null,
+          invitedAt: item.createdAt ?? new Date().toISOString(),
         })),
     );
   }
@@ -2783,6 +2830,24 @@ function getMockResponse<T>(
           relation: item.role,
           status: item.status,
           checkedIn: Boolean(item.checkedInAt),
+        })),
+    );
+  }
+
+  if (
+    pathname.startsWith("/events/") &&
+    pathname.endsWith("/invitations/sent") &&
+    method === "GET"
+  ) {
+    return schema.parse(
+      listMockParticipants(pathname.slice("/events/".length, -"/invitations/sent".length))
+        .filter((item) => item.status === "invited" && item.user)
+        .map((item) => ({
+          id: item.user!.id,
+          name: item.user!.name,
+          username: item.user!.username ?? null,
+          avatarUrl: item.user!.avatarUrl ?? null,
+          invitedAt: item.createdAt ?? new Date().toISOString(),
         })),
     );
   }
@@ -9232,7 +9297,7 @@ export function importContacts(
 }
 export function searchContacts(
   query: string,
-  type: "name" | "email" | "phone" = "name",
+  type: "username" | "name" | "email" | "phone" = "name",
 ): Promise<MemberCard[]> {
   const params = new URLSearchParams({ query, type });
   return requestJson(`/contacts/search?${params}`, memberCardsSchema, {
@@ -9381,6 +9446,7 @@ export function confirmPhoneVerification(phone: string, code: string) {
 export function acceptInvite(input: {
   token: string;
   name?: string;
+  email?: string;
   password: string;
 }): Promise<LoginResponse> {
   return requestJson("/auth/invite/accept", loginResponseSchema, {
@@ -9760,6 +9826,14 @@ export function listAdminAnnouncements(): Promise<Announcement[]> {
   });
 }
 
+export function listActiveAdminAnnouncements(): Promise<Announcement[]> {
+  return requestJson(
+    "/admin/announcements/active",
+    z.array(announcementSchema),
+    { auth: true },
+  );
+}
+
 export function createAdminAnnouncement(
   input: AnnouncementInput,
 ): Promise<Announcement> {
@@ -10109,6 +10183,101 @@ export type OwnedTicketOrder = {
     qrPayload: string;
   }>;
 };
+
+function listMockOwnedTicketOrders(): OwnedTicketOrder[] {
+  const session = getUserSession();
+  if (!session) return [];
+  const stored = readStorage<Record<string, OwnedTicketOrder[]>>(MOCK_OWNED_TICKET_ORDERS_KEY, {});
+  const existingOrders = stored[session.id];
+  if (existingOrders) return existingOrders;
+  const now = Date.now();
+  const event = getStoredEvents().find((item) => new Date(item.endsAt ?? item.startsAt).getTime() >= now) ?? getStoredEvents()[0];
+  if (!event) return [];
+  const order: OwnedTicketOrder = {
+    id: "77777777-0001-4000-8000-000000000001",
+    status: "paid",
+    quantity: 2,
+    unitPrice: 350,
+    totalAmount: 700,
+    currency: "TRY",
+    purchasedAt: new Date(now - 86_400_000).toISOString(),
+    eventChanged: false,
+    event: {
+      id: event.id,
+      title: event.title,
+      slug: event.slug,
+      status: event.status,
+      startsAt: String(event.startsAt),
+      endsAt: event.endsAt ? String(event.endsAt) : null,
+      city: event.city ?? null,
+      country: event.country ?? null,
+      coverImageUrl: event.coverImageUrl ?? null,
+    },
+    ticketType: {
+      id: "77777777-0002-4000-8000-000000000001",
+      eventId: event.id,
+      name: "Konnektora Select",
+      description: "Demo bilet",
+      capacity: 120,
+      perUserLimit: 4,
+      soldCount: 72,
+      remaining: 48,
+      price: 350,
+      currency: "TRY",
+      salesPlatform: "konnektora",
+      externalSalesUrl: null,
+      saleStartsAt: null,
+      saleEndsAt: null,
+      gateOpensAt: null,
+      gateClosesAt: null,
+      status: "active",
+    },
+    tickets: [
+      "77777777-0003-4000-8000-000000000001",
+      "77777777-0003-4000-8000-000000000002",
+    ].map((id, index) => ({
+      id,
+      status: "active",
+      createdAt: new Date(now - 86_400_000).toISOString(),
+      usedAt: null,
+      qrPayload: `konnektora-ticket:${id}:demo-token-${index + 1}`,
+    })),
+  };
+  writeStorage(MOCK_OWNED_TICKET_ORDERS_KEY, { ...stored, [session.id]: [order] });
+  return [order];
+}
+
+function transferMockOwnedTickets(input: { ticketIds: string[] }) {
+  const session = getUserSession();
+  if (!session) throw new Error("Mock user session not found");
+  const stored = readStorage<Record<string, OwnedTicketOrder[]>>(MOCK_OWNED_TICKET_ORDERS_KEY, {});
+  const orders = listMockOwnedTicketOrders();
+  const selected = new Set(input.ticketIds);
+  let transferred = 0;
+  const next = orders.flatMap((order) => {
+    const tickets = order.tickets.filter((ticket) => {
+      if (!selected.has(ticket.id) || ticket.status !== "active") return true;
+      transferred += 1;
+      return false;
+    });
+    return tickets.length ? [{ ...order, quantity: tickets.length, tickets }] : [];
+  });
+  if (transferred !== selected.size) throw new Error("Devredilecek aktif biletler bulunamadı.");
+  writeStorage(MOCK_OWNED_TICKET_ORDERS_KEY, { ...stored, [session.id]: next });
+  return { transferred };
+}
+
+function refundMockTicketOrder(orderId: string) {
+  const session = getUserSession();
+  if (!session) throw new Error("Mock user session not found");
+  const stored = readStorage<Record<string, OwnedTicketOrder[]>>(MOCK_OWNED_TICKET_ORDERS_KEY, {});
+  const orders = listMockOwnedTicketOrders();
+  if (!orders.some((order) => order.id === orderId)) throw new Error("Bilet siparişi bulunamadı.");
+  const next = orders.map((order) => order.id === orderId ? { ...order, status: "refunded", tickets: order.tickets.map((ticket) => ({ ...ticket, status: "refunded" })) } : order);
+  writeStorage(MOCK_OWNED_TICKET_ORDERS_KEY, { ...stored, [session.id]: next });
+  return { status: "refunded" };
+}
+
 const ticketTypeRecordsSchema = z.array(
   z.object({
     id: z.string(),
@@ -10357,6 +10526,20 @@ export function listEventParticipants(
     z.array(eventParticipantSchema),
     { auth },
   );
+}
+
+const sentEventInvitationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  username: z.string().nullable().optional(),
+  avatarUrl: z.string().nullable().optional(),
+  invitedAt: z.coerce.string(),
+});
+export function listSentEventInvitations(eventId: string) {
+  return requestJson(`/events/${eventId}/invitations/sent`, z.array(sentEventInvitationSchema), { auth: "user" });
+}
+export function listSentPlaceInvitations(placeId: string) {
+  return requestJson(`/places/${placeId}/invitations/sent`, z.array(sentEventInvitationSchema), { auth: "user" });
 }
 
 export type GuestList = {

@@ -54,7 +54,7 @@ export class IdentityService {
       ],
     );
     if (!user) throw new NotFoundException("Kullanıcı bulunamadı.");
-    const steps = [
+    const allSteps = [
       {
         key: "phone" as const,
         title: "Telefonunu doğrula",
@@ -86,11 +86,13 @@ export class IdentityService {
         path: "/onboarding",
       },
     ];
+    const steps =
+      user.accountType === "corporate" ? allSteps.slice(0, 4) : allSteps;
     const completedCount = steps.filter((step) => step.completed).length;
     return {
       completed: Boolean(user.onboardingCompletedAt),
       completedAt: user.onboardingCompletedAt,
-      progress: completedCount * 20,
+      progress: Math.round((completedCount / steps.length) * 100),
       currentStep: steps.find((step) => !step.completed) ?? null,
       steps,
     };

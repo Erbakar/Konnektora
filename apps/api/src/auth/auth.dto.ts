@@ -96,6 +96,10 @@ export class AcceptInviteDto extends ResetPasswordDto {
   @IsString()
   @MinLength(2)
   name?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 }
 
 export class ChangePasswordDto {

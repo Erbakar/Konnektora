@@ -28,6 +28,8 @@ export class ContactsService {
           ? { email: query.toLowerCase() }
           : type === "phone"
             ? { phone: normalizedPhone }
+            : type === "username"
+              ? { username: { contains: query.replace(/^@/, ""), mode: "insensitive" as const } }
             : {
                 OR: [
                   { username: { contains: query.replace(/^@/, ""), mode: "insensitive" } },
