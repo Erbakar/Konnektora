@@ -27,18 +27,21 @@ describe("post içi YouTube ve SoundCloud oynatıcıları", () => {
     );
   });
 
-  it("SoundCloud başlığını ve sayfa içi oynatıcıyı gösterir", async () => {
+  it("SoundCloud kısa bağlantısını oEmbed'in doğruladığı oynatıcı adresiyle gösterir", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ title: "Konnektora Audio Recap" }),
+      json: async () => ({
+        title: "Konnektora Audio Recap",
+        html: '<iframe src="https://w.soundcloud.com/player/?visual=true&amp;url=https%3A%2F%2Fapi.soundcloud.com%2Ftracks%2F123"></iframe>',
+      }),
     }));
-    render(<LanguageProvider><EmbeddedMedia text="Dinle https://soundcloud.com/example/konnektora)." /></LanguageProvider>);
+    render(<LanguageProvider><EmbeddedMedia text="Dinle https://on.soundcloud.com/Konnektora123)." /></LanguageProvider>);
 
     const link = await screen.findByRole("link", { name: "Konnektora Audio Recap" });
-    expect(link).toHaveAttribute("href", "https://soundcloud.com/example/konnektora");
+    expect(link).toHaveAttribute("href", "https://on.soundcloud.com/Konnektora123");
     await waitFor(() => expect(screen.getByTitle("Konnektora Audio Recap")).toHaveAttribute(
       "src",
-      expect.stringContaining("https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fexample%2Fkonnektora"),
+      "https://w.soundcloud.com/player/?visual=true&url=https%3A%2F%2Fapi.soundcloud.com%2Ftracks%2F123",
     ));
   });
 });
