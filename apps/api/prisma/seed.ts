@@ -110,6 +110,22 @@ async function main() {
     await prisma.cmsPolicy.upsert({ where: { type: policy.type }, update: { ...policy, status: "active", publishedAt: new Date() }, create: { ...policy, status: "active", publishedAt: new Date() } });
   }
 
+  const reportRules = [
+    { id: "30000000-0000-4000-8000-000000000001", targetType: "event" as const, title: "Ayrımcılık ve nefret söylemi", description: "Bir kişi veya grubu korunan özellikleri nedeniyle hedef alan, aşağılayan ya da dışlayan etkinlik içeriklerine izin verilmez.", violationScore: 40 },
+    { id: "30000000-0000-4000-8000-000000000002", targetType: "event" as const, title: "Yanıltıcı etkinlik bilgisi", description: "Tarih, konum, ücret, organizatör veya etkinlik içeriği hakkında kullanıcıyı yanıltan bilgi yayınlanamaz.", violationScore: 20 },
+    { id: "30000000-0000-4000-8000-000000000003", targetType: "place" as const, title: "Güvenli olmayan mekân", description: "Katılımcıların fiziksel güvenliğini tehlikeye atan veya gerçeğe aykırı güvenlik bilgisi paylaşan mekânlar bildirilebilir.", violationScore: 35 },
+    { id: "30000000-0000-4000-8000-000000000004", targetType: "post" as const, title: "Spam ve istenmeyen tanıtım", description: "Tekrarlayan, ilgisiz, yanıltıcı veya topluluk deneyimini bozan ticari içeriklere izin verilmez.", violationScore: 10 },
+    { id: "30000000-0000-4000-8000-000000000005", targetType: "private_message" as const, title: "Taciz ve tehdit", description: "Özel mesajlarda ısrarlı taciz, tehdit, korkutma veya hedef gösterme yasaktır.", violationScore: 50 },
+    { id: "30000000-0000-4000-8000-000000000006", targetType: "user" as const, title: "Sahte kimlik ve taklit", description: "Başka bir kişi, marka veya kuruluş gibi davranarak kullanıcıları yanıltan hesaplara izin verilmez.", violationScore: 30 },
+  ];
+  for (const rule of reportRules) {
+    await prisma.reportRule.upsert({
+      where: { id: rule.id },
+      update: { ...rule, status: "active" },
+      create: { ...rule, status: "active" },
+    });
+  }
+
   const categories = await Promise.all(
     [
       { name: "Sektör", slug: "sektor", sortOrder: 1 },
