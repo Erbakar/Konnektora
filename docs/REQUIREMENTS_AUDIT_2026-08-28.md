@@ -1,6 +1,6 @@
 # 157 maddelik gereksinim denetimi
 
-> **Durum: devam ediyor.** Bu belge nihai “tamamlandı” raporu değildir. Sağlayıcı/cihaz kabulü bekleyen maddeler kapalı gösterilemez ve kapsamı kaynak dokümanda henüz tanımlanmamış 133. madde tamamlanmış sayılamaz.
+> **Durum: devam ediyor.** Bu belge nihai “tamamlandı” raporu değildir. Sağlayıcı/cihaz kabulü bekleyen maddeler kapalı gösterilemez. 133. maddede bugün için açıkça istenen “Muhasebe & Finans” yetki kutusu mevcuttur; parantez içinde geleceğe bırakılan ekranların kapsamı ise ayrıca tanımlanmadan tamamlanmış sayılmayacaktır.
 
 Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbirinden ayırmak için tutulur. Bir madde ancak ilgili arayüz, servis/veri modeli, hata davranışı ve uygulanabilir doğrulamalar birlikte karşılandığında tamamlanmış sayılır.
 
@@ -38,13 +38,15 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 - `/events` 15 kart/sayfa, masaüstü üç kolon ve ikinci sayfadaki tek kartın sabit genişliği tarayıcıda doğrulandı.
 - Güncel etkinlik ve mekân kartı bağlantıları detay sayfalarını açtı.
 - Canlı `/api/health/ready`, `/api/events` ve `/api/places` istekleri 28 Ağustos 2026 tarihinde HTTP 200 döndürdü.
+- `47c2170` sürümü için GitHub CI başarıyla tamamlandı ve Railway deployment `2d6096ce-fcad-45e6-b99a-26ee725afc39` başarılı oldu.
+- Canlı herkese açık kabul testi sağlık, 15 kayıtlık etkinlik sayfası, dinamik etkinlik detayı, ikinci sayfa, mekân listesi/detayı, çift dilli duyurular ve SSS uçlarını doğruladı.
+- Canlı oturumlu kabul testi admin kullanıcı/CMS/içerik/activity-log, etkinlik katılımcı-davet-bilet-istatistik-pasaport, mekân üye-davet-istatistik ve üye profil/etkinlik/bilet/finans akışlarını doğruladı. Uygun paketi olmayan test üyesinde Guest List'in `403` dönmesi beklenen yetki davranışı olarak ayrıca doğrulandı.
+- Canlı tarayıcıda konum tanıtımı izin vermeden “Şimdi değil” ile kapatıldı. `/events` sayfalaması gerçek düğme tıklamasıyla 2. sayfaya geçti; tek kart 279 px genişlikte kaldı ve 1. sayfaya dönüşte 15 kart üç kolona geri döndü. 390 px mobil görünümde yatay taşma olmadı.
 
-## Deploy öncesi zorunlu kapılar
+## Açık dış bağımlılıklar ve tamamlanan canlı kapılar
 
 1. Google OAuth web/API istemci kimliğini ve People API iznini production ortamına ekle.
 2. Gerçek telefon daveti ve telefonla şifre sıfırlama için `SMS_WEBHOOK_URL` ile `SMS_API_KEY` değerlerini production ortamına ekle.
-3. Tarayıcı push bildirimi isteniyorsa kalıcı VAPID anahtar çiftini production ortamına ekle. In-app bildirimler bundan bağımsız çalışır.
-4. Yeni migrasyonları gerçek PostgreSQL üzerinde uygula. Yerelde PostgreSQL ve Docker servisi çalışmadığı için boş veritabanı migration provası yapılamadı.
-5. CI’ı çalıştır ve başarılı sonucunu kaydet.
-6. Canlı masaüstü ve mobil smoke testi yap.
-7. QR/NFC/kamera ve iki cihaz akışlarını desteklenen fiziksel cihazlarda kabul testine al.
+3. QR/NFC/kamera, ses/titreşim ve iki cihaz akışlarını desteklenen fiziksel cihazlarda kabul testine al.
+4. Kalıcı VAPID anahtar çifti production ortamında mevcuttur; in-app ve push hazırlığı dış bağımlılık sayılmaz.
+5. CI, production build/deploy, herkese açık ve oturumlu canlı smoke testleri tamamlandı.
