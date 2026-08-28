@@ -16,7 +16,7 @@ export function ShareDialog({
   onClose: () => void;
   title: string;
   url: string;
-  targetType: "event" | "place" | "tag" | "user";
+  targetType: "event" | "place" | "tag" | "user" | "post";
   targetId: string;
 }) {
   const { language } = useLanguage();

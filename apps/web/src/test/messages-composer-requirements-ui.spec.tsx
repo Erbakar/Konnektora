@@ -76,4 +76,23 @@ describe("özel mesaj medya gereksinimleri 139–141", () => {
     expect(screen.getByText("@Username")).toBeVisible();
     expect(screen.getByText(/YouTube ve SoundCloud/)).toBeVisible();
   });
+
+  it("aynı yüklemedeki metinsiz medyaları tek kolajda birleştirir", async () => {
+    apiMocks.listConversationMessages.mockResolvedValue({
+      items: [
+        { id: "media-1", senderId: "member-1", recipientId: "peer-1", body: "", status: "active", attachmentUrl: "/uploads/one.webp", attachmentType: "image/webp", attachmentName: "one.webp", createdAt: "2026-08-28T10:05:00.000Z", reactions: [] },
+        { id: "media-2", senderId: "member-1", recipientId: "peer-1", body: "", status: "active", attachmentUrl: "/uploads/two.webp", attachmentType: "image/webp", attachmentName: "two.webp", createdAt: "2026-08-28T10:05:15.000Z", reactions: [] },
+      ],
+      page: 1, pageSize: 50, total: 2, hasNextPage: false,
+    });
+    const { container } = render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <LanguageProvider><MemoryRouter initialEntries={["/messages?peer=peer-1"]}><MessagesPage /></MemoryRouter></LanguageProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(container.querySelector(".message-media-collage-2")).toBeInTheDocument());
+    expect(container.querySelectorAll(".message-media-collage-2 img")).toHaveLength(2);
+    expect(container.querySelector(".message-bubble > p")).not.toBeInTheDocument();
+  });
 });

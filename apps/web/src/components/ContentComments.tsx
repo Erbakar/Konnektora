@@ -39,6 +39,7 @@ import { EmbeddedMedia } from "./EmbeddedMedia";
 import { userProfilePath } from "./UserIdentityLink";
 import { ReportDialog } from "./ReportDialog";
 import { ComposerTips } from "./ComposerTips";
+import { ShareDialog } from "./ContentDialogs";
 import { useLanguage } from "../lib/i18n";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
@@ -390,6 +391,7 @@ function CommentActions({
   const [banned, setBanned] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [guestOpen, setGuestOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const like = useMutation({
     mutationFn: () => toggleContentCommentLike(comment.id),
     onSuccess: onChanged,
@@ -482,7 +484,7 @@ function CommentActions({
           {comment.replies?.length ?? 0} {language === "tr" ? "yorum" : "replies"}
         </button>
         {!comment.parentId ? (
-          <button onClick={() => void sharePost(comment.id)} type="button">
+          <button onClick={() => setShareOpen(true)} type="button">
             <Share2 size={14} />
             {language === "tr" ? "Paylaş" : "Share"}
           </button>
@@ -616,13 +618,14 @@ function CommentActions({
         targetId={comment.id}
         targetType={reportTargetType}
       />
+      <ShareDialog
+        onClose={() => setShareOpen(false)}
+        open={shareOpen}
+        targetId={comment.id}
+        targetType="post"
+        title={comment.body.trim().slice(0, 120) || (language === "tr" ? "Konnektora postu" : "Konnektora post")}
+        url={`${window.location.href.split("#")[0]}#post-${comment.id}`}
+      />
     </>
   );
-}
-
-async function sharePost(id: string) {
-  const url = new URL(window.location.href);
-  url.hash = `post-${id}`;
-  if (navigator.share) await navigator.share({ url: url.toString() });
-  else await navigator.clipboard.writeText(url.toString());
 }

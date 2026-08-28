@@ -11280,6 +11280,7 @@ div.form-error::before {
 }
 .share-dialog-actions > * {
   justify-content: center;
+  min-height: 46px;
 }
 .program-heading {
   border-bottom: 2px solid var(--primary, #111827);

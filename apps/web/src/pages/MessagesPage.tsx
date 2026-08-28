@@ -338,11 +338,12 @@ function MessageThread({
   const groupedMessages = useMemo(() => messages.reduce<Array<{ message: PrivateChatMessage; attachments: PrivateChatMessage[] }>>((groups, message) => {
     const previous = groups.at(-1);
     const previousMessage = previous?.attachments.at(-1) ?? previous?.message;
+    const isMediaOnly = (item: PrivateChatMessage | undefined) => Boolean(item?.attachmentUrl && ["", "Medya", "Media"].includes(item.body.trim()));
     const sameUploadBatch = Boolean(
-      message.attachmentUrl &&
-      previousMessage?.attachmentUrl &&
+      previousMessage &&
+      isMediaOnly(message) &&
+      isMediaOnly(previousMessage) &&
       previousMessage.senderId === message.senderId &&
-      ["Medya", "Media"].includes(message.body) &&
       Math.abs(new Date(message.createdAt).getTime() - new Date(previousMessage.createdAt).getTime()) < 60_000,
     );
     if (previous && sameUploadBatch) previous.attachments.push(message);
@@ -738,7 +739,7 @@ function MessageBubble({
             {message.replyTo.body}
           </div>
         ) : null}
-        {!(message.attachmentUrl && ["Medya", "Media"].includes(message.body)) ? <p className={message.status === "deleted" ? "deleted-message" : ""}>
+        {!(message.attachmentUrl && ["", "Medya", "Media"].includes(message.body.trim())) ? <p className={message.status === "deleted" ? "deleted-message" : ""}>
           <RichText text={message.body} />
         </p> : null}
         {attachments.length ? <div className={`message-media-collage message-media-collage-${Math.min(attachments.length, 4)}`}>{attachments.map((attachment) => attachment.attachmentType?.startsWith("image/") || attachment.attachmentType?.startsWith("video/") ? <a href={resolveMediaUrl(attachment.attachmentUrl!)} key={attachment.id} rel="noreferrer" target="_blank">{attachment.attachmentType.startsWith("image/") ? <img className="message-image" src={resolveMediaUrl(attachment.attachmentUrl!)} alt={attachment.attachmentName ?? t("Mesaj görseli", "Message image")}/> : <video className="message-image" controls preload="metadata" src={resolveMediaUrl(attachment.attachmentUrl!)}/>}</a> : <a className="message-file" href={resolveMediaUrl(attachment.attachmentUrl!)} key={attachment.id} rel="noreferrer" target="_blank"><File size={18}/><span>{attachment.attachmentName ?? t("Dosya", "File")}<small>{attachment.attachmentSize ? `${Math.ceil(attachment.attachmentSize / 1024)} KB` : ""}</small></span></a>)}</div> : null}

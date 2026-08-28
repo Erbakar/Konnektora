@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ContentComments } from "../components/ContentComments";
+import { ContentMediaGallery } from "../components/ContentMediaGallery";
 import { LanguageProvider } from "../lib/i18n";
 import { ContactPage } from "../pages/ContactPage";
 import { HelpCenterPage } from "../pages/HelpCenterPage";
@@ -14,12 +15,18 @@ const apiMocks = vi.hoisted(() => ({
   createUserMessage: vi.fn(),
   getUserSession: vi.fn(),
   listContentComments: vi.fn(),
+  listContentMedia: vi.fn(),
   listFollowing: vi.fn(),
   listGuestLists: vi.fn(),
   listPublicFaqs: vi.fn(),
   listPublicSupportCategories: vi.fn(),
   listReportRules: vi.fn(),
   uploadContentMedia: vi.fn(),
+  recordContentShare: vi.fn(),
+}));
+
+vi.mock("qrcode", () => ({
+  default: { toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,cXI=") },
 }));
 
 vi.mock("../lib/api", async () => {
@@ -51,6 +58,7 @@ beforeEach(() => {
   apiMocks.listPublicSupportCategories.mockResolvedValue([]);
   apiMocks.createUserMessage.mockResolvedValue({ id: "message-1" });
   apiMocks.listContentComments.mockResolvedValue([]);
+  apiMocks.listContentMedia.mockResolvedValue([]);
   apiMocks.listFollowing.mockResolvedValue([]);
   apiMocks.listGuestLists.mockResolvedValue([]);
   apiMocks.createContentComment.mockResolvedValue({
@@ -156,5 +164,38 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
     expect(screen.getByText("email@domain.com")).toBeVisible();
     expect(screen.getByText("@Username")).toBeVisible();
     expect(screen.getByText(/YouTube ve SoundCloud/)).toBeVisible();
+  });
+
+  it("üst seviye postun Paylaş düğmesinden paylaşım lightbox'ını açar", async () => {
+    apiMocks.getUserSession.mockReturnValue({ id: "member-1", name: "Ada", username: "ada", role: "user", status: "active" });
+    apiMocks.listContentComments.mockResolvedValue([{
+      id: "post-1", targetId: "place-1", targetType: "place", parentId: null, authorId: "member-2",
+      author: { id: "member-2", name: "Deniz", username: "deniz" }, body: "Topluluk buluşması için güzel bir post.",
+      likeCount: 2, createdAt: "2026-08-28T00:00:00.000Z", replies: [], media: [],
+    }]);
+    render(providers(<ContentComments targetId="place-1" targetType="place" title="Mekân postları" />, "/places/demo"));
+
+    await userEvent.click(await screen.findByRole("button", { name: "Paylaş" }));
+    expect(screen.getByRole("dialog", { name: "Paylaş" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Bağlantıyı kopyala" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "QR kodu" })).toBeVisible();
+  });
+});
+
+describe("etkinlik ve mekân medya galerisi gereksinimleri 142–143", () => {
+  it("ilk dört thumbnail'i, kalan medya sayısını ve tam ekran gezinmeyi gösterir", async () => {
+    apiMocks.listContentMedia.mockResolvedValue(Array.from({ length: 5 }, (_, index) => ({
+      id: `media-${index + 1}`, url: `https://images.example.com/${index + 1}.webp`, type: "image",
+      status: "active", contentType: "event", contentId: "event-1", sortOrder: index,
+      isProfilePicture: false, createdAt: "2026-08-28T00:00:00.000Z", updatedAt: "2026-08-28T00:00:00.000Z",
+    })));
+    render(providers(<ContentMediaGallery targetId="event-1" targetType="event" />, "/events/demo"));
+
+    expect(await screen.findByText("+1")).toBeVisible();
+    expect(screen.getAllByRole("button", { name: /Görsel .* büyüt/ })).toHaveLength(4);
+    await userEvent.click(screen.getByRole("button", { name: "Görsel 4 / 5 büyüt" }));
+    expect(screen.getByRole("dialog", { name: "Medya 4 / 5" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Sonraki" }));
+    expect(screen.getByRole("dialog", { name: "Medya 5 / 5" })).toBeVisible();
   });
 });

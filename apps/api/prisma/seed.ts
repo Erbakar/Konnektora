@@ -523,10 +523,24 @@ async function main() {
     }
   ] as const;
 
+  const demoEventCoordinates: Record<string, { latitude: number; longitude: number }> = {
+    London: { latitude: 51.5074, longitude: -0.1278 },
+    Amsterdam: { latitude: 52.3676, longitude: 4.9041 },
+    Berlin: { latitude: 52.52, longitude: 13.405 },
+    "New York": { latitude: 40.7128, longitude: -74.006 },
+    Paris: { latitude: 48.8566, longitude: 2.3522 },
+    Lisbon: { latitude: 38.7223, longitude: -9.1393 },
+    "San Francisco": { latitude: 37.7749, longitude: -122.4194 },
+    Copenhagen: { latitude: 55.6761, longitude: 12.5683 },
+    Toronto: { latitude: 43.6532, longitude: -79.3832 },
+    Istanbul: { latitude: 41.0082, longitude: 28.9784 },
+  };
+  const seededEvents = new Map<string, string>();
   for (const [index, event] of mockEvents.entries()) {
     const startsAt = new Date(Date.now() + day * event.startsInDays);
     const endsAt = new Date(startsAt.getTime() + 1000 * 60 * 60 * 3);
     const tagIds = event.tagSlugs.map(getTagId);
+    const coordinates = event.city ? demoEventCoordinates[event.city] : undefined;
 
     const seededEvent = await prisma.event.upsert({
       where: { slug: event.slug },
@@ -542,6 +556,8 @@ async function main() {
         visibility: event.visibility,
         city: event.city,
         country: event.country,
+        latitude: coordinates?.latitude ?? null,
+        longitude: coordinates?.longitude ?? null,
         language: "tr",
         organizerName: event.organizerName,
         externalRegistrationUrl: null,
@@ -565,6 +581,8 @@ async function main() {
         visibility: event.visibility,
         city: event.city,
         country: event.country,
+        latitude: coordinates?.latitude ?? null,
+        longitude: coordinates?.longitude ?? null,
         language: "tr",
         organizerName: event.organizerName,
         externalRegistrationUrl: null,
@@ -590,6 +608,7 @@ async function main() {
         }
       }
     });
+    seededEvents.set(event.slug, seededEvent.id);
 
     await Promise.all([
       prisma.eventParticipant.upsert({
@@ -608,6 +627,30 @@ async function main() {
         }
       })
     ]);
+  }
+
+  const demoGalleryMedia = [
+    ...[
+      "https://images.unsplash.com/photo-1511578314322-379afb476865",
+      "https://images.unsplash.com/photo-1521737604893-d14cc237f11d",
+      "https://images.unsplash.com/photo-1556761175-b413da4baf72",
+      "https://images.unsplash.com/photo-1559136555-9303baea8ebd",
+      "https://images.unsplash.com/photo-1543269865-cbf427effbad",
+    ].map((url, index) => ({ id: `31000000-0000-4000-8000-00000000000${index + 1}`, url, contentType: "event" as const, contentId: seededEvents.get("global-startup-demo-night-420001"), sortOrder: index })),
+    ...[
+      "https://images.unsplash.com/photo-1497366811353-6870744d04b2",
+      "https://images.unsplash.com/photo-1497366754035-f200968a6e72",
+      "https://images.unsplash.com/photo-1519389950473-47ba0277781c",
+      "https://images.unsplash.com/photo-1524758631624-e2822e304c36",
+      "https://images.unsplash.com/photo-1522202176988-66273c2fd55f",
+    ].map((url, index) => ({ id: `32000000-0000-4000-8000-00000000000${index + 1}`, url, contentType: "place" as const, contentId: places.find((place) => place.slug === "london-community-studio-310004")?.id, sortOrder: index })),
+  ].filter((item): item is typeof item & { contentId: string } => Boolean(item.contentId));
+  for (const media of demoGalleryMedia) {
+    await prisma.mediaFile.upsert({
+      where: { id: media.id },
+      update: { url: media.url, type: "image", status: "active", contentType: media.contentType, contentId: media.contentId, uploadedById: admin.id, sortOrder: media.sortOrder },
+      create: { ...media, type: "image", status: "active", uploadedById: admin.id },
+    });
   }
 
   for (const tag of tags) {
