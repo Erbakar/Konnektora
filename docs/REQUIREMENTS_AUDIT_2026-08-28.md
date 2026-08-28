@@ -29,6 +29,7 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 ## Otomatik kontroller
 
 - API testleri: **33 suite / 243 test geçti**.
+- Web etkileşim testleri: **1 suite / 8 test geçti**. Konum penceresi, etkinlik sayfalama, etkinlik/mekân kartları, çift dilli duyuru, rapor, paylaşım/QR ve bildirim-takvim davranışları doğrudan kullanıcı etkileşimiyle doğrulandı.
 - Shared, API ve web TypeScript kontrolleri: geçti.
 - API ve web lint: geçti.
 - Shared, API ve web production build: geçti.
