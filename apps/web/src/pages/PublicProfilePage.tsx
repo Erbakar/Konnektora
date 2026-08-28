@@ -260,6 +260,11 @@ export function PublicProfilePage() {
     profile.media.find(
       (item) => item.isProfilePicture && item.type === "image",
     ) ?? profile.media.find((item) => item.type === "image");
+  const profilePhotoIndex = profilePhoto
+    ? profile.media.findIndex((item) => item.id === profilePhoto.id)
+    : profile.media.length
+      ? 0
+      : null;
   const addedTagNameSet = new Set(addedTagNames.map((name) => name.toLocaleLowerCase("tr-TR")));
   const relevantCategoryIds = new Set([
     ...profile.interests.map((interest) => interest.tag.categoryId),
@@ -283,7 +288,7 @@ export function PublicProfilePage() {
         <button
           aria-label={t("Medya galerisini aç", "Open media gallery")}
           className="public-profile-avatar"
-          onClick={() => setGalleryIndex(0)}
+          onClick={() => setGalleryIndex(profilePhotoIndex)}
           type="button"
         >
           {profilePhoto ? (
@@ -400,25 +405,20 @@ export function PublicProfilePage() {
                   <MoreVertical size={20} />
                 </summary>
                 <div>
-                  {profile.relationship.canMessage ? (
-                    <Link to={`/messages?peer=${profile.id}`}>
-                      <Mail size={18} /> {t("Mesaj gönder", "Send message")}
-                    </Link>
-                  ) : null}
+                  <button onClick={() => setShareOpen(true)} type="button">
+                    <Share2 size={18} /> {t("Paylaş", "Share")}
+                  </button>
                   {!profile.relationship.blockedByViewer ? <button onClick={() => setNotificationOpen(true)} type="button">
                     {notification.data?.enabled
                       ? t("Bildirimleri kapat", "Turn off notifications")
                       : t("Bildirim ayarla", "Set a notification")}
                   </button> : null}
-                  {canUseGuestLists && !profile.relationship.blockedByViewer ? <button onClick={() => setGuestOpen(true)} type="button">
-                    <UserPlus size={18} /> {t("Misafir listesine ekle", "Add to guest list")}
-                  </button> : null}
                   <Link to={`/stats/user/${profile.id}`}>
                     {t("Etkileşim istatistikleri", "Interaction statistics")}
                   </Link>
-                  <button onClick={() => setShareOpen(true)} type="button">
-                    <Share2 size={18} /> {t("Paylaş", "Share")}
-                  </button>
+                  {canUseGuestLists && !profile.relationship.blockedByViewer ? <button onClick={() => setGuestOpen(true)} type="button">
+                    <UserPlus size={18} /> {t("Misafir listesine ekle", "Add to guest list")}
+                  </button> : null}
                   <button
                     onClick={() => setReportOpen((open) => !open)}
                     type="button"
@@ -466,7 +466,7 @@ export function PublicProfilePage() {
           {profile.accountType === "individual" && profile.birthDate ? (
             <span>{t(`${ageFrom(profile.birthDate)} yaşında`, `${ageFrom(profile.birthDate)} years old`)}</span>
           ) : null}
-          {profile.city || profile.country ? (
+          {(profile.accountType === "individual" || (!profile.address && !profile.district)) && (profile.city || profile.country) ? (
             <span>
               <MapPin size={15} />{" "}
               {[profile.city, profile.country].filter(Boolean).join(", ")}
@@ -627,7 +627,7 @@ export function PublicProfilePage() {
             </form>
             <h3>{t("Misafir listeleri", "Guest lists")}</h3>
             <div className="admin-list">
-              {namedGuestLists.data?.map((list) => (
+              {namedGuestLists.data?.slice().sort((left, right) => left.name.localeCompare(right.name, language)).map((list) => (
                 <button
                   className="admin-list-row"
                   disabled={
@@ -671,7 +671,15 @@ export function PublicProfilePage() {
           {user && !profile.relationship.blockedByViewer ? (
             <button
               className="text-action"
-              onClick={() => setTagDialogOpen(true)}
+              onClick={() => {
+                setSelectedTagId("");
+                setTagName("");
+                setSelectedSentiment("like");
+                setAddedTagCount(0);
+                setAddedTagNames([]);
+                addTagMutation.reset();
+                setTagDialogOpen(true);
+              }}
               type="button"
             >
               +{" "}
@@ -792,6 +800,7 @@ export function PublicProfilePage() {
           onMouseDown={() => setTagDialogOpen(false)}
         >
           <form
+            aria-labelledby="add-profile-tag-title"
             aria-modal="true"
             className="content-dialog add-profile-tag-dialog"
             onMouseDown={(event) => event.stopPropagation()}
@@ -803,8 +812,8 @@ export function PublicProfilePage() {
           >
             <div className="section-header">
               <div>
-                <p className="eyebrow">{t("Profile etiket ekle", "Add a Tag to Profile")}</p>
-                <h2>{t("Adım 1: Bir etiket seç veya yaz", "Step 1: Select or write a tag")}</h2>
+                <h2 id="add-profile-tag-title">{t("Profile etiket ekle", "Add a Tag to Profile")}</h2>
+                <p className="eyebrow">{t("Adım 1: Bir etiket seç veya yaz", "Step 1: Select or write a tag")}</p>
               </div>
               <button onClick={() => setTagDialogOpen(false)} type="button">
                 {t("Kapat", "Close")}

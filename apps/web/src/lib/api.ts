@@ -1865,7 +1865,7 @@ function getMockResponse<T>(
     const items = readStorage<ProfileTagSuggestion[]>(MOCK_PROFILE_TAG_SUGGESTIONS_KEY, []);
     if (items.some((item) => item.targetUserId === targetUserId && item.suggestedById === session.id && item.tagId === input.tagId && item.status === "pending")) throw new Error("Bu etiket daha önce onaya gönderildi.");
     const now = new Date().toISOString();
-    const suggestion: ProfileTagSuggestion = { id: createId(), targetUserId, suggestedById: session.id, tagId: tag.id, sentiment: input.sentiment, status: "pending", createdAt: now, updatedAt: now, tag, targetUser: { id: target.id, name: target.name, username: target.username ?? null, email: target.email, role: target.role ?? "user", status: target.status ?? "active" }, suggestedBy: { id: session.id, name: session.name, username: session.username ?? null, email: session.email, role: session.role, status: session.status ?? "active" } };
+    const suggestion: ProfileTagSuggestion = { id: createId(), targetUserId, suggestedById: session.id, tagId: tag.id, sentiment: input.sentiment, status: "pending", createdAt: now, updatedAt: now, tag, targetUser: { id: target.id, name: target.name, username: target.username ?? null, role: target.role ?? "user", status: target.status ?? "active" }, suggestedBy: { id: session.id, name: session.name, username: session.username ?? null, role: session.role, status: session.status ?? "active" } };
     writeStorage(MOCK_PROFILE_TAG_SUGGESTIONS_KEY, [suggestion, ...items]);
     return schema.parse(suggestion);
   }
@@ -7313,6 +7313,7 @@ function listMockConversations(): ConversationList {
           name: peer.name,
           username: peer.username ?? null,
           status: peer.status ?? "active",
+          avatarUrl: peer.avatarUrl ?? null,
         },
         lastMessage: message,
         unreadCount: unread,

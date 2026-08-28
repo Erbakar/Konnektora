@@ -534,6 +534,37 @@ select:focus-visible {
 .message-search-results button:hover {
   background: #edf3ef;
 }
+.message-search-results .message-user-result {
+  align-items: center;
+  grid-template-columns: 36px minmax(0, 1fr);
+}
+.message-result-avatar {
+  align-items: center;
+  background: #dce9df;
+  border-radius: 50%;
+  color: #1f5f46;
+  display: inline-flex;
+  font-weight: 900;
+  height: 36px;
+  justify-content: center;
+  overflow: hidden;
+  width: 36px;
+}
+.message-result-avatar img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+.message-user-result > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+.message-user-result small {
+  color: #69776f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .message-search-results span {
   color: #69776f;
   font-size: 12px;
@@ -3195,7 +3226,7 @@ select:focus-visible {
   border: 1px solid #e0e5df;
   border-radius: 13px;
 }
-.onboarding-people article > span {
+.onboarding-person-avatar {
   width: 42px;
   height: 42px;
   display: grid;
@@ -3204,6 +3235,13 @@ select:focus-visible {
   background: #22543d;
   border-radius: 50%;
   font-weight: 900;
+  overflow: hidden;
+}
+.onboarding-person-avatar img,
+.conversation-avatar img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
 }
 .onboarding-people article div {
   display: grid;

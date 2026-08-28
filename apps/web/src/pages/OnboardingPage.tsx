@@ -597,7 +597,15 @@ export function OnboardingPage() {
             <div className="onboarding-people">
               {suggestions.data?.map((member) => (
                 <article key={member.id}>
-                  {member.username ? <Link to={`/users/${member.username}`}>{member.name.slice(0, 1)}</Link> : <span>{member.name.slice(0, 1)}</span>}
+                  {member.username ? (
+                    <Link aria-label={t(`${member.name} profilini aç`, `Open ${member.name}'s profile`)} className="onboarding-person-avatar" to={`/users/${member.username}`}>
+                      {member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)} /> : member.name.slice(0, 1)}
+                    </Link>
+                  ) : (
+                    <span className="onboarding-person-avatar">
+                      {member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)} /> : member.name.slice(0, 1)}
+                    </span>
+                  )}
                   <div>
                     <strong>{member.username ? <Link to={`/users/${member.username}`}>@{member.username}</Link> : member.name}</strong>
                     <small>

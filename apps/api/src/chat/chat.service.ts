@@ -4,7 +4,36 @@ import { PrismaService } from "../prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { ConversationMessagesQueryDto, ConversationPreferenceDto, EditPrivateMessageDto, MessageReactionDto, SendPrivateMessageDto } from "./chat.dto";
 
-const peerSelect = { id: true, name: true, username: true, status: true } as const;
+const peerSelect = {
+  id: true,
+  name: true,
+  username: true,
+  status: true,
+  uploadedMedia: {
+    where: { contentType: "user", status: "active", isProfilePicture: true },
+    select: { url: true },
+    orderBy: { sortOrder: "asc" },
+    take: 1,
+  },
+} as const;
+
+type ConversationPeer = {
+  id: string;
+  name: string;
+  username: string | null;
+  status: UserStatus;
+  avatarUrl: string | null;
+};
+
+function toConversationPeer(peer: { id: string; name: string; username: string | null; status: UserStatus; uploadedMedia?: Array<{ url: string }> }): ConversationPeer {
+  return {
+    id: peer.id,
+    name: peer.name,
+    username: peer.username,
+    status: peer.status,
+    avatarUrl: peer.uploadedMedia?.[0]?.url ?? null,
+  };
+}
 
 @Injectable()
 export class ChatService {
@@ -27,10 +56,11 @@ export class ChatService {
     ]);
     const blockedIds = new Set(blocks.map((block) => block.userId === userId ? block.targetId : block.userId));
     const preferenceMap = new Map(preferences.map((item) => [item.peerId, item]));
-    const conversations = new Map<string, { peer: NonNullable<(typeof messages)[number]["sender"]>; lastMessage: PrivateMessage; unreadCount: number }>();
+    const conversations = new Map<string, { peer: ConversationPeer; lastMessage: PrivateMessage; unreadCount: number }>();
     for (const message of messages) {
-      const peer = message.senderId === userId ? message.recipient : message.sender;
-      if (!peer || blockedIds.has(peer.id) || peer.status !== UserStatus.active) continue;
+      const rawPeer = message.senderId === userId ? message.recipient : message.sender;
+      if (!rawPeer || blockedIds.has(rawPeer.id) || rawPeer.status !== UserStatus.active) continue;
+      const peer = toConversationPeer(rawPeer);
       const hiddenBefore = preferenceMap.get(peer.id)?.hiddenBefore;
       if (hiddenBefore && message.createdAt <= hiddenBefore) continue;
       const current = conversations.get(peer.id);
@@ -95,7 +125,13 @@ export class ChatService {
     const term = query.trim();
     if (term.length < 2) return [];
     const items = await this.prisma.privateMessage.findMany({ where: { status: "active", body: { contains: term, mode: "insensitive" }, OR: [{ senderId: userId }, { recipientId: userId }] }, orderBy: { createdAt: "desc" }, take: 50, include: { sender: { select: peerSelect }, recipient: { select: peerSelect } } });
-    return items.map((message) => ({ ...this.stripRelations(message), peer: message.senderId === userId ? message.recipient : message.sender }));
+    return items.map((message) => {
+      const peer = message.senderId === userId ? message.recipient : message.sender;
+      return {
+        ...this.stripRelations(message),
+        peer: peer ? toConversationPeer(peer) : null,
+      };
+    });
   }
 
   async edit(userId: string, id: string, input: EditPrivateMessageDto) {

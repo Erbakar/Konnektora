@@ -22,7 +22,7 @@ describe("ChatService", () => {
   };
   const service = new ChatService(prisma as never, notifications as never);
   const sender = { id: "11111111-1111-4111-8111-111111111111", name: "Sender" } as any;
-  const peer = { id: "22222222-2222-4222-8222-222222222222", name: "Peer", username: "peer", status: UserStatus.active };
+  const peer = { id: "22222222-2222-4222-8222-222222222222", name: "Peer", username: "peer", status: UserStatus.active, uploadedMedia: [{ url: "/uploads/peer.webp" }] };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -46,7 +46,8 @@ describe("ChatService", () => {
     const result = await service.listConversations(sender.id);
 
     expect(result.items).toHaveLength(1);
-    expect(result.items[0]).toMatchObject({ peer, unreadCount: 1, lastMessage: { id: "m2" }, preference: { pinned: false, muted: false, archived: false } });
+    expect(result.items[0]).toMatchObject({ peer: { id: peer.id, name: peer.name, username: peer.username, status: peer.status, avatarUrl: "/uploads/peer.webp" }, unreadCount: 1, lastMessage: { id: "m2" }, preference: { pinned: false, muted: false, archived: false } });
+    expect(result.items[0]!.peer).not.toHaveProperty("uploadedMedia");
     expect(result.totalUnread).toBe(1);
   });
 
@@ -57,6 +58,19 @@ describe("ChatService", () => {
     ]);
     userBlock.findMany.mockResolvedValue([{ userId: peer.id, targetId: sender.id }]);
     await expect(service.listConversations(sender.id)).resolves.toEqual({ items: [], totalUnread: 0 });
+  });
+
+  it("includes profile photos in message search and keeps deleted peers nullable", async () => {
+    const now = new Date();
+    privateMessage.findMany.mockResolvedValue([
+      { id: "m-photo", senderId: sender.id, recipientId: peer.id, body: "fotoğraflı", status: "active", createdAt: now, updatedAt: now, sender: { ...peer, id: sender.id }, recipient: peer },
+      { id: "m-deleted", senderId: sender.id, recipientId: null, body: "silinmiş", status: "active", createdAt: now, updatedAt: now, sender: { ...peer, id: sender.id }, recipient: null },
+    ]);
+
+    const result = await service.search(sender.id, "fo");
+
+    expect(result[0]?.peer).toEqual({ id: peer.id, name: peer.name, username: peer.username, status: peer.status, avatarUrl: "/uploads/peer.webp" });
+    expect(result[1]?.peer).toBeNull();
   });
 
   it("rejects messages to self", async () => {

@@ -14,6 +14,7 @@ import { SettingsSectionPage } from "../pages/SettingsCenterPage";
 const apiMocks = vi.hoisted(() => ({
   createBlock: vi.fn(),
   getFinanceDashboard: vi.fn(),
+  getContentNotification: vi.fn(),
   getMyProfile: vi.fn(),
   getNotificationPreferences: vi.fn(),
   getPrivacySettings: vi.fn(),
@@ -23,6 +24,7 @@ const apiMocks = vi.hoisted(() => ({
   getUserSession: vi.fn(),
   listBlocks: vi.fn(),
   listFollowing: vi.fn(),
+  listGuestLists: vi.fn(),
   listMemberSuggestions: vi.fn(),
   listMyEvents: vi.fn(),
   listMyNotifications: vi.fn(),
@@ -71,14 +73,17 @@ beforeEach(() => {
   apiMocks.getUserSession.mockReturnValue(null);
   apiMocks.createBlock.mockResolvedValue({ ok: true });
   apiMocks.getFinanceDashboard.mockResolvedValue({ business: { plan: "starter" } });
+  apiMocks.getContentNotification.mockResolvedValue({ enabled: false });
   apiMocks.getMyProfile.mockResolvedValue({ city: "İstanbul", country: "Türkiye" });
   apiMocks.getNotificationPreferences.mockResolvedValue([]);
   apiMocks.getPrivacySettings.mockResolvedValue({});
   apiMocks.getProfileAffinities.mockResolvedValue([]);
   apiMocks.listBlocks.mockResolvedValue([]);
   apiMocks.listFollowing.mockResolvedValue([]);
+  apiMocks.listGuestLists.mockResolvedValue([]);
   apiMocks.listMemberSuggestions.mockResolvedValue([]);
   apiMocks.listMyNotifications.mockResolvedValue([]);
+  apiMocks.listMyEvents.mockResolvedValue([]);
   apiMocks.listMyPlaces.mockResolvedValue([]);
   apiMocks.listProfileMedia.mockResolvedValue([]);
   apiMocks.listProfileTagSuggestions.mockResolvedValue([]);
@@ -248,6 +253,87 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     expect(within(interests).queryByText("#Caz")).not.toBeInTheDocument();
   });
 
+  it("profil fotoğrafından doğru medya öğesini açar, kalan medya sayısını gösterir ve kurumsal konumu tekrarlamaz", async () => {
+    apiMocks.getPublicProfile.mockResolvedValue({
+      id: "business-1",
+      name: "Konnektora Studio",
+      username: "konnektora-studio",
+      accountType: "corporate",
+      verified: true,
+      followerCount: 42,
+      followingCount: 17,
+      city: "İstanbul",
+      country: "Türkiye",
+      district: "Sarıyer",
+      address: "Maslak",
+      companyName: "Konnektora Teknoloji",
+      media: [
+        { id: "media-1", url: "/uploads/one.webp", type: "image", isProfilePicture: false },
+        { id: "media-2", url: "/uploads/two.webp", type: "image", isProfilePicture: false },
+        { id: "profile-photo", url: "/uploads/profile.webp", type: "image", isProfilePicture: true },
+        { id: "media-3", url: "/uploads/three.webp", type: "image", isProfilePicture: false },
+        { id: "media-4", url: "/uploads/four.webp", type: "image", isProfilePicture: false },
+      ],
+      interests: [],
+      events: [],
+      places: [],
+      relationship: { isSelf: false, following: false, canMessage: false },
+    });
+
+    render(providers(
+      <Routes><Route path="/users/:username" element={<PublicProfilePage />} /></Routes>,
+      "/users/konnektora-studio",
+    ));
+
+    const facts = await screen.findByLabelText("Profil bilgileri");
+    expect(within(facts).getByText("Maslak, Sarıyer, İstanbul, Türkiye")).toBeVisible();
+    expect(within(facts).queryByText("İstanbul, Türkiye")).not.toBeInTheDocument();
+    expect(document.querySelector(".profile-media-thumbnails span")).toHaveTextContent("+1");
+
+    await userEvent.click(screen.getByRole("button", { name: "Medya galerisini aç" }));
+    const gallery = await screen.findByRole("dialog");
+    expect(within(gallery).getByText("3 / 5")).toBeVisible();
+    expect(within(gallery).getByRole("img", { name: "Konnektora Studio profil medyası" }).getAttribute("src")?.endsWith("/uploads/profile.webp")).toBe(true);
+  });
+
+  it("profilin birincil düğmelerini menüden ayırır ve aksiyonları istenen sırada gösterir", async () => {
+    apiMocks.getUserSession.mockReturnValue({
+      id: "admin-1", name: "Yönetici", username: "yonetici", role: "admin", status: "active", accountType: "individual",
+    });
+    apiMocks.getPublicProfile.mockResolvedValue({
+      id: "person-1", name: "Ada Yılmaz", username: "ada", accountType: "individual", verified: false,
+      followerCount: 42, followingCount: 17, city: "İstanbul", country: "Türkiye", media: [], interests: [], events: [], places: [],
+      relationship: { isSelf: false, following: false, canMessage: true, blockedByViewer: false },
+    });
+    apiMocks.listGuestLists.mockResolvedValue([
+      { id: "list-z", name: "Ziyaretçiler", members: [] },
+      { id: "list-a", name: "Arkadaşlar", members: [] },
+    ]);
+
+    render(providers(<Routes><Route path="/users/:username" element={<PublicProfilePage />} /></Routes>, "/users/ada"));
+
+    expect(await screen.findByRole("button", { name: "Takip et" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Mesaj" })).toHaveAttribute("href", "/messages?peer=person-1");
+    await userEvent.click(screen.getByRole("button", { name: "Profil aksiyonları" }));
+    const menu = document.querySelector<HTMLElement>(".profile-actions-menu > div")!;
+    expect(Array.from(menu.children).map((item) => item.textContent?.trim())).toEqual([
+      "Paylaş",
+      "Bildirim ayarla",
+      "Etkileşim istatistikleri",
+      "Misafir listesine ekle",
+      "Kullanıcıyı raporla",
+      "Kullanıcıyı engelle",
+    ]);
+    expect(within(menu).queryByText("Mesaj gönder")).not.toBeInTheDocument();
+
+    await userEvent.click(within(menu).getByRole("button", { name: "Misafir listesine ekle" }));
+    const guestDialog = await screen.findByRole("dialog", { name: "Misafir listesine ekle" });
+    expect(Array.from(guestDialog.querySelectorAll(".admin-list-row strong")).map((item) => item.textContent)).toEqual([
+      "Arkadaşlar",
+      "Ziyaretçiler",
+    ]);
+  });
+
   it("profil aksiyon menüsünde engelleme ve engeli kaldırmayı aynı yerden tamamlar", async () => {
     const session = { id: "viewer-1", name: "Deniz", username: "deniz", role: "user", status: "active", accountType: "individual" };
     const baseProfile = {
@@ -286,6 +372,8 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
 
     render(providers(<Routes><Route path="/users/:username" element={<PublicProfilePage />} /></Routes>, "/users/ada"));
     await userEvent.click(await screen.findByRole("button", { name: /Kendine etiket ekle/ }));
+    const tagDialog = await screen.findByRole("dialog", { name: "Profile etiket ekle" });
+    expect(within(tagDialog).getByText("Adım 1: Bir etiket seç veya yaz")).toBeVisible();
     const input = await screen.findByRole("combobox", { name: "Etiket" });
     for (const tagName of ["Caz", "Seramik", "Kahve"]) {
       await userEvent.clear(input);
@@ -297,6 +385,11 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     expect(within(suggestions).getByText("Profil sinyallerine göre önerilen kategoriler")).toBeVisible();
     await userEvent.click(within(suggestions).getByRole("button", { name: "Fotoğraf" }));
     expect(input).toHaveValue("Fotoğraf");
+    await userEvent.click(within(tagDialog).getByRole("button", { name: "Kapat" }));
+    await userEvent.click(screen.getByRole("button", { name: /Kendine etiket ekle/ }));
+    const reopened = await screen.findByRole("dialog", { name: "Profile etiket ekle" });
+    expect(within(reopened).getByText(/Sevdiğiniz kahve, müzik grubu, film/)).toBeVisible();
+    expect(within(reopened).queryByRole("region", { name: "Akıllı etiket önerileri" })).not.toBeInTheDocument();
   });
 
   it("kullanıcının kendi kimlik rotasında profilini kayıp saymadan açar", async () => {

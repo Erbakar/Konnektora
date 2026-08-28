@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { LanguageProvider } from "../lib/i18n";
 import { OnboardingPage } from "../pages/OnboardingPage";
@@ -56,6 +56,11 @@ beforeEach(() => {
   apiMocks.listTags.mockResolvedValue([]);
 });
 
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
 describe("kurumsal üyelik onboarding akışı", () => {
   it("üçüncü adımda yalnız firma alanlarını gösterir ve Topluluk adımını tamamen kaldırır", async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -78,5 +83,36 @@ describe("kurumsal üyelik onboarding akışı", () => {
     expect(screen.getByRole("textbox", { name: "Web sitesi" })).toHaveValue("https://example.com");
     expect(screen.queryByLabelText("Doğum tarihi")).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Cinsiyet" })).not.toBeInTheDocument();
+  });
+
+  it("bireysel üyenin Topluluk adımında önerilen kişilerin gerçek profil fotoğraflarını gösterir", async () => {
+    apiMocks.getUserSession.mockReturnValue({
+      id: "member-1", name: "Ada", email: "ada@example.com", role: "user", status: "pending", accountType: "individual", onboardingCompleted: false,
+    });
+    apiMocks.getOnboardingStatus.mockResolvedValue({ completed: false, currentStep: { key: "people" } });
+    apiMocks.getMyProfile.mockResolvedValue({ id: "member-1", name: "Ada", username: "ada", accountType: "individual", country: "Türkiye", city: "İstanbul" });
+    apiMocks.listMemberSuggestions.mockResolvedValue([{
+      id: "22222222-2222-4222-8222-222222222222",
+      name: "Deniz",
+      username: "deniz",
+      avatarUrl: "/uploads/deniz.webp",
+      accountType: "individual",
+      city: "İstanbul",
+      country: "Türkiye",
+      followerCount: 4,
+      commonTagCount: 2,
+      following: false,
+    }]);
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(
+      <QueryClientProvider client={client}>
+        <LanguageProvider><MemoryRouter><OnboardingPage /></MemoryRouter></LanguageProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Takip edebileceklerin" })).toBeVisible();
+    expect(await screen.findByRole("link", { name: "Deniz profilini aç" })).toHaveAttribute("href", "/users/deniz");
+    expect(container.querySelector<HTMLImageElement>(".onboarding-person-avatar img")?.src).toMatch(/\/uploads\/deniz\.webp$/);
   });
 });

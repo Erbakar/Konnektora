@@ -28,14 +28,17 @@ beforeEach(() => {
   });
   apiMocks.listConversations.mockResolvedValue({
     items: [{
-      peer: { id: "peer-1", name: "Deniz", username: "deniz", status: "active" },
+      peer: { id: "peer-1", name: "Deniz", username: "deniz", status: "active", avatarUrl: "/uploads/deniz.webp" },
       lastMessage: { id: "last-1", senderId: "peer-1", recipientId: "member-1", body: "Merhaba", status: "active", createdAt: "2026-08-28T10:00:00.000Z", reactions: [] },
       unreadCount: 0,
       preference: { pinned: false, muted: false, archived: false },
     }],
     totalUnread: 0,
   });
-  apiMocks.listMemberSuggestions.mockResolvedValue([]);
+  apiMocks.listMemberSuggestions.mockResolvedValue([{
+    id: "peer-2", name: "Ece", username: "ece", avatarUrl: "/uploads/ece.webp", accountType: "individual",
+    city: "İstanbul", country: "Türkiye", followerCount: 3, commonTagCount: 1, following: false,
+  }]);
   apiMocks.listConversationMessages.mockResolvedValue({ items: [], page: 1, pageSize: 50, total: 0, hasNextPage: false });
   apiMocks.getTyping.mockResolvedValue({ typing: false });
   apiMocks.markConversationRead.mockResolvedValue({ ok: true });
@@ -65,6 +68,8 @@ describe("özel mesaj medya gereksinimleri 139–141", () => {
     );
 
     const mediaButton = await screen.findByRole("button", { name: "Fotoğraf/video ekle" });
+    expect(container.querySelector<HTMLImageElement>(".conversation-avatar img")?.src).toMatch(/\/uploads\/deniz\.webp$/);
+    expect(container.querySelector<HTMLImageElement>(".thread-peer-avatar img")?.src).toMatch(/\/uploads\/deniz\.webp$/);
     expect(mediaButton.querySelector("svg")).not.toBeInTheDocument();
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     const image = new File(["image"], "photo.webp", { type: "image/webp" });
@@ -94,5 +99,17 @@ describe("özel mesaj medya gereksinimleri 139–141", () => {
     await waitFor(() => expect(container.querySelector(".message-media-collage-2")).toBeInTheDocument());
     expect(container.querySelectorAll(".message-media-collage-2 img")).toHaveLength(2);
     expect(container.querySelector(".message-bubble > p")).not.toBeInTheDocument();
+  });
+
+  it("yeni konuşma önerilerinde kullanıcının profil fotoğrafını gösterir", async () => {
+    const { container } = render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <LanguageProvider><MemoryRouter initialEntries={["/messages"]}><MessagesPage /></MemoryRouter></LanguageProvider>
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(await screen.findByPlaceholderText("Kullanıcı adı veya ad yaz…"));
+    expect(await screen.findByRole("button", { name: /@ece/ })).toBeVisible();
+    expect(container.querySelector<HTMLImageElement>(".message-result-avatar img")?.src).toMatch(/\/uploads\/ece\.webp$/);
   });
 });

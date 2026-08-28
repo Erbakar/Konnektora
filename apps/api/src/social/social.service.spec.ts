@@ -82,6 +82,7 @@ describe("SocialService", () => {
         gender: "female",
         birthDate: new Date("1992-03-14T00:00:00.000Z"),
         createdAt: new Date("2026-08-28T02:00:00.000Z"),
+        uploadedMedia: [{ url: "/uploads/ada.webp" }],
         privacySettings: { demographicsAudience: "everybody" },
         interestTags: [{ tagId: "tag-a" }],
       },
@@ -94,6 +95,7 @@ describe("SocialService", () => {
         following: true,
         commonTagCount: 1,
         gender: "female",
+        avatarUrl: "/uploads/ada.webp",
       }),
     ]);
     expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -104,6 +106,10 @@ describe("SocialService", () => {
       },
       orderBy: { createdAt: "desc" },
       take: 200,
+    }));
+    expect(prisma.user.findMany.mock.calls[0][0].select.uploadedMedia).toEqual(expect.objectContaining({
+      where: { contentType: "user", status: "active", isProfilePicture: true },
+      take: 1,
     }));
   });
 });

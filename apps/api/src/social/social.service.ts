@@ -12,6 +12,12 @@ const memberSelect = {
   gender: true,
   birthDate: true,
   createdAt: true,
+  uploadedMedia: {
+    where: { contentType: "user", status: "active", isProfilePicture: true },
+    select: { url: true },
+    orderBy: { sortOrder: "asc" },
+    take: 1,
+  },
   privacySettings: { select: { demographicsAudience: true } },
   interestTags: { select: { tagId: true } }
 } as const;
@@ -113,11 +119,12 @@ export class SocialService {
     return { ok: true as const, following: false };
   }
 
-  private toMemberCard(user: { id: string; name: string; username: string | null; accountType: string; city: string | null; country: string | null; followerCount: number; gender?: string | null; birthDate?: Date | null; createdAt?: Date; privacySettings?: { demographicsAudience: string } | null; interestTags: { tagId: string }[] }, ownTags: Set<string>, following: boolean) {
+  private toMemberCard(user: { id: string; name: string; username: string | null; accountType: string; city: string | null; country: string | null; followerCount: number; gender?: string | null; birthDate?: Date | null; createdAt?: Date; uploadedMedia?: Array<{ url: string }>; privacySettings?: { demographicsAudience: string } | null; interestTags: { tagId: string }[] }, ownTags: Set<string>, following: boolean) {
     return {
       id: user.id,
       name: user.name,
       username: user.username,
+      avatarUrl: user.uploadedMedia?.[0]?.url ?? null,
       accountType: user.accountType === "corporate" ? "corporate" as const : "individual" as const,
       city: user.city,
       country: user.country,

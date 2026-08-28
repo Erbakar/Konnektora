@@ -338,8 +338,8 @@ export class ProfileService {
       orderBy: { createdAt: "desc" },
       include: {
         tag: true,
-        targetUser: { select: { id: true, name: true, username: true, email: true, role: true, status: true } },
-        suggestedBy: { select: { id: true, name: true, username: true, email: true, role: true, status: true } },
+        targetUser: { select: { id: true, name: true, username: true, role: true, status: true } },
+        suggestedBy: { select: { id: true, name: true, username: true, role: true, status: true } },
       },
     });
   }
@@ -357,7 +357,7 @@ export class ProfileService {
     if (pending) throw new ConflictException("Bu etiket daha önce onaya gönderildi.");
     const suggestion = await this.prisma.profileTagSuggestion.create({
       data: { targetUserId, suggestedById, tagId: input.tagId, sentiment: input.sentiment },
-      include: { tag: true, targetUser: { select: { id: true, name: true, username: true, email: true, role: true, status: true } }, suggestedBy: { select: { id: true, name: true, username: true, email: true, role: true, status: true } } },
+      include: { tag: true, targetUser: { select: { id: true, name: true, username: true, role: true, status: true } }, suggestedBy: { select: { id: true, name: true, username: true, role: true, status: true } } },
     });
     await this.notifications.dispatch({ userId: targetUserId, topic: "tag_request", type: "profile_tag_suggestion", title: "Profilinize yeni etiket önerildi", body: `${suggestion.suggestedBy.username ? `@${suggestion.suggestedBy.username}` : suggestion.suggestedBy.name}, ${tag.name} etiketini profilinize eklemek istiyor.`, targetType: "user", targetId: targetUserId });
     return suggestion;

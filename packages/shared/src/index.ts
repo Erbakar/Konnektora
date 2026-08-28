@@ -182,6 +182,7 @@ export const memberCardSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   username: z.string().nullable(),
+  avatarUrl: z.string().nullable().optional(),
   accountType: accountTypeSchema,
   city: z.string().nullable(),
   country: z.string().nullable(),
@@ -653,7 +654,6 @@ const profileTagSuggestionUserSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   username: z.string().nullable().optional(),
-  email: z.string().email(),
   role: z.string(),
   status: z.string(),
 });
@@ -1456,6 +1456,7 @@ export const conversationSchema = z.object({
     name: z.string(),
     username: z.string().nullable(),
     status: userStatusSchema,
+    avatarUrl: z.string().nullable().optional(),
   }),
   lastMessage: privateChatMessageSchema,
   unreadCount: z.number().int().nonnegative(),
@@ -1471,6 +1472,7 @@ export const messageSearchResultSchema = privateChatMessageSchema.extend({
       name: z.string(),
       username: z.string().nullable(),
       status: userStatusSchema,
+      avatarUrl: z.string().nullable().optional(),
     })
     .nullable(),
 });

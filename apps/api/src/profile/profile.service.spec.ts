@@ -100,6 +100,18 @@ describe("ProfileService", () => {
     expect(notifications.dispatch).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-2", topic: "tag_request" }));
   });
 
+  it("lists profile tag suggestions without exposing either user's email", async () => {
+    const { service, prisma } = createService();
+
+    await service.listTagSuggestions("user-1");
+
+    const query = prisma.profileTagSuggestion.findMany.mock.calls[0][0];
+    expect(query.include.targetUser.select).toEqual({ id: true, name: true, username: true, role: true, status: true });
+    expect(query.include.suggestedBy.select).toEqual({ id: true, name: true, username: true, role: true, status: true });
+    expect(query.include.targetUser.select).not.toHaveProperty("email");
+    expect(query.include.suggestedBy.select).not.toHaveProperty("email");
+  });
+
   it("accepts a suggestion and adds it to the target profile", async () => {
     const { service, prisma } = createService();
     prisma.profileTagSuggestion.findUnique.mockResolvedValue({ id: "suggestion-1", targetUserId: "user-2", suggestedById: "user-1", tagId: "tag-1", sentiment: "ok", status: "pending", tag: { id: "tag-1", name: "Caz" } });

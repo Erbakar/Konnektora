@@ -132,6 +132,7 @@ export function MessagesPage() {
           name: suggested.name,
           username: suggested.username,
           status: "active" as const,
+          avatarUrl: suggested.avatarUrl ?? null,
         }
       : null);
   const newRecipients = (suggestions.data ?? []).filter(
@@ -171,14 +172,17 @@ export function MessagesPage() {
           <div className="message-search-results">
             {searchResults.data?.map((item) => (
               <button
+                className="message-user-result"
                 key={item.id}
                 onClick={() => {
                   if (item.peer) setParams({ peer: item.peer.id });
                   setQuery("");
                 }}
               >
-                <strong>{item.peer?.name}</strong>
-                <span>{item.body}</span>
+                <span className="message-result-avatar">
+                  {item.peer?.avatarUrl ? <img alt="" src={resolveMediaUrl(item.peer.avatarUrl)} /> : item.peer?.name?.[0] ?? "?"}
+                </span>
+                <span><strong>{item.peer?.name}</strong><small>{item.body}</small></span>
               </button>
             ))}
             {!searchResults.isLoading && !searchResults.data?.length ? (
@@ -205,14 +209,17 @@ export function MessagesPage() {
                   .filter((item) => item.kind === "user")
                   .map((item) => (
                     <button
+                      className="message-user-result"
                       key={item.id}
                       onClick={() => {
                         setParams({ peer: item.id });
                         setRecipientQuery("");
                       }}
                     >
-                      <strong>{item.title}</strong>
-                      <span>{item.subtitle}</span>
+                      <span className="message-result-avatar">
+                        {item.imageUrl ? <img alt="" src={resolveMediaUrl(item.imageUrl)} /> : item.title[0]}
+                      </span>
+                      <span><strong>{item.title}</strong><small>{item.subtitle}</small></span>
                     </button>
                   ))}
                 {!recipientResults.isLoading &&
@@ -227,12 +234,14 @@ export function MessagesPage() {
                 <small>{t("Öneriler", "Suggestions")}</small>
                 {newRecipients.slice(0, 5).map((member) => (
                   <button
+                    className="message-user-result"
                     key={member.id}
                     onClick={() => setParams({ peer: member.id })}
                   >
-                    <strong>
-                      {member.username ? `@${member.username}` : member.name}
-                    </strong>
+                    <span className="message-result-avatar">
+                      {member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)} /> : member.name[0]}
+                    </span>
+                    <span><strong>{member.username ? `@${member.username}` : member.name}</strong></span>
                   </button>
                 ))}
               </div>
@@ -249,7 +258,9 @@ export function MessagesPage() {
                   onClick={() => setParams({ peer: conversation.peer.id })}
                 >
                   <span className="conversation-avatar">
-                    {conversation.peer.name[0]}
+                    {conversation.peer.avatarUrl ? (
+                      <img alt="" src={resolveMediaUrl(conversation.peer.avatarUrl)} />
+                    ) : conversation.peer.name[0]}
                   </span>
                   <span>
                     <strong>
@@ -312,7 +323,7 @@ function MessageThread({
   onChanged,
   language,
 }: {
-  peer: { id: string; name: string; username?: string | null };
+  peer: { id: string; name: string; username?: string | null; avatarUrl?: string | null };
   messages: PrivateChatMessage[];
   currentUserId: string;
   typing: boolean;

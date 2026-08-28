@@ -76,7 +76,7 @@ function deduplicateGuests(items: Awaited<ReturnType<typeof listGuestLists>>, fo
   for (const list of items) for (const member of list.members) {
     const current = result.get(member.userId);
     const eventNames = current?.eventNames ?? new Set<string>(); eventNames.add(list.name);
-    result.set(member.userId, { id: member.userId, name: member.user.name, username: member.user.username ?? null, accountType: "individual", city: null, country: null, followerCount: 0, commonTagCount: 0, following: followingIds.has(member.userId), eventNames });
+    result.set(member.userId, { id: member.userId, name: member.user.name, username: member.user.username ?? null, avatarUrl: member.user.uploadedMedia?.[0]?.url ?? null, accountType: "individual", city: null, country: null, followerCount: 0, commonTagCount: 0, following: followingIds.has(member.userId), eventNames });
   }
   return [...result.values()].map(({ eventNames, ...member }) => ({ ...member, guestEvents: [...eventNames].join(" · ") }));
 }
