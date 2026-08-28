@@ -10898,6 +10898,14 @@ div.form-error::before {
 }
 
 @media (max-width: 760px) {
+  .content-media-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .content-media-gallery.content-media-cover-only {
+    grid-template-columns: 1fr;
+  }
+
   button:not([data-compact-touch]),
   input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
   select,
