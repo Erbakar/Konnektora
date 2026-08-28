@@ -21,7 +21,8 @@
     "db:seed": "npm run db:seed -w apps/api",
     "ops:backup": "bash scripts/backup-database.sh",
     "ops:restore": "bash scripts/restore-database.sh",
-    "ops:smoke": "node scripts/smoke-production.mjs"
+    "ops:smoke": "node scripts/smoke-production.mjs",
+    "ops:smoke:auth": "node scripts/smoke-authenticated-production.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.28.0",
