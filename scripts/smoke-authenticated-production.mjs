@@ -91,9 +91,19 @@ if (passportUser) {
 }
 
 const places = await fetch(`${baseUrl}/places?page=1&pageSize=12`).then((response) => response.json());
-const place = places.items?.[0];
+const place = places.items?.find((item) => item.inviteCount > 0) ?? places.items?.[0];
 if (!place?.id) throw new Error("Smoke testi için mekân bulunamadı.");
 const placeMembers = await request(`/places/${place.id}/members`, adminToken);
+const activePlaceInviteCount = placeMembers.data?.filter((member) => member.status === "invited").length ?? 0;
+if (place.inviteCount !== activePlaceInviteCount) {
+  throw new Error(
+    `Mekân davet sayacı tutarsız: kart=${place.inviteCount}, aktif davet=${activePlaceInviteCount}.`,
+  );
+}
+process.stdout.write(`OK place invite counter (${activePlaceInviteCount})\n`);
+if (!Number.isInteger(place.followingMemberCount) || place.followingMemberCount < 0) {
+  throw new Error("Mekân kartındaki takip edilen üye sayısı geçerli değil.");
+}
 for (const path of [
   `/places/${place.id}/invitations/sent`,
   `/places/${place.id}/related-users`,
