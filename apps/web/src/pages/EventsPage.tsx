@@ -50,7 +50,7 @@ async function listAllDiscoveryEvents(params: Record<string, string>) {
   let result: EventList;
 
   do {
-    result = await listEvents(new URLSearchParams({ ...params, page: String(page), pageSize: "100" }));
+    result = await listEvents(new URLSearchParams({ ...params, page: String(page), pageSize: "50" }));
     items.push(...result.items);
     page += 1;
   } while (result.hasNextPage);

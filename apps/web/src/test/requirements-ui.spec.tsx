@@ -124,7 +124,7 @@ describe("157 maddelik listenin kritik web davranışları", () => {
     const firstPage = mockEvents.slice(0, 15);
     const secondPage = [mockEvents[15]!];
     apiMocks.listEvents.mockImplementation(async (params: URLSearchParams) => {
-      if (params.get("pageSize") === "100") return listPage([], 1, 0);
+      if (params.get("pageSize") === "50") return listPage([], 1, 0);
       return params.get("page") === "2"
         ? listPage(secondPage, 2, 16)
         : listPage(firstPage, 1, 16);
@@ -171,15 +171,16 @@ describe("157 maddelik listenin kritik web davranışları", () => {
       city: "Ankara",
     }));
     apiMocks.listEvents.mockImplementation(async (params: URLSearchParams) => {
-      if (params.get("pageSize") !== "100") return listPage([], 1, 0);
-      if (params.get("city") !== "Ankara") return { items: [], page: 1, pageSize: 100, total: 0, hasNextPage: false };
+      if (params.get("pageSize") !== "50") return listPage([], 1, 0);
+      if (params.get("city") !== "Ankara") return { items: [], page: 1, pageSize: 50, total: 0, hasNextPage: false };
       const page = Number(params.get("page") ?? "1");
+      const start = (page - 1) * 50;
       return {
-        items: page === 1 ? ankaraEvents.slice(0, 100) : ankaraEvents.slice(100),
+        items: ankaraEvents.slice(start, start + 50),
         page,
-        pageSize: 100,
+        pageSize: 50,
         total: ankaraEvents.length,
-        hasNextPage: page === 1,
+        hasNextPage: page * 50 < ankaraEvents.length,
       };
     });
 
@@ -188,6 +189,7 @@ describe("157 maddelik listenin kritik web davranışları", () => {
     expect(await screen.findByRole("heading", { name: "Ankara etkinlikleri" })).toBeVisible();
     await waitFor(() => expect(container.querySelectorAll(".event-discovery-device_location .event-card")).toHaveLength(101));
     expect(apiMocks.listEvents.mock.calls.some(([params]) => params.get("city") === "Ankara" && params.get("page") === "2")).toBe(true);
+    expect(apiMocks.listEvents.mock.calls.some(([params]) => params.get("city") === "Ankara" && params.get("page") === "3")).toBe(true);
     expect(screen.getByRole("link", { name: "Tümünü göster" })).toHaveAttribute("href", "/events?city=Ankara");
 
     await waitFor(() => expect(container.querySelectorAll(".event-tag-filter-cloud button")).toHaveLength(2));
