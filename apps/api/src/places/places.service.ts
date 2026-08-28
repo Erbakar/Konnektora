@@ -118,7 +118,7 @@ export class PlacesService {
       ? [...foundItems].sort((left, right) => placeNearScore(right, new Set(personalTagIds), query.latitude!, query.longitude!) - placeNearScore(left, new Set(personalTagIds), query.latitude!, query.longitude!)).slice((page - 1) * pageSize, page * pageSize)
       : foundItems;
     return {
-      items: items.map((place) => this.toPublicPlace(place)),
+      items: items.map((place) => this.toPublicPlace(place, viewerId)),
       total,
       page,
       pageSize,
@@ -162,7 +162,7 @@ export class PlacesService {
       orderBy: [{ role: "desc" }, { createdAt: "asc" }],
       select: { role: true, user: { select: { id: true, name: true, username: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } },
     });
-    return { ...this.toPublicPlace(place), managers: (managers ?? []).map((item) => ({ id: item.user.id, name: item.user.name, username: item.user.username, role: item.role, avatarUrl: item.user.uploadedMedia?.[0]?.url ?? null })) };
+    return { ...this.toPublicPlace(place, viewerId), managers: (managers ?? []).map((item) => ({ id: item.user.id, name: item.user.name, username: item.user.username, role: item.role, avatarUrl: item.user.uploadedMedia?.[0]?.url ?? null })) };
   }
 
   async getInteractionStats(placeId: string, actor?: User) {
@@ -393,7 +393,7 @@ export class PlacesService {
       orderBy: { updatedAt: "desc" },
       include: this.viewerInclude(actor.id),
     });
-    return places.map((place) => this.toPublicPlace(place));
+    return places.map((place) => this.toPublicPlace(place, actor.id));
   }
 
   async update(id: string, input: UpdatePlaceDto, actor: User) {
@@ -629,7 +629,7 @@ export class PlacesService {
         create: { placeId, userId: user.id, status: "invited", role },
         update: { status: "invited", role },
       });
-      if (!existing)
+      if (!existing || existing.status !== PlaceMemberStatus.invited)
         await tx.place.update({
           where: { id: placeId },
           data: { inviteCount: { increment: 1 } },
@@ -716,10 +716,20 @@ export class PlacesService {
         "Mekân sahibi rolünü yalnız mekân kurucusu değiştirebilir.",
       );
     }
-    return this.prisma.placeMember.update({
-      where: { placeId_userId: { placeId, userId } },
-      data: { status: input.status, role: input.role },
-      include: { user: { select: memberUserSelect } },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.placeMember.update({
+        where: { placeId_userId: { placeId, userId } },
+        data: { status: input.status, role: input.role },
+        include: { user: { select: memberUserSelect } },
+      });
+      if (input.status && input.status !== member.status) {
+        if (member.status === PlaceMemberStatus.invited) {
+          await tx.place.update({ where: { id: placeId }, data: { inviteCount: { decrement: 1 } } });
+        } else if (input.status === PlaceMemberStatus.invited) {
+          await tx.place.update({ where: { id: placeId }, data: { inviteCount: { increment: 1 } } });
+        }
+      }
+      return updated;
     });
   }
 
@@ -823,13 +833,17 @@ export class PlacesService {
     const now = new Date();
     const updated = await this.prisma.$transaction(async (tx) => {
       const checkInOrder = input.decision === "admit" ? await tx.placeMember.count({ where: { placeId, checkedInAt: { not: null } } }) + 1 : null;
-      return tx.placeMember.update({
+      const result = await tx.placeMember.update({
         where: { placeId_userId: { placeId, userId } },
         data: input.decision === "admit"
           ? { status: PlaceMemberStatus.accepted, checkedInAt: now, checkInDecisionAt: now, checkInMethod: input.method, checkInOrder }
           : { status: PlaceMemberStatus.declined, checkedInAt: null, checkInDecisionAt: now, checkInMethod: input.method, checkInOrder: null },
         include: { user: { select: memberUserSelect } },
       });
+      if (member.status === PlaceMemberStatus.invited) {
+        await tx.place.update({ where: { id: placeId }, data: { inviteCount: { decrement: 1 } } });
+      }
+      return result;
     });
     await this.notifications.dispatch({
       userId,
@@ -859,9 +873,16 @@ export class PlacesService {
     });
     if (!member || member.status !== PlaceMemberStatus.invited)
       throw new NotFoundException("Aktif mekân daveti bulunamadı.");
-    return this.prisma.placeMember.update({
-      where: { placeId_userId: { placeId, userId } },
-      data: { status },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.placeMember.update({
+        where: { placeId_userId: { placeId, userId } },
+        data: { status },
+      });
+      await tx.place.update({
+        where: { id: placeId },
+        data: { inviteCount: { decrement: 1 } },
+      });
+      return updated;
     });
   }
 
@@ -963,24 +984,44 @@ export class PlacesService {
         select: { userId: true },
       },
       members: {
-        where: { userId: viewerId ?? "" },
-        select: { status: true, role: true },
+        where: viewerId
+          ? {
+              OR: [
+                { userId: viewerId },
+                {
+                  status: { in: [PlaceMemberStatus.accepted, PlaceMemberStatus.invited] },
+                  user: { followers: { some: { followerId: viewerId } } },
+                },
+              ],
+            }
+          : { userId: "" },
+        select: {
+          userId: true,
+          status: true,
+          role: true,
+          user: {
+            select: {
+              followers: {
+                where: { followerId: viewerId ?? "" },
+                select: { followerId: true },
+                take: 1,
+              },
+            },
+          },
+        },
       },
       tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
       _count: {
         select: {
           members: { where: { status: "accepted" } },
           events: { where: { status: "published", startsAt: { gte: new Date() } } },
-          followers: viewerId
-            ? { where: { user: { followers: { some: { followerId: viewerId } } } } }
-            : true,
         },
       },
       ...(includeEvents ? { events: { where: { status: EventStatus.published }, orderBy: { startsAt: "desc" as const }, take: 20, include: { tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } }, participants: { where: { status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] } }, select: { id: true } } } } } : {}),
     } as const;
   }
 
-  private toPublicPlace(place: any) {
+  private toPublicPlace(place: any, viewerId?: string) {
     const { followers, members, tags, events, _count, ...data } = place;
     delete data.updatedById;
     delete data.legacySlugs;
@@ -992,9 +1033,15 @@ export class PlacesService {
       longitude: data.longitude == null ? null : Number(data.longitude),
       isFollowing: followers.length > 0,
       memberCount: viewerIdSafeCount(_count?.members),
-      followingMemberCount: viewerIdSafeCount(_count?.followers),
+      followingMemberCount: viewerId
+        ? (members ?? []).filter((member: any) =>
+            member.userId !== viewerId &&
+            [PlaceMemberStatus.accepted, PlaceMemberStatus.invited].includes(member.status) &&
+            member.user?.followers?.length,
+          ).length
+        : 0,
       upcomingEventCount: viewerIdSafeCount(_count?.events),
-      viewerMembership: members[0] ?? null,
+      viewerMembership: (members ?? []).find((member: any) => member.userId === viewerId) ?? null,
     };
   }
 

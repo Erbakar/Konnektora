@@ -1621,7 +1621,7 @@ export class EventsService {
         ? participantSummary.filter((participant: any) => participant.status === "accepted" || participant.status === "attended").length
         : event._count?.participants ?? 0,
       invitedCount: participantSummary?.filter((participant: any) => participant.status === "invited").length ?? 0,
-      followingAttendeeCount: participantSummary?.filter((participant: any) => participant.status !== "invited" && participant.user?.followers?.length).length ?? 0,
+      followingAttendeeCount: participantSummary?.filter((participant: any) => participant.user?.followers?.length).length ?? 0,
       viewerParticipation: participantSummary ? null : event.participants?.[0] ?? null,
       tags: event.tags.map((eventTag: { tag: unknown }) => eventTag.tag),
       ticketTypes: Array.isArray(event.ticketTypeRecords)

@@ -332,6 +332,19 @@ describe("157 maddelik listenin kritik web davranışları", () => {
     expect(await screen.findByRole("button", { name: /Konum için izin verin/ })).toBeVisible();
   });
 
+  it("katılımcı yokken takip edilen davetlileri etkinlik kartında doğru grupta gösterir", () => {
+    const event: Event = {
+      ...mockEvents[0]!,
+      attendeeCount: 0,
+      invitedCount: 4,
+      followingAttendeeCount: 2,
+    };
+
+    render(providers(<EventCard event={event} />));
+
+    expect(screen.getByText("4 davetli · 2 takip ettiğiniz")).toBeVisible();
+  });
+
   it("mekân kartını ortak görünürlük, tür, konum ve etkinlik bilgileriyle standartlaştırır", async () => {
     const place: Place = {
       id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",

@@ -113,6 +113,39 @@ describe("PlacesService", () => {
     expect(place.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 200 }));
   });
 
+  it("counts followed accepted and invited members instead of general place followers", async () => {
+    place.findMany.mockResolvedValue([{
+      id: "place-1",
+      name: "Community Hub",
+      slug: "community-hub-310001",
+      status: "active",
+      visibility: "open",
+      followerCount: 99,
+      inviteCount: 1,
+      tags: [],
+      followers: [{ userId: actor.id }],
+      members: [
+        { userId: actor.id, status: "accepted", role: "member", user: { followers: [] } },
+        { userId: "friend-1", status: "accepted", role: "member", user: { followers: [{ followerId: actor.id }] } },
+        { userId: "friend-2", status: "invited", role: "member", user: { followers: [{ followerId: actor.id }] } },
+      ],
+      _count: { members: 2, events: 0 },
+    }]);
+    place.count.mockResolvedValue(1);
+
+    const result = await service.list({ page: 1, pageSize: 12 } as never, actor.id);
+
+    expect(result.items[0]).toEqual(expect.objectContaining({
+      isFollowing: true,
+      memberCount: 2,
+      inviteCount: 1,
+      followingMemberCount: 2,
+      viewerMembership: expect.objectContaining({ userId: actor.id, status: "accepted" }),
+    }));
+    const include = place.findMany.mock.calls[0][0].include;
+    expect(include.members.where).toEqual(expect.objectContaining({ OR: expect.any(Array) }));
+  });
+
   it("creates the owner as an accepted organizer", async () => {
     place.create.mockResolvedValue({
       id: "22222222-2222-4222-8222-222222222222",
@@ -271,6 +304,27 @@ describe("PlacesService", () => {
     await expect(
       service.respondToInvite("place-1", PlaceMemberStatus.banned, "user-1"),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("decrements the active place invite count when an invitation is accepted", async () => {
+    placeMember.findUnique.mockResolvedValue({
+      placeId: "place-1",
+      userId: "user-1",
+      status: PlaceMemberStatus.invited,
+    });
+    placeMember.update.mockResolvedValue({
+      placeId: "place-1",
+      userId: "user-1",
+      status: PlaceMemberStatus.accepted,
+    });
+    place.update.mockResolvedValue({});
+
+    await service.respondToInvite("place-1", PlaceMemberStatus.accepted, "user-1");
+
+    expect(place.update).toHaveBeenCalledWith({
+      where: { id: "place-1" },
+      data: { inviteCount: { decrement: 1 } },
+    });
   });
 
   it("checks in only an accepted place member", async () => {

@@ -539,14 +539,14 @@ describe("EventsService", () => {
       participants: [
         { status: "accepted", userId: "friend-1", user: { followers: [{ followerId: actor.id }] } },
         { status: "attended", userId: "member-2", user: { followers: [] } },
-        { status: "invited", userId: "member-3", user: { followers: [] } },
+        { status: "invited", userId: "member-3", user: { followers: [{ followerId: actor.id }] } },
       ],
       _count: { participants: 2 },
     }]);
 
     const result = await service.listPublicEvents({}, actor.id);
 
-    expect(result.items[0]).toEqual(expect.objectContaining({ attendeeCount: 2, invitedCount: 1, followingAttendeeCount: 1 }));
+    expect(result.items[0]).toEqual(expect.objectContaining({ attendeeCount: 2, invitedCount: 1, followingAttendeeCount: 2 }));
     expect(result.items[0]).not.toHaveProperty("participants");
   });
 
