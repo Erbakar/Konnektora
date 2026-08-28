@@ -128,16 +128,37 @@ for (const path of [
   "/me/events",
   "/events?scope=mine&pageSize=15",
   "/events?scope=invited&pageSize=15",
-  "/social/new-members",
   "/me/places",
   "/me/tickets",
   "/me/owned-tickets",
   "/me/member-pass",
-  "/profile/tag-suggestions",
   "/me/finance",
   "/announcements",
 ]) {
   await request(path, userToken);
+}
+
+const newMembers = await request("/social/new-members", userToken);
+for (const member of newMembers.data ?? []) {
+  if (!Object.hasOwn(member, "avatarUrl")) throw new Error("Sosyal üye kartı avatarUrl alanını içermiyor.");
+}
+const memberWithAvatar = (newMembers.data ?? []).find((member) => member.avatarUrl);
+if (!memberWithAvatar) throw new Error("Canlı sosyal üye listesinde doğrulanabilecek bir profil görseli bulunamadı.");
+const avatarProfile = await request(`/users/id/${memberWithAvatar.id}`, userToken);
+const expectedAvatar = avatarProfile.data?.media?.find((item) => item.isProfilePicture)?.url ?? null;
+if (!expectedAvatar || memberWithAvatar.avatarUrl !== expectedAvatar) {
+  throw new Error("Sosyal üye kartındaki avatar, kullanıcının etkin profil görseliyle eşleşmiyor.");
+}
+const conversations = await request("/me/conversations", userToken);
+for (const conversation of conversations.data?.items ?? []) {
+  if (!Object.hasOwn(conversation.peer ?? {}, "avatarUrl")) throw new Error("Konuşma kullanıcısı avatarUrl alanını içermiyor.");
+  if (Object.hasOwn(conversation.peer ?? {}, "uploadedMedia")) throw new Error("Konuşma yanıtı iç medya modelini sızdırıyor.");
+}
+const profileTagSuggestions = await request("/profile/tag-suggestions", userToken);
+for (const suggestion of profileTagSuggestions.data ?? []) {
+  if (Object.hasOwn(suggestion.targetUser ?? {}, "email") || Object.hasOwn(suggestion.suggestedBy ?? {}, "email")) {
+    throw new Error("Profil etiketi önerisi kullanıcı e-postasını sızdırıyor.");
+  }
 }
 
 const finance = await request("/me/finance", userToken);
