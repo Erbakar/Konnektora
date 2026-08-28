@@ -11,11 +11,11 @@ afterEach(() => {
 
 describe("post içi YouTube ve SoundCloud oynatıcıları", () => {
   it("oynatıcı varken uzun medya URL'sini post metninde tekrar göstermez", () => {
-    render(<LanguageProvider><p><RichText hideEmbeddableUrls text="Önerim: https://youtu.be/AbCdEf12345 ve https://on.soundcloud.com/Konnektora123" /></p></LanguageProvider>);
+    render(<LanguageProvider><p data-testid="post-copy"><RichText hideEmbeddableUrls text="Önerim: https://youtu.be/AbCdEf12345 ve https://on.soundcloud.com/Konnektora123" /></p></LanguageProvider>);
 
-    expect(screen.getByText(/Önerim:/)).toBeInTheDocument();
-    expect(screen.queryByText("https://youtu.be/AbCdEf12345")).not.toBeInTheDocument();
-    expect(screen.queryByText("https://on.soundcloud.com/Konnektora123")).not.toBeInTheDocument();
+    expect(screen.getByTestId("post-copy")).toHaveTextContent("Önerim: ve");
+    expect(screen.getByTestId("post-copy")).not.toHaveTextContent("youtu.be");
+    expect(screen.getByTestId("post-copy")).not.toHaveTextContent("soundcloud.com");
   });
 
   it("YouTube başlığını gösterir, önizlemeyi oynatıcıya çevirir ve live URL'sini destekler", async () => {

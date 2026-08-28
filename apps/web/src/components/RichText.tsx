@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { parseRichText } from "@konnektora/shared";
 
 export function RichText({ text, hideEmbeddableUrls = false }: { text: string; hideEmbeddableUrls?: boolean }) {
-  const displayText = /<[^>]+>/.test(text)
+  const plainText = /<[^>]+>/.test(text)
     ? new DOMParser()
         .parseFromString(
           text
@@ -13,6 +13,12 @@ export function RichText({ text, hideEmbeddableUrls = false }: { text: string; h
         )
         .body.textContent?.trim() ?? text
     : text;
+  const displayText = hideEmbeddableUrls
+    ? plainText.replace(/https?:\/\/[^\s]+/gi, (match) => {
+        const url = match.replace(/[),.!?;:]+$/g, "");
+        return /(?:youtu\.be|youtube\.com|soundcloud\.com)\//i.test(url) ? "" : match;
+      }).replace(/[ \t]{2,}/g, " ").trim()
+    : plainText;
 
   return <>{parseRichText(displayText).map((token, index) => {
     if (token.type === "mention" || token.type === "tag") return <Link className="rich-text-link" key={index} to={token.href!}>{token.text}</Link>;
