@@ -12,7 +12,7 @@ import { EventCard } from "../components/EventCard";
 import { PlaceCard } from "../components/PlaceCard";
 import { ReportDialog } from "../components/ReportDialog";
 import { LanguageProvider } from "../lib/i18n";
-import { mockEvents } from "../lib/mockData";
+import { mockEvents, mockTags } from "../lib/mockData";
 import { EventsPage } from "../pages/EventsPage";
 
 const apiMocks = vi.hoisted(() => ({
@@ -147,6 +147,72 @@ describe("157 maddelik listenin kritik web davranışları", () => {
     await userEvent.click(screen.getByRole("button", { name: "1. sayfaya git" }));
     await waitFor(() => expect(screen.getByLabelText("current-search")).toBeEmptyDOMElement());
     await waitFor(() => expect(container.querySelectorAll(".event-discovery-all .event-card")).toHaveLength(15));
+  });
+
+  it("keşif widget'ında tüm sayfaları sağa kaydırılabilir kartlarda birleştirir, farklı cihaz şehrini ve gerçek trend sırasını gösterir", async () => {
+    apiMocks.getUserSession.mockReturnValue({
+      id: "member-1", name: "Ada", role: "user", status: "active", onboardingCompleted: true,
+    });
+    apiMocks.getMyProfile.mockResolvedValue({ city: "İstanbul", country: "Türkiye" });
+    apiMocks.getDiscoveryFeed.mockResolvedValue({
+      popularMembers: [], newMembers: [], localEvents: [], trendingTags: [], popularPlaces: [],
+      activeUserCount: 0, scope: "local", location: "Ankara", city: "Ankara", country: "Türkiye", activities: [],
+    });
+    apiMocks.listTags.mockResolvedValue([
+      { ...mockTags[0]!, id: "tag-zero", name: "Etkinliksiz", slug: "etkinliksiz", eventCount: 0 },
+      { ...mockTags[1]!, id: "tag-three", name: "Seramik", slug: "seramik", eventCount: 3 },
+      { ...mockTags[2]!, id: "tag-eight", name: "Teknoloji", slug: "teknoloji", eventCount: 8 },
+    ]);
+    const ankaraEvents = Array.from({ length: 101 }, (_, index) => ({
+      ...mockEvents[index % mockEvents.length]!,
+      id: `ankara-event-${index + 1}`,
+      slug: `ankara-etkinligi-${index + 1}`,
+      title: `Ankara Etkinliği ${index + 1}`,
+      city: "Ankara",
+    }));
+    apiMocks.listEvents.mockImplementation(async (params: URLSearchParams) => {
+      if (params.get("pageSize") !== "100") return listPage([], 1, 0);
+      if (params.get("city") !== "Ankara") return { items: [], page: 1, pageSize: 100, total: 0, hasNextPage: false };
+      const page = Number(params.get("page") ?? "1");
+      return {
+        items: page === 1 ? ankaraEvents.slice(0, 100) : ankaraEvents.slice(100),
+        page,
+        pageSize: 100,
+        total: ankaraEvents.length,
+        hasNextPage: page === 1,
+      };
+    });
+
+    const { container } = render(providers(<EventsPage />, ["/events"]));
+
+    expect(await screen.findByRole("heading", { name: "Ankara etkinlikleri" })).toBeVisible();
+    await waitFor(() => expect(container.querySelectorAll(".event-discovery-device_location .event-card")).toHaveLength(101));
+    expect(apiMocks.listEvents.mock.calls.some(([params]) => params.get("city") === "Ankara" && params.get("page") === "2")).toBe(true);
+    expect(screen.getByRole("link", { name: "Tümünü göster" })).toHaveAttribute("href", "/events?city=Ankara");
+
+    await waitFor(() => expect(container.querySelectorAll(".event-tag-filter-cloud button")).toHaveLength(2));
+    expect([...container.querySelectorAll<HTMLButtonElement>(".event-tag-filter-cloud button")].map((button) => button.textContent)).toEqual([
+      "#Teknoloji8", "#Seramik3",
+    ]);
+  });
+
+  it("üyeliği tamamlanmamış kullanıcıyı eski üye alanı yerine onboarding'e yönlendirir", async () => {
+    window.sessionStorage.setItem("konnektora:location-intro", "seen");
+    apiMocks.getUserSession.mockReturnValue({
+      id: "business-1", name: "Mahmut Tuncer", role: "user", status: "pending",
+      accountType: "corporate", onboardingCompleted: false,
+    });
+
+    render(providers(
+      <Routes>
+        <Route element={<AppLayout />}><Route path="/feed" element={<main>Eski üye alanı</main>} /></Route>
+        <Route path="/onboarding" element={<main>Kurumsal onboarding</main>} />
+      </Routes>,
+      ["/feed"],
+    ));
+
+    expect(await screen.findByText("Kurumsal onboarding")).toBeVisible();
+    expect(screen.queryByText("Eski üye alanı")).not.toBeInTheDocument();
   });
 
   it("etkinlik kartında görünürlük, zaman, konum ve topluluk özetini birlikte gösterir", async () => {

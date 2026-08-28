@@ -71,9 +71,9 @@ export function AppLayout() {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
-    if (!user || user.role !== "user" || user.onboardingCompleted !== false || location.pathname === "/onboarding" || location.pathname === "/verify-email") return;
+    if (!storedUser || storedUser.role !== "user" || storedUser.onboardingCompleted !== false || location.pathname === "/onboarding" || location.pathname === "/verify-email") return;
     navigate("/onboarding", { replace: true });
-  }, [location.pathname, navigate, user]);
+  }, [location.pathname, navigate, storedUser?.id, storedUser?.onboardingCompleted, storedUser?.role]);
 
   useEffect(() => {
     const relevantPage = location.pathname === "/" || location.pathname.startsWith("/events") || location.pathname.startsWith("/places");

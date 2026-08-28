@@ -7,7 +7,7 @@ import { EmailInput, PhoneInput, VerificationCodeInput } from "../components/For
 import { ServiceFeedback } from "../components/ServiceFeedback";
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
 import { CountryCityFields } from "../components/CountryCityFields";
-import { checkAvailability, completeOnboarding, confirmPhoneVerification, followUser, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, resolveMediaUrl, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, updateUserSession, uploadProfileMedia } from "../lib/api";
+import { checkAvailability, completeOnboarding, confirmPhoneVerification, followUser, getDiscoveryFeed, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, resolveMediaUrl, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, updateUserSession, uploadProfileMedia } from "../lib/api";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
 import { useLanguage } from "../lib/i18n";
 
@@ -26,6 +26,15 @@ const statusStep: Record<string, number> = {
   interests: 4,
   people: 5,
 };
+const inferredCountries: Record<string, string> = {
+  DE: "Almanya", ES: "İspanya", FR: "Fransa", GB: "Birleşik Krallık", IT: "İtalya",
+  NL: "Hollanda", TR: "Türkiye", US: "Amerika Birleşik Devletleri",
+};
+
+function normalizeInferredCountry(country?: string | null) {
+  if (!country) return "";
+  return inferredCountries[country.toUpperCase()] ?? country;
+}
 
 export function OnboardingPage() {
   const { language } = useLanguage();
@@ -62,6 +71,11 @@ export function OnboardingPage() {
   });
   const isCorporate = (profile.data?.accountType ?? session?.accountType ?? accountType) === "corporate";
   const steps = isCorporate ? corporateSteps[language] : individualSteps[language];
+  const inferredLocation = useQuery({
+    queryKey: ["onboarding-location", session?.id],
+    queryFn: () => getDiscoveryFeed({ scope: "local" }),
+    enabled: Boolean(session && isCorporate),
+  });
   const media = useQuery({
     queryKey: ["profile-media", session?.id],
     queryFn: listProfileMedia,
@@ -418,7 +432,12 @@ export function OnboardingPage() {
               }} pattern="[A-Za-z0-9 .-]+" required />
               {availabilityText ? <span className={/uygun|available/i.test(availabilityText) ? "form-success" : "form-error"}>{availabilityText}</span> : null}
             </label>
-            <CountryCityFields defaultCity={profile.data.city} defaultCountry={profile.data.country} requiredCountry />
+            <CountryCityFields
+              defaultCity={profile.data.city || inferredLocation.data?.city}
+              defaultCountry={profile.data.country || normalizeInferredCountry(inferredLocation.data?.country)}
+              key={`${profile.data.country || inferredLocation.data?.country || ""}:${profile.data.city || inferredLocation.data?.city || ""}`}
+              requiredCountry
+            />
             {profile.data.accountType === "corporate" ? <label>
               {t("Firmanın ilçesi", "Company district")}
               <input defaultValue={profile.data.district ?? ""} name="district" placeholder={t("İsteğe bağlı", "Optional")} />

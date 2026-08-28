@@ -85,6 +85,10 @@ describe("etkinlik ve mekân adres seçici", () => {
     );
 
     await userEvent.click(await screen.findByRole("button", { name: "Mekân oluştur" }));
+    expect(screen.queryByLabelText("Enlem")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Boylam")).not.toBeInTheDocument();
+    expect(document.querySelector<HTMLInputElement>('input[name="latitude"]')).toHaveAttribute("type", "hidden");
+    expect(document.querySelector<HTMLInputElement>('input[name="longitude"]')).toHaveAttribute("type", "hidden");
     await userEvent.type(screen.getByRole("textbox", { name: "Ad" }), "Konnektora Atölye");
     await userEvent.click(screen.getByRole("button", { name: "Mekânı oluştur" }));
 

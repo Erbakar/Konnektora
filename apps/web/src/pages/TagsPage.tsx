@@ -455,7 +455,7 @@ export function TagsPage() {
         <h2>{t("Profiline ekleyen kişiler", "People who added it to their profile")}</h2>
         <div><span className="attendee-avatar-stack">{(relatedUsers.data ?? []).slice(0, 8).map((member) => <Link key={member.id} title={t(`${member.name} profilini aç`, `Open ${member.name}'s profile`)} to={userProfilePath(member)}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/tags/${tag.slug}/users`}><strong>{t(`${relatedUsers.data?.length ?? tag.usageCount} kullanıcının tümünü göster`, `Show all ${relatedUsers.data?.length ?? tag.usageCount} users`)}</strong></Link></div>
       </section>
-      {relatedEvents.data?.total ? <Link className="tag-related-events-notice" to={`/events?tag=${encodeURIComponent(tag.slug)}`}>{t(`${relatedEvents.data.total} ilişkili devam eden veya gelecek etkinlik bulundu.`, `${relatedEvents.data.total} related ongoing or upcoming events found.`)}</Link> : null}
+      {relatedEvents.data?.total ? <Link className="tag-related-events-notice" to={`/events?tag=${encodeURIComponent(tag.slug)}`}>{t(`${relatedEvents.data.total} ilişkili etkinlik bulundu.`, `${relatedEvents.data.total} related events found.`)}</Link> : null}
       {user && ["admin", "super_admin", "curator"].includes(user.role) ? <section className="tag-public-stats" id="tag-stats">
         {[
           { Icon: Users, value: stats.data?.followers ?? 0, label: t("takipçi", "followers") },

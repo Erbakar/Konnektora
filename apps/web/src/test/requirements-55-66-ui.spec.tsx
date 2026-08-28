@@ -44,6 +44,9 @@ vi.mock("../lib/api", async () => {
 vi.mock("../components/PushNotificationControl", () => ({
   PushNotificationControl: () => <div aria-label="Push bildirim kontrolü" />,
 }));
+vi.mock("../components/ProfileVerificationPanel", () => ({
+  ProfileVerificationPanel: () => <div aria-label="Profil doğrulama paneli" />,
+}));
 
 function providers(children: ReactNode, initialEntry: string) {
   const client = new QueryClient({
@@ -128,6 +131,13 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     expect(await screen.findByRole("heading", { name: "Etkinliği düzenle" })).toBeVisible();
     expect(screen.getByRole("textbox", { name: "Başlık" })).toHaveValue(event.title);
     expect(screen.getByRole("textbox", { name: "Açıklama" })).toHaveValue(event.description);
+
+    await userEvent.click(screen.getByRole("button", { name: "Adım 2" }));
+    const location = document.querySelector<HTMLElement>('[data-event-step="2"]')!;
+    expect(within(location).queryByLabelText("Enlem")).not.toBeInTheDocument();
+    expect(within(location).queryByLabelText("Boylam")).not.toBeInTheDocument();
+    expect(location.querySelector<HTMLInputElement>('input[name="latitude"]')).toHaveAttribute("type", "hidden");
+    expect(location.querySelector<HTMLInputElement>('input[name="longitude"]')).toHaveAttribute("type", "hidden");
 
     await userEvent.click(screen.getByRole("button", { name: "Adım 5" }));
     const programme = document.querySelector<HTMLElement>('[data-event-step="5"]')!;
@@ -254,5 +264,38 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     expect(await screen.findByRole("combobox", { name: "Profil ayarlarımda kayıtlı adresimi kim görebilir?" })).toBeVisible();
     expect(screen.getByRole("combobox", { name: "Ticari unvanımı kim görebilir?" })).toBeVisible();
     expect(screen.queryByRole("combobox", { name: "Profil ayarlarımda kayıtlı şehri kim görebilir?" })).not.toBeInTheDocument();
+  });
+
+  it("telefon ve e-postayı profil düzenlemeden kaldırıp yalnız hesap ayarlarında gösterir", async () => {
+    apiMocks.getUserSession.mockReturnValue({
+      id: "person-1",
+      name: "Ada Yılmaz",
+      email: "ada@example.com",
+      accountType: "individual",
+      role: "user",
+    });
+    apiMocks.getMyProfile.mockResolvedValue({
+      id: "person-1",
+      name: "Ada Yılmaz",
+      email: "ada@example.com",
+      phone: "+905551234567",
+      username: "ada",
+      accountType: "individual",
+      city: "İstanbul",
+      country: "Türkiye",
+      interests: [],
+    });
+
+    const profile = render(providers(<SettingsSectionPage section="profile" />, "/settings/profile"));
+    expect(await screen.findByRole("heading", { name: "Profili düzenle" })).toBeVisible();
+    expect(screen.queryByRole("textbox", { name: "Telefon" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "E-posta" })).not.toBeInTheDocument();
+    profile.unmount();
+
+    render(providers(<SettingsSectionPage section="account" />, "/settings/account"));
+    expect(await screen.findByRole("heading", { name: "E-posta adresi" })).toBeVisible();
+    expect(screen.getByRole("textbox", { name: "E-posta" })).toHaveValue("ada@example.com");
+    expect(screen.getByRole("heading", { name: "Telefon numarası" })).toBeVisible();
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Telefon" })).toHaveValue("+905551234567"));
   });
 });

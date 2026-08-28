@@ -1,4 +1,5 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
+import type { Event, EventList } from "@konnektora/shared";
 import { CalendarX, ListFilter, LoaderCircle, MapPinned, Plus, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -42,6 +43,20 @@ const pageCopy = {
     page: (page: number, size: number) => `Page ${page} · ${size} per page`, goToPage: (page: number) => `Go to page ${page}`, result: (total: number) => `${total} results`, global: "Global",
   },
 } as const;
+
+async function listAllDiscoveryEvents(params: Record<string, string>) {
+  const items: Event[] = [];
+  let page = 1;
+  let result: EventList;
+
+  do {
+    result = await listEvents(new URLSearchParams({ ...params, page: String(page), pageSize: "100" }));
+    items.push(...result.items);
+    page += 1;
+  } while (result.hasNextPage);
+
+  return { ...result, items, page: 1, pageSize: Math.max(items.length, 1), hasNextPage: false };
+}
 
 export function EventsPage() {
   const { language } = useLanguage();
@@ -96,7 +111,7 @@ export function EventsPage() {
   ] as const;
   const discoveryQueries = useQueries({ queries: discoveryDefinitions.map((definition) => ({
     queryKey: ["events", "discovery-section", definition.key, definition.params],
-    queryFn: () => listEvents(new URLSearchParams({ ...definition.params, pageSize: "100" })),
+    queryFn: () => listAllDiscoveryEvents(definition.params),
     enabled: !hasFilters && selectedPage === 1 && (!definition.auth || Boolean(user)),
   })) });
 

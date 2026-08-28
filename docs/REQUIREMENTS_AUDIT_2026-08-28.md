@@ -48,6 +48,7 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 - Canlı oturumlu kabul testi admin kullanıcı/CMS/içerik/activity-log, etkinlik katılımcı-davet-bilet-istatistik-pasaport, mekân üye-davet-istatistik ve üye profil/etkinlik/bilet/finans akışlarını doğruladı. Uygun paketi olmayan test üyesinde Guest List'in `403` dönmesi beklenen yetki davranışı olarak ayrıca doğrulandı.
 - Canlı tarayıcıda konum tanıtımı izin vermeden “Şimdi değil” ile kapatıldı. `/events` sayfalaması gerçek düğme tıklamasıyla 2. sayfaya geçti; tek kart 279 px genişlikte kaldı ve 1. sayfaya dönüşte 15 kart üç kolona geri döndü. 390 px mobil görünümde yatay taşma olmadı.
 - Canlı etkinlik bilgi penceresi açılıp kapandı. İlgili etkinlikler masaüstünde 3 sütun (8 kartta 3+3+2), 390 px mobilde tek sütun gösterildi; yatay taşma ve tarayıcı konsol hatası bulunmadı.
+- 81–91 grubu için hesap ayarları, kurumsal onboarding, tamamlanmamış hesap yönlendirmesi, çok sayfalı etkinlik widget'ı, cihaz şehri widget'ı, trend etiket sırası, etiket-etkinlik bağlantısı ve gizli koordinat alanlarını kapsayan UI testleri eklendi. Tam paket 34 API suite/246 test ve 8 web dosyası/39 test olarak geçti; bu grubun deploy ve canlı doğrulaması sıradaki kapıdır.
 
 ## Açık dış bağımlılıklar ve tamamlanan canlı kapılar
 

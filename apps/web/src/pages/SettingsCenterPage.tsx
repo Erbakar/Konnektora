@@ -593,7 +593,7 @@ function AccountSettings() {
         }}
       >
         <h2>{t("E-posta adresi", "Email address")}</h2>
-        <EmailInput defaultValue={profile.data?.email ?? user.email} name="email" required />
+        <EmailInput aria-label={t("E-posta", "Email")} defaultValue={profile.data?.email ?? user.email} name="email" required />
         <button className="primary-action" disabled={updateEmail.isPending}>{t("E-postayı güncelle", "Update email")}</button>
         {updateEmail.isSuccess ? <p className="form-success">{t("E-posta güncellendi; doğrulama bağlantısı gönderildi.", "Email updated; a verification link has been sent.")}</p> : null}
         {updateEmail.isError ? <p className="form-error">{t("E-posta güncellenemedi.", "Email could not be updated.")}</p> : null}
@@ -623,6 +623,7 @@ function AccountSettings() {
           </>
         ) : (
           <PhoneInput
+            aria-label={t("Telefon", "Phone")}
             defaultValue={profile.data?.phone ?? ""}
             name="phone"
             required
