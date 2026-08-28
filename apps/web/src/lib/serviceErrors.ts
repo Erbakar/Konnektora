@@ -138,11 +138,16 @@ export function getServiceErrorPresentation(
   }
 
   if (status === 401) {
+    const invalidCredentials = /geçersiz kullanıcı hesabı|invalid credentials|unauthorized/i.test(message);
     return {
       kind: "authentication",
       title: english ? "Check your login details" : "Giriş bilgilerini kontrol et",
       message:
-        localizedDetail ??
+        (invalidCredentials
+          ? english
+            ? "The email or password is incorrect. Check your details and try again."
+            : "E-posta veya şifre doğru değil. Bilgilerini kontrol edip yeniden dene."
+          : localizedDetail) ??
         (english ? "Your session may have expired. Log in again and retry the action." : "Oturumun sona ermiş olabilir. Yeniden giriş yapıp işlemi tekrar dene."),
       retryable: true,
       status,
