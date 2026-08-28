@@ -28,8 +28,8 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 
 ## Otomatik kontroller
 
-- API testleri: **35 suite / 250 test geçti**. Sosyal servis, içerik paylaşımı, özel mesaj medya gruplaması, admin izinleri, check-in, davet, bilet, etkinlik ve mekân davranışlarına engellenen profilin güvenli biçimde geri açılması/engeli kaldırma davranışı eklendi.
-- Web etkileşim testleri: **13 dosya / 66 test geçti**. Önceki kapsama ek olarak profil ilgi kartı ikon/stili, çoklu profil etiketi ve akıllı öneriler, profil engelle/engeli kaldır, yanıt avatar/hizası, yönetici post aksiyonları ve admin CMS/rol/özel mesaj/kural/activity-log davranışları doğrudan doğrulandı.
+- API testleri: **35 suite / 251 test geçti**. Sosyal servis, içerik paylaşımı, özel mesaj medya gruplaması, admin izinleri, check-in, davet, bilet, etkinlik ve mekân davranışlarına engellenen profilin güvenli biçimde geri açılması/engeli kaldırma ve Top25 davet önerisi davranışları eklendi.
+- Web etkileşim testleri: **13 dosya / 67 test geçti**. Önceki kapsama ek olarak profil ilgi kartı ikon/stili, çoklu profil etiketi ve akıllı öneriler, profil engelle/engeli kaldır, yanıt avatar/hizası, yönetici post aksiyonları, admin CMS/rol/özel mesaj/kural/activity-log ve gerekçeli Top25 davet akışı doğrudan doğrulandı.
 - Check-in pasaportunda erişilebilir Guest List adlarının A–Z sıralanmaması yeni UI testinde yakalandı ve düzeltildi. Etkinlik/mekân listelerinde 10’ar kayıt, arama, bilet/gate, geçmiş, QR/NFC yöntemi, pasaport, “zaten içeride” kilidi, kabul/ret ve taranan kullanıcı sonuç ekranları regresyon kapsamına alındı.
 - Shared, API ve web TypeScript kontrolleri: geçti.
 - API ve web lint: geçti.
@@ -64,6 +64,7 @@ Bu belge, “ekranı var” ile “gereksinim tamamlandı” ifadelerini birbiri
 - Son canlı açık smoke paketi sağlık, etkinlik sayfaları/detayları ve mekân sayfaları/detaylarını; oturumlu smoke paketi admin, CMS, moderasyon, activity log, etkinlik/mekân davet-check-in-istatistik, profil, bilet ve finans uçlarını başarıyla doğruladı.
 - Son kaynak-listesi yeniden denetiminde önceki genel dosya referanslarının örttüğü gerçek boşluklar bulundu: profil ilgi kartlarının yeşil ortak görünümü ve farklı duygu karakterleri kaldırıldı; yorum yanıtlarına avatar/profil/tarih/medya hizası eklendi; profilden engeli geri kaldırma akışı tamamlandı; üçüncü etiket sonrası profil sinyalli öneriler eklendi; admin 125–137 ve post aksiyonları kesin UI regresyonlarına bağlandı. `8a13dfa` sürümünde tüm kapılar 35/250 API ve 13/66 web testiyle geçti.
 - `8a13dfa` sürümü Railway deployment `b050798c-a67f-4025-85a3-95b0e3b1a0ab` ile canlıya alındı. Herkese açık sağlık/etkinlik/mekân/duyuru/SSS uçları ile oturumlu admin, etkinlik, mekân, profil, bilet ve finans smoke kontrolleri yeniden geçti; paketsiz test üyesinin Guest List isteğinde beklenen `403` yetki sonucu korundu.
+- 40. madde yeniden açıldığında kaynak notundaki Top25 davet önerisinin uygulanmadığı ve davet sonrası “Zaten davet ettikleriniz” sorgusunun anında yenilenmediği bulundu. Yöneticiye özel gerekçeli Top25 sıralaması ile etkinlik/mekân davet sorgusu yenilemesi eklendi; tek kullanıcı kaldığında da “Tümünü davet et” görünür. 35/251 API ve 13/67 web testi, tip/lint/build, Prisma ve güvenlik kapıları geçti; deploy/canlı kabul tamamlanmadan bu ek doğrulama kapatılmayacaktır.
 
 ## Açık dış bağımlılıklar ve tamamlanan canlı kapılar
 

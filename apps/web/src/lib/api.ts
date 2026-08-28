@@ -10644,6 +10644,32 @@ export function listEventRelatedUsers(eventId: string): Promise<RelatedUser[]> {
   );
 }
 
+export type EventInviteRecommendation = {
+  id: string;
+  name: string;
+  username: string;
+  avatarUrl?: string | null;
+  score: number;
+  sharedInterestCount: number;
+  reasons: string[];
+};
+const eventInviteRecommendationSchema: z.ZodType<EventInviteRecommendation> = z.object({
+  id: z.string(),
+  name: z.string(),
+  username: z.string(),
+  avatarUrl: z.string().nullable().optional(),
+  score: z.number(),
+  sharedInterestCount: z.number().int().nonnegative(),
+  reasons: z.array(z.string()),
+});
+export function listEventInviteRecommendations(eventId: string): Promise<EventInviteRecommendation[]> {
+  return requestJson(
+    `/events/${eventId}/invite-recommendations`,
+    z.array(eventInviteRecommendationSchema),
+    { auth: "user" },
+  );
+}
+
 export function requestEventAttendance(
   eventId: string,
 ): Promise<EventParticipant> {

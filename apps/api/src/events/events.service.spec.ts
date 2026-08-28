@@ -27,9 +27,9 @@ describe("EventsService", () => {
       eventTag: { findMany: jest.fn(), count: jest.fn() },
       tag: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
       userBlock: { findMany: jest.fn() },
-      user: { findUnique: jest.fn(), create: jest.fn() },
+      user: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn() },
       userInterestTag: { findMany: jest.fn() },
-      userFollow: { count: jest.fn() },
+      userFollow: { count: jest.fn(), findMany: jest.fn() },
       guestList: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
       guestListMember: { upsert: jest.fn(), deleteMany: jest.fn() },
       eventInvitation: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn() },
@@ -91,6 +91,82 @@ describe("EventsService", () => {
     await service.listGuestLists(actor as never);
     expect(prisma.guestList.create).toHaveBeenCalledWith(expect.objectContaining({ data: { ownerId: actor.id, name: "VIP" } }));
     expect(prisma.guestList.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { ownerId: actor.id } }));
+  });
+
+  it("ranks at most 25 transparent invite recommendations and excludes current or blocked users", async () => {
+    const { service, prisma } = createService();
+    prisma.event.findUnique
+      .mockResolvedValueOnce({ createdById: actor.id })
+      .mockResolvedValueOnce({
+        id: "event-1",
+        status: "published",
+        startsAt: new Date("2027-09-01T18:00:00.000Z"),
+        endsAt: new Date("2027-09-01T21:00:00.000Z"),
+        city: "İstanbul",
+        country: "Türkiye",
+        tags: [{ tagId: "tag-1" }],
+        participants: [{ userId: "participant-1" }],
+        invitations: [{ inviteeId: "invited-1" }],
+      });
+    prisma.userFollow.findMany.mockResolvedValue([{ followingId: "candidate-best" }]);
+    prisma.guestList.findMany.mockResolvedValue([{ members: [{ userId: "candidate-best" }] }]);
+    prisma.event.findMany.mockResolvedValue([{ id: "past-event" }]);
+    prisma.eventParticipant.findMany.mockResolvedValue([{ userId: "candidate-best" }]);
+    prisma.userBlock.findMany.mockResolvedValue([{ userId: actor.id, targetId: "blocked-1" }]);
+    prisma.user.findMany.mockResolvedValue([
+      {
+        id: "candidate-country",
+        name: "Country Match",
+        username: "country",
+        city: "Ankara",
+        country: "Türkiye",
+        followerCount: 1,
+        lastOnlineAt: null,
+        profileVerifiedAt: null,
+        interestTags: [],
+        uploadedMedia: [],
+      },
+      {
+        id: "candidate-best",
+        name: "Best Match",
+        username: "best",
+        city: "istanbul",
+        country: "Türkiye",
+        followerCount: 100,
+        lastOnlineAt: new Date(),
+        profileVerifiedAt: new Date(),
+        interestTags: [{ tagId: "tag-1", sentiment: "like" }],
+        uploadedMedia: [{ url: "/best.jpg" }],
+      },
+      ...Array.from({ length: 25 }, (_, index) => ({
+        id: `candidate-${index}`,
+        name: `Candidate ${index}`,
+        username: `candidate-${index}`,
+        city: null,
+        country: null,
+        followerCount: 0,
+        lastOnlineAt: null,
+        profileVerifiedAt: null,
+        interestTags: [],
+        uploadedMedia: [],
+      })),
+    ]);
+
+    const result = await service.listInviteRecommendations("event-1", actor as never);
+
+    expect(result).toHaveLength(25);
+    expect(result[0]).toEqual(expect.objectContaining({
+      id: "candidate-best",
+      avatarUrl: "/best.jpg",
+      sharedInterestCount: 1,
+      reasons: expect.arrayContaining(["shared_interests", "same_city", "following", "past_attendee", "guest_list", "verified", "active_recently", "popular"]),
+    }));
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: { notIn: expect.arrayContaining([actor.id, "participant-1", "invited-1", "blocked-1"]) },
+      }),
+      take: 500,
+    }));
   });
 
   it("prevents another user from editing a named guest list", async () => {

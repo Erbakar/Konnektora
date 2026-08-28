@@ -37,6 +37,7 @@ import {
   invitePlaceMember,
   listGuestLists,
   listEventParticipants,
+  listEventInviteRecommendations,
   listSentEventInvitations,
   listFollowing,
   listMyEvents,
@@ -55,6 +56,7 @@ import { useLanguage } from "../lib/i18n";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
 type InviteMethod =
+  | "recommendations"
   | "following"
   | "guest_lists"
   | "old_attendees"
@@ -132,10 +134,22 @@ export function EventInviteManagementPage() {
     queryFn: () => listEventParticipants(oldEventId, "user"),
     enabled: Boolean(oldEventId),
   });
+  const inviteRecommendations = useQuery({
+    queryKey: ["event-invite-recommendations", event.data?.id, user?.id],
+    queryFn: () => listEventInviteRecommendations(event.data!.id),
+    enabled: Boolean(event.data?.id && canManage && inviteMethod === "recommendations"),
+    retry: false,
+  });
   const invitedUserIds = new Set((sentInvitations.data ?? []).map((item) => item.id));
   const refresh = () => {
     void client.invalidateQueries({
       queryKey: ["event-participants", event.data?.id],
+    });
+    void client.invalidateQueries({
+      queryKey: ["event-invitations-sent", event.data?.id, user?.id],
+    });
+    void client.invalidateQueries({
+      queryKey: ["event-invite-recommendations", event.data?.id, user?.id],
     });
   };
   const invite = useMutation({
@@ -259,6 +273,7 @@ export function EventInviteManagementPage() {
           active={inviteMethod}
           includeOldEvents={canManage}
           includeGuestLists={canUseGuestLists}
+          includeRecommendations={canManage}
           onChange={(method) => {
             setInviteMethod(method);
             invite.reset();
@@ -301,6 +316,36 @@ export function EventInviteManagementPage() {
               addToGuestList.mutate({ listId, userId })
             }
           />
+        ) : null}
+        {inviteMethod === "recommendations" && canManage ? (
+          <InviteSource title={tr ? "AI ile önerilen Top 25" : "AI-recommended Top 25"}>
+            <p className="form-help">
+              {tr
+                ? "Etkinlik ilgi alanları, konum, takip ilişkileri, eski katılımlar, Guest List ve profil sinyallerine göre şeffaf biçimde sıralanır."
+                : "Ranked transparently using event interests, location, follows, past attendance, Guest Lists and profile signals."}
+            </p>
+            {inviteRecommendations.isLoading ? (
+              <p className="form-help">{tr ? "Öneriler hazırlanıyor…" : "Preparing recommendations…"}</p>
+            ) : inviteRecommendations.isError ? (
+              <p className="form-error" role="alert">
+                {tr ? "Öneriler yüklenemedi." : "Recommendations could not be loaded."}
+              </p>
+            ) : (
+              <InviteUserCards
+                users={(inviteRecommendations.data ?? []).map((member) => ({
+                  ...member,
+                  recommendationScore: member.score,
+                  recommendationReasons: member.reasons,
+                }))}
+                invitedUserIds={invitedUserIds}
+                pending={invite.isPending || inviteUsers.isPending}
+                guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
+                onInvite={(userId) => invite.mutate({ userId, role: "attendee" })}
+                onInviteAll={(userIds) => inviteUsers.mutate(userIds)}
+                onAddToGuestList={(listId, userId) => addToGuestList.mutate({ listId, userId })}
+              />
+            )}
+          </InviteSource>
         ) : null}
         {inviteMethod === "guest_lists" && canUseGuestLists ? (
           <>
@@ -511,6 +556,9 @@ export function PlaceInviteManagementPage() {
   const refresh = () => {
     void client.invalidateQueries({
       queryKey: ["place-members", place.data?.id],
+    });
+    void client.invalidateQueries({
+      queryKey: ["place-invitations-sent", place.data?.id, user?.id],
     });
   };
   const invite = useMutation({
@@ -854,16 +902,21 @@ function InviteMethodPicker({
   active,
   includeOldEvents = false,
   includeGuestLists = false,
+  includeRecommendations = false,
   onChange,
 }: {
   active: InviteMethod;
   includeOldEvents?: boolean;
   includeGuestLists?: boolean;
+  includeRecommendations?: boolean;
   onChange: (method: InviteMethod) => void;
 }) {
   const { language } = useLanguage();
   const tr = language === "tr";
   const methods: Array<[InviteMethod, string]> = [
+    ...(includeRecommendations
+      ? [["recommendations", tr ? "AI ile önerilen Top 25" : "AI-recommended Top 25"] as [InviteMethod, string]]
+      : []),
     ["following", tr ? "Takip ettiklerimden seç" : "Choose from people I follow"],
     ...(includeGuestLists
       ? [["guest_lists", tr ? "Guest listeden seç" : "Choose from a guest list"] as [InviteMethod, string]]
@@ -946,6 +999,24 @@ function InviteSource({
   );
 }
 
+function recommendationReasonLabel(reason: string, tr: boolean, sharedInterestCount = 0) {
+  const labels: Record<string, [string, string]> = {
+    shared_interests: [
+      `${sharedInterestCount} ortak ilgi alanı`,
+      `${sharedInterestCount} shared interest${sharedInterestCount === 1 ? "" : "s"}`,
+    ],
+    same_city: ["aynı şehir", "same city"],
+    same_country: ["aynı ülke", "same country"],
+    following: ["takip ediyorsunuz", "you follow"],
+    past_attendee: ["eski etkinlik katılımcısı", "past event attendee"],
+    guest_list: ["Guest List'inizde", "in your Guest List"],
+    verified: ["doğrulanmış profil", "verified profile"],
+    active_recently: ["yakın zamanda aktif", "recently active"],
+    popular: ["toplulukta popüler", "popular in the community"],
+  };
+  return labels[reason]?.[tr ? 0 : 1] ?? reason;
+}
+
 function InviteUserCards({
   title,
   users,
@@ -962,6 +1033,9 @@ function InviteUserCards({
     name: string;
     username?: string | null;
     avatarUrl?: string | null;
+    recommendationScore?: number;
+    recommendationReasons?: string[];
+    sharedInterestCount?: number;
   }>;
   invitedUserIds: Set<string>;
   pending: boolean;
@@ -994,6 +1068,14 @@ function InviteUserCards({
               {member.username ? `@${member.username}` : member.name}
             </Link>
           </strong>
+          {member.recommendationScore !== undefined ? (
+            <small className="invite-recommendation-reasons">
+              {tr ? `Eşleşme puanı ${member.recommendationScore}` : `Match score ${member.recommendationScore}`}
+              {member.recommendationReasons?.length
+                ? ` · ${member.recommendationReasons.map((reason) => recommendationReasonLabel(reason, tr, member.sharedInterestCount)).join(" · ")}`
+                : ""}
+            </small>
+          ) : null}
         </div>
         <div className="row-actions">
           <button
@@ -1021,7 +1103,7 @@ function InviteUserCards({
   return (
     <div className="invite-user-cards">
       {title ? <h2>{title}</h2> : null}
-      {available.length > 1 ? (
+      {available.length ? (
         <button
           className="create-inline-link invite-all-link"
           disabled={pending}

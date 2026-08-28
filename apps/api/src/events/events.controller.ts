@@ -125,6 +125,12 @@ export class EventsController {
     return this.eventsService.listSentInvitations(id, user.id);
   }
 
+  @Get("events/:id/invite-recommendations")
+  @UseGuards(JwtAuthGuard)
+  inviteRecommendations(@Param("id") id: string, @CurrentUser() user: User) {
+    return this.eventsService.listInviteRecommendations(id, user);
+  }
+
   @Post("events/:id/attend")
   @UseGuards(JwtAuthGuard)
   requestAttendance(@Param("id") id: string, @CurrentUser() user: User) {

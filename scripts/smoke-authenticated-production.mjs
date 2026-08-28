@@ -63,6 +63,15 @@ for (const path of [
 
 const participants = await request(`/events/${managedEvent.id}/participants`, adminToken);
 await request(`/events/${managedEvent.id}/invitations/sent`, adminToken);
+const inviteRecommendations = await request(`/events/${managedEvent.id}/invite-recommendations`, adminToken);
+if (!Array.isArray(inviteRecommendations.data) || inviteRecommendations.data.length > 25) {
+  throw new Error("Etkinlik davet önerileri en fazla 25 kayıtlık bir liste döndürmelidir.");
+}
+for (const recommendation of inviteRecommendations.data) {
+  if (!recommendation.id || !recommendation.username || !Array.isArray(recommendation.reasons) || typeof recommendation.score !== "number") {
+    throw new Error("Etkinlik davet önerisi kullanıcı, puan veya gerekçe bilgisini içermiyor.");
+  }
+}
 await request(`/events/${managedEvent.id}/ticket-types`, adminToken);
 await request(`/events/${managedEvent.id}/related-users`, adminToken);
 await request(`/event-stats/${managedEvent.id}`, adminToken);

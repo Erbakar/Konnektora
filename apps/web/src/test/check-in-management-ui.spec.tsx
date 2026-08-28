@@ -23,6 +23,7 @@ const apiMocks = vi.hoisted(() => ({
   getUserSession: vi.fn(),
   inviteEventParticipant: vi.fn(),
   invitePlaceMember: vi.fn(),
+  listEventInviteRecommendations: vi.fn(),
   listEventParticipants: vi.fn(),
   listFollowing: vi.fn(),
   listGuestLists: vi.fn(),
@@ -238,6 +239,26 @@ beforeEach(() => {
   apiMocks.getEvent.mockResolvedValue(event);
   apiMocks.getPlace.mockResolvedValue(place);
   apiMocks.listEventParticipants.mockResolvedValue(Array.from({ length: 12 }, (_, index) => participant(index)));
+  apiMocks.listEventInviteRecommendations.mockResolvedValue([
+    {
+      id: "recommended-1",
+      name: "Ada Öneri",
+      username: "ada-oneri",
+      avatarUrl: null,
+      score: 43,
+      sharedInterestCount: 2,
+      reasons: ["shared_interests", "same_city", "following", "verified"],
+    },
+    {
+      id: "recommended-2",
+      name: "Deniz Öneri",
+      username: "deniz-oneri",
+      avatarUrl: null,
+      score: 21,
+      sharedInterestCount: 1,
+      reasons: ["shared_interests", "past_attendee"],
+    },
+  ]);
   apiMocks.listPlaceMembers.mockResolvedValue(Array.from({ length: 12 }, (_, index) => member(index)));
   apiMocks.listSentEventInvitations.mockResolvedValue([]);
   apiMocks.listSentPlaceInvitations.mockResolvedValue([]);
@@ -249,6 +270,7 @@ beforeEach(() => {
   apiMocks.decideEventCheckInPassport.mockResolvedValue(participant(11));
   apiMocks.decidePlaceCheckInPassport.mockResolvedValue(member(11));
   apiMocks.addGuestListMember.mockResolvedValue({});
+  apiMocks.inviteEventParticipant.mockResolvedValue({});
 });
 
 afterEach(() => {
@@ -257,6 +279,20 @@ afterEach(() => {
 });
 
 describe("check-in yönetimi gereksinimleri", () => {
+  it("etkinlik yöneticisine şeffaf sinyalli AI Top 25 önerilerini ve toplu daveti sunar", async () => {
+    renderEventManagement("");
+
+    await userEvent.click(await screen.findByRole("button", { name: "AI ile önerilen Top 25" }));
+    expect(apiMocks.listEventInviteRecommendations).toHaveBeenCalledWith(event.id);
+    expect(await screen.findByRole("link", { name: "@ada-oneri" })).toHaveAttribute("href", "/users/id/recommended-1");
+    expect(screen.getByText(/Eşleşme puanı 43 · 2 ortak ilgi alanı · aynı şehir · takip ediyorsunuz · doğrulanmış profil/)).toBeVisible();
+    expect(screen.getByText(/Eşleşme puanı 21 · 1 ortak ilgi alanı · eski etkinlik katılımcısı/)).toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: "Tümünü davet et" }));
+    await waitFor(() => expect(apiMocks.inviteEventParticipant).toHaveBeenCalledTimes(2));
+    expect(apiMocks.inviteEventParticipant).toHaveBeenCalledWith(event.id, { userId: "recommended-1", role: "attendee" }, "user");
+  });
+
   it("QR/NFC tarayıcıyı manuel içerik alanı olmadan sunar", async () => {
     render(providers(<QrCheckInScanner pending={false} onScan={vi.fn()} />));
 

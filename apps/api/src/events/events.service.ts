@@ -667,6 +667,173 @@ export class EventsService {
     }));
   }
 
+  async listInviteRecommendations(eventId: string, actor: User) {
+    await this.ensureCanManageParticipants(eventId, actor, true);
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        status: true,
+        startsAt: true,
+        endsAt: true,
+        city: true,
+        country: true,
+        tags: { select: { tagId: true } },
+        participants: { select: { userId: true } },
+        invitations: { select: { inviteeId: true } },
+      },
+    });
+    if (!event || event.status !== EventStatus.published) {
+      throw new NotFoundException("Etkinlik bulunamadı.");
+    }
+    const cutoff = event.endsAt
+      ? event.endsAt.getTime() + 12 * 60 * 60 * 1000
+      : event.startsAt.getTime() + 24 * 60 * 60 * 1000;
+    if (Date.now() > cutoff) {
+      throw new BadRequestException("Bitmiş bir etkinlik için davet önerisi oluşturulamaz.");
+    }
+
+    const [follows, guestLists, managedPastEvents, blocks] = await Promise.all([
+      this.prisma.userFollow.findMany({
+        where: { followerId: actor.id },
+        select: { followingId: true },
+      }),
+      this.prisma.guestList.findMany({
+        where: { ownerId: actor.id },
+        select: { members: { select: { userId: true } } },
+      }),
+      this.prisma.event.findMany({
+        where: {
+          id: { not: eventId },
+          status: { in: [EventStatus.published, EventStatus.archived] },
+          endsAt: { lt: new Date() },
+          OR: [
+            { createdById: actor.id },
+            {
+              participants: {
+                some: {
+                  userId: actor.id,
+                  status: EventParticipantStatus.accepted,
+                  role: { in: [EventParticipantRole.organizer, EventParticipantRole.manager] },
+                },
+              },
+            },
+          ],
+        },
+        select: { id: true },
+        take: 100,
+      }),
+      this.prisma.userBlock.findMany({
+        where: {
+          targetType: "user",
+          OR: [{ userId: actor.id }, { targetId: actor.id }],
+        },
+        select: { userId: true, targetId: true },
+      }),
+    ]);
+    const pastAttendees = managedPastEvents.length
+      ? await this.prisma.eventParticipant.findMany({
+          where: {
+            eventId: { in: managedPastEvents.map((item) => item.id) },
+            status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] },
+          },
+          select: { userId: true },
+          distinct: ["userId"],
+          take: 500,
+        })
+      : [];
+    const excludedIds = new Set([
+      actor.id,
+      ...event.participants.map((item) => item.userId),
+      ...event.invitations.map((item) => item.inviteeId),
+      ...blocks.flatMap((item) => [item.userId, item.targetId]),
+    ]);
+    const candidates = await this.prisma.user.findMany({
+      where: {
+        id: { notIn: [...excludedIds] },
+        status: "active",
+        username: { not: null },
+      },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        city: true,
+        country: true,
+        followerCount: true,
+        lastOnlineAt: true,
+        profileVerifiedAt: true,
+        interestTags: { select: { tagId: true, sentiment: true } },
+        uploadedMedia: {
+          where: { contentType: "user", status: "active", isProfilePicture: true },
+          select: { url: true },
+          take: 1,
+        },
+      },
+      take: 500,
+    });
+    const eventTagIds = new Set(event.tags.map((item) => item.tagId));
+    const followingIds = new Set(follows.map((item) => item.followingId));
+    const guestListIds = new Set(guestLists.flatMap((list) => list.members.map((item) => item.userId)));
+    const pastAttendeeIds = new Set(pastAttendees.map((item) => item.userId));
+    const normalize = (value?: string | null) => value?.trim().toLocaleLowerCase("tr-TR") ?? "";
+    const recentThreshold = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+    return candidates
+      .map((candidate) => {
+        const matchingInterests = candidate.interestTags.filter((item) => eventTagIds.has(item.tagId));
+        const likedInterests = matchingInterests.filter((item) => item.sentiment === "like").length;
+        const okayInterests = matchingInterests.filter((item) => item.sentiment === "ok").length;
+        const reasons: string[] = [];
+        let score = likedInterests * 12 + okayInterests * 5;
+        if (matchingInterests.length) reasons.push("shared_interests");
+        if (event.city && normalize(candidate.city) === normalize(event.city)) {
+          score += 8;
+          reasons.push("same_city");
+        } else if (event.country && normalize(candidate.country) === normalize(event.country)) {
+          score += 3;
+          reasons.push("same_country");
+        }
+        if (followingIds.has(candidate.id)) {
+          score += 8;
+          reasons.push("following");
+        }
+        if (pastAttendeeIds.has(candidate.id)) {
+          score += 6;
+          reasons.push("past_attendee");
+        }
+        if (guestListIds.has(candidate.id)) {
+          score += 5;
+          reasons.push("guest_list");
+        }
+        if (candidate.profileVerifiedAt) {
+          score += 2;
+          reasons.push("verified");
+        }
+        if (candidate.lastOnlineAt && candidate.lastOnlineAt.getTime() >= recentThreshold) {
+          score += 2;
+          reasons.push("active_recently");
+        }
+        score += Math.min(5, Math.floor(Math.log10(candidate.followerCount + 1) * 2));
+        if (candidate.followerCount >= 10) reasons.push("popular");
+        return {
+          id: candidate.id,
+          name: candidate.name,
+          username: candidate.username,
+          avatarUrl: candidate.uploadedMedia[0]?.url ?? null,
+          score,
+          sharedInterestCount: matchingInterests.length,
+          reasons,
+        };
+      })
+      .sort((left, right) =>
+        right.score - left.score ||
+        right.sharedInterestCount - left.sharedInterestCount ||
+        (left.username ?? "").localeCompare(right.username ?? "", "tr"),
+      )
+      .slice(0, 25);
+  }
+
   async listRelatedUsers(eventId: string, actor?: User) {
     const event = await this.prisma.event.findFirst({
       where: { id: eventId, status: "published" },
