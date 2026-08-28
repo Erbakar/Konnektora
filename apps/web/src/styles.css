@@ -12198,8 +12198,15 @@ div.form-error::before {
 .location-intro-dialog { max-width: 520px; padding: 34px; text-align: left; }
 .location-intro-dialog h2 { margin: 8px 0 12px; }
 .location-intro-dialog > p:not(.eyebrow) { color: var(--muted); line-height: 1.65; margin: 0 0 24px; }
-.location-intro-dialog .primary-action { justify-content: center; width: 100%; }
+.location-intro-dialog .passport-close { position: absolute; right: 18px; top: 18px; }
+.location-intro-actions { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.location-intro-actions .primary-action,
+.location-intro-actions .secondary-action { justify-content: center; width: 100%; }
 .location-intro-icon { align-items: center; background: #e9f7ef; border-radius: 18px; color: #146b42; display: inline-flex; height: 58px; justify-content: center; margin-bottom: 18px; width: 58px; }
+
+@media (max-width: 520px) {
+  .location-intro-actions { grid-template-columns: 1fr; }
+}
 .ticket-change-warning { display: block; max-width: 62ch; border: 1px solid #e3b65d; border-radius: 10px; background: #fff8e6; color: #6d4a00; padding: .65rem .75rem; font-weight: 650; line-height: 1.45; }
 .related-count-links { align-items: center; display: flex; flex-wrap: wrap; gap: .35rem; }
 .related-count-links a { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: .18em; }

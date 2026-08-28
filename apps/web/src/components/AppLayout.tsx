@@ -91,6 +91,11 @@ export function AppLayout() {
     );
   }
 
+  function dismissLocationIntro() {
+    sessionStorage.setItem("konnektora:location-intro", "seen");
+    setLocationIntroOpen(false);
+  }
+
   useEffect(() => {
     const announced = new WeakSet<Element>();
     const revealFeedback = () => {
@@ -124,7 +129,7 @@ export function AppLayout() {
     <div className={`app-shell${user ? " authenticated-shell" : ""}`}>
       <DialogAccessibilityManager />
       {liveCheckInDecision ? <CheckInDecisionDialog notification={liveCheckInDecision} onClose={() => { const id = liveCheckInDecision.id; setLiveCheckInDecision(null); void markMyNotificationRead(id).then(() => notificationsQuery.refetch()); }}/>: null}
-      {locationIntroOpen ? <div className="dialog-backdrop location-intro-backdrop" role="presentation"><section aria-describedby="location-intro-description" aria-labelledby="location-intro-title" aria-modal="true" className="content-dialog location-intro-dialog" role="dialog"><span className="location-intro-icon"><Navigation size={25}/></span><p className="eyebrow">{language === "tr" ? "Konum tabanlı keşif" : "Location-based discovery"}</p><h2 id="location-intro-title">{language === "tr" ? "Size daha yakın deneyimleri gösterelim" : "Let us show experiences closer to you"}</h2><p id="location-intro-description">{language === "tr" ? "Konnektora, özellikle etkinlikler ve mekânlarda ilgi alanı ve konum bazlı bir deneyim sunar. Bu ekranı kapattığınızda tarayıcınız konum erişimi için izin isteyecek." : "Konnektora uses interests and location to improve event and venue discovery. After you continue, your browser will ask for location access."}</p><button className="primary-action" onClick={requestLocationPermission} type="button">{language === "tr" ? "Tamam, devam et" : "Continue"}</button></section></div> : null}
+      {locationIntroOpen ? <div className="dialog-backdrop location-intro-backdrop" role="presentation"><section aria-describedby="location-intro-description" aria-labelledby="location-intro-title" aria-modal="true" className="content-dialog location-intro-dialog" role="dialog"><button aria-label={language === "tr" ? "Şimdi değil" : "Not now"} className="passport-close" onClick={dismissLocationIntro} type="button"><X size={20}/></button><span className="location-intro-icon"><Navigation size={25}/></span><p className="eyebrow">{language === "tr" ? "Konum tabanlı keşif" : "Location-based discovery"}</p><h2 id="location-intro-title">{language === "tr" ? "Size daha yakın deneyimleri gösterelim" : "Let us show experiences closer to you"}</h2><p id="location-intro-description">{language === "tr" ? "Konnektora, özellikle etkinlikler ve mekânlarda ilgi alanı ve konum bazlı bir deneyim sunar. İsterseniz konum erişimine izin verebilir veya şimdi kapatıp kartlardaki konum bağlantısından daha sonra açabilirsiniz." : "Konnektora uses interests and location to improve event and venue discovery. Allow location access now, or close this message and enable it later from the location link on a card."}</p><div className="location-intro-actions"><button className="primary-action" onClick={requestLocationPermission} type="button">{language === "tr" ? "Konuma izin ver" : "Allow location"}</button><button className="secondary-action" onClick={dismissLocationIntro} type="button">{language === "tr" ? "Şimdi değil" : "Not now"}</button></div></section></div> : null}
       <header className="corp-topbar">
         <a href={publicSiteHref()} className="brand" aria-label={t("brandHome")}>
           <img alt="Konnektora" src="/brand/konnektora-logo.svg" />
