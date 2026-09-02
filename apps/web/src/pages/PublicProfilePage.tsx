@@ -21,13 +21,13 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { DiscoveryCard } from "../components/DiscoveryCard";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
+import { GuestListAction } from "../components/GuestListAction";
 import { ReportDialog } from "../components/ReportDialog";
 import {
   createBlock,
   createUserTag,
   createProfileTagSuggestion,
   decideProfileTagSuggestion,
-  createGuestList,
   followUser,
   getPublicProfile,
   getPublicProfileById,
@@ -35,8 +35,6 @@ import {
   recordContentView,
   getContentNotification,
   getUserSession,
-  addGuestListMember,
-  listGuestLists,
   listProfileTagSuggestions,
   removeBlock,
   setContentNotification,
@@ -84,7 +82,6 @@ export function PublicProfilePage() {
   const [reportOpen, setReportOpen] = useState(false);
   const [privacyNotice, setPrivacyNotice] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
-  const [guestOpen, setGuestOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
@@ -121,11 +118,6 @@ export function PublicProfilePage() {
     enabled: Boolean(user && profile && !profile.relationship.isSelf),
   });
   const { canUseGuestLists } = useGuestListEntitlement();
-  const namedGuestLists = useQuery({
-    queryKey: ["guest-lists", user?.id],
-    queryFn: listGuestLists,
-    enabled: Boolean(user && guestOpen),
-  });
   const allTags = useQuery({
     queryKey: ["tags", "profile-dialog"],
     queryFn: () => listTags(),
@@ -150,20 +142,6 @@ export function PublicProfilePage() {
       });
       setNotificationOpen(false);
     },
-  });
-  const namedGuestMutation = useMutation({
-    mutationFn: (listId: string) => addGuestListMember(listId, profile!.id),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["guest-lists", user?.id],
-      });
-      setGuestOpen(false);
-    },
-  });
-  const createNamedGuestList = useMutation({
-    mutationFn: (name: string) => createGuestList(name),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["guest-lists", user?.id] }),
   });
   const addTagMutation = useMutation({
     mutationFn: async () => {
@@ -416,9 +394,7 @@ export function PublicProfilePage() {
                   <Link to={`/stats/user/${profile.id}`}>
                     {t("Etkileşim istatistikleri", "Interaction statistics")}
                   </Link>
-                  {canUseGuestLists && !profile.relationship.blockedByViewer ? <button onClick={() => setGuestOpen(true)} type="button">
-                    <UserPlus size={18} /> {t("Misafir listesine ekle", "Add to guest list")}
-                  </button> : null}
+                  {!profile.relationship.blockedByViewer ? <GuestListAction canUse={canUseGuestLists} className="" target={{ id: profile.id, name: profile.name, username: profile.username, avatarUrl: profile.media[0]?.url ?? null, accountType: profile.accountType, role: profile.systemRole, plan: profile.plan }}/> : null}
                   <button
                     onClick={() => setReportOpen((open) => !open)}
                     type="button"
@@ -587,72 +563,6 @@ export function PublicProfilePage() {
               </button>
             </div>
           </section>
-        </div>
-      ) : null}
-      {guestOpen ? (
-        <div
-          className="emotion-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("Misafir listesine ekle", "Add to guest list")}
-        >
-          <div>
-            <button aria-label={t("Kapat", "Close")} onClick={() => setGuestOpen(false)}>
-              ×
-            </button>
-            <h2>{profile.name}</h2>
-            <p>
-              {t("Kullanıcıyı isimlendirilmiş bir Guest List'e ekle.", "Add the user to a named Guest List.")}
-            </p>
-            <form
-              className="inline-create-guest-list"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const input = event.currentTarget.elements.namedItem(
-                  "listName",
-                ) as HTMLInputElement;
-                if (input.value.trim()) {
-                  createNamedGuestList.mutate(input.value.trim());
-                  input.value = "";
-                }
-              }}
-            >
-              <input name="listName" placeholder={t("Yeni liste adı", "New list name")} />
-              <button
-                className="secondary-action"
-                disabled={createNamedGuestList.isPending}
-              >
-                {t("Liste oluştur", "Create list")}
-              </button>
-            </form>
-            <h3>{t("Misafir listeleri", "Guest lists")}</h3>
-            <div className="admin-list">
-              {namedGuestLists.data?.slice().sort((left, right) => left.name.localeCompare(right.name, language)).map((list) => (
-                <button
-                  className="admin-list-row"
-                  disabled={
-                    namedGuestMutation.isPending ||
-                    list.members.some((member) => member.userId === profile.id)
-                  }
-                  key={list.id}
-                  onClick={() => namedGuestMutation.mutate(list.id)}
-                >
-                  <strong>{list.name}</strong>
-                  <span>
-                    {list.members.length} {t("kişi", "people")}
-                    {list.members.some((member) => member.userId === profile.id)
-                      ? t(" · Zaten listede", " · Already added")
-                      : ""}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {namedGuestMutation.isError ? (
-              <p className="form-error">
-                {t("Kullanıcı misafir listesine eklenemedi.", "The user could not be added to the guest list.")}
-              </p>
-            ) : null}
-          </div>
         </div>
       ) : null}
       {!profile.relationship.isSelf && profile.mutualism ? (

@@ -788,9 +788,12 @@ export class PlacesService {
         include: { inviter: { select: { username: true, name: true } } },
       }),
       this.prisma.guestList.findMany({
-        where: { ownerId: actor.id, members: { some: { userId } } },
+        where: {
+          OR: [{ ownerId: actor.id }, { shares: { some: { userId: actor.id } } }],
+          members: { some: { userId } },
+        },
         orderBy: { name: "asc" },
-        select: { id: true, name: true },
+        select: { id: true, name: true, ownerId: true },
       }),
       this.prisma.userFollow.count({
         where: {
@@ -814,7 +817,7 @@ export class PlacesService {
       checkInMethod: member.checkInMethod ?? method,
       invitedBy: invitations.map((item) => item.inviter.username ? `@${item.inviter.username}` : item.inviter.name),
       relatedFollowerCount,
-      guestLists,
+      guestLists: guestLists.map((list) => ({ id: list.id, name: list.name, access: list.ownerId === actor.id ? "owner" as const : "read" as const })),
       tickets: [],
     };
   }

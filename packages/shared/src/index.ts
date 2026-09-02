@@ -562,6 +562,8 @@ export const publicProfileSchema = z.object({
   name: z.string(),
   username: z.string(),
   accountType: accountTypeSchema,
+  systemRole: z.string().optional(),
+  plan: z.string().nullable().optional(),
   website: z.string().nullable(),
   gender: z.string().nullable().optional(),
   birthDate: z.string().datetime().or(z.date()).nullable().optional(),
@@ -1315,7 +1317,7 @@ export const checkInPassportSchema = z.object({
   checkInMethod: z.enum(["manual", "qr", "nfc"]).nullable(),
   invitedBy: z.array(z.string()),
   relatedFollowerCount: z.number().int().nonnegative(),
-  guestLists: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+  guestLists: z.array(z.object({ id: z.string().uuid(), name: z.string(), access: z.enum(["owner", "read"]).optional() })),
   relatedPlace: z.object({
     id: z.string().uuid(),
     name: z.string(),

@@ -1080,9 +1080,12 @@ export class EventsService {
         include: { inviter: { select: { username: true, name: true } } },
       }),
       this.prisma.guestList.findMany({
-        where: { ownerId: actor.id, members: { some: { userId } } },
+        where: {
+          OR: [{ ownerId: actor.id }, { shares: { some: { userId: actor.id } } }],
+          members: { some: { userId } },
+        },
         orderBy: { name: "asc" },
-        select: { id: true, name: true },
+        select: { id: true, name: true, ownerId: true },
       }),
       this.prisma.userFollow.count({
         where: {
@@ -1114,7 +1117,7 @@ export class EventsService {
       checkInMethod: participant.checkInMethod ?? method,
       invitedBy: invitations.map((item) => item.inviter.username ? `@${item.inviter.username}` : item.inviter.name),
       relatedFollowerCount,
-      guestLists,
+      guestLists: guestLists.map((list) => ({ id: list.id, name: list.name, access: list.ownerId === actor.id ? "owner" as const : "read" as const })),
       relatedPlace: participant.event.place && relatedPlaceMember ? { id: participant.event.place.id, name: participant.event.place.name, status: relatedPlaceMember.status, role: relatedPlaceMember.role, checkedInAt: relatedPlaceMember.checkedInAt, order: relatedPlaceMember.checkInOrder, invitedBy: relatedPlaceInvitations.map((item) => item.inviter.username ? `@${item.inviter.username}` : item.inviter.name) } : null,
       tickets: [...tickets.values()],
     };
@@ -1799,28 +1802,60 @@ export class EventsService {
   }
 
   async listGuestLists(user: User) {
-    await this.ensureCanUseGuestLists(user);
-    return this.prisma.guestList.findMany({
-      where: { ownerId: user.id },
+    const canOwnLists = await this.canUseGuestLists(user);
+    if (!canOwnLists) {
+      const sharedListCount = await this.prisma.guestListShare.count({ where: { userId: user.id } });
+      if (!sharedListCount) throw new ForbiddenException("Özel Guest List özelliği uygun işletme paketi, devam eden ücretli bir etkinlik veya sizinle paylaşılmış bir liste gerektirir.");
+    }
+    const lists = await this.prisma.guestList.findMany({
+      where: canOwnLists
+        ? { OR: [{ ownerId: user.id }, { shares: { some: { userId: user.id } } }] }
+        : { shares: { some: { userId: user.id } } },
       orderBy: { updatedAt: "desc" },
       include: {
+        owner: { select: { id: true, name: true, username: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } },
+        shares: {
+          orderBy: { createdAt: "asc" },
+          include: { user: { select: { id: true, name: true, username: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } },
+        },
         members: {
           orderBy: { createdAt: "desc" },
-          include: { user: { select: { id: true, name: true, username: true, email: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } },
+          include: { user: { select: { id: true, name: true, username: true, city: true, country: true, gender: true, birthDate: true, followerCount: true, accountType: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } },
         },
       },
     });
+    return lists.map((list) => ({ ...list, shares: list.ownerId === user.id ? list.shares : [], access: list.ownerId === user.id ? "owner" as const : "read" as const }));
+  }
+
+  async getGuestList(id: string, user: User) {
+    const list = await this.prisma.guestList.findFirst({
+      where: { id, OR: [{ ownerId: user.id }, { shares: { some: { userId: user.id } } }] },
+      include: {
+        owner: { select: { id: true, name: true, username: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } },
+        shares: { orderBy: { createdAt: "asc" }, include: { user: { select: { id: true, name: true, username: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } } },
+        members: { orderBy: { createdAt: "desc" }, include: { user: { select: { id: true, name: true, username: true, city: true, country: true, gender: true, birthDate: true, followerCount: true, accountType: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } } },
+      },
+    });
+    if (!list) throw new NotFoundException("Guest list bulunamadı veya sizinle paylaşılmadı.");
+    return { ...list, shares: list.ownerId === user.id ? list.shares : [], access: list.ownerId === user.id ? "owner" as const : "read" as const };
   }
 
   async createGuestList(name: string, user: User) {
     await this.ensureCanUseGuestLists(user);
-    return this.prisma.guestList.create({ data: { ownerId: user.id, name: name.trim() }, include: { members: true } });
+    const normalizedName = name.trim();
+    if (normalizedName.length < 2) throw new BadRequestException("Guest List adı en az 2 karakter olmalıdır.");
+    await this.ensureUniqueGuestListName(user.id, normalizedName);
+    const list = await this.prisma.guestList.create({ data: { ownerId: user.id, name: normalizedName }, include: { owner: { select: { id: true, name: true, username: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } }, members: true, shares: true } });
+    return { ...list, access: "owner" as const };
   }
 
   async renameGuestList(id: string, name: string, user: User) {
     await this.ensureCanUseGuestLists(user);
     await this.ensureOwnGuestList(id, user);
-    return this.prisma.guestList.update({ where: { id }, data: { name: name.trim() } });
+    const normalizedName = name.trim();
+    if (normalizedName.length < 2) throw new BadRequestException("Guest List adı en az 2 karakter olmalıdır.");
+    await this.ensureUniqueGuestListName(user.id, normalizedName, id);
+    return this.prisma.guestList.update({ where: { id }, data: { name: normalizedName } });
   }
 
   async deleteGuestList(id: string, user: User) {
@@ -1847,14 +1882,46 @@ export class EventsService {
     return this.prisma.guestListMember.deleteMany({ where: { guestListId: id, userId: memberId } });
   }
 
+  async shareGuestList(id: string, sharedUserId: string, user: User) {
+    await this.ensureCanUseGuestLists(user);
+    await this.ensureOwnGuestList(id, user);
+    if (sharedUserId === user.id) throw new BadRequestException("Guest list sahibi listeyi kendisiyle paylaşamaz.");
+    const sharedUser = await this.prisma.user.findFirst({ where: { id: sharedUserId, status: "active" }, select: { id: true } });
+    if (!sharedUser) throw new NotFoundException("Paylaşılacak kullanıcı bulunamadı.");
+    return this.prisma.guestListShare.upsert({
+      where: { guestListId_userId: { guestListId: id, userId: sharedUserId } },
+      create: { guestListId: id, userId: sharedUserId },
+      update: {},
+    });
+  }
+
+  async unshareGuestList(id: string, sharedUserId: string, user: User) {
+    await this.ensureCanUseGuestLists(user);
+    await this.ensureOwnGuestList(id, user);
+    return this.prisma.guestListShare.deleteMany({ where: { guestListId: id, userId: sharedUserId } });
+  }
+
   private async ensureOwnGuestList(id: string, user: User) {
     const list = await this.prisma.guestList.findUnique({ where: { id }, select: { ownerId: true } });
     if (!list) throw new NotFoundException("Guest list bulunamadı.");
-    if (list.ownerId !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu guest list'i yönetme yetkiniz yok.");
+    if (list.ownerId !== user.id) throw new ForbiddenException("Bu guest list'i yönetme yetkiniz yok.");
+  }
+
+  private async ensureUniqueGuestListName(ownerId: string, name: string, excludedId?: string) {
+    const duplicate = await this.prisma.guestList.findFirst({
+      where: { ownerId, name: { equals: name, mode: "insensitive" }, ...(excludedId ? { id: { not: excludedId } } : {}) },
+      select: { id: true },
+    });
+    if (duplicate) throw new ConflictException("Aynı isimde başka bir Guest List zaten var.");
   }
 
   private async ensureCanUseGuestLists(user: User) {
-    if (canUseGuestListPlan(user)) return;
+    if (await this.canUseGuestLists(user)) return;
+    throw new ForbiddenException("Özel Guest List özelliği uygun işletme paketi veya devam eden ücretli bir etkinlik gerektirir.");
+  }
+
+  private async canUseGuestLists(user: User) {
+    if (canUseGuestListPlan(user)) return true;
     const paidManagedEvent = await this.prisma.event.findFirst({
       where: {
         status: "published",
@@ -1869,7 +1936,7 @@ export class EventsService {
       },
       select: { id: true },
     });
-    if (!paidManagedEvent) throw new ForbiddenException("Özel Guest List özelliği uygun işletme paketi veya devam eden ücretli bir etkinlik gerektirir.");
+    return Boolean(paidManagedEvent);
   }
 
   private async ensureCanManageParticipants(eventId: string, user: User, allowCurator = false) {

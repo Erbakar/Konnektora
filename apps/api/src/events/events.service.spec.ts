@@ -27,11 +27,12 @@ describe("EventsService", () => {
       eventTag: { findMany: jest.fn(), count: jest.fn() },
       tag: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
       userBlock: { findMany: jest.fn() },
-      user: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn() },
+      user: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn() },
       userInterestTag: { findMany: jest.fn() },
       userFollow: { count: jest.fn(), findMany: jest.fn() },
-      guestList: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+      guestList: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
       guestListMember: { upsert: jest.fn(), deleteMany: jest.fn() },
+      guestListShare: { count: jest.fn(), upsert: jest.fn(), deleteMany: jest.fn() },
       eventInvitation: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn() },
       placeInvitation: { findMany: jest.fn() },
       placeMember: { findUnique: jest.fn() },
@@ -90,7 +91,7 @@ describe("EventsService", () => {
     await expect(service.createGuestList(" VIP ", actor as never)).resolves.toEqual(expect.objectContaining({ name: "VIP" }));
     await service.listGuestLists(actor as never);
     expect(prisma.guestList.create).toHaveBeenCalledWith(expect.objectContaining({ data: { ownerId: actor.id, name: "VIP" } }));
-    expect(prisma.guestList.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { ownerId: actor.id } }));
+    expect(prisma.guestList.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { OR: [{ ownerId: actor.id }, { shares: { some: { userId: actor.id } } }] } }));
   });
 
   it("ranks at most 25 transparent invite recommendations and excludes current or blocked users", async () => {
@@ -174,6 +175,34 @@ describe("EventsService", () => {
     prisma.guestList.findUnique.mockResolvedValue({ ownerId: "another-user" });
     await expect(service.renameGuestList("list-1", "New name", actor as never)).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.guestList.update).not.toHaveBeenCalled();
+  });
+
+  it("does not let an administrator mutate another user's private Guest List", async () => {
+    const { service, prisma } = createService();
+    prisma.guestList.findUnique.mockResolvedValue({ ownerId: "another-user" });
+    const administrator = { ...actor, role: "admin" };
+    await expect(service.deleteGuestList("list-1", administrator as never)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.guestList.delete).not.toHaveBeenCalled();
+  });
+
+  it("lets a free member read only Guest Lists explicitly shared with them", async () => {
+    const { service, prisma } = createService();
+    const freeMember = { ...actor, accountType: "individual", businessPlan: "starter", memberPlan: "free" };
+    prisma.event.findFirst.mockResolvedValue(null);
+    prisma.guestListShare.count.mockResolvedValue(1);
+    prisma.guestList.findMany.mockResolvedValue([{ id: "list-1", ownerId: "owner-2", name: "VIP", members: [], shares: [] }]);
+    await expect(service.listGuestLists(freeMember as never)).resolves.toEqual([
+      expect.objectContaining({ id: "list-1", access: "read" }),
+    ]);
+  });
+
+  it("shares a Guest List without granting mutation ownership", async () => {
+    const { service, prisma } = createService();
+    prisma.guestList.findUnique.mockResolvedValue({ ownerId: actor.id });
+    prisma.user.findFirst.mockResolvedValue({ id: "viewer-2" });
+    prisma.guestListShare.upsert.mockResolvedValue({ id: "share-1", guestListId: "list-1", userId: "viewer-2" });
+    await expect(service.shareGuestList("list-1", "viewer-2", actor as never)).resolves.toEqual(expect.objectContaining({ id: "share-1" }));
+    expect(prisma.guestListShare.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: { guestListId: "list-1", userId: "viewer-2" } }));
   });
 
   it("allows custom Guest Lists for a manager with an active paid event", async () => {

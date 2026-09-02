@@ -49,6 +49,40 @@ export function localizeCityName(value: string | null | undefined, language: "tr
   return value;
 }
 
+export function formatPostDateTime(
+  value: string | Date,
+  language: "tr" | "en",
+  now = new Date(),
+) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const calendarDay = (item: Date) => Date.UTC(
+    item.getFullYear(),
+    item.getMonth(),
+    item.getDate(),
+  );
+  const dayDifference = Math.round(
+    (calendarDay(now) - calendarDay(date)) / 86_400_000,
+  );
+  const locale = language === "tr" ? "tr-TR" : "en-GB";
+  const time = new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
+
+  if (dayDifference === 0) return `${language === "tr" ? "Bugün" : "Today"}, ${time}`;
+  if (dayDifference === 1) return `${language === "tr" ? "Dün" : "Yesterday"}, ${time}`;
+
+  const dateText = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+  return `${dateText} ${time}`;
+}
+
 function dateParts(value: Date, locale: string, includeYear: boolean) {
   return new Intl.DateTimeFormat(locale, {
     weekday: "short",

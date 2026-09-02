@@ -19,7 +19,6 @@ import {
   SlidersHorizontal,
   Trash2,
   ThumbsDown,
-  UserPlus,
   Users,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -31,10 +30,11 @@ import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
 import { ReportDialog } from "../components/ReportDialog";
 import { ComposerTips } from "../components/ComposerTips";
 import { EmbeddedMedia } from "../components/EmbeddedMedia";
+import { GuestListAction } from "../components/GuestListAction";
+import { formatPostDateTime } from "../lib/formats";
 import type { ReportTargetType, TagSentiment } from "@konnektora/shared";
 import {
   createTagComment,
-  createGuestList,
   createUserTag,
   deleteTagComment,
   followUser,
@@ -42,11 +42,9 @@ import {
   getProfileAffinities,
   getTagStats,
   getUserSession,
-  addGuestListMember,
   likeTagComment,
   listFollowing,
   listEvents,
-  listGuestLists,
   listTagComments,
   listTagRelatedUsers,
   listTags,
@@ -86,10 +84,6 @@ export function TagsPage() {
   const [postTab, setPostTab] = useState<
     "all" | "popular" | "following" | "photo" | "video"
   >("all");
-  const [guestAuthor, setGuestAuthor] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -133,11 +127,6 @@ export function TagsPage() {
     queryKey: ["following", user?.id],
     queryFn: listFollowing,
     enabled: Boolean(user),
-  });
-  const namedGuestLists = useQuery({
-    queryKey: ["guest-lists", user?.id, "tag-post"],
-    queryFn: listGuestLists,
-    enabled: Boolean(user && canUseGuestLists && guestAuthor),
   });
   const notificationQuery = useQuery({
     queryKey: ["content-notification", "tag", tag?.id],
@@ -204,14 +193,6 @@ export function TagsPage() {
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
       active ? unfollowUser(id) : followUser(id),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["following"] }),
-  });
-  const addToNamedGuestList = useMutation({
-    mutationFn: (listId: string) => addGuestListMember(listId, guestAuthor!.id),
-    onSuccess: () => void client.invalidateQueries({ queryKey: ["guest-lists"] }),
-  });
-  const createNamedGuestList = useMutation({
-    mutationFn: createGuestList,
-    onSuccess: () => void client.invalidateQueries({ queryKey: ["guest-lists"] }),
   });
   const create = useMutation({
     mutationFn: () => createUserTag({ name: query.trim() }),
@@ -588,7 +569,7 @@ export function TagsPage() {
                   )}
                 </strong>
                 <time>
-                  {new Date(comment.createdAt).toLocaleString(language === "tr" ? "tr-TR" : "en-GB")}
+                  {formatPostDateTime(comment.createdAt, language)}
                 </time>
               </header>
               <p>
@@ -652,7 +633,16 @@ export function TagsPage() {
                         <button disabled={follow.isPending} onClick={() => follow.mutate({ id: comment.author!.id, active: followingIds.has(comment.author!.id) })} type="button">
                           {followingIds.has(comment.author.id) ? t("Takibi bırak", "Unfollow") : t("Takip et", "Follow")}
                         </button>
-                        {canUseGuestLists ? <button onClick={() => setGuestAuthor({ id: comment.author!.id, name: comment.author!.name })} type="button"><UserPlus size={17}/>{t("Misafir listesine ekle", "Add to guest list")}</button> : null}
+                        <GuestListAction
+                          canUse={canUseGuestLists}
+                          className=""
+                          target={{
+                            id: comment.author.id,
+                            name: comment.author.name,
+                            username: comment.author.username,
+                            avatarUrl: comment.author.avatarUrl,
+                          }}
+                        />
                         <button onClick={() => setReportTarget({ type: "tag_comment", id: comment.id })} type="button"><Flag size={17}/>{t("Rapor et", "Report")}</button>
                       </>
                     ) : (
@@ -698,38 +688,6 @@ export function TagsPage() {
           ))}
         </div>
       </section>
-      {guestAuthor ? (
-        <div
-          className="emotion-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("Misafir listesine ekle", "Add to guest list")}
-        >
-          <div>
-            <button aria-label={t("Kapat", "Close")} onClick={() => setGuestAuthor(null)}>
-              ×
-            </button>
-            <h2>{t("Misafir listesine ekle", "Add to guest list")}</h2>
-            <p>{t(`${guestAuthor.name} kullanıcısını isimlendirilmiş bir Guest List'e ekle.`, `Add ${guestAuthor.name} to a named Guest List.`)}</p>
-            <form className="inline-create-guest-list" onSubmit={(event) => {
-              event.preventDefault();
-              const input = event.currentTarget.elements.namedItem("listName") as HTMLInputElement;
-              if (input.value.trim()) createNamedGuestList.mutate(input.value.trim(), { onSuccess: () => { input.value = ""; } });
-            }}>
-              <input name="listName" placeholder={t("Yeni liste adı", "New list name")} />
-              <button className="secondary-action" disabled={createNamedGuestList.isPending}>{t("Liste oluştur", "Create list")}</button>
-            </form>
-            <h3>{t("Misafir listeleri", "Guest lists")}</h3>
-            <div className="admin-list">
-              {namedGuestLists.data?.map((list) => {
-                const alreadyAdded = list.members.some((member) => member.userId === guestAuthor.id);
-                return <button className="admin-list-row" disabled={alreadyAdded || addToNamedGuestList.isPending} key={list.id} onClick={() => addToNamedGuestList.mutate(list.id)} type="button"><strong>{list.name}</strong><span>{t(`${list.members.length} kişi${alreadyAdded ? " · Zaten listede" : ""}`, `${list.members.length} people${alreadyAdded ? " · Already added" : ""}`)}</span></button>;
-              })}
-            </div>
-            {addToNamedGuestList.isError || createNamedGuestList.isError ? <p className="form-error">{t("Kullanıcı misafir listesine eklenemedi.", "The user could not be added to the guest list.")}</p> : null}
-          </div>
-        </div>
-      ) : null}
       <NotificationDialog
         open={notificationOpen}
         onClose={() => setNotificationOpen(false)}

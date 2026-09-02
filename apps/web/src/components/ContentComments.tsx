@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Ban,
-  CalendarCheck,
   Edit3,
   Heart,
   LoaderCircle,
@@ -18,12 +17,10 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   createContentComment,
-  addGuestListMember,
   deleteContentComment,
   followUser,
   getUserSession,
   listFollowing,
-  listGuestLists,
   listContentComments,
   uploadContentMedia,
   toggleContentCommentLike,
@@ -42,6 +39,8 @@ import { ComposerTips } from "./ComposerTips";
 import { ShareDialog } from "./ContentDialogs";
 import { useLanguage } from "../lib/i18n";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
+import { formatPostDateTime } from "../lib/formats";
+import { GuestListAction } from "./GuestListAction";
 
 export function ContentComments({
   targetType,
@@ -239,7 +238,7 @@ export function ContentComments({
                 </div>
               ) : null}
               <small>
-                {new Date(comment.createdAt).toLocaleString(language === "tr" ? "tr-TR" : "en-GB")}
+                {formatPostDateTime(comment.createdAt, language)}
               </small>
               <CommentActions
                 canManage={canManage}
@@ -294,7 +293,7 @@ export function ContentComments({
                             )}
                           </div>
                         ) : null}
-                        <small>{new Date(reply.createdAt).toLocaleString(language === "tr" ? "tr-TR" : "en-GB")}</small>
+                        <small>{formatPostDateTime(reply.createdAt, language)}</small>
                         <CommentActions
                           canManage={canManage}
                           canAddGuest={canAddGuest}
@@ -390,7 +389,6 @@ function CommentActions({
   const { language } = useLanguage();
   const [banned, setBanned] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
-  const [guestOpen, setGuestOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const like = useMutation({
@@ -424,19 +422,6 @@ function CommentActions({
         ? unfollowUser(comment.authorId!)
         : followUser(comment.authorId!),
     onSuccess: onChanged,
-  });
-  const guestLists = useQuery({
-    queryKey: ["guest-lists", currentUserId, "comment-actions"],
-    queryFn: listGuestLists,
-    enabled: guestOpen,
-  });
-  const guest = useMutation({
-    mutationFn: (listId: string) =>
-      addGuestListMember(listId, comment.authorId!),
-    onSuccess: () => {
-      setGuestOpen(false);
-      onChanged();
-    },
   });
   const ban = useMutation({
     mutationFn: async () => {
@@ -532,10 +517,16 @@ function CommentActions({
               </>
             ) : null}
             {canAddGuest && comment.authorId && comment.authorId !== currentUserId ? (
-              <button disabled={guest.isPending} onClick={() => setGuestOpen(true)} type="button">
-                <CalendarCheck size={14} />
-                {language === "tr" ? "Misafir listesine ekle" : "Add to Guest List"}
-              </button>
+              <GuestListAction
+                canUse
+                className=""
+                context={targetType === "tag_comment" ? undefined : { id: comment.targetId, type: targetType }}
+                target={{
+                  id: comment.authorId,
+                  name: comment.author?.name ?? (language === "tr" ? "Kullanıcı" : "User"),
+                  username: comment.author?.username,
+                }}
+              />
             ) : null}
             {comment.authorId === currentUserId ? (
               <button
@@ -567,53 +558,6 @@ function CommentActions({
           </div>
         </details>
       </div>
-      {guestOpen ? (
-        <div
-          className="emotion-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label={language === "tr" ? "Misafir listesine ekle" : "Add to Guest List"}
-        >
-          <div>
-            <button aria-label={language === "tr" ? "Kapat" : "Close"} onClick={() => setGuestOpen(false)}>
-              ×
-            </button>
-            <h2>{language === "tr" ? "Misafir listesine ekle" : "Add to Guest List"}</h2>
-            <p>
-              @{comment.author?.username ?? comment.author?.name ?? (language === "tr" ? "kullanıcı" : "user")}{" "}
-              {language === "tr" ? "için liste seçin." : "— select a list."}
-            </p>
-            <div className="admin-list">
-              {guestLists.data?.map((list) => (
-                <button
-                  className="admin-list-row"
-                  disabled={
-                    guest.isPending ||
-                    list.members.some(
-                      (member) => member.userId === comment.authorId,
-                    )
-                  }
-                  key={list.id}
-                  onClick={() => guest.mutate(list.id)}
-                >
-                  <strong>{list.name}</strong>
-                  <span>
-                    {list.members.length} {language === "tr" ? "kişi" : "people"}
-                    {list.members.some(
-                      (member) => member.userId === comment.authorId,
-                    )
-                      ? language === "tr" ? " · Zaten listede" : " · Already listed"
-                      : ""}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {!guestLists.isLoading && !guestLists.data?.length ? (
-              <p className="form-help">{language === "tr" ? "Henüz misafir listesi oluşturmadınız." : "You have not created a Guest List yet."}</p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
       {deleteOpen ? (
         <div className="emotion-modal" role="presentation" onMouseDown={() => setDeleteOpen(false)}>
           <section aria-labelledby={`delete-comment-title-${comment.id}`} aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog">

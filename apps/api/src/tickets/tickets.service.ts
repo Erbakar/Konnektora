@@ -31,7 +31,7 @@ export class TicketsService {
     const now = new Date();
     if (type.saleStartsAt && type.saleStartsAt > now) throw new BadRequestException("Bilet satışı henüz başlamadı.");
     if (type.saleEndsAt && type.saleEndsAt < now) throw new BadRequestException("Bilet satışı sona erdi.");
-    if (!type.event.createdById || type.event.createdById === buyer.id) throw new BadRequestException("Bu bilet satın alınamaz.");
+    if (Number(type.price) > 0 && (!type.event.createdById || type.event.createdById === buyer.id)) throw new BadRequestException("Bu bilet satın alınamaz.");
     if (type.perUserLimit) {
       const purchased = await this.prisma.eventTicketOrder.aggregate({ where: { buyerId: buyer.id, ticketTypeId: type.id, status: TicketOrderStatus.paid }, _sum: { quantity: true } });
       if ((purchased._sum.quantity ?? 0) + quantity > type.perUserLimit) throw new BadRequestException(`Bu bilet türünde kişi başı en fazla ${type.perUserLimit} bilet alınabilir.`);

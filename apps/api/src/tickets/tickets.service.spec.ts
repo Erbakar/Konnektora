@@ -43,7 +43,7 @@ describe("TicketsService", () => {
   });
 
   it("issues a free ticket without creating a payment transaction", async () => {
-    eventTicketType.findUnique.mockResolvedValue({ ...type, price: 0, soldCount: 0 });
+    eventTicketType.findUnique.mockResolvedValue({ ...type, price: 0, soldCount: 0, event: { ...type.event, createdById: "buyer-1" } });
     eventTicketOrder.create.mockResolvedValue({ id: "order-free", totalAmount: 0, unitPrice: 0, tickets: [{ id: "ticket-free" }] });
 
     const result = await service.purchase("type-1", 1, buyer);
@@ -51,6 +51,13 @@ describe("TicketsService", () => {
     expect(paymentTransaction.create).not.toHaveBeenCalled();
     expect(eventTicketOrder.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ totalAmount: 0, paymentId: undefined }) }));
     expect(result.tickets).toHaveLength(1);
+  });
+
+  it("does not sell a paid ticket when its payment recipient is missing", async () => {
+    eventTicketType.findUnique.mockResolvedValue({ ...type, event: { ...type.event, createdById: null } });
+
+    await expect(service.purchase("type-1", 1, buyer)).rejects.toBeInstanceOf(BadRequestException);
+    expect(eventTicketType.updateMany).not.toHaveBeenCalled();
   });
 
   it("enforces the organizer's per-user ticket limit across purchases", async () => {

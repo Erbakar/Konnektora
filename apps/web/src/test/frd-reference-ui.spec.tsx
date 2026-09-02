@@ -117,7 +117,7 @@ describe("FRD referanslı ekran davranışları", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Etkinlik ve mekân hakkında daha fazla bilgi" }));
     const dialog = screen.getByRole("dialog", { name: event.title });
     expect(dialog).toBeVisible();
-    expect(within(dialog).getByText(event.description)).toBeVisible();
+    expect(within(dialog).queryByText(event.description)).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Etkinlik haritası" })).toBeVisible();
     expect(screen.getByRole("link", { name: event.place.name })).toHaveAttribute("href", `/places/${event.place.slug}`);
     expect(screen.getByRole("link", { name: event.liveUrl })).toHaveAttribute("target", "_blank");

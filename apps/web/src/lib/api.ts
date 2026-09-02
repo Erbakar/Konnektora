@@ -6684,6 +6684,8 @@ function getMockPublicProfile(identifier: string, byId = false): PublicProfile {
     username: target.username ?? target.id,
     accountType:
       target.accountType === "corporate" ? "corporate" : "individual",
+    systemRole: target.role,
+    plan: null,
     website: target.website ?? null,
     city: target.city ?? null,
     country: target.country ?? null,
@@ -8205,7 +8207,7 @@ export function updateMyProfile(input: ProfileUpdateInput): Promise<Profile> {
   });
 }
 
-export function upgradeCorporateAccount(input: { companyName: string; tradeName: string; companyType?: string; businessCategory?: string }): Promise<{ ok: boolean; accountType: "corporate" }> {
+export function upgradeCorporateAccount(input: { companyName: string; tradeName: string; companyType: string; businessCategory: string; country: string; city?: string; district?: string; address?: string }): Promise<{ ok: boolean; accountType: "corporate" }> {
   return requestJson("/profile/upgrade-corporate", z.object({ ok: z.boolean(), accountType: z.literal("corporate") }), {
     auth: "user", method: "POST", body: JSON.stringify(input),
   });
@@ -10592,19 +10594,28 @@ export function listSentPlaceInvitations(placeId: string) {
 
 export type GuestList = {
   id: string;
+  ownerId: string;
   name: string;
-  members: Array<{ id: string; userId: string; user: { id: string; name: string; username?: string | null; email: string; uploadedMedia?: Array<{ url: string }> } }>;
+  access: "owner" | "read";
+  owner?: { id: string; name: string; username?: string | null; uploadedMedia?: Array<{ url: string }> };
+  shares?: Array<{ id: string; userId: string; user: { id: string; name: string; username?: string | null; uploadedMedia?: Array<{ url: string }> } }>;
+  members: Array<{ id: string; userId: string; user: { id: string; name: string; username?: string | null; email?: string; city?: string | null; country?: string | null; gender?: string | null; birthDate?: string | null; followerCount?: number; accountType?: string; uploadedMedia?: Array<{ url: string }> } }>;
 };
 const guestListSchema: z.ZodType<GuestList> = z.object({
-  id: z.string(), name: z.string(),
-  members: z.array(z.object({ id: z.string(), userId: z.string(), user: z.object({ id: z.string(), name: z.string(), username: z.string().nullable().optional(), email: z.string(), uploadedMedia: z.array(z.object({ url: z.string() })).optional() }) })),
+  id: z.string(), ownerId: z.string(), name: z.string(), access: z.enum(["owner", "read"]),
+  owner: z.object({ id: z.string(), name: z.string(), username: z.string().nullable().optional(), uploadedMedia: z.array(z.object({ url: z.string() })).optional() }).optional(),
+  shares: z.array(z.object({ id: z.string(), userId: z.string(), user: z.object({ id: z.string(), name: z.string(), username: z.string().nullable().optional(), uploadedMedia: z.array(z.object({ url: z.string() })).optional() }) })).optional(),
+  members: z.array(z.object({ id: z.string(), userId: z.string(), user: z.object({ id: z.string(), name: z.string(), username: z.string().nullable().optional(), email: z.string().optional(), city: z.string().nullable().optional(), country: z.string().nullable().optional(), gender: z.string().nullable().optional(), birthDate: z.coerce.string().nullable().optional(), followerCount: z.number().optional(), accountType: z.string().optional(), uploadedMedia: z.array(z.object({ url: z.string() })).optional() }) })),
 });
 export function listGuestLists(): Promise<GuestList[]> { return requestJson("/guest-lists", z.array(guestListSchema), { auth: "user" }); }
+export function getGuestList(id: string): Promise<GuestList> { return requestJson(`/guest-lists/${id}`, guestListSchema, { auth: "user" }); }
 export function createGuestList(name: string): Promise<GuestList> { return requestJson("/guest-lists", guestListSchema, { auth: "user", method: "POST", body: JSON.stringify({ name }) }); }
 export function renameGuestList(id: string, name: string) { return requestJson(`/guest-lists/${id}`, z.object({ id: z.string(), name: z.string() }), { auth: "user", method: "PATCH", body: JSON.stringify({ name }) }); }
 export function deleteGuestList(id: string) { return requestJson(`/guest-lists/${id}`, z.object({ id: z.string() }), { auth: "user", method: "DELETE" }); }
 export function addGuestListMember(id: string, userId: string) { return requestJson(`/guest-lists/${id}/members`, z.object({ id: z.string(), userId: z.string() }), { auth: "user", method: "POST", body: JSON.stringify({ userId }) }); }
 export function removeGuestListMember(id: string, userId: string) { return requestJson(`/guest-lists/${id}/members/${userId}`, z.object({ count: z.number() }), { auth: "user", method: "DELETE" }); }
+export function shareGuestList(id: string, userId: string) { return requestJson(`/guest-lists/${id}/shares`, z.object({ id: z.string(), userId: z.string() }), { auth: "user", method: "POST", body: JSON.stringify({ userId }) }); }
+export function unshareGuestList(id: string, userId: string) { return requestJson(`/guest-lists/${id}/shares/${userId}`, z.object({ count: z.number() }), { auth: "user", method: "DELETE" }); }
 
 export type RelatedUser = {
   id: string;

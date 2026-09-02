@@ -114,7 +114,7 @@ describe("topluluk ve ilgili kullanıcı gereksinimleri", () => {
     expect(await screen.findByRole("link", { name: "@ada" })).toHaveAttribute("href", "/users/ada");
     expect(screen.queryByText("Profili gör")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Takip et" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: "Misafir listesi" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Guest List'e ekle" }).length).toBeGreaterThan(0);
   });
 
   it("etiket kullanıcılarında filtreleri gizler, yönetici/check-in sekmelerini kaldırır ve kişinin kendi ortak sayısını saklar", async () => {

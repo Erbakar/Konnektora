@@ -121,8 +121,12 @@ export class ProfileService {
         accountType: "corporate",
         companyName: input.companyName.trim(),
         tradeName: input.tradeName.trim(),
-        companyType: input.companyType?.trim() || null,
-        businessCategory: input.businessCategory?.trim() || null,
+        companyType: input.companyType,
+        businessCategory: input.businessCategory,
+        country: input.country.trim(),
+        city: input.city?.trim() || null,
+        district: input.district?.trim() || null,
+        address: input.address?.trim() || null,
       },
     });
     return { ok: true, accountType: "corporate" as const };

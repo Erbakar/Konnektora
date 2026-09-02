@@ -18,10 +18,11 @@ import {
   XCircle,
   X,
 } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import type { TableCell, TDocumentDefinitions } from "pdfmake/interfaces";
 import { QrCheckInScanner } from "../components/QrCheckInScanner";
+import { GuestListAction, type GuestListContext, type GuestListTarget } from "../components/GuestListAction";
 import {
   addGuestListMember,
   createGuestList,
@@ -467,6 +468,7 @@ export function EventInviteManagementPage() {
             />
           )}
           <CheckInHistory
+            context={{ id: event.data.id, name: event.data.title, type: "event" }}
             items={(participants.data ?? [])
               .filter((item) => item.checkInDecisionAt || item.checkedInAt)
               .map((item) => ({
@@ -493,8 +495,10 @@ export function EventInviteManagementPage() {
       {checkInMode && !canManage ? <PermissionState /> : null}
       {passport ? (
         <CheckInPassportDialog
+          guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
           passport={passport}
           pending={passportDecision.isPending}
+          onAddToGuestList={(listId, userId) => addToGuestList.mutate({ listId, userId })}
           onClose={() => setPassport(null)}
           onDecision={(decision) =>
             passportDecision.mutate({ decision, method: passportMethod })
@@ -802,6 +806,7 @@ export function PlaceInviteManagementPage() {
             />
           )}
           <CheckInHistory
+            context={{ id: place.data.id, name: place.data.name, type: "place" }}
             items={(members.data ?? [])
               .filter((item) => item.checkInDecisionAt || item.checkedInAt)
               .map((item) => ({
@@ -828,8 +833,10 @@ export function PlaceInviteManagementPage() {
       {checkInMode && !canManage ? <PermissionState /> : null}
       {passport ? (
         <CheckInPassportDialog
+          guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
           passport={passport}
           pending={passportDecision.isPending}
+          onAddToGuestList={(listId, userId) => addToGuestList.mutate({ listId, userId })}
           onClose={() => setPassport(null)}
           onDecision={(decision) =>
             passportDecision.mutate({ decision, method: passportMethod })
@@ -1096,6 +1103,7 @@ function InviteUserCards({
           <GuestListPicker
             lists={guestLists}
             onAdd={(listId) => onAddToGuestList(listId, member.id)}
+            target={{ id: member.id, name: member.name, username: member.username, avatarUrl: member.avatarUrl }}
           />
         </div>
       </article>
@@ -1149,31 +1157,20 @@ function GuestListInviteSource({
   const ordered = [...lists].sort((a, b) =>
     a.name.localeCompare(b.name, tr ? "tr" : "en"),
   );
-  const [selectedId, setSelectedId] = useState(ordered[0]?.id ?? "");
-  const selected = ordered.find((list) => list.id === selectedId) ?? ordered[0];
-  const users = (selected?.members ?? []).map((member) => ({
-    id: member.user.id,
-    name: member.user.name,
-    username: member.user.username,
-    avatarUrl: member.user.uploadedMedia?.[0]?.url ?? null,
-  }));
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(ordered[0] ? [ordered[0].id] : []));
+  const firstListId = ordered[0]?.id;
+  useEffect(() => {
+    if (firstListId) setSelectedIds((current) => current.size ? current : new Set([firstListId]));
+  }, [firstListId]);
+  const users = ordered
+    .filter((list) => selectedIds.has(list.id))
+    .flatMap((list) => list.members)
+    .filter((member, index, all) => all.findIndex((item) => item.userId === member.userId) === index)
+    .map((member) => ({ id: member.user.id, name: member.user.name, username: member.user.username, avatarUrl: member.user.uploadedMedia?.[0]?.url ?? null }));
   return (
     <InviteSource title={tr ? "Guest listeden seç" : "Choose from a guest list"}>
-      <label>
-        Guest list
-        <select
-          value={selected?.id ?? ""}
-          onChange={(event) => setSelectedId(event.target.value)}
-        >
-          <option value="">{tr ? "Guest list seç" : "Select a guest list"}</option>
-          {ordered.map((list) => (
-            <option key={list.id} value={list.id}>
-              {list.name} ({list.members.length})
-            </option>
-          ))}
-        </select>
-      </label>
-      {selected ? (
+      <fieldset className="guest-list-source-options"><legend>{tr ? "Bir veya daha fazla Guest List seç" : "Choose one or more Guest Lists"}</legend>{ordered.map((list) => <label key={list.id}><input checked={selectedIds.has(list.id)} onChange={(event) => setSelectedIds((current) => { const next = new Set(current); if (event.target.checked) next.add(list.id); else next.delete(list.id); return next; })} type="checkbox"/>{list.name} ({list.members.length}){list.access === "read" ? ` · ${tr ? "salt okunur" : "read only"}` : ""}</label>)}</fieldset>
+      {selectedIds.size ? (
         <InviteUserCards
           users={users}
           invitedUserIds={invitedUserIds}
@@ -1264,7 +1261,7 @@ function GuestListManager({
         <article key={list.id}>
           <header>
             <div>
-              {editingId === list.id ? (
+              {editingId === list.id && list.access !== "read" ? (
                 <form
                   className="guest-list-rename"
                   onSubmit={(event) => {
@@ -1291,6 +1288,7 @@ function GuestListManager({
               )}
               <span>
                 {list.members.length} {tr ? "kişi" : list.members.length === 1 ? "person" : "people"}
+                {list.access === "read" ? ` · ${tr ? "salt okunur" : "read only"}` : ""}
               </span>
             </div>
             <div className="row-actions">
@@ -1301,7 +1299,7 @@ function GuestListManager({
               >
                 {tr ? `${targetLabel} davet et` : `Invite ${targetLabel.toLowerCase()}`}
               </button>
-              <button
+              {list.access !== "read" ? <button
                 onClick={() => {
                   setEditingId(list.id);
                   setEditingName(list.name);
@@ -1310,8 +1308,8 @@ function GuestListManager({
                 type="button"
               >
                 {tr ? "Düzenle" : "Edit"}
-              </button>
-              {deletingId === list.id ? (
+              </button> : null}
+              {list.access !== "read" && deletingId === list.id ? (
                 <>
                   <button
                     className="danger"
@@ -1325,7 +1323,7 @@ function GuestListManager({
                     {tr ? "Vazgeç" : "Cancel"}
                   </button>
                 </>
-              ) : (
+              ) : list.access !== "read" ? (
                 <button
                   className="danger"
                   onClick={() => {
@@ -1336,14 +1334,14 @@ function GuestListManager({
                 >
                   {tr ? "Sil" : "Delete"}
                 </button>
-              )}
+              ) : null}
             </div>
           </header>
           <div className="guest-list-member-chips">
             {list.members.map((member) => (
               <span key={member.id}>
                 {member.user.name}
-                <button
+                {list.access !== "read" ? <button
                   aria-label={
                     tr
                       ? `${member.user.name} kişisini listeden çıkar`
@@ -1355,7 +1353,7 @@ function GuestListManager({
                   type="button"
                 >
                   ×
-                </button>
+                </button> : null}
               </span>
             ))}
           </div>
@@ -1650,8 +1648,10 @@ function EventGuestList({
                 </button>
               ) : null}
               <GuestListPicker
+                context={{ id: item.eventId, type: "event" }}
                 lists={guestLists}
                 onAdd={(listId) => onAddToGuestList(listId, item.userId)}
+                target={{ id: item.userId, name: item.user?.name ?? item.userId, username: item.user?.username, avatarUrl: item.user?.avatarUrl, status: item.status, role: item.role, checkedIn: Boolean(item.checkedInAt) }}
               />
             </div>
           </article>
@@ -1841,8 +1841,10 @@ function PlaceMemberList({
                 </>
               ) : null}
               <GuestListPicker
+                context={{ id: item.placeId, type: "place" }}
                 lists={guestLists}
                 onAdd={(listId) => onAddToGuestList(listId, item.userId)}
+                target={{ id: item.userId, name: item.user?.name ?? item.userId, username: item.user?.username, avatarUrl: item.user?.avatarUrl, status: item.status, role: item.role, checkedIn: Boolean(item.checkedInAt) }}
               />
             </div>
           </article>
@@ -1867,10 +1869,12 @@ function PlaceMemberList({
 }
 
 function CheckInHistory({
+  context,
   items,
   guestLists,
   onAddToGuestList,
 }: {
+  context: GuestListContext;
   items: Array<{
     id: string;
     name: string;
@@ -1967,8 +1971,10 @@ function CheckInHistory({
               </span>
               {item.user?.id ? (
                 <GuestListPicker
+                  context={context}
                   lists={guestLists}
                   onAdd={(listId) => onAddToGuestList(listId, item.user!.id)}
+                  target={{ id: item.user.id, name: item.user.name ?? item.name, username: item.user.username, avatarUrl: item.user.avatarUrl, status: item.decision, checkedIn: item.decision === "attended" }}
                 />
               ) : null}
             </div>
@@ -1994,14 +2000,20 @@ function CheckInHistory({
 }
 
 function GuestListPicker({
+  context,
   lists,
   onAdd,
+  target,
 }: {
+  context?: GuestListContext;
   lists: GuestLists;
   onAdd: (listId: string) => void;
+  target?: GuestListTarget;
 }) {
   const { language } = useLanguage();
   const tr = language === "tr";
+  const { canUseGuestLists } = useGuestListEntitlement();
+  if (target) return <GuestListAction canUse={canUseGuestLists} context={context} target={target}/>;
   if (!lists.length) return null;
   return (
     <select
@@ -2017,6 +2029,7 @@ function GuestListPicker({
         {tr ? "Guest liste ekle" : "Add to guest list"}
       </option>
       {[...lists]
+        .filter((list) => list.access !== "read")
         .sort((a, b) => a.name.localeCompare(b.name, tr ? "tr" : "en"))
         .map((list) => (
           <option key={list.id} value={list.id}>
@@ -2028,18 +2041,23 @@ function GuestListPicker({
 }
 
 function CheckInPassportDialog({
+  guestLists,
   passport,
   pending,
+  onAddToGuestList,
   onClose,
   onDecision,
 }: {
+  guestLists: GuestLists;
   passport: CheckInPassport;
   pending: boolean;
+  onAddToGuestList: (listId: string, userId: string) => void;
   onClose: () => void;
   onDecision: (decision: "admit" | "decline") => void;
 }) {
   const { language } = useLanguage();
   const tr = language === "tr";
+  const { canUseGuestLists } = useGuestListEntitlement();
   const locale = tr ? "tr-TR" : "en-US";
   const media = passport.user.media ?? [];
   return (
@@ -2170,6 +2188,7 @@ function CheckInPassportDialog({
             </dd>
           </div>
         </dl>
+        {canUseGuestLists ? <div className="passport-guest-list-action"><div><strong>Guest List</strong><span>{tr ? "Bu kişiyi tekrar kullanılabilir listelerine ekle." : "Add this person to your reusable lists."}</span></div><GuestListPicker context={{ id: passport.targetId, name: passport.targetName, type: passport.targetType }} lists={guestLists} onAdd={(listId) => onAddToGuestList(listId, passport.user.id)} target={{ id: passport.user.id, name: passport.user.name, username: passport.user.username, avatarUrl: passport.user.avatarUrl, accountType: passport.user.accountType, plan: passport.user.plan, status: passport.status, role: passport.role, checkedIn: passport.alreadyInside }}/></div> : null}
         {passport.relatedPlace ? (
           <div className="passport-related-place">
             <h3>{tr ? "Mekân durumu" : "Place status"}</h3>

@@ -136,6 +136,11 @@ const CommunityPage = lazy(() =>
     default: module.CommunityPage,
   })),
 );
+const GuestListDetailPage = lazy(() =>
+  import("./components/GuestListHub").then((module) => ({
+    default: module.GuestListDetailPage,
+  })),
+);
 const FinancePage = lazy(() =>
   import("./pages/FinancePage").then((module) => ({
     default: module.FinancePage,
@@ -320,6 +325,7 @@ const router = createBrowserRouter([
         children: [
           { path: "feed", element: <FeedPage /> },
           { path: "community", element: <CommunityPage /> },
+          { path: "community/guest-lists/:listId", element: <GuestListDetailPage /> },
           { path: "finance", element: <FinancePage /> },
           { path: "finance/kyc", element: <CorporateKycPage /> },
           { path: "store", element: <StorePage /> },

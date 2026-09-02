@@ -36,7 +36,7 @@ const cityNamesEn: Record<string, string> = {
   Torino: "Turin",
 };
 
-export function CountryCityFields({ defaultCountry = "", defaultCity = "", requiredCountry = false, requiredCity = false }: { defaultCountry?: string | null; defaultCity?: string | null; requiredCountry?: boolean; requiredCity?: boolean }) {
+export function CountryCityFields({ defaultCountry = "", defaultCity = "", requiredCountry = false, requiredCity = false, countryLabel, cityLabel }: { defaultCountry?: string | null; defaultCity?: string | null; requiredCountry?: boolean; requiredCity?: boolean; countryLabel?: string; cityLabel?: string }) {
   const { language } = useLanguage();
   const [country, setCountry] = useState(defaultCountry ?? "");
   const countryKey = useMemo(() => Object.keys(countryCities).find((key) => key === country || countryNamesEn[key] === country) ?? country, [country]);
@@ -47,7 +47,7 @@ export function CountryCityFields({ defaultCountry = "", defaultCity = "", requi
   const cityOptions = defaultCity && !cities.includes(defaultCity) ? [defaultCity, ...cities] : cities;
 
   return <>
-    <label>{language === "tr" ? "Ülke" : "Country"}<select defaultValue={defaultCountry ?? ""} name="country" onChange={(event) => setCountry(event.target.value)} required={requiredCountry}><option value="">{language === "tr" ? "Ülke seçin" : "Select country"}</option>{countryOptions.map((item) => <option key={item} value={item}>{language === "tr" ? item : countryNamesEn[item] ?? item}</option>)}</select></label>
-    <label>{language === "tr" ? "Şehir" : "City"}<select defaultValue={defaultCity ?? ""} name="city" required={requiredCity}><option value="">{language === "tr" ? "Şehir seçin" : "Select city"}</option>{cityOptions.map((item) => <option key={item} value={item}>{language === "tr" ? item : cityNamesEn[item] ?? item}</option>)}</select></label>
+    <label>{countryLabel ?? (language === "tr" ? "Ülke" : "Country")}<select defaultValue={defaultCountry ?? ""} name="country" onChange={(event) => setCountry(event.target.value)} required={requiredCountry}><option value="">{language === "tr" ? "Ülke seçin" : "Select country"}</option>{countryOptions.map((item) => <option key={item} value={item}>{language === "tr" ? item : countryNamesEn[item] ?? item}</option>)}</select></label>
+    <label>{cityLabel ?? (language === "tr" ? "Şehir" : "City")}<select defaultValue={defaultCity ?? ""} name="city" required={requiredCity}><option value="">{language === "tr" ? "Şehir seçin" : "Select city"}</option>{cityOptions.map((item) => <option key={item} value={item}>{language === "tr" ? item : cityNamesEn[item] ?? item}</option>)}</select></label>
   </>;
 }

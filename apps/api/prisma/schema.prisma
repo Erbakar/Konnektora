@@ -278,6 +278,7 @@ model User {
   eventInvitationsReceived     EventInvitation[]         @relation("EventInvitationInvitee")
   ownedGuestLists             GuestList[]                @relation("GuestListOwner")
   guestListMemberships        GuestListMember[]
+  guestListShares             GuestListShare[]           @relation("GuestListSharedWith")
   ticketRefunds                TicketRefund[]
   ticketOrders                 EventTicketOrder[]        @relation("TicketBuyer")
   ownedTickets                 OwnedEventTicket[]        @relation("TicketOwner")
@@ -934,10 +935,24 @@ model GuestList {
   updatedAt DateTime          @updatedAt @map("updated_at")
   owner     User              @relation("GuestListOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members   GuestListMember[]
+  shares    GuestListShare[]
 
   @@unique([ownerId, name])
   @@index([ownerId, updatedAt])
   @@map("guest_lists")
+}
+
+model GuestListShare {
+  id          String    @id @default(uuid())
+  guestListId String    @map("guest_list_id")
+  userId      String    @map("user_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  guestList   GuestList @relation(fields: [guestListId], references: [id], onDelete: Cascade)
+  user        User      @relation("GuestListSharedWith", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([guestListId, userId])
+  @@index([userId, createdAt])
+  @@map("guest_list_shares")
 }
 
 model GuestListMember {

@@ -18,9 +18,9 @@ export class PublicProfileService {
 
   private async getProfile(identifier: { id: string } | { username: { equals: string; mode: "insensitive" } }, viewerId?: string, viewerRole?: string) {
     const profile = await this.prisma.user.findFirst({
-      where: { ...identifier, status: "active", role: { in: ["user", "curator"] } },
+      where: { ...identifier, status: "active", role: { in: ["user", "curator", "admin", "super_admin"] } },
       select: {
-        id: true, name: true, username: true, accountType: true, businessPlan: true, memberPlan: true, website: true, city: true, country: true, district: true, address: true, gender: true, birthDate: true, companyName: true, tradeName: true, companyType: true, businessCategory: true,
+        id: true, name: true, username: true, role: true, accountType: true, businessPlan: true, memberPlan: true, website: true, city: true, country: true, district: true, address: true, gender: true, birthDate: true, companyName: true, tradeName: true, companyType: true, businessCategory: true,
         followerCount: true, followingCount: true, createdAt: true, profileVerifiedAt: true,
         privacySettings: { select: { messageAudience: true, eventAudience: true, placeAudience: true, profileNameAudience: true, demographicsAudience: true, locationAudience: true, websiteAudience: true, businessAudience: true, addressAudience: true, tradeNameAudience: true } },
         interestTags: { where: { tag: { status: "active" } }, include: { tag: true }, orderBy: { createdAt: "desc" } }
@@ -196,6 +196,8 @@ export class PublicProfileService {
     return {
       id: profile.id, name: this.canView(privacy.profileNameAudience ?? "everybody", relationship) ? profile.name : profile.username ?? "Konnektora üyesi", username: profile.username ?? profile.id,
       accountType: profile.accountType === "corporate" ? "corporate" as const : "individual" as const,
+      systemRole: profile.role,
+      plan: profile.accountType === "corporate" ? (profile.businessPlan === "starter" ? null : profile.businessPlan) : (profile.memberPlan === "free" ? null : profile.memberPlan),
       website: this.canView(privacy.websiteAudience ?? "everybody", relationship) ? profile.website : null,
       city: this.canView(privacy.locationAudience ?? "everybody", relationship) ? profile.city : null,
       country: this.canView(privacy.locationAudience ?? "everybody", relationship) ? profile.country : null,

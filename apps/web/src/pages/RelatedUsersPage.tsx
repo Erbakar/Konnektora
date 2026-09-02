@@ -8,15 +8,13 @@ import {
   MapPin,
   MoreVertical,
   Search,
-  UserPlus,
   Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { UserIdentityLink } from "../components/UserIdentityLink";
+import { GuestListAction } from "../components/GuestListAction";
 import {
-  addGuestListMember,
-  createGuestList,
   getEvent,
   getPlace,
   listEventRelatedUsers,
@@ -24,7 +22,6 @@ import {
   listTagRelatedUsers,
   listTags,
   followUser,
-  listGuestLists,
   listFollowing,
   unfollowUser,
   updatePlaceMember,
@@ -65,10 +62,6 @@ export function RelatedUsersPage({
   const [gender, setGender] = useState("");
   const [sentiment, setSentiment] = useState("");
   const [ageRange, setAgeRange] = useState("");
-  const [guestTarget, setGuestTarget] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
   const target = useQuery({
     queryKey: [kind, slug],
     queryFn: async () => {
@@ -128,11 +121,6 @@ export function RelatedUsersPage({
     enabled: Boolean(session),
   });
   const { canUseGuestLists } = useGuestListEntitlement(Boolean(kind !== "tag" && target.data?.canManage));
-  const guestLists = useQuery({
-    queryKey: ["guest-lists", session?.id],
-    queryFn: listGuestLists,
-    enabled: Boolean(session && guestTarget),
-  });
   const followingIds = useMemo(
     () => new Set((following.data ?? []).map((item) => item.id)),
     [following.data],
@@ -185,17 +173,6 @@ export function RelatedUsersPage({
     mutationFn: (id: string) =>
       followingIds.has(id) ? unfollowUser(id) : followUser(id),
     onSuccess: () => client.invalidateQueries({ queryKey: ["following"] }),
-  });
-  const addGuest = useMutation({
-    mutationFn: (guestListId: string) => addGuestListMember(guestListId, guestTarget!.id),
-    onSuccess: () => {
-      setGuestTarget(null);
-      void client.invalidateQueries({ queryKey: ["guest-lists"] });
-    },
-  });
-  const addGuestList = useMutation({
-    mutationFn: createGuestList,
-    onSuccess: () => void client.invalidateQueries({ queryKey: ["guest-lists"] }),
   });
   const placeMemberAction = useMutation({
     mutationFn: ({
@@ -509,15 +486,7 @@ export function RelatedUsersPage({
                   {followingIds.has(user.id) ? t("Takipte", "Following") : t("Takip et", "Follow")}
                 </button>
               ) : null}
-              {session && session.id !== user.id && canUseGuestLists ? (
-                <button
-                  onClick={() =>
-                    setGuestTarget({ id: user.id, name: user.name })
-                  }
-                >
-                  <UserPlus size={15} /> {t("Misafir listesi", "Guest List")}
-                </button>
-              ) : null}
+              {session && session.id !== user.id ? <GuestListAction canUse={canUseGuestLists} className="" context={kind === "tag" || !target.data ? undefined : { id: target.data.id, name: target.data.title, type: kind }} target={{ id: user.id, name: user.name, username: user.username, avatarUrl: user.avatarUrl, status: user.status, role: user.relation, checkedIn: user.checkedIn }}/> : null}
               {session && session.id !== user.id ? (
                 <details className="action-menu">
                   <summary aria-label={t("Kullanıcı aksiyonları", "User actions")}>
@@ -668,45 +637,6 @@ export function RelatedUsersPage({
       ) : null}
       {users.isError ? (
         <p className="form-error">{t("Kullanıcılar yüklenemedi.", "People could not be loaded.")}</p>
-      ) : null}
-      {guestTarget ? (
-        <div
-          className="emotion-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("Guest List'e ekle", "Add to Guest List")}
-        >
-          <div>
-            <button aria-label={t("Kapat", "Close")} onClick={() => setGuestTarget(null)}>
-              ×
-            </button>
-            <h2>{guestTarget.name}</h2>
-            <p>{t("Eklenecek misafir listesini seç.", "Choose the Guest List to add this member to.")}</p>
-            <div className="admin-list">
-              {guestLists.data?.map((list) => (
-                <button
-                  className="admin-list-row"
-                  disabled={addGuest.isPending}
-                  key={list.id}
-                  onClick={() => addGuest.mutate(list.id)}
-                >
-                  <strong>{list.name}</strong>
-                  <span>{list.members.length} {t("üye", "members")}</span>
-                </button>
-              ))}
-            </div>
-            {!guestLists.isLoading && !guestLists.data?.length ? (
-              <p className="form-help">{t("Henüz bir misafir listen yok.", "You do not have a Guest List yet.")}</p>
-            ) : null}
-            <button className="secondary-action" disabled={addGuestList.isPending} onClick={() => {
-              const name = window.prompt(t("Yeni misafir listesinin adı:", "New Guest List name:"));
-              if (name?.trim()) addGuestList.mutate(name.trim());
-            }} type="button"><UserPlus size={15}/> {t("Yeni liste oluştur", "Create new list")}</button>
-            {addGuest.isError ? (
-              <p className="form-error">{t("Misafir listesi işlemi tamamlanamadı.", "The Guest List action could not be completed.")}</p>
-            ) : null}
-          </div>
-        </div>
       ) : null}
     </div>
   );

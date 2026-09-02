@@ -179,12 +179,13 @@ describe("ProfileService", () => {
     prisma.user.update.mockResolvedValue({ ...currentProfile, accountType: "corporate" });
 
     await expect(service.upgradeCorporateAccount("user-1", {
-      companyName: " Konnektora Events ", tradeName: " Konnektora Teknoloji Ltd. ", companyType: "Limited", businessCategory: "Etkinlik",
+      companyName: " Konnektora Events ", tradeName: " Konnektora Teknoloji Ltd. ", companyType: "limited_or_corporation", businessCategory: "event_organizer",
+      country: " Türkiye ", city: " İstanbul ", district: " Beyoğlu ", address: " İstiklal Caddesi 10 ",
     })).resolves.toEqual({ ok: true, accountType: "corporate" });
 
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: "user-1" },
-      data: { accountType: "corporate", companyName: "Konnektora Events", tradeName: "Konnektora Teknoloji Ltd.", companyType: "Limited", businessCategory: "Etkinlik" },
+      data: { accountType: "corporate", companyName: "Konnektora Events", tradeName: "Konnektora Teknoloji Ltd.", companyType: "limited_or_corporation", businessCategory: "event_organizer", country: "Türkiye", city: "İstanbul", district: "Beyoğlu", address: "İstiklal Caddesi 10" },
     });
   });
 

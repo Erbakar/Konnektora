@@ -953,11 +953,32 @@ function PrivacySettings() {
   );
 }
 
+const companyTypeOptions = [
+  ["sole_proprietorship", "Şahıs firması", "Sole proprietorship"],
+  ["limited_or_corporation", "Limited / Anonim", "Limited company / corporation"],
+  ["association", "Dernek", "Association"],
+  ["foundation", "Vakıf", "Foundation"],
+  ["public_body", "Kamu kurumu", "Public body"],
+  ["other", "Diğer", "Other"],
+] as const;
+
+const businessCategoryOptions = [
+  ["event_organizer", "Etkinlik organizatörü", "Event organiser"],
+  ["restaurant_bar_cafe", "Restoran / Bar / Kafe", "Restaurant / Bar / Café"],
+  ["night_club", "Gece kulübü", "Nightclub"],
+  ["university_club", "Üniversite kulübü", "University club"],
+  ["ngo", "STK", "NGO"],
+  ["brand", "Marka", "Brand"],
+  ["tourism_company", "Turizm şirketi", "Tourism company"],
+  ["sports_club", "Spor kulübü", "Sports club"],
+  ["other", "Diğer", "Other"],
+] as const;
+
 function BusinessSettings({ user }: { user: NonNullable<ReturnType<typeof getUserSession>> }) {
   const { language } = useLanguage();
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const upgrade = useMutation({
-    mutationFn: (input: { companyName: string; tradeName: string; companyType?: string; businessCategory?: string }) => upgradeCorporateAccount(input),
+    mutationFn: (input: { companyName: string; tradeName: string; companyType: string; businessCategory: string; country: string; city?: string; district?: string; address?: string }) => upgradeCorporateAccount(input),
     onSuccess: () => {
       updateUserSession({ ...user, accountType: "corporate" });
       window.location.assign("/settings/business");
@@ -965,14 +986,55 @@ function BusinessSettings({ user }: { user: NonNullable<ReturnType<typeof getUse
   });
   if (user.accountType !== "corporate") return (
     <form className="identity-panel settings-form" onSubmit={(event) => {
-      event.preventDefault(); const form = new FormData(event.currentTarget);
-      upgrade.mutate({ companyName: String(form.get("companyName") ?? ""), tradeName: String(form.get("tradeName") ?? ""), companyType: String(form.get("companyType") ?? "") || undefined, businessCategory: String(form.get("businessCategory") ?? "") || undefined });
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      const optional = (name: string) => String(form.get(name) ?? "").trim() || undefined;
+      upgrade.mutate({
+        companyName: String(form.get("companyName") ?? ""),
+        tradeName: String(form.get("tradeName") ?? ""),
+        companyType: String(form.get("companyType") ?? ""),
+        businessCategory: String(form.get("businessCategory") ?? ""),
+        country: String(form.get("country") ?? ""),
+        city: optional("city"),
+        district: optional("district"),
+        address: optional("address"),
+      });
     }}>
       <h2>{t("Kurumsal hesaba geç", "Switch to a business account")}</h2>
       <p>{t("Etkinlik, mekân, finans ve kurumsal doğrulama araçlarını aç. Mevcut profilin ve bağlantıların korunur.", "Unlock event, place, finance and business verification tools. Your existing profile and connections are preserved.")}</p>
       <label>{t("İşletme adı", "Business name")}<input name="companyName" minLength={2} required /></label>
       <label>{t("Ticari unvan", "Registered business name")}<input name="tradeName" minLength={2} required /></label>
-      <div className="form-grid"><label>{t("Şirket türü", "Company type")}<input name="companyType" placeholder={t("Örn. Limited Şirket", "E.g. Limited company")} /></label><label>{t("İşletme kategorisi", "Business category")}<input name="businessCategory" placeholder={t("Örn. Etkinlik organizasyonu", "E.g. Event organisation")} /></label></div>
+      <div className="form-grid">
+        <label>
+          {t("Şirket türü", "Company type")}
+          <select defaultValue="" name="companyType" required>
+            <option disabled value="">{t("Şirket türü seçin", "Select company type")}</option>
+            {companyTypeOptions.map(([value, tr, en]) => <option key={value} value={value}>{t(tr, en)}</option>)}
+          </select>
+        </label>
+        <label>
+          {t("İşletme kategorisi", "Business category")}
+          <select defaultValue="" name="businessCategory" required>
+            <option disabled value="">{t("İşletme kategorisi seçin", "Select business category")}</option>
+            {businessCategoryOptions.map(([value, tr, en]) => <option key={value} value={value}>{t(tr, en)}</option>)}
+          </select>
+        </label>
+        <CountryCityFields
+          countryLabel={t("Firmanın ülkesi", "Company country")}
+          cityLabel={t("Firmanın şehri (opsiyonel)", "Company city (optional)")}
+          defaultCity={user.city}
+          defaultCountry={user.country}
+          requiredCountry
+        />
+        <label>
+          {t("Firmanın ilçesi (opsiyonel)", "Company district (optional)")}
+          <input maxLength={120} name="district" />
+        </label>
+        <label>
+          {t("Firmanın açık adresi (opsiyonel)", "Company address (optional)")}
+          <input maxLength={500} name="address" />
+        </label>
+      </div>
       <button className="primary-action" disabled={upgrade.isPending}>{upgrade.isPending ? t("Geçiş yapılıyor…", "Switching…") : t("Kurumsal hesaba geç", "Switch to a business account")}</button>
       {upgrade.isError ? <p className="form-error">{t("Hesap türü güncellenemedi. Bilgileri kontrol edip tekrar deneyin.", "The account type could not be updated. Check your details and try again.")}</p> : null}
     </form>

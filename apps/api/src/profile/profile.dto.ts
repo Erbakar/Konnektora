@@ -85,11 +85,23 @@ export class UpgradeCorporateAccountDto {
   @IsString() @MinLength(2) @MaxLength(160)
   tradeName!: string;
 
-  @IsOptional() @IsString() @MaxLength(80)
-  companyType?: string;
+  @IsIn(["sole_proprietorship", "limited_or_corporation", "association", "foundation", "public_body", "other"])
+  companyType!: string;
+
+  @IsIn(["event_organizer", "restaurant_bar_cafe", "night_club", "university_club", "ngo", "brand", "tourism_company", "sports_club", "other"])
+  businessCategory!: string;
+
+  @IsString() @MinLength(2) @MaxLength(120)
+  country!: string;
 
   @IsOptional() @IsString() @MaxLength(120)
-  businessCategory?: string;
+  city?: string;
+
+  @IsOptional() @IsString() @MaxLength(120)
+  district?: string;
+
+  @IsOptional() @IsString() @MaxLength(500)
+  address?: string;
 }
 
 export class UpdatePrivacySettingsDto {

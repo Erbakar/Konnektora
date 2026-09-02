@@ -320,13 +320,13 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
       "Paylaş",
       "Bildirim ayarla",
       "Etkileşim istatistikleri",
-      "Misafir listesine ekle",
+      "Guest List'e ekle",
       "Kullanıcıyı raporla",
       "Kullanıcıyı engelle",
     ]);
     expect(within(menu).queryByText("Mesaj gönder")).not.toBeInTheDocument();
 
-    await userEvent.click(within(menu).getByRole("button", { name: "Misafir listesine ekle" }));
+    await userEvent.click(within(menu).getByRole("button", { name: "Guest List'e ekle" }));
     const guestDialog = await screen.findByRole("dialog", { name: "Misafir listesine ekle" });
     expect(Array.from(guestDialog.querySelectorAll(".admin-list-row strong")).map((item) => item.textContent)).toEqual([
       "Arkadaşlar",

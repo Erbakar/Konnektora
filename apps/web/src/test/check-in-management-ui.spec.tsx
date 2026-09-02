@@ -305,6 +305,14 @@ describe("check-in yönetimi gereksinimleri", () => {
     expect(screen.getByText("Bu cihaz veya tarayıcı NFC okumayı desteklemiyor.")).toBeVisible();
   });
 
+  it("uygun kullanıcıya henüz özel listesi yokken de ilk listeyi oluşturma girişini gösterir", async () => {
+    apiMocks.listGuestLists.mockResolvedValue([]);
+    renderEventManagement();
+
+    const guestPanel = (await screen.findByRole("heading", { name: /Misafir listesi/ })).closest("section")!;
+    expect((await within(guestPanel).findAllByRole("button", { name: "Guest List'e ekle" })).length).toBeGreaterThan(0);
+  });
+
   it("etkinlik check-in ekranında 10'ar kayıt, arama, bilet/gate, geçmiş ve pasaport kararını çalıştırır", async () => {
     renderEventManagement();
 
@@ -323,7 +331,7 @@ describe("check-in yönetimi gereksinimleri", () => {
     expect(within(guestPanel).getByRole("link", { name: "@katilimci11" })).toHaveAttribute("href", "/users/id/person-11");
     expect(within(guestPanel).getByText("VIP Bilet")).toBeVisible();
     expect(within(guestPanel).getByText(/2 adet · 750 TRY · Gate:/)).toBeVisible();
-    expect(within(guestPanel).getByRole("combobox", { name: "Guest liste ekle" })).toBeVisible();
+    expect(within(guestPanel).getByRole("button", { name: "Guest List'e ekle" })).toBeVisible();
 
     await userEvent.click(within(guestPanel).getByRole("button", { name: "Pasaport kontrol" }));
     expect(apiMocks.getEventCheckInPassport).toHaveBeenCalledWith(event.id, "person-11");

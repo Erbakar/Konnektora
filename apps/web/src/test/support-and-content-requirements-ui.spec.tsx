@@ -17,6 +17,7 @@ const apiMocks = vi.hoisted(() => ({
   getUserSession: vi.fn(),
   listContentComments: vi.fn(),
   listContentMedia: vi.fn(),
+  listEventParticipants: vi.fn(),
   listFollowing: vi.fn(),
   listGuestLists: vi.fn(),
   listPublicFaqs: vi.fn(),
@@ -62,6 +63,7 @@ beforeEach(() => {
   apiMocks.createUserMessage.mockResolvedValue({ id: "message-1" });
   apiMocks.listContentComments.mockResolvedValue([]);
   apiMocks.listContentMedia.mockResolvedValue([]);
+  apiMocks.listEventParticipants.mockResolvedValue([]);
   apiMocks.listFollowing.mockResolvedValue([]);
   apiMocks.listGuestLists.mockResolvedValue([]);
   apiMocks.createContentComment.mockResolvedValue({
@@ -220,9 +222,10 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
     expect(within(postActions).getByRole("button", { name: "Etkinliğe yasakla" })).toBeVisible();
     expect(within(postActions).getByRole("button", { name: "Rapor et" })).toBeVisible();
     expect(within(postActions).getByRole("button", { name: "Sil" })).toBeVisible();
-    await userEvent.click(within(postActions).getByRole("button", { name: "Misafir listesine ekle" }));
+    await userEvent.click(within(postActions).getByRole("button", { name: "Guest List'e ekle" }));
     const guestDialog = await screen.findByRole("dialog", { name: "Misafir listesine ekle" });
-    expect(await within(guestDialog).findByRole("button", { name: /VIP/ })).toHaveTextContent("0 kişi");
+    expect(await within(guestDialog).findByText("VIP")).toBeVisible();
+    expect(within(guestDialog).getByText("0 kişi")).toBeVisible();
 
     await userEvent.click(within(postActions).getByRole("button", { name: "Sil" }));
     const deleteDialog = screen.getByRole("dialog", { name: "Yorumu sil" });

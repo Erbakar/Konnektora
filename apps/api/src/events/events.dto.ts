@@ -294,3 +294,8 @@ export class GuestListMemberDto {
   @IsUUID()
   userId!: string;
 }
+
+export class GuestListShareDto {
+  @IsUUID()
+  userId!: string;
+}

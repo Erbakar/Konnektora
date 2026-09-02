@@ -21,6 +21,7 @@ import {
   EventQueryDto,
   GuestListDto,
   GuestListMemberDto,
+  GuestListShareDto,
   InviteParticipantDto,
   ScanCheckInTicketDto,
   UpdateParticipantDto,
@@ -77,6 +78,10 @@ export class EventsController {
   @UseGuards(JwtAuthGuard)
   listGuestLists(@CurrentUser() user: User) { return this.eventsService.listGuestLists(user); }
 
+  @Get("guest-lists/:id")
+  @UseGuards(JwtAuthGuard)
+  getGuestList(@Param("id") id: string, @CurrentUser() user: User) { return this.eventsService.getGuestList(id, user); }
+
   @Post("guest-lists")
   @UseGuards(JwtAuthGuard)
   createGuestList(@Body() body: GuestListDto, @CurrentUser() user: User) { return this.eventsService.createGuestList(body.name, user); }
@@ -96,6 +101,14 @@ export class EventsController {
   @Delete("guest-lists/:id/members/:userId")
   @UseGuards(JwtAuthGuard)
   removeGuestListMember(@Param("id") id: string, @Param("userId") userId: string, @CurrentUser() user: User) { return this.eventsService.removeGuestListMember(id, userId, user); }
+
+  @Post("guest-lists/:id/shares")
+  @UseGuards(JwtAuthGuard)
+  shareGuestList(@Param("id") id: string, @Body() body: GuestListShareDto, @CurrentUser() user: User) { return this.eventsService.shareGuestList(id, body.userId, user); }
+
+  @Delete("guest-lists/:id/shares/:userId")
+  @UseGuards(JwtAuthGuard)
+  unshareGuestList(@Param("id") id: string, @Param("userId") userId: string, @CurrentUser() user: User) { return this.eventsService.unshareGuestList(id, userId, user); }
 
   @Patch("me/events/:id")
   @UseGuards(JwtAuthGuard)
