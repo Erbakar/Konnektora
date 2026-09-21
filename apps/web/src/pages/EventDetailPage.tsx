@@ -17,7 +17,6 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
 import { ContentComments } from "../components/ContentComments";
-import { ContentMediaGallery } from "../components/ContentMediaGallery";
 import { ContentRating } from "../components/ContentRating";
 import { EventCard } from "../components/EventCard";
 import { LocationMap } from "../components/LocationMap";
@@ -202,7 +201,6 @@ export function EventDetailPage() {
           <img alt="" src={resolveMediaUrl(event.coverImageUrl)} />
         </div>
       ) : null}
-      <ContentMediaGallery canManage={canManage} coverAlt={event.title} coverImageUrl={event.coverImageUrl} targetId={event.id} targetType="event" />
       <p className="eyebrow">
         {event.format === "online" ? language === "tr" ? "ÇEVRİM İÇİ" : "ONLINE" : event.format === "hybrid" ? language === "tr" ? "HİBRİT" : "HYBRID" : language === "tr" ? "YÜZ YÜZE" : "IN PERSON"} {language === "tr" ? "ETKİNLİK" : "EVENT"} – {event.visibility === "open" ? language === "tr" ? "HERKESE AÇIK" : "OPEN TO EVERYONE" : event.visibility === "approval_required" ? language === "tr" ? "ONAY GEREKLİ" : "APPROVAL REQUIRED" : language === "tr" ? "SADECE DAVETLİ" : "INVITE ONLY"}
       </p>

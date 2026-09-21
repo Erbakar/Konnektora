@@ -114,6 +114,8 @@ describe("FRD referanslı ekran davranışları", () => {
       `/events/${event.slug}`,
     ));
 
+    expect(await screen.findByRole("heading", { name: event.title })).toBeVisible();
+    expect(screen.queryByLabelText("Medya galerisi")).not.toBeInTheDocument();
     await userEvent.click(await screen.findByRole("button", { name: "Etkinlik ve mekân hakkında daha fazla bilgi" }));
     const dialog = screen.getByRole("dialog", { name: event.title });
     expect(dialog).toBeVisible();

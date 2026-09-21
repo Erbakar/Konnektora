@@ -82,6 +82,7 @@ describe("mekân detay gereksinimleri", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Konnektora Studio" })).toBeVisible();
+    expect(screen.queryByLabelText("Mekân medyaları")).not.toBeInTheDocument();
     const followers = screen.getByRole("heading", { name: "Takipçiler" }).closest("section")!;
     await waitFor(() => expect(within(followers).getByRole("link", { name: /2 üye · 1 davetli/ })).toHaveTextContent("2 üye · 1 davetli · 1 bekleyen · 1 takip ettiğiniz"));
     expect(screen.getByLabelText("Mekân ve kullanıcı konumu haritası")).toBeVisible();

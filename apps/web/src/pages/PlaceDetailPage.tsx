@@ -16,7 +16,6 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
 import { ContentComments } from "../components/ContentComments";
-import { ContentMediaGallery } from "../components/ContentMediaGallery";
 import { ContentRating } from "../components/ContentRating";
 import { DistanceLabel } from "../components/DistanceLabel";
 import { LocationMap } from "../components/LocationMap";
@@ -170,7 +169,6 @@ export function PlaceDetailPage() {
           <img alt="" src={resolveMediaUrl(place.coverImageUrl)} />
         </div>
       ) : null}
-      <ContentMediaGallery canManage={canManage} coverAlt={place.name} coverImageUrl={place.coverImageUrl} targetId={place.id} targetType="place" />
       <p className="eyebrow">{language === "tr" ? "MEKÂN" : "PLACE"} – {place.visibility === "invite_only" ? language === "tr" ? "SADECE DAVETLİ" : "INVITE ONLY" : place.visibility === "approval_required" ? language === "tr" ? "ONAY GEREKLİ" : "APPROVAL REQUIRED" : language === "tr" ? "HERKESE AÇIK" : "OPEN TO EVERYONE"}</p>
       <h1>{place.name}</h1>
       <div className="detail-meta">
