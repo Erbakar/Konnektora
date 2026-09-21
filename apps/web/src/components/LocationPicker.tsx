@@ -30,7 +30,7 @@ export function LocationPicker({ addressName, latitudeName = "latitude", longitu
   useEffect(() => {
     if (!mapElement.current || mapRef.current) return;
     const map = L.map(mapElement.current, { scrollWheelZoom: true }).setView([initialLat, initialLon], 14);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap contributors", maxZoom: 19 }).addTo(map);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap contributors", maxZoom: 19 }).addTo(map);
     const icon = L.divIcon({ className: "location-picker-pin", html: "<span>●</span>", iconAnchor: [12, 24], iconSize: [24, 24] });
     const marker = L.marker([initialLat, initialLon], { draggable: true, icon }).addTo(map);
     const update = (lat: number, lon: number) => { setLatitude(Number(lat.toFixed(7))); setLongitude(Number(lon.toFixed(7))); marker.setLatLng([lat, lon]); };

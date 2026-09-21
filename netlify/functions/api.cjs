@@ -30,7 +30,10 @@ async function createHandler() {
     req.url = req.url.replace(/^\/(?:api|\.netlify\/functions\/api)(?=\/|$)/, "") || "/";
     next();
   });
-  expressApp.use(helmet({ crossOriginResourcePolicy: false }));
+  expressApp.use(helmet({
+    crossOriginResourcePolicy: false,
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  }));
   expressApp.use((req, res, next) => {
     const requestId = String(req.headers["x-request-id"] || "").slice(0, 100) || randomUUID();
     res.setHeader("x-request-id", requestId);

@@ -22,7 +22,7 @@ const mapMocks = vi.hoisted(() => {
   const marker = { addTo: vi.fn(), bindPopup: vi.fn(), getLatLng: vi.fn(), on: vi.fn(), setLatLng: vi.fn() };
   marker.addTo.mockReturnValue(marker);
   marker.bindPopup.mockReturnValue(marker);
-  return { map, marker };
+  return { map, marker, tileLayer: vi.fn(() => ({ addTo: vi.fn() })) };
 });
 
 vi.mock("../lib/api", async () => {
@@ -35,12 +35,12 @@ vi.mock("leaflet", () => ({
     divIcon: vi.fn(() => ({})),
     map: vi.fn(() => mapMocks.map),
     marker: vi.fn(() => mapMocks.marker),
-    tileLayer: vi.fn(() => ({ addTo: vi.fn() })),
+    tileLayer: mapMocks.tileLayer,
   },
   divIcon: vi.fn(() => ({})),
   map: vi.fn(() => mapMocks.map),
   marker: vi.fn(() => mapMocks.marker),
-  tileLayer: vi.fn(() => ({ addTo: vi.fn() })),
+  tileLayer: mapMocks.tileLayer,
 }));
 
 beforeEach(() => {
@@ -78,6 +78,10 @@ describe("etkinlik ve mekân adres seçici", () => {
     await waitFor(() => expect(apiMocks.geocodeAddress).toHaveBeenCalledWith("İstiklal Caddesi Beyoğlu", "tr"));
     expect(mapMocks.marker.setLatLng).toHaveBeenCalledWith([41.034, 28.977]);
     expect(mapMocks.map.setView).toHaveBeenCalledWith([41.034, 28.977], 16);
+    expect(mapMocks.tileLayer).toHaveBeenCalledWith(
+      "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+      expect.objectContaining({ attribution: "© OpenStreetMap contributors", maxZoom: 19 }),
+    );
     expect(container.querySelector<HTMLInputElement>('input[name="latitude"]')).toHaveValue("41.034");
     expect(container.querySelector<HTMLInputElement>('input[name="longitude"]')).toHaveValue("28.977");
     expect(screen.getByText("Adres haritada işaretlendi; gerekirse pini taşıyabilirsiniz.")).toBeVisible();
@@ -126,6 +130,9 @@ describe("etkinlik ve mekân adres seçici", () => {
     );
 
     expect(await screen.findByText("Konumunuz da haritada gösteriliyor")).toBeVisible();
+    await waitFor(() => expect(
+      document.querySelector<HTMLImageElement>(".leaflet-tile")?.src,
+    ).toMatch(/^https:\/\/tile\.openstreetmap\.org\//));
     const mapLink = screen.getByRole("link", { name: /Konnektora Studio/ });
     expect(mapLink).toHaveAttribute("target", "_blank");
     expect(mapLink.getAttribute("href")).toMatch(/maps\.apple\.com|google\.com\/maps|^geo:/);

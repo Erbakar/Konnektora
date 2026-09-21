@@ -23,7 +23,7 @@ export function LocationMap({ items }: { items: MapItem[] }) {
       const points: Array<[number, number]> = located.map((item) => [item.latitude!, item.longitude!]);
       if (userLocation) points.push([userLocation.latitude, userLocation.longitude]);
       map = leaflet.map(mapElement.current, { scrollWheelZoom: false });
-      leaflet.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap contributors", maxZoom: 19 }).addTo(map);
+      leaflet.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap contributors", maxZoom: 19 }).addTo(map);
       located.forEach((item) => leaflet.marker([item.latitude!, item.longitude!], { icon: leaflet.divIcon({ className: "location-map-marker place-marker", html: "<span>●</span>", iconSize: [24, 24], iconAnchor: [12, 12] }) }).addTo(map!).bindPopup(`<strong>${escapeMapText(item.title)}</strong><br>${escapeMapText(item.location)}`));
       if (userLocation) leaflet.marker([userLocation.latitude, userLocation.longitude], { icon: leaflet.divIcon({ className: "location-map-marker user-marker", html: "<span>●</span>", iconSize: [24, 24], iconAnchor: [12, 12] }) }).addTo(map).bindPopup(language === "tr" ? "Konumunuz" : "Your location");
       if (points.length === 1) map.setView(points[0]!, 15); else map.fitBounds(points, { padding: [36, 36], maxZoom: 15 });
