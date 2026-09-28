@@ -13749,3 +13749,76 @@ body {
   .hero-search button { grid-column: 1 / -1; min-height: 42px; width: 100%; }
   .corp-hero h1 { font-size: 2.75rem; }
 }
+
+/* Responsive type scale: keep display headings readable without collisions. */
+.page > :where(header, .section-header):first-child h1,
+.page > h1:first-child {
+  font-size: clamp(1.9rem, 3.4vw, 2.85rem);
+  line-height: 1.08;
+}
+
+.corp-hero h1 {
+  font-size: clamp(2.75rem, 5.4vw, 5rem);
+  letter-spacing: -.05em;
+  line-height: 1.02;
+  max-width: 880px;
+}
+
+.home-hero h1,
+.detail-page h1,
+.business-hero h1,
+.curator-recruitment h1,
+.curator-page h1,
+.member-store > header h1,
+.policy-header h1,
+.help-hero h1,
+.mobile-feed-hero h1,
+.feed-heading h1,
+.related-users-page > .section-header h1,
+.guest-list-detail-hero h1 {
+  font-size: clamp(2.1rem, 4.5vw, 3.75rem);
+  letter-spacing: -.045em;
+  line-height: 1.06;
+}
+
+@media (max-width: 760px) {
+  .page > :where(header, .section-header):first-child h1,
+  .page > h1:first-child {
+    font-size: clamp(1.85rem, 8vw, 2.4rem);
+    line-height: 1.1;
+  }
+
+  .corp-hero h1 {
+    font-size: clamp(2.25rem, 10vw, 3rem);
+    line-height: 1.04;
+  }
+
+  .home-hero h1,
+  .detail-page h1,
+  .business-hero h1,
+  .curator-recruitment h1,
+  .curator-page h1,
+  .member-store > header h1,
+  .policy-header h1,
+  .help-hero h1,
+  .mobile-feed-hero h1,
+  .feed-heading h1,
+  .related-users-page > .section-header h1,
+  .guest-list-detail-hero h1 {
+    font-size: clamp(2rem, 9vw, 2.65rem);
+    line-height: 1.08;
+  }
+
+  .messages-layout,
+  .conversation-sidebar {
+    min-height: 0;
+  }
+
+  .message-thread {
+    min-height: min(620px, calc(100dvh - 145px));
+  }
+}
+
+@media (max-width: 430px) {
+  .corp-hero h1 { font-size: 2.35rem; }
+}
