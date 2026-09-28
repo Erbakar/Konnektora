@@ -8707,6 +8707,7 @@ export function submitCuratorApplication(input: {
   country?: string;
   motivation: string;
   cvUrl?: string;
+  preferredLanguage?: "tr" | "en";
 }): Promise<{ id: string }> {
   return requestJson(
     "/curators/applications",
