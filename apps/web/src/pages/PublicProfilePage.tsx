@@ -565,6 +565,7 @@ export function PublicProfilePage() {
           </section>
         </div>
       ) : null}
+      <div className="public-profile-content">
       {!profile.relationship.isSelf && profile.mutualism ? (
         <Link
           className="mutualism-bar"
@@ -927,6 +928,7 @@ export function PublicProfilePage() {
           <p className="form-help">{t("Görüntülenebilir mekân yok.", "There are no visible places.")}</p>
         ) : null}
       </section>
+      </div>
     </section>
   );
 }
