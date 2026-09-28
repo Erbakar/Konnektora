@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, IsUrl, MaxLength, MinLength } from "class-validator";
+import { IsEmail, IsIn, IsOptional, IsString, IsUrl, MaxLength, MinLength } from "class-validator";
 export class CuratorApplicationDto {
   @IsString() @MinLength(2) @MaxLength(120) name!: string;
   @IsEmail() @MaxLength(160) email!: string;
@@ -6,4 +6,5 @@ export class CuratorApplicationDto {
   @IsOptional() @IsString() @MaxLength(120) country?: string;
   @IsString() @MinLength(50) @MaxLength(5000) motivation!: string;
   @IsOptional() @IsUrl({ require_protocol: true }) @MaxLength(1000) cvUrl?: string;
+  @IsOptional() @IsIn(["tr", "en"]) preferredLanguage?: "tr" | "en";
 }

@@ -27,6 +27,10 @@ describe("AuthService", () => {
         create: jest.fn().mockResolvedValue({}),
         update: jest.fn(),
       },
+      automatedMessageDelivery: {
+        create: jest.fn().mockResolvedValue({ id: "delivery-1" }),
+        update: jest.fn().mockResolvedValue({}),
+      },
       socialAccount: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
@@ -210,6 +214,9 @@ describe("AuthService", () => {
     expect(prisma.emailToken.update).toHaveBeenCalledWith({ where: { id: "token-1" }, data: { consumedAt: expect.any(Date) } });
     expect(result.user.email).toBe("deniz@example.com");
     expect(mailService.sendAccountActivatedEmail).toHaveBeenCalledWith({ to: "deniz@example.com", name: "Deniz Kaya" });
+    expect(prisma.automatedMessageDelivery.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ userId: invitedUser.id, messageType: "account_activated", channel: "email" }),
+    }));
   });
 
   it("does not consume a phone invitation token before the required real email is supplied", async () => {
@@ -313,6 +320,20 @@ describe("AuthService", () => {
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: user.id },
       data: { emailVerified: true },
+    });
+  });
+
+  it("sends the welcome email only once for the same activated account", async () => {
+    const { service, prisma, mailService } = createService();
+
+    await expect(service.sendAccountActivatedEmailOnce({ userId: "user-1", to: "ada@example.com", name: "Ada" })).resolves.toBe(true);
+    prisma.automatedMessageDelivery.create.mockRejectedValueOnce({ code: "P2002" });
+    await expect(service.sendAccountActivatedEmailOnce({ userId: "user-1", to: "ada@example.com", name: "Ada" })).resolves.toBe(false);
+
+    expect(mailService.sendAccountActivatedEmail).toHaveBeenCalledTimes(1);
+    expect(prisma.automatedMessageDelivery.update).toHaveBeenCalledWith({
+      where: { id: "delivery-1" },
+      data: { status: "sent", providerId: undefined },
     });
   });
 

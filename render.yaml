@@ -26,7 +26,11 @@ services:
       - key: NODE_VERSION
         value: "22"
       - key: EMAIL_FROM
-        sync: false
+        value: Konnektora <noreply@mail.konnektora.com>
+      - key: EMAIL_REPLY_TO
+        value: hello@konnektora.com
+      - key: CURATOR_APPLICATION_EMAIL
+        value: curator@konnektora.com
       - key: RESEND_API_KEY
         sync: false
       - key: SMS_WEBHOOK_URL

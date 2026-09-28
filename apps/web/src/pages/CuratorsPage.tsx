@@ -41,6 +41,7 @@ export function CuratorsPage() {
         country: String(form.get("country") || "") || undefined,
         motivation: String(form.get("motivation")),
         cvUrl: String(form.get("cvUrl") || "") || undefined,
+        preferredLanguage: language,
       },
       { onSuccess: () => formElement.reset() },
     );

@@ -6,6 +6,7 @@ type MailMessage = {
   subject: string;
   text: string;
   html?: string;
+  replyTo?: string;
 };
 
 @Injectable()
@@ -13,6 +14,54 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
 
   constructor(private readonly configService: ConfigService) {}
+
+  async sendCuratorApplicationEmail(input: {
+    applicationId: string;
+    name: string;
+    email: string;
+    city: string;
+    country?: string;
+    motivation: string;
+    cvUrl?: string;
+    userId?: string;
+    preferredLanguage: string;
+    submittedAt: Date;
+  }) {
+    const recipient = this.configService.get<string>("CURATOR_APPLICATION_EMAIL") ?? "curator@konnektora.com";
+    const applicationUrl = `${this.getAppUrl()}/curators`;
+    const details: Array<[string, string]> = [
+      ["Başvuru no", input.applicationId],
+      ["Ad soyad", input.name],
+      ["E-posta", input.email],
+      ["Şehir", input.city],
+      ["Ülke", input.country || "Belirtilmedi"],
+      ["Varsayılan dil", input.preferredLanguage],
+      ["Kullanıcı no", input.userId || "Misafir başvuru"],
+      ["Gönderim zamanı", input.submittedAt.toISOString()],
+      ["CV", input.cvUrl || "Belirtilmedi"],
+    ];
+    const text = `${details.map(([label, value]) => `${label}: ${value}`).join("\n")}\n\nMotivasyon:\n${input.motivation}`;
+    await this.send({
+      to: recipient,
+      replyTo: input.email,
+      subject: `Yeni küratör başvurusu — ${input.name} / ${input.city}`,
+      text,
+      html: this.renderBrandedEmail({
+        preheader: `${input.name}, ${input.city} için küratör başvurusu gönderdi.`,
+        eyebrow: "YENİ KÜRATÖR BAŞVURUSU",
+        title: `${this.escapeHtml(input.city)} için yeni aday`,
+        intro: `${this.escapeHtml(input.name)} adlı adayın başvurusu alındı. Yanıt verdiğinizde mesaj doğrudan adayın ${this.escapeHtml(input.email)} adresine gider.`,
+        buttonLabel: "Küratör sayfasını aç",
+        buttonUrl: applicationUrl,
+        highlights: details.map(([label, value], index) => ({
+          number: String(index + 1).padStart(2, "0"),
+          title: this.escapeHtml(label),
+          body: this.escapeHtml(value),
+        })).concat([{ number: "10", title: "Motivasyon", body: this.escapeHtml(input.motivation) }]),
+        footerNote: "Bu e-posta, Konnektora küratör başvuru formu gönderildiği için oluşturuldu.",
+      }),
+    });
+  }
 
   async sendNotificationEmail(input: { to: string; name: string; title: string; body: string; targetType?: string; targetId?: string; targetUrl?: string }) {
     const appUrl = this.getAppUrl();
@@ -23,7 +72,7 @@ export class MailService {
       to: input.to,
       subject: input.title,
       text: `Merhaba ${input.name}, ${input.body} ${targetUrl}`,
-      html: `<p>Merhaba ${safeName},</p><p>${safeBody}</p><p><a href="${targetUrl}">Konnektora'da görüntüle</a></p>`
+      html: this.renderBrandedEmail({ preheader: input.body, eyebrow: "YENİ BİLDİRİM", title: this.escapeHtml(input.title), intro: `Merhaba ${safeName}, ${safeBody}`, buttonLabel: "Konnektora'da görüntüle", buttonUrl: targetUrl, footerNote: "Bu e-posta, Konnektora bildirim tercihlerine göre gönderildi." })
     });
   }
 
@@ -32,7 +81,7 @@ export class MailService {
     const feedUrl = `${appUrl}/feed`;
     const safeName = this.escapeHtml(input.name);
 
-    await this.send({
+    return this.send({
       to: input.to,
       subject: "Konnektora'ya hoş geldin — hesabın hazır",
       text: `Merhaba ${input.name}, Konnektora hesabın hazır. Akışı keşfet, ilgilendiğin etkinliklere katıl ve profilini tamamla: ${feedUrl}`,
@@ -113,7 +162,7 @@ export class MailService {
       to: input.to,
       subject: `${input.eventTitle} etkinliğine davetlisin`,
       text: `Merhaba ${input.name}, ${input.invitedByName} seni ${input.eventTitle} etkinliğine davet etti. Daveti kabul et: ${acceptUrl}`,
-      html: `<p>Merhaba ${input.name},</p><p>${input.invitedByName} seni <strong>${input.eventTitle}</strong> etkinliğine davet etti.</p><p><a href="${acceptUrl}">Daveti görüntüle</a></p>`
+      html: this.renderBrandedEmail({ preheader: `${input.eventTitle} etkinliğine davetlisin.`, eyebrow: "ETKİNLİK DAVETİ", title: this.escapeHtml(input.eventTitle), intro: `Merhaba ${this.escapeHtml(input.name)}, ${this.escapeHtml(input.invitedByName)} seni bu etkinliğe davet etti.`, buttonLabel: "Daveti görüntüle", buttonUrl: acceptUrl, footerNote: "Bu e-posta, Konnektora üzerinden bir etkinlik daveti aldığın için gönderildi." })
     });
   }
 
@@ -123,7 +172,7 @@ export class MailService {
       to: input.to,
       subject: `${input.eventTitle} için biletin var`,
       text: `Merhaba ${input.name}, ${input.invitedByName} sana ${input.eventTitle} etkinliği için ${input.quantity} bilet devretti. Biletlerini almak için hesabını oluştur: ${acceptUrl}`,
-      html: `<p>Merhaba ${this.escapeHtml(input.name)},</p><p><strong>${this.escapeHtml(input.invitedByName)}</strong> sana <strong>${this.escapeHtml(input.eventTitle)}</strong> etkinliği için ${input.quantity} bilet devretti.</p><p><a href="${acceptUrl}">Hesabını oluştur ve biletlerini al</a></p>`,
+      html: this.renderBrandedEmail({ preheader: `${input.eventTitle} için ${input.quantity} biletin var.`, eyebrow: "BİLET DEVRİ", title: this.escapeHtml(input.eventTitle), intro: `Merhaba ${this.escapeHtml(input.name)}, ${this.escapeHtml(input.invitedByName)} sana ${input.quantity} bilet devretti.`, buttonLabel: "Biletlerimi al", buttonUrl: acceptUrl, footerNote: "Bu e-posta, Konnektora üzerinden sana bilet devredildiği için gönderildi." }),
     });
   }
 
@@ -135,13 +184,13 @@ export class MailService {
       to: input.to,
       subject: `${input.placeName} mekânına davetlisin`,
       text: `Merhaba ${input.name}, ${input.invitedByName} seni ${input.placeName} mekânına davet etti. Daveti görüntüle: ${acceptUrl}`,
-      html: `<p>Merhaba ${this.escapeHtml(input.name)},</p><p><strong>${this.escapeHtml(input.invitedByName)}</strong> seni <strong>${this.escapeHtml(input.placeName)}</strong> mekânına davet etti.</p><p><a href="${acceptUrl}">Daveti görüntüle</a></p>`,
+      html: this.renderBrandedEmail({ preheader: `${input.placeName} mekânına davetlisin.`, eyebrow: "MEKÂN DAVETİ", title: this.escapeHtml(input.placeName), intro: `Merhaba ${this.escapeHtml(input.name)}, ${this.escapeHtml(input.invitedByName)} seni bu mekâna davet etti.`, buttonLabel: "Daveti görüntüle", buttonUrl: acceptUrl, footerNote: "Bu e-posta, Konnektora üzerinden bir mekân daveti aldığın için gönderildi." }),
     });
   }
 
   async sendEventReminderEmail(input: { to: string; name: string; eventTitle: string; eventSlug: string; startsAt: Date }) {
     const eventUrl = `${this.getAppUrl()}/events/${input.eventSlug}`;
-    return this.send({ to: input.to, subject: `${input.eventTitle} yarın başlıyor`, text: `Merhaba ${input.name}, ${input.eventTitle} etkinliği ${input.startsAt.toLocaleString("tr-TR")} tarihinde başlıyor. ${eventUrl}`, html: `<p>Merhaba ${this.escapeHtml(input.name)},</p><p><strong>${this.escapeHtml(input.eventTitle)}</strong> etkinliği yarın başlıyor.</p><p>${input.startsAt.toLocaleString("tr-TR")}</p><p><a href="${eventUrl}">Etkinliği görüntüle</a></p>` });
+    return this.send({ to: input.to, subject: `${input.eventTitle} yarın başlıyor`, text: `Merhaba ${input.name}, ${input.eventTitle} etkinliği ${input.startsAt.toLocaleString("tr-TR")} tarihinde başlıyor. ${eventUrl}`, html: this.renderBrandedEmail({ preheader: `${input.eventTitle} yarın başlıyor.`, eyebrow: "ETKİNLİK HATIRLATMASI", title: this.escapeHtml(input.eventTitle), intro: `Merhaba ${this.escapeHtml(input.name)}, etkinlik ${input.startsAt.toLocaleString("tr-TR")} tarihinde başlıyor.`, buttonLabel: "Etkinliği görüntüle", buttonUrl: eventUrl, footerNote: "Bu e-posta, katıldığın Konnektora etkinliğini hatırlatmak için gönderildi." }) });
   }
 
   async sendContactInviteEmail(input: { to: string; name: string; invitedByName: string }) {
@@ -150,7 +199,7 @@ export class MailService {
       to: input.to,
       subject: `${input.invitedByName} seni Konnektora'ya davet etti`,
       text: `Merhaba ${input.name}, ${input.invitedByName} seni Konnektora topluluğuna davet etti: ${appUrl}`,
-      html: `<p>Merhaba ${input.name},</p><p><strong>${input.invitedByName}</strong> seni Konnektora topluluğuna davet etti.</p><p><a href="${appUrl}">Konnektora'yı keşfet</a></p>`
+      html: this.renderBrandedEmail({ preheader: `${input.invitedByName} seni Konnektora'ya davet etti.`, eyebrow: "TOPLULUK DAVETİ", title: "Konnektora'ya davetlisin", intro: `Merhaba ${this.escapeHtml(input.name)}, ${this.escapeHtml(input.invitedByName)} seni Konnektora topluluğuna davet etti.`, buttonLabel: "Konnektora'yı keşfet", buttonUrl: appUrl, footerNote: "Bu e-posta, bir Konnektora üyesi seni davet ettiği için gönderildi." })
     });
   }
 
@@ -159,7 +208,7 @@ export class MailService {
       to: input.to,
       subject: "Konnektora moderasyon kararı",
       text: `Merhaba ${input.name}, içerikle ilgili moderasyon kararı: ${input.decision}. Aksiyon: ${input.action}. ${input.note ?? ""}`,
-      html: `<p>Merhaba ${input.name},</p><p>İçerikle ilgili moderasyon kararı: <strong>${input.decision}</strong>.</p><p>Aksiyon: <strong>${input.action}</strong></p>${input.note ? `<p>${input.note}</p>` : ""}`
+      html: this.renderBrandedEmail({ preheader: "İçeriğinle ilgili moderasyon sonucu hazır.", eyebrow: "MODERASYON KARARI", title: "İnceleme sonucu", intro: `Merhaba ${this.escapeHtml(input.name)}, karar: ${this.escapeHtml(input.decision)}. Uygulanan aksiyon: ${this.escapeHtml(input.action)}.`, buttonLabel: "Konnektora'yı aç", buttonUrl: this.getAppUrl(), notice: input.note ? this.escapeHtml(input.note) : undefined, footerNote: "Bu e-posta, Konnektora moderasyon sürecinin sonucu olarak gönderildi." })
     });
   }
 
@@ -168,7 +217,7 @@ export class MailService {
       to: input.to,
       subject: "Konnektora şikayet geri bildirimi",
       text: `Merhaba ${input.name}, bildirdiğin içerik incelendi. Karar: ${input.decision}. ${input.note ?? ""}`,
-      html: `<p>Merhaba ${input.name},</p><p>Bildirdiğin içerik incelendi. Karar: <strong>${input.decision}</strong>.</p>${input.note ? `<p>${input.note}</p>` : ""}`
+      html: this.renderBrandedEmail({ preheader: "Bildiriminle ilgili inceleme tamamlandı.", eyebrow: "ŞİKAYET GERİ BİLDİRİMİ", title: "İnceleme tamamlandı", intro: `Merhaba ${this.escapeHtml(input.name)}, bildirdiğin içerik incelendi. Karar: ${this.escapeHtml(input.decision)}.`, buttonLabel: "Konnektora'yı aç", buttonUrl: this.getAppUrl(), notice: input.note ? this.escapeHtml(input.note) : undefined, footerNote: "Bu e-posta, gönderdiğin içerik bildiriminin sonucu olarak gönderildi." })
     });
   }
 
@@ -179,7 +228,7 @@ export class MailService {
       to: input.to,
       subject: "Konnektora hesap müdahalesi",
       text: `Merhaba ${input.name}, hesabınla ilgili admin müdahalesi uygulandı: ${input.action}.${untilText} ${input.note ?? ""}`,
-      html: `<p>Merhaba ${input.name},</p><p>Hesabınla ilgili admin müdahalesi uygulandı: <strong>${input.action}</strong>.</p>${input.until ? `<p>Bitiş zamanı: ${input.until.toISOString()}</p>` : ""}${input.note ? `<p>${input.note}</p>` : ""}`
+      html: this.renderBrandedEmail({ preheader: "Hesabınla ilgili önemli bir güncelleme var.", eyebrow: "HESAP BİLDİRİMİ", title: "Hesap durumun güncellendi", intro: `Merhaba ${this.escapeHtml(input.name)}, hesabına şu işlem uygulandı: ${this.escapeHtml(input.action)}.`, buttonLabel: "Hesap ayarlarını aç", buttonUrl: `${this.getAppUrl()}/settings`, notice: [input.until ? `Bitiş zamanı: ${input.until.toISOString()}` : "", input.note || ""].filter(Boolean).map((item) => this.escapeHtml(item)).join(" · ") || undefined, footerNote: "Bu e-posta, Konnektora hesabındaki yönetim işlemi nedeniyle gönderildi." })
     });
   }
 
@@ -210,7 +259,7 @@ export class MailService {
           subject: message.subject,
           text: message.text,
           html: message.html,
-          ...(replyTo ? { reply_to: replyTo } : {})
+          ...(message.replyTo || replyTo ? { reply_to: message.replyTo || replyTo } : {})
         })
       });
 

@@ -52,8 +52,13 @@ VITE_MOCK_API=false
 VITE_API_URL=/api
 GOOGLE_CLIENT_ID=<google-oauth-web-client-id>
 VITE_GOOGLE_CLIENT_ID=<same-google-oauth-web-client-id>
-EMAIL_FROM=Konnektora <noreply@your-domain.com>
+FACEBOOK_APP_ID=<facebook-app-id>
+FACEBOOK_APP_SECRET=<facebook-app-secret>
+VITE_FACEBOOK_APP_ID=<same-facebook-app-id>
+EMAIL_FROM=Konnektora <noreply@mail.konnektora.com>
+EMAIL_REPLY_TO=hello@konnektora.com
 RESEND_API_KEY=<resend-api-key>
+CURATOR_APPLICATION_EMAIL=curator@konnektora.com
 SMS_WEBHOOK_URL=<sms-provider-https-endpoint>
 SMS_API_KEY=<sms-provider-api-key>
 VAPID_SUBJECT=mailto:support@your-domain.com
@@ -125,8 +130,10 @@ DATABASE_URL=<Render PostgreSQL connection string>
 JWT_SECRET=<uzun-random-secret>
 WEB_ORIGIN=https://konnektora.netlify.app
 PUBLIC_APP_URL=https://konnektora.netlify.app
-EMAIL_FROM=Konnektora <noreply@your-domain.com>
+EMAIL_FROM=Konnektora <noreply@mail.konnektora.com>
+EMAIL_REPLY_TO=hello@konnektora.com
 RESEND_API_KEY=<resend-api-key>
+CURATOR_APPLICATION_EMAIL=curator@konnektora.com
 NODE_VERSION=22
 NODE_ENV=production
 ```
@@ -139,7 +146,7 @@ npm run db:deploy
 
 Render kendi `PORT` değerini sağlar. Bu yüzden ayrıca `PORT` tanımlamak zorunda değilsin.
 
-`EMAIL_FROM` ve `RESEND_API_KEY` tanımlı değilse API üyelik/davet akışlarını bozmaz; gönderilecek e-postaları Render loglarına dev mail olarak yazar.
+Canlı ortamda `EMAIL_FROM` veya `RESEND_API_KEY` eksikse e-posta gönderimi görünür biçimde başarısız olur. Yerel geliştirmede ise mesaj gerçek alıcıya gönderilmeden loglanır.
 
 Önemli: Repo `Node.js >=22` ister. Localde veya Render build sırasında Node 18 kullanılırsa Prisma CLI native hatalar verebilir. Render'da `NODE_VERSION=22` tanımlı olmalı; localde `.nvmrc` için `nvm use` çalıştır.
 

@@ -590,11 +590,49 @@ export class AuthService {
       (this.prisma as any).emailToken.update({ where: { id: token.id }, data: { consumedAt: new Date() } }),
     ]);
 
-    await this.sendAccountActivatedEmailSafely({
+    await this.sendAccountActivatedEmailOnce({
+      userId: user.id,
       to: user.email,
       name: user.name,
     });
     return this.createLoginResponse(user);
+  }
+
+  async sendAccountActivatedEmailOnce(input: { userId: string; to: string; name: string }) {
+    let delivery: { id: string };
+    try {
+      delivery = await this.prisma.automatedMessageDelivery.create({
+        data: {
+          userId: input.userId,
+          targetType: "user",
+          targetId: input.userId,
+          messageType: "account_activated",
+          channel: "email",
+          status: "pending",
+        },
+        select: { id: true },
+      });
+    } catch (error: any) {
+      if (error?.code === "P2002") return false;
+      this.logger.error("Hoş geldin e-postası teslimat kaydı oluşturulamadı; aktivasyon tamamlandı.", error);
+      return false;
+    }
+
+    try {
+      const result = await this.mailService.sendAccountActivatedEmail({ to: input.to, name: input.name });
+      await this.prisma.automatedMessageDelivery.update({
+        where: { id: delivery.id },
+        data: { status: "sent", providerId: result?.providerId },
+      });
+      return true;
+    } catch (error) {
+      await this.prisma.automatedMessageDelivery.update({
+        where: { id: delivery.id },
+        data: { status: "failed" },
+      }).catch(() => undefined);
+      this.logger.error("Hoş geldin e-postası gönderilemedi; aktivasyon tamamlandı.", error);
+      return false;
+    }
   }
 
   private async createEmailToken(userId: string, type: keyof typeof EMAIL_TOKEN_TTL_MS) {
@@ -642,16 +680,6 @@ export class AuthService {
       return true;
     } catch (error) {
       this.logger.error("Doğrulama e-postası gönderilemedi; üyelik akışı açık bırakıldı.", error);
-      return false;
-    }
-  }
-
-  private async sendAccountActivatedEmailSafely(input: { to: string; name: string }) {
-    try {
-      await this.mailService.sendAccountActivatedEmail(input);
-      return true;
-    } catch (error) {
-      this.logger.error("Hesap onay e-postası gönderilemedi; aktivasyon tamamlandı.", error);
       return false;
     }
   }

@@ -40,6 +40,24 @@ describe("MailService branded account emails", () => {
     expect(request.html).toContain("30 dakika");
   });
 
+  it("uses the corporate template for event invitations", async () => {
+    await service.sendEventInviteEmail({ to: "user@example.com", name: "Ada", eventTitle: "Tasarım Buluşması", eventSlug: "tasarim-bulusmasi", invitedByName: "Deniz" });
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(request.html).toContain("ETKİNLİK DAVETİ");
+    expect(request.html).toContain("background:#103c2c");
+    expect(request.html).toContain("/events/tasarim-bulusmasi");
+  });
+
+  it("sends detailed curator applications to the curator inbox and replies to the applicant", async () => {
+    await service.sendCuratorApplicationEmail({ applicationId: "application-1", name: "Ada", email: "ada@example.com", city: "İstanbul", country: "Türkiye", motivation: "Topluluğu büyütmek ve yerel etkinlikleri desteklemek istiyorum.", cvUrl: "https://example.com/cv", userId: "user-1", preferredLanguage: "tr", submittedAt: new Date("2026-09-28T10:00:00.000Z") });
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(request.to).toEqual(["curator@konnektora.com"]);
+    expect(request.reply_to).toBe("ada@example.com");
+    expect(request.html).toContain("YENİ KÜRATÖR BAŞVURUSU");
+    expect(request.html).toContain("Varsayılan dil");
+    expect(request.html).toContain("https://example.com/cv");
+  });
+
   it("fails visibly when production mail credentials are missing", async () => {
     const productionService = new MailService({ get: jest.fn((key: string) => key === "NODE_ENV" ? "production" : undefined) } as never);
     await expect(productionService.sendVerificationEmail({ to: "user@example.com", name: "Ada", token: "token" })).rejects.toThrow("E-posta servisi yapılandırılmamış");

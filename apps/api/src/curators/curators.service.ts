@@ -1,12 +1,30 @@
 import { ForbiddenException, Injectable } from "@nestjs/common";
 import { User } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { MailService } from "../mail/mail.service";
 import { CuratorApplicationDto } from "./curators.dto";
 
 @Injectable()
 export class CuratorsService {
-  constructor(private readonly prisma: PrismaService) {}
-  apply(input: CuratorApplicationDto, user?: User) { return this.prisma.curatorApplication.create({ data: { ...input, userId: user?.id } }); }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
+
+  async apply(input: CuratorApplicationDto, user?: User) {
+    const { preferredLanguage, ...applicationData } = input;
+    const application = await this.prisma.curatorApplication.create({
+      data: { ...applicationData, userId: user?.id },
+    });
+    await this.mailService.sendCuratorApplicationEmail({
+      ...applicationData,
+      applicationId: application.id,
+      userId: user?.id,
+      preferredLanguage: user?.preferredLanguage ?? preferredLanguage ?? "tr",
+      submittedAt: application.createdAt,
+    });
+    return application;
+  }
   async dashboard(user: User) {
     if (user.role !== "curator") throw new ForbiddenException("Küratör yetkisi gerekli.");
     const city = user.curatorCity || user.city;

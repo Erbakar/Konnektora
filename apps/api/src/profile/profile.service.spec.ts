@@ -80,7 +80,8 @@ describe("ProfileService", () => {
     };
 
     const notifications = { dispatch: jest.fn() };
-    return { service: new ProfileService(prisma as never, notifications as never), prisma, notifications };
+    const authService = { sendAccountActivatedEmailOnce: jest.fn().mockResolvedValue(true) };
+    return { service: new ProfileService(prisma as never, notifications as never, authService as never), prisma, notifications, authService };
   };
 
   it("creates a pending profile tag suggestion and notifies the profile owner", async () => {
@@ -190,7 +191,7 @@ describe("ProfileService", () => {
   });
 
   it("activates a pending individual account only after verified phone and basic profile", async () => {
-    const { service, prisma } = createService();
+    const { service, prisma, authService } = createService();
     prisma.user.findUnique.mockResolvedValue({ ...currentProfile, status: "pending", phoneVerified: true });
     prisma.user.findFirst.mockResolvedValue(null);
     prisma.user.update.mockResolvedValue({ ...currentProfile, status: "active" });
@@ -198,6 +199,11 @@ describe("ProfileService", () => {
     await service.updateProfile("user-1", { name: "Ada Lovelace", username: "ada", country: "Türkiye", birthDate: "1990-01-01T00:00:00.000Z" });
 
     expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "active" }) }));
+    expect(authService.sendAccountActivatedEmailOnce).toHaveBeenCalledWith({
+      userId: "user-1",
+      to: "ada@example.com",
+      name: "Ada Lovelace",
+    });
   });
 
   it("fails when the profile no longer exists", async () => {

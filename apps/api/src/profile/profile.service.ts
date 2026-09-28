@@ -3,6 +3,7 @@ import { BlockedTargetType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateProfileTagSuggestionDto, CreateUserBlockDto, NotificationPreferenceDto, TagAffinityInputDto, UpgradeCorporateAccountDto, UpdateNotificationPreferencesDto, UpdatePrivacySettingsDto, UpdateProfileDto } from "./profile.dto";
 import { NotificationsService } from "../notifications/notifications.service";
+import { AuthService } from "../auth/auth.service";
 
 const notificationTopics: NotificationPreferenceDto["topic"][] = [
   "tag_request", "private_message", "mention", "comment", "password_changed", "email_changed", "phone_changed",
@@ -37,7 +38,11 @@ const profileSelect = {
 
 @Injectable()
 export class ProfileService {
-  constructor(private readonly prisma: PrismaService, private readonly notifications: NotificationsService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+    private readonly authService: AuthService,
+  ) {}
 
   async updatePreferredLanguage(userId: string, language?: string) {
     const preferredLanguage = language === "en" ? "en" : language === "tr" ? "tr" : null;
@@ -87,7 +92,7 @@ export class ProfileService {
       && current.phoneVerified
       && Boolean(username && input.country?.trim())
       && (current.accountType === "corporate" || Boolean(birthDate));
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data: {
         name: input.name.trim(),
@@ -110,6 +115,14 @@ export class ProfileService {
       },
       select: profileSelect
     });
+    if (shouldActivate && updated.status === "active") {
+      await this.authService.sendAccountActivatedEmailOnce({
+        userId: updated.id,
+        to: updated.email,
+        name: updated.name,
+      });
+    }
+    return updated;
   }
 
   async upgradeCorporateAccount(userId: string, input: UpgradeCorporateAccountDto) {
