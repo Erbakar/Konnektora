@@ -13822,3 +13822,52 @@ body {
 @media (max-width: 430px) {
   .corp-hero h1 { font-size: 2.35rem; }
 }
+
+/* Preserve readable type on every inverse (dark) surface. */
+:where(
+  .corp-proof,
+  .corp-cta-band,
+  .business-hero-card,
+  .business-cta,
+  .curator-application,
+  .guest-list-dashboard,
+  .guest-list-detail-hero,
+  .mobile-feed-hero
+) :where(h1, h2, h3, h4, strong) {
+  color: #fff;
+}
+
+@media (max-width: 680px) {
+  .site-footer-columns,
+  .site-footer-section {
+    border-color: #3a3a3f;
+  }
+
+  .site-footer-section-toggle,
+  .site-footer-section-toggle span {
+    color: #fff;
+  }
+
+  .site-footer-section-links a {
+    color: #c8c8cd;
+  }
+
+  .site-footer-section-links a:active {
+    background: #303036;
+  }
+
+  .site-footer-language-options {
+    background: #2b2b30;
+    border-color: #45454b;
+  }
+
+  .site-footer-language-options button {
+    color: #d4d4d8;
+  }
+
+  .site-footer-language-options button.active,
+  .site-footer-language-options button.active:hover {
+    background: #fff;
+    color: #202024;
+  }
+}
