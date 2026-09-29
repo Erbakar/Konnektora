@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPostDateTime } from "./formats";
+import { formatPostDateTime, formatTimeZoneOffset } from "./formats";
 
 describe("formatPostDateTime", () => {
   const now = new Date(2026, 8, 2, 18, 30);
@@ -16,5 +16,12 @@ describe("formatPostDateTime", () => {
     const result = formatPostDateTime(new Date(2026, 7, 30, 12, 4, 51), "tr", now);
     expect(result).toMatch(/^30 Ağu 2026 12:04$/);
     expect(result).not.toContain("51");
+  });
+});
+
+describe("formatTimeZoneOffset", () => {
+  it("etkinlik tarihindeki yaz/kış saatini IANA saat diliminden GMT biçimine çevirir", () => {
+    expect(formatTimeZoneOffset("Europe/Istanbul", "2026-10-17T18:00:00.000Z")).toBe("GMT+3");
+    expect(formatTimeZoneOffset("America/New_York", "2026-01-17T18:00:00.000Z")).toBe("GMT-5");
   });
 });

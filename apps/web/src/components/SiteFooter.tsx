@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Facebook, Instagram, Youtube } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { publicSiteHref } from "../lib/domains";
@@ -19,6 +19,13 @@ export function SiteFooter() {
         <div className="site-footer-brand">
           <img alt="Konnektora" src="/brand/konnektora-logo.svg" />
           <p>{t("footerCopy")}</p>
+          <nav aria-label={language === "tr" ? "Sosyal medya" : "Social media"} className="site-footer-social">
+            <a aria-label="Instagram" href="https://www.instagram.com/konnektora/" rel="noreferrer" target="_blank"><Instagram size={19}/></a>
+            <a aria-label="Facebook" href="https://www.facebook.com/konnektora" rel="noreferrer" target="_blank"><Facebook size={19}/></a>
+            <a aria-label="TikTok" href="https://www.tiktok.com/@_konnektora" rel="noreferrer" target="_blank">TikTok</a>
+            <a aria-label="X" href="https://x.com/konnektora" rel="noreferrer" target="_blank">X</a>
+            <a aria-label="YouTube" href="https://youtube.com/@konnektora" rel="noreferrer" target="_blank"><Youtube size={19}/></a>
+          </nav>
         </div>
         <nav className="site-footer-columns" aria-label={language === "tr" ? "Alt bilgi bağlantıları" : "Footer links"}>
           <div className={`site-footer-section${openSection === "konnektora" ? " is-open" : ""}`}>

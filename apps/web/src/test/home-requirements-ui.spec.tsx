@@ -76,7 +76,7 @@ describe("ana sayfa 108–123 gereksinimleri", () => {
   it("oturumsuz ziyaretçiye popüler etkinlikleri, trend ilgi alanlarını ve iki üyelik yolunu gösterir", async () => {
     render(providers(<HomePage />));
 
-    expect(await screen.findByText(/Konnektora, insanların ilgi alanları, etkinlikler, mekânlar/)).toBeVisible();
+    expect((await screen.findByText((_, element) => element?.classList.contains("corp-hero-lead") ?? false))).toHaveTextContent(/Konnektora, insanların ilgi alanları, etkinlikler, mekânlar/);
     expect(await screen.findByRole("heading", { name: "İstanbul yakınında popüler etkinlikler" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Gündemdeki ilgi alanları" })).toBeVisible();
     expect(screen.getByRole("link", { name: "#Teknoloji" })).toHaveAttribute("href", "/tags/teknoloji");

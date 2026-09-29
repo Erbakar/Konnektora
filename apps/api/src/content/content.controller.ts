@@ -51,6 +51,25 @@ export class ContentController {
     catch (error) { await unlink(file.path).catch(() => undefined); throw error; }
   }
 
+  @Post("media/event/pending/:batchId/upload")
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor("file", {
+    storage: diskStorage({ destination: resolve(process.cwd(), "uploads"), filename: (_request, file, callback) => callback(null, `${randomUUID()}${mediaExtensions[file.mimetype] ?? ""}`) }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_request, file, callback) => { const allowed = Boolean(mediaExtensions[file.mimetype]); callback(allowed ? null : new BadRequestException("Yalnız JPG, PNG, WebP, GIF, MP4 veya WebM yüklenebilir."), allowed); }
+  }))
+  async uploadPendingEventMedia(@Param("batchId") batchId: string, @UploadedFile() file: Express.Multer.File | undefined, @CurrentUser() user: User) {
+    if (!file) throw new BadRequestException("Yüklenecek dosya bulunamadı.");
+    try { return await this.contentService.createPendingEventMedia(batchId, user, `/uploads/${file.filename}`, file.mimetype.startsWith("image/") ? "image" : "video"); }
+    catch (error) { await unlink(file.path).catch(() => undefined); throw error; }
+  }
+
+  @Post("media/event/:eventId/claim/:batchId")
+  @UseGuards(JwtAuthGuard)
+  claimPendingEventMedia(@Param("eventId") eventId: string, @Param("batchId") batchId: string, @CurrentUser() user: User) {
+    return this.contentService.claimPendingEventMedia(eventId, batchId, user);
+  }
+
   @Put("media/:targetType/:targetId/order")
   @UseGuards(JwtAuthGuard)
   reorderContentMedia(@Param("targetType") targetType: ReportTargetType, @Param("targetId") targetId: string, @Body() body: ReorderProfileMediaDto, @CurrentUser() user: User) {

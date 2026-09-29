@@ -150,6 +150,12 @@ export class EventsController {
     return this.eventsService.requestAttendance(id, user.id);
   }
 
+  @Delete("events/:id/attend")
+  @UseGuards(JwtAuthGuard)
+  leaveEvent(@Param("id") id: string, @CurrentUser() user: User) {
+    return this.eventsService.leaveEvent(id, user.id);
+  }
+
   @Get("events/:id/ticket")
   @UseGuards(JwtAuthGuard)
   issueTicket(@Param("id") id: string, @CurrentUser() user: User) {

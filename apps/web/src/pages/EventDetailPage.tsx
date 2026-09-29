@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Ban,
+  BarChart3,
   Bell,
   CalendarDays,
   CreditCard,
@@ -8,8 +9,11 @@ import {
   Flag,
   MapPin,
   MoreVertical,
+  Pencil,
   Share2,
   ShieldCheck,
+  Trash2,
+  UserCheck,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -17,12 +21,11 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
 import { ContentComments } from "../components/ContentComments";
-import { ContentRating } from "../components/ContentRating";
 import { EventCard } from "../components/EventCard";
 import { LocationMap } from "../components/LocationMap";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
 import { ReportDialog } from "../components/ReportDialog";
-import { formatEventDateRange, localizeCityName, localizeCountryName } from "../lib/formats";
+import { formatEventDateRange, formatTimeZoneOffset, localizeCityName, localizeCountryName } from "../lib/formats";
 import { getServiceErrorMessage, getServiceErrorPresentation } from "../lib/serviceErrors";
 import { NotFoundPage } from "./NotFoundPage";
 import {
@@ -38,6 +41,7 @@ import {
   listEventRelatedUsers,
   listFollowing,
   listEvents,
+  leaveEvent,
   purchaseEventTickets,
   requestEventAttendance,
   recordContentView,
@@ -129,11 +133,18 @@ export function EventDetailPage() {
   });
   const attendMutation = useMutation({
     mutationFn: requestEventAttendance,
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: ["interaction-stats", "event", event?.id],
-      }),
+    onSuccess: () => refreshAttendance(),
   });
+  const leaveMutation = useMutation({
+    mutationFn: leaveEvent,
+    onSuccess: () => refreshAttendance(),
+  });
+  function refreshAttendance() {
+    void queryClient.invalidateQueries({ queryKey: ["event", slug] });
+    void queryClient.invalidateQueries({ queryKey: ["event", event?.id, "related-users"] });
+    void queryClient.invalidateQueries({ queryKey: ["interaction-stats", "event", event?.id] });
+    void queryClient.invalidateQueries({ queryKey: ["event-participants-preview", event?.id] });
+  }
   const paymentMutation = useMutation({
     mutationFn: async () => {
       const intent = await createEventPayment(event!.id, crypto.randomUUID());
@@ -189,6 +200,7 @@ export function EventDetailPage() {
     ? new Date(event.endsAt).getTime() + 12 * 60 * 60 * 1000
     : new Date(event.startsAt).getTime() + 24 * 60 * 60 * 1000;
   const inviteAllowed = canManage || event.viewerParticipation?.status === "accepted" || event.viewerParticipation?.status === "attended" || event.viewerParticipation?.status === "invited";
+  const canLeave = event.viewerParticipation?.role === "attendee" && ["accepted", "attended", "requested"].includes(event.viewerParticipation.status);
   const invitedPreviewCount = canManage
     ? participantsQuery.data?.filter((item) => item.status === "invited").length ?? 0
     : (relatedUsersQuery.data ?? []).filter((item) => item.status === "invited").length;
@@ -229,12 +241,18 @@ export function EventDetailPage() {
         {user && !canManage ? (
           <button
             className="primary-action"
-            disabled={attendMutation.isPending}
-            onClick={() => attendMutation.mutate(event.id)}
+            disabled={attendMutation.isPending || leaveMutation.isPending}
+            onClick={() => canLeave ? leaveMutation.mutate(event.id) : attendMutation.mutate(event.id)}
             type="button"
           >
             <Users size={18} />
-            {attendMutation.isSuccess
+            {leaveMutation.isPending
+              ? language === "tr" ? "Ayrılıyor" : "Leaving"
+              : canLeave
+                ? event.viewerParticipation?.status === "requested"
+                  ? language === "tr" ? "Katılım isteğini geri çek" : "Withdraw request"
+                  : language === "tr" ? "Etkinlikten ayrıl" : "Leave event"
+              : attendMutation.isSuccess
               ? event.visibility === "approval_required"
                 ? language === "tr" ? "Onay bekliyor" : "Pending approval"
                 : language === "tr" ? "Katılımın onaylandı" : "Attendance confirmed"
@@ -276,10 +294,10 @@ export function EventDetailPage() {
                 return;
               }
               navigate(`/events/${event.slug}/invites#check-in`);
-            }} type="button"><ShieldCheck size={18}/>{language === "tr" ? "Check-in kontrolü" : "Check-in control"}</button> : null}
-            {canManage ? <Link to={`/events/create?edit=${event.id}`}><ExternalLink size={18}/>{language === "tr" ? "Etkinliği düzenle" : "Edit event"}</Link> : null}
-            {canManage ? <button disabled={archiveMutation.isPending} onClick={() => window.confirm(language === "tr" ? "Etkinlik silinsin mi? Satılmış tüm biletler otomatik olarak iade edilecek ve bu işlem geri alınamayacaktır." : "Delete this event? All sold tickets will be refunded automatically and this action cannot be undone.") && archiveMutation.mutate()}><Flag size={18}/>{language === "tr" ? "Etkinliği sil" : "Delete event"}</button> : null}
-            <Link to={user ? `/stats/event/${event.id}` : `/login?next=${encodeURIComponent(`/stats/event/${event.id}`)}`}><ShieldCheck size={18}/>{language === "tr" ? "Etkileşim istatistikleri" : "Interaction analytics"}</Link>
+            }} type="button"><UserCheck size={18}/>{language === "tr" ? "Check-in kontrolü" : "Check-in control"}</button> : null}
+            {canManage ? <Link to={`/events/create?edit=${event.id}`}><Pencil size={18}/>{language === "tr" ? "Etkinliği düzenle" : "Edit event"}</Link> : null}
+            {canManage ? <button disabled={archiveMutation.isPending} onClick={() => window.confirm(language === "tr" ? "Etkinlik silinsin mi? Satılmış tüm biletler otomatik olarak iade edilecek ve bu işlem geri alınamayacaktır." : "Delete this event? All sold tickets will be refunded automatically and this action cannot be undone.") && archiveMutation.mutate()}><Trash2 size={18}/>{language === "tr" ? "Etkinliği sil" : "Delete event"}</button> : null}
+            <Link to={user ? `/stats/event/${event.id}` : `/login?next=${encodeURIComponent(`/stats/event/${event.id}`)}`}><BarChart3 size={18}/>{language === "tr" ? "Etkileşim istatistikleri" : "Interaction analytics"}</Link>
             {user && !canManage ? <button onClick={() => setReportOpen((current) => !current)}><Flag size={18}/>{language === "tr" ? "Etkinliği rapor et" : "Report event"}</button> : null}
             {user && !canManage ? <button disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()}><Ban size={18}/>{language === "tr" ? "Etkinliği engelle" : "Block event"}</button> : null}
           </div>
@@ -369,7 +387,7 @@ export function EventDetailPage() {
                       </button>
                       <button
                         className="primary-action"
-                        disabled={unavailable || quantity < 1 || ticketPurchase.isPending}
+                        disabled={unavailable || (type.salesPlatform !== "external" && quantity < 1) || ticketPurchase.isPending}
                         onClick={() => type.salesPlatform === "external" && type.externalSalesUrl ? window.open(type.externalSalesUrl, "_blank", "noopener,noreferrer") : ticketPurchase.mutate({ id: type.id, quantity })}
                       >
                         {unavailable ? language === "tr" ? "Tükendi" : "Sold out" : type.salesPlatform === "external" ? language === "tr" ? "Satış sayfasına git" : "Go to sales page" : type.salesPlatform === "door" ? language === "tr" ? "Bileti ayır" : "Reserve ticket" : language === "tr" ? "Satın al" : "Buy"}
@@ -412,8 +430,7 @@ export function EventDetailPage() {
         <RichText text={!overviewExpanded && event.description.length > 650 ? `${event.description.slice(0, 650).trim()}…` : event.description} />
         {event.description.length > 650 ? <button className="text-action" onClick={() => setOverviewExpanded((expanded) => !expanded)} type="button">{overviewExpanded ? language === "tr" ? "Daha az göster" : "Show less" : language === "tr" ? "Devamını göster" : "Show more"}</button> : null}
       </section>
-      {user ? <ContentRating targetId={event.id} targetType="event"/> : null}
-      {moreInfoOpen ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setMoreInfoOpen(false)}><section aria-modal="true" aria-labelledby="event-more-title" className="content-dialog event-more-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><div className="section-header"><div><p className="eyebrow">{language === "tr" ? "Etkinlik ve mekân" : "Event and place"}</p><h2 id="event-more-title">{event.title}</h2></div><button onClick={() => setMoreInfoOpen(false)} type="button">{language === "tr" ? "Kapat" : "Close"}</button></div>{event.format !== "online" && event.latitude != null && event.longitude != null ? <LocationMap items={[{ id: event.id, title: event.place?.name ?? event.locationName ?? event.title, latitude: event.latitude, longitude: event.longitude, location: [event.place?.address, event.locationAddress, localizeCityName(event.city ?? event.place?.city, language), localizeCountryName(event.country ?? event.place?.country, language)].filter(Boolean).join(", ") }]} /> : null}<dl className="event-more-facts"><div><dt>{language === "tr" ? "Zaman" : "Time"}</dt><dd>{formatEventDateRange(event.startsAt, event.endsAt, { withDuration: true, locale })}</dd></div><div><dt>Format</dt><dd>{event.format === "online" ? language === "tr" ? "Çevrim içi" : "Online" : event.format === "hybrid" ? language === "tr" ? "Hibrit" : "Hybrid" : language === "tr" ? "Yüz yüze" : "In person"}</dd></div><div><dt>{language === "tr" ? "Katılım" : "Access"}</dt><dd>{event.visibility === "open" ? language === "tr" ? "Herkese açık" : "Open to everyone" : event.visibility === "approval_required" ? language === "tr" ? "Onay gerekli" : "Approval required" : language === "tr" ? "Sadece davetli" : "Invite only"}</dd></div>{event.format !== "online" ? <><div><dt>{language === "tr" ? "Etkinlik yeri" : "Event location"}</dt><dd>{event.place ? <Link to={`/places/${event.place.slug}`}>{event.place.name}</Link> : event.locationName || (language === "tr" ? "Konum adı belirtilmedi" : "Location name not provided")}</dd></div><div><dt>{language === "tr" ? "Adres" : "Address"}</dt><dd>{[event.place?.address, event.locationAddress, localizeCityName(event.city ?? event.place?.city, language), localizeCountryName(event.country ?? event.place?.country, language)].filter(Boolean).join(", ") || (event.latitude != null && event.longitude != null ? `${event.latitude}, ${event.longitude}` : language === "tr" ? "Adres belirtilmedi" : "Address not provided")}</dd></div></> : null}{event.format !== "offline" && event.liveUrl ? <div><dt>{language === "tr" ? "Canlı etkinlik bağlantısı" : "Live event URL"}</dt><dd><a href={event.liveUrl} rel="noreferrer" target="_blank">{event.liveUrl}<ExternalLink size={14}/></a></dd></div> : null}</dl></section></div> : null}
+      {moreInfoOpen ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setMoreInfoOpen(false)}><section aria-modal="true" aria-labelledby="event-more-title" className="content-dialog event-more-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><div className="section-header"><div><p className="eyebrow">{language === "tr" ? "Etkinlik ve mekân" : "Event and place"}</p><h2 id="event-more-title">{event.title}</h2></div><button onClick={() => setMoreInfoOpen(false)} type="button">{language === "tr" ? "Kapat" : "Close"}</button></div>{event.format !== "online" && event.latitude != null && event.longitude != null ? <LocationMap items={[{ id: event.id, title: event.place?.name ?? event.locationName ?? event.title, latitude: event.latitude, longitude: event.longitude, location: [event.place?.address, event.locationAddress, localizeCityName(event.city ?? event.place?.city, language), localizeCountryName(event.country ?? event.place?.country, language)].filter(Boolean).join(", ") }]} /> : null}<dl className="event-more-facts"><div><dt>{language === "tr" ? "Zaman" : "Time"}</dt><dd>{formatEventDateRange(event.startsAt, event.endsAt, { withDuration: true, locale })} ({formatTimeZoneOffset(event.timezone, event.startsAt)})</dd></div><div><dt>Format</dt><dd>{event.format === "online" ? language === "tr" ? "Çevrim içi" : "Online" : event.format === "hybrid" ? language === "tr" ? "Hibrit" : "Hybrid" : language === "tr" ? "Yüz yüze" : "In person"}</dd></div><div><dt>{language === "tr" ? "Katılım" : "Access"}</dt><dd>{event.visibility === "open" ? language === "tr" ? "Herkese açık" : "Open to everyone" : event.visibility === "approval_required" ? language === "tr" ? "Onay gerekli" : "Approval required" : language === "tr" ? "Sadece davetli" : "Invite only"}</dd></div>{event.format !== "online" ? <><div><dt>{language === "tr" ? "Etkinlik yeri" : "Event location"}</dt><dd>{event.place ? <Link to={`/places/${event.place.slug}`}>{event.place.name}</Link> : event.locationName || (language === "tr" ? "Konum adı belirtilmedi" : "Location name not provided")}</dd></div><div><dt>{language === "tr" ? "Adres" : "Address"}</dt><dd>{[event.place?.address, event.locationAddress, localizeCityName(event.city ?? event.place?.city, language), localizeCountryName(event.country ?? event.place?.country, language)].filter(Boolean).join(", ") || (event.latitude != null && event.longitude != null ? `${event.latitude}, ${event.longitude}` : language === "tr" ? "Adres belirtilmedi" : "Address not provided")}</dd></div></> : null}{event.format !== "offline" && event.liveUrl ? <div><dt>{language === "tr" ? "Canlı etkinlik bağlantısı" : "Live event URL"}</dt><dd><a href={event.liveUrl} rel="noreferrer" target="_blank">{event.liveUrl}<ExternalLink size={14}/></a></dd></div> : null}</dl></section></div> : null}
       {event.timeline ? (
         <section className="admin-form">
           <h2>{language === "tr" ? "Genel bakış" : "Overview"}</h2>
@@ -527,6 +544,15 @@ export function EventDetailPage() {
         targetId={event.id}
         targetType="event"
         title={event.title}
+        text={[event.title, formatEventDateRange(event.startsAt, event.endsAt, { locale }), [event.locationName, event.city].filter(Boolean).join(" · "), event.tags.slice(0, 5).map((tag) => `#${tag.name.replace(/\s+/g, "")}`).join(" ")].filter(Boolean).join("\n")}
+        storyDetails={{
+          startsAt: event.startsAt,
+          endsAt: event.endsAt,
+          timezone: event.timezone,
+          venue: event.place?.name ?? event.locationName,
+          address: event.place?.address ?? event.locationAddress,
+          city: event.place?.city ?? event.city,
+        }}
         url={window.location.href}
       />
     </article>

@@ -3,21 +3,26 @@ import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { useLanguage } from "../lib/i18n";
 import { recordContentShare } from "../lib/api";
+import { createEventStoryFile, shareOrDownloadSocialFiles, type EventStoryDetails } from "../lib/socialTemplates";
 
 export function ShareDialog({
   open,
   onClose,
   title,
+  text,
   url,
   targetType,
   targetId,
+  storyDetails,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  text?: string;
   url: string;
   targetType: "event" | "place" | "tag" | "user" | "post";
   targetId: string;
+  storyDetails?: EventStoryDetails;
 }) {
   const { language } = useLanguage();
   const [qrImage, setQrImage] = useState("");
@@ -30,7 +35,7 @@ export function ShareDialog({
     void QRCode.toDataURL(url, { width: 240, margin: 1 }).then(setQrImage);
   }, [open, url]);
   if (!open) return null;
-  const message = `${title}\n${url}`;
+  const message = `${text?.trim() || title}\n${url}`;
   const track = (channel: string) => void recordContentShare(targetType, targetId, channel);
   const supportsSocialCard = /\/(events|places|tags)\//.test(new URL(url, window.location.origin).pathname);
   return (
@@ -75,11 +80,11 @@ export function ShareDialog({
           >
             WhatsApp
           </a>
-          {supportsSocialCard ? <button className="secondary-action" disabled={!qrImage || storyPending} onClick={() => { setStoryPending(true); setStoryMessage(""); void shareStoryCard(title, url, qrImage, language).then((result) => { setStoryMessage(result); track("instagram_story_dm"); }).finally(() => setStoryPending(false)); }}><Instagram size={17}/>{storyPending ? language === "tr" ? "Kart hazırlanıyor…" : "Preparing card…" : "Instagram Story / DM"}</button> : null}
+          {supportsSocialCard ? <button className="secondary-action" disabled={!qrImage || storyPending} onClick={() => { setStoryPending(true); setStoryMessage(""); void shareStoryCard(title, url, qrImage, language, targetType === "event" ? storyDetails : undefined).then((result) => { setStoryMessage(result); track("instagram_story_dm"); }).finally(() => setStoryPending(false)); }}><Instagram size={17}/>{storyPending ? language === "tr" ? "Kart hazırlanıyor…" : "Preparing card…" : "Instagram Story / DM"}</button> : null}
           {navigator.share ? (
             <button
               className="primary-action"
-              onClick={() => void navigator.share({ title, url }).then(() => { track("native_share"); onClose(); })}
+              onClick={() => void navigator.share({ title, text: text?.trim() || title, url }).then(() => { track("native_share"); onClose(); })}
             >
               <Share2 size={17} />
               {language === "tr" ? "Diğer uygulamalar" : "Other apps"}
@@ -93,7 +98,14 @@ export function ShareDialog({
   );
 }
 
-async function shareStoryCard(title: string, url: string, qrImage: string, language: "tr" | "en") {
+async function shareStoryCard(title: string, url: string, qrImage: string, language: "tr" | "en", storyDetails?: EventStoryDetails) {
+  if (storyDetails) {
+    const file = await createEventStoryFile(title, storyDetails, language);
+    const result = await shareOrDownloadSocialFiles([file], title);
+    return result === "shared"
+      ? language === "tr" ? "Etkinlik Story kartı Instagram veya seçtiğiniz uygulamaya gönderildi." : "The event Story card was sent to Instagram or your selected app."
+      : language === "tr" ? "Etkinlik Story kartı indirildi." : "The event Story card was downloaded.";
+  }
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
   canvas.height = 1920;

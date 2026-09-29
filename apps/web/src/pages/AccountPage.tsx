@@ -9,7 +9,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type {
   AccountType,
@@ -26,6 +26,7 @@ import type {
 } from "@konnektora/shared";
 import {
   EmailInput,
+  PasswordInput,
   PhoneInput,
   VerificationCodeInput,
 } from "../components/FormInputs";
@@ -49,6 +50,7 @@ import {
   checkAvailability,
   changeEmail,
   changePassword,
+  claimPendingEventMedia,
   connectSocialAccount,
   confirmPhoneVerification,
   clearUserSession,
@@ -98,6 +100,7 @@ import {
   updateNotificationPreferences,
   updatePrivacySettings,
   uploadContentMedia,
+  uploadPendingEventMedia,
   uploadProfileMedia,
   userLogin,
   socialLogin,
@@ -174,6 +177,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   const [eventStartsAt, setEventStartsAt] = useState("");
   const [eventStep, setEventStep] = useState(1);
   const [eventTicketCount, setEventTicketCount] = useState(1);
+  const [selectedEventPlaceId, setSelectedEventPlaceId] = useState("");
+  const [eventMediaBatchId] = useState(() => crypto.randomUUID());
+  const eventMediaUploadPromises = useRef<Promise<unknown>[]>([]);
+  const [eventMediaUpload, setEventMediaUpload] = useState({ total: 0, completed: 0, failed: 0 });
   const [ticketSalesPlatforms, setTicketSalesPlatforms] = useState<Array<"door" | "konnektora" | "external">>(["door"]);
   const [restrictedTicketPlatformIndex, setRestrictedTicketPlatformIndex] = useState<number | null>(null);
   const [lineupRows, setLineupRows] = useState<
@@ -184,6 +191,9 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     tone: "success" | "error";
     message: string;
   } | null>(null);
+  useEffect(() => {
+    if (initialMode === "login" && user && !eventCreator) navigate("/settings", { replace: true });
+  }, [eventCreator, initialMode, navigate, user]);
   const { data: tags = [] } = useQuery({
     queryKey: ["tags"],
     queryFn: () => listTags(),
@@ -204,6 +214,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     setTicketSalesPlatforms(editingEvent.ticketTypes?.map((ticket) => ticket.salesPlatform ?? "door") ?? ["door"]);
   }, [editingEvent]);
   const myPlacesQuery = useQuery({ queryKey: ["my-places", user?.id], queryFn: listMyPlaces, enabled: Boolean(user) });
+  const selectedEventPlace = myPlacesQuery.data?.find((place) => place.id === selectedEventPlaceId);
   const interestsQuery = useQuery({
     queryKey: ["profile-interests", user?.id],
     queryFn: getProfileAffinities,
@@ -438,7 +449,9 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         mediaFiles?: File[];
       },
     ) => {
-      const { managerUsernames = [], mediaFiles = [], ...eventInput } = input;
+      const { managerUsernames = [], mediaFiles: _mediaFiles = [], ...eventInput } = input;
+      void _mediaFiles;
+      await Promise.all(eventMediaUploadPromises.current);
       const created = editingEvent ? await updateMyEvent(editingEvent.id, eventInput) : await createUserEvent(eventInput);
       await Promise.allSettled([
         ...managerUsernames.map((username) =>
@@ -448,9 +461,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
             "user",
           ),
         ),
-        ...mediaFiles.map((file) =>
-          uploadContentMedia("event", created.id, file),
-        ),
+        ...(!editingEvent && eventMediaUpload.total ? [claimPendingEventMedia(created.id, eventMediaBatchId)] : []),
       ]);
       return created;
     },
@@ -477,6 +488,23 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         ),
       }),
   });
+
+  function startEventMediaUpload(files: FileList | null) {
+    const retryingFailedFiles = eventMediaUpload.failed > 0;
+    const retainedCount = retryingFailedFiles ? eventMediaUpload.completed : eventMediaUpload.total;
+    const selected = Array.from(files ?? []).slice(0, Math.max(0, 20 - retainedCount));
+    if (!selected.length) return;
+    setEventMediaUpload((current) => retryingFailedFiles
+      ? { total: current.completed + selected.length, completed: current.completed, failed: 0 }
+      : { ...current, total: current.total + selected.length });
+    const uploads = selected.map((file) => (editingEvent
+      ? uploadContentMedia("event", editingEvent.id, file)
+      : uploadPendingEventMedia(eventMediaBatchId, file))
+      .then((result) => { setEventMediaUpload((current) => ({ ...current, completed: current.completed + 1 })); return result; })
+      .catch((error) => { setEventMediaUpload((current) => ({ ...current, failed: current.failed + 1 })); throw error; }));
+    if (retryingFailedFiles) eventMediaUploadPromises.current = uploads;
+    else eventMediaUploadPromises.current.push(...uploads);
+  }
   const tagMutation = useMutation({
     mutationFn: createUserTag,
     onSuccess: (tag) => {
@@ -1232,7 +1260,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
             ) : null}
             <label>
               {t("Şifre", "Password")}
-              <input
+              <PasswordInput
                 autoComplete={
                   mode === "login" ? "current-password" : "new-password"
                 }
@@ -1253,7 +1281,6 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       )
                     : undefined
                 }
-                type="password"
               />
               {mode === "register" ? (
                 <span className="form-help">
@@ -1580,7 +1607,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 </label>
                 <label>
                   {t("Mevcut şifre", "Current password")}
-                  <input autoComplete="current-password" minLength={8} name="currentPassword" required type="password" />
+                  <PasswordInput autoComplete="current-password" minLength={8} name="currentPassword" required />
                 </label>
               </div>
               <button className="secondary-action" disabled={changeEmailMutation.isPending} type="submit">{changeEmailMutation.isPending ? t("Değiştiriliyor", "Changing") : t("E-postayı değiştir", "Change email")}</button>
@@ -1788,25 +1815,23 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               <h2>{t("Şifre değiştir", "Change password")}</h2>
               <label>
                 {t("Mevcut şifre", "Current password")}
-                <input
+                <PasswordInput
                   autoComplete="current-password"
                   minLength={8}
                   name="currentPassword"
                   required
-                  type="password"
                 />
               </label>
               <div className="form-grid">
                 <label>
                   {t("Yeni şifre", "New password")}
-                  <input
+                  <PasswordInput
                     autoComplete="new-password"
                     maxLength={128}
                     minLength={8}
                     name="newPassword"
                     pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}"
                     required
-                    type="password"
                   />
                   <span className="form-help">
                     {t("En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam içermeli.", "Use at least 8 characters with an uppercase letter, a lowercase letter and a number.")}
@@ -1814,14 +1839,13 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 </label>
                 <label>
                   {t("Yeni şifre tekrar", "Confirm new password")}
-                  <input
+                  <PasswordInput
                     autoComplete="new-password"
                     maxLength={128}
                     minLength={8}
                     name="newPasswordAgain"
                     pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}"
                     required
-                    type="password"
                   />
                   <span className="form-help">
                     {t("Yukarıdaki güçlü şifreyle aynı olmalı.", "It must match the strong password above.")}
@@ -1845,12 +1869,11 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               </p>
               <label>
                 {t("Mevcut şifre", "Current password")}
-                <input
+                <PasswordInput
                   autoComplete="current-password"
                   minLength={8}
                   name="currentPassword"
                   required
-                  type="password"
                 />
               </label>
               <label>
@@ -2190,9 +2213,9 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       value={eventFormat}
                       onChange={(event) => setEventFormat(event.target.value)}
                     >
-                      <option value="online">Online</option>
-                      <option value="offline">Offline</option>
-                      <option value="hybrid">Hybrid</option>
+                      <option value="online">{t("Çevrim içi", "Online")}</option>
+                      <option value="offline">{t("Yüz yüze", "In person")}</option>
+                      <option value="hybrid">{t("Hibrit", "Hybrid")}</option>
                     </select>
                   </label>
                   <label>
@@ -2223,10 +2246,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   <div className="form-grid">
                     <label>
                       {t("Mekân adı", "Place name")}
-                      <input defaultValue={editingEvent?.locationName ?? ""} name="locationName" />
+                      <input key={selectedEventPlace?.id ?? "custom-place-name"} defaultValue={selectedEventPlace?.name ?? editingEvent?.locationName ?? ""} name="locationName" />
                     </label>
-                    <label>{t("Var olan mekânlarımdan seç", "Choose from my existing places")}<select name="placeId" defaultValue=""><option value="">{t("Mekân seçilmedi", "No place selected")}</option>{myPlacesQuery.data?.map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}</select></label>
-                    <div className="location-fields-group"><CountryCityFields defaultCity={editingEvent?.city ?? profileQuery.data?.city} defaultCountry={editingEvent?.country ?? profileQuery.data?.country}/><LocationPicker addressName="locationAddress" defaultAddress={editingEvent?.locationAddress ?? ""} defaultLatitude={editingEvent?.latitude} defaultLongitude={editingEvent?.longitude}/></div>
+                    <label>{t("Var olan mekânlarımdan seç", "Choose from my existing places")}<select name="placeId" onChange={(event) => setSelectedEventPlaceId(event.currentTarget.value)} value={selectedEventPlaceId}><option value="">{t("Mekân seçilmedi", "No place selected")}</option>{myPlacesQuery.data?.map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}</select></label>
+                    <div className="location-fields-group" key={selectedEventPlace?.id ?? "custom-location"}><CountryCityFields defaultCity={selectedEventPlace?.city ?? editingEvent?.city ?? profileQuery.data?.city} defaultCountry={selectedEventPlace?.country ?? editingEvent?.country ?? profileQuery.data?.country}/><LocationPicker addressName="locationAddress" defaultAddress={selectedEventPlace?.address ?? editingEvent?.locationAddress ?? ""} defaultLatitude={selectedEventPlace?.latitude ?? editingEvent?.latitude} defaultLongitude={selectedEventPlace?.longitude ?? editingEvent?.longitude}/></div>
                   </div>
                 ) : null}
                 {eventFormat !== "offline" ? (
@@ -2267,10 +2290,17 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
                     multiple
                     name="eventMedia"
+                    onChange={(event) => startEventMediaUpload(event.currentTarget.files)}
                     type="file"
                   />
                   <span className="form-help">
-                    {t("En fazla 20 dosya seçebilirsin.", "You can select up to 20 files.")}
+                    {eventMediaUpload.total
+                      ? eventMediaUpload.failed
+                        ? t(`${eventMediaUpload.failed} dosya yüklenemedi; yeniden seçin.`, `${eventMediaUpload.failed} files failed to upload; select them again.`)
+                        : eventMediaUpload.completed < eventMediaUpload.total
+                          ? t(`${eventMediaUpload.completed}/${eventMediaUpload.total} dosya yükleniyor…`, `Uploading ${eventMediaUpload.completed}/${eventMediaUpload.total} files…`)
+                          : t(`${eventMediaUpload.completed} dosya yüklendi.`, `${eventMediaUpload.completed} files uploaded.`)
+                      : t("En fazla 20 dosya seçebilirsin. Seçimden hemen sonra yükleme başlar.", "You can select up to 20 files. Upload starts immediately after selection.")}
                   </span>
                 </label>
                 <h3>{t("Adım 3: Etkinlik medyası", "Step 3: Event media")}</h3>
@@ -2516,33 +2546,35 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         {t("Dış satış URL'si", "External sales URL")}
                         <input defaultValue={editingEvent?.ticketTypes?.[index]?.externalSalesUrl ?? ""} name="ticketExternalSalesUrl" placeholder="https://" required type="url" />
                       </label> : <input name="ticketExternalSalesUrl" type="hidden" value=""/>}
-                      <label>
-                        {t("Kontenjan", "Capacity")}
-                        <input defaultValue={editingEvent?.ticketTypes?.[index]?.capacity ?? ""} min="1" name="ticketCapacity" type="number" />
-                      </label>
-                      <label>
-                        {t("Kişi başına maksimum bilet", "Maximum tickets per person")}
-                        <input defaultValue={editingEvent?.ticketTypes?.[index]?.perUserLimit ?? ""} max="20" min="1" name="ticketPerUserLimit" type="number" />
-                      </label>
+                      {ticketSalesPlatforms[index] === "konnektora" ? <>
+                        <label>
+                          {t("Kontenjan", "Capacity")}
+                          <input defaultValue={editingEvent?.ticketTypes?.[index]?.capacity ?? ""} min="1" name="ticketCapacity" type="number" />
+                        </label>
+                        <label>
+                          {t("Kişi başına maksimum bilet", "Maximum tickets per person")}
+                          <input defaultValue={editingEvent?.ticketTypes?.[index]?.perUserLimit ?? ""} max="20" min="1" name="ticketPerUserLimit" type="number" />
+                        </label>
+                      </> : <><input name="ticketCapacity" type="hidden" value=""/><input name="ticketPerUserLimit" type="hidden" value=""/></>}
                       {editingEvent ? <label>{t("Bilet durumu", "Ticket status")}<select defaultValue={editingEvent.ticketTypes?.[index]?.status ?? "active"} name="ticketStatus" onChange={(event) => { const previous = editingEvent.ticketTypes?.[index]?.status ?? "active"; if (event.currentTarget.value !== previous && !window.confirm(event.currentTarget.value === "inactive" ? t("Bu bilet pasif yapılsın mı? Yeni satışlarda listelenmeyecek, mevcut biletler iptal edilmeyecek.", "Make this ticket inactive? It will disappear from new sales without cancelling existing tickets.") : t("Bu bilet yeniden aktif yapılsın mı? Satış koşulları uygunsa tekrar listelenecek.", "Reactivate this ticket? It will be listed again when its sales conditions are met."))) event.currentTarget.value = previous; }}><option value="active">{t("Aktif", "Active")}</option><option value="inactive">{t("Pasif", "Inactive")}</option></select></label> : <input name="ticketStatus" type="hidden" value="active"/>}
-                      <label>
-                        {t("Satış başlangıcı", "Sales start")}
-                        <input
-                          name="ticketSaleStartsAt"
-                          type="datetime-local"
-                        />
-                      </label>
-                      <label>
-                        {t("Satış bitişi", "Sales end")}
-                        <input name="ticketSaleEndsAt" type="datetime-local" />
-                      </label>
+                      {ticketSalesPlatforms[index] === "konnektora" ? <>
+                        <label>
+                          {t("Satış başlangıcı", "Sales start")}
+                          <input defaultValue={editingEvent?.ticketTypes?.[index]?.saleStartsAt ? toDateTimeLocal(editingEvent.ticketTypes[index]!.saleStartsAt!) : ""} name="ticketSaleStartsAt" type="datetime-local" />
+                        </label>
+                        <label>
+                          {t("Satış bitişi", "Sales end")}
+                          <input defaultValue={editingEvent?.ticketTypes?.[index]?.saleEndsAt ? toDateTimeLocal(editingEvent.ticketTypes[index]!.saleEndsAt!) : ""} name="ticketSaleEndsAt" type="datetime-local" />
+                        </label>
+                      </> : <><input name="ticketSaleStartsAt" type="hidden" value=""/><input name="ticketSaleEndsAt" type="hidden" value=""/></>}
                       <label>
                         {t("Gate açılışı", "Gate opens")}
-                        <input name="ticketGateOpensAt" type="datetime-local" />
+                        <input defaultValue={editingEvent?.ticketTypes?.[index]?.gateOpensAt ? toDateTimeLocal(editingEvent.ticketTypes[index]!.gateOpensAt!) : ""} name="ticketGateOpensAt" type="datetime-local" />
                       </label>
                       <label>
                         {t("Gate kapanışı", "Gate closes")}
                         <input
+                          defaultValue={editingEvent?.ticketTypes?.[index]?.gateClosesAt ? toDateTimeLocal(editingEvent.ticketTypes[index]!.gateClosesAt!) : ""}
                           name="ticketGateClosesAt"
                           type="datetime-local"
                         />

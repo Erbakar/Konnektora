@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { type ElementType, type ReactNode, useMemo, useState } from "react";
 import { useLanguage } from "../lib/i18n";
+import { PasswordInput } from "../components/FormInputs";
 
 type MobileMode = "intro" | "signup" | "login" | "forgot" | "tutorials" | "invite" | "app";
 type SignupKind = "individual" | "corporate";
@@ -355,8 +356,8 @@ function SignupScreen({
           )}
           <label>{t("Telefon numarası", "Phone number")}<input placeholder="+90 555 000 00 00" /></label>
           <label>{t("E-posta", "Email")}<input placeholder="maya@example.com" type="email" /></label>
-          <label>{t("Yeni parola", "New password")}<input placeholder={t("En az 8 karakter", "At least 8 characters")} type="password" /></label>
-          <label>{t("Yeni parola tekrar", "Confirm new password")}<input type="password" /></label>
+          <label>{t("Yeni parola", "New password")}<PasswordInput placeholder={t("En az 8 karakter", "At least 8 characters")} /></label>
+          <label>{t("Yeni parola tekrar", "Confirm new password")}<PasswordInput /></label>
           <label className="mobile-checkbox"><input type="checkbox" /> {t("Kullanım Koşulları ve Gizlilik Politikası'nı kabul ediyorum", "I accept the Terms of Use and Privacy Policy")}</label>
         </div>
       ) : null}
@@ -431,7 +432,7 @@ function LoginScreen({
   return (
     <section className="mobile-screen-body mobile-flow">
       <label>{loginMethod === "email" ? t("E-posta adresi", "Email address") : t("Telefon numarası", "Phone number")}<input placeholder={loginMethod === "email" ? "maya@example.com" : "+90 555 000 00 00"} /></label>
-      <label>{t("Parola", "Password")}<input type="password" /></label>
+      <label>{t("Parola", "Password")}<PasswordInput /></label>
       <button className="mobile-text-btn align-left" onClick={onForgot} type="button">{t("Parolanı mı unuttun?", "Forgot your password?")}</button>
       <button className="mobile-primary-btn" onClick={onLogin} type="button">{t("Giriş yap", "Log in")}</button>
     </section>
@@ -447,8 +448,8 @@ function ForgotPasswordScreen({ onDone }: { onDone: () => void }) {
       <p>{t("Parolanı e-posta adresin veya telefon numaranla yenile.", "Reset your password with your email address or phone number.")}</p>
       <label>{t("E-posta veya telefon", "Email or phone")}<input placeholder="maya@example.com" /></label>
       <CodeScreen body={t("Gönderdiğimiz 6 haneli kodu gir.", "Enter the 6-digit code we sent.")} />
-      <label>{t("Yeni parola", "New password")}<input type="password" /></label>
-      <label>{t("Yeni parola tekrar", "Confirm new password")}<input type="password" /></label>
+      <label>{t("Yeni parola", "New password")}<PasswordInput /></label>
+      <label>{t("Yeni parola tekrar", "Confirm new password")}<PasswordInput /></label>
       <button className="mobile-primary-btn" onClick={onDone} type="button">{t("Kaydet", "Save")}</button>
     </section>
   );

@@ -8,8 +8,8 @@ import { recordContentImpression, rememberContentSource, resolveMediaUrl } from 
 
 const icons = { user: UserRound, tag: Hash, event: CalendarDays, place: MapPin };
 
-export function DiscoveryCard({ item, hideSubtitle = false }: { item: DiscoveryItem; hideSubtitle?: boolean }) {
-  const cardRef = useRef<HTMLAnchorElement>(null);
+export function DiscoveryCard({ item, hideSubtitle = false, standard = false }: { item: DiscoveryItem; hideSubtitle?: boolean; standard?: boolean }) {
+  const cardRef = useRef<HTMLElement>(null);
   const { language } = useLanguage();
   const Icon = icons[item.kind];
   const initials = item.title
@@ -46,8 +46,22 @@ export function DiscoveryCard({ item, hideSubtitle = false }: { item: DiscoveryI
     observer.observe(element);
     return () => observer.disconnect();
   }, [item.id, item.kind]);
+  if (standard && (item.kind === "event" || item.kind === "place")) return (
+    <article className={`event-card${item.kind === "place" ? " place-card" : ""}`} ref={cardRef}>
+      <Link className={`event-card-media${item.imageUrl ? "" : " event-card-media-fallback"}`} onClick={() => rememberContentSource(item.kind, item.id)} to={item.href}>
+        {item.imageUrl ? <img alt="" src={resolveMediaUrl(item.imageUrl)}/> : item.kind === "event" ? <CalendarDays aria-hidden="true" size={34}/> : <MapPin aria-hidden="true" size={34}/>}
+        <span className="event-card-visibility-badge">{kindLabel}</span>
+      </Link>
+      <div><h3><Link onClick={() => rememberContentSource(item.kind, item.id)} to={item.href}>{item.title}</Link></h3>{!hideSubtitle && subtitle ? <p>{subtitle}</p> : null}</div>
+      <div className="event-details">
+        <span>{item.kind === "event" ? <CalendarDays size={16}/> : <MapPin size={16}/>} {meta}</span>
+        {item.kind === "event" && item.attendeeCount != null ? <span><UserRound size={16}/>{item.attendeeCount} {language === "tr" ? "katılımcı" : "attendees"}</span> : null}
+        <DistanceLabel latitude={item.latitude} longitude={item.longitude}/>
+      </div>
+    </article>
+  );
   return (
-    <Link className={`discovery-card discovery-${item.kind}`} onClick={() => rememberContentSource(item.kind, item.id)} ref={cardRef} to={item.href}>
+    <Link className={`discovery-card discovery-${item.kind}`} onClick={() => rememberContentSource(item.kind, item.id)} ref={(node) => { cardRef.current = node; }} to={item.href}>
       <span className="discovery-card-visual">
         {item.imageUrl ? (
           <img alt="" src={resolveMediaUrl(item.imageUrl)} />

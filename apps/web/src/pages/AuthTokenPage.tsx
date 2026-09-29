@@ -3,6 +3,7 @@ import { Check, KeyRound, MailCheck, UserRound } from "lucide-react";
 import { type FormEvent, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ServiceFeedback } from "../components/ServiceFeedback";
+import { PasswordInput } from "../components/FormInputs";
 import { acceptInvite, confirmEmail, resetPassword, setUserSession } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
 
@@ -76,7 +77,7 @@ export function ResetPasswordPage() {
       <form className="admin-form compact-form" onSubmit={handleSubmit}>
         <label>
           {t("Yeni şifre", "New password")}
-          <input maxLength={128} minLength={8} name="password" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" required title={t("En az 8 karakter, bir büyük harf, bir küçük harf ve bir özel karakter kullanın.", "Use at least 8 characters with an uppercase letter, a lowercase letter and a special character.")} type="password" />
+          <PasswordInput maxLength={128} minLength={8} name="password" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,128}" required title={t("En az 8 karakter, bir büyük harf, bir küçük harf ve bir özel karakter kullanın.", "Use at least 8 characters with an uppercase letter, a lowercase letter and a special character.")} />
         </label>
         <button className="primary-action" disabled={mutation.isPending || !token} type="submit">
           {t("Şifreyi kaydet", "Save password")}
@@ -136,7 +137,7 @@ export function AcceptInvitePage() {
         </label>
         <label>
           {t("Şifre", "Password")}
-          <input maxLength={128} minLength={8} name="password" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required title={t("En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam kullanın.", "Use at least 8 characters with an uppercase letter, a lowercase letter and a number.")} type="password" />
+          <PasswordInput maxLength={128} minLength={8} name="password" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required title={t("En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam kullanın.", "Use at least 8 characters with an uppercase letter, a lowercase letter and a number.")} />
         </label>
         <button className="primary-action" disabled={mutation.isPending || !token} type="submit">
           {t("Daveti kabul et", "Accept invitation")}

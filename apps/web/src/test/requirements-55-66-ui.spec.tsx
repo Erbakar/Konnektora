@@ -174,11 +174,12 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     await userEvent.click(screen.getByRole("button", { name: "Adım 6" }));
     const tickets = document.querySelector<HTMLElement>('[data-event-step="6"]')!;
     const platform = within(tickets).getByRole("combobox", { name: "Satış platformu" });
-    expect(within(tickets).getByRole("spinbutton", { name: "Kişi başına maksimum bilet" })).not.toBeRequired();
+    expect(within(tickets).queryByRole("spinbutton", { name: "Kişi başına maksimum bilet" })).not.toBeInTheDocument();
     await userEvent.selectOptions(platform, "konnektora");
     expect(within(tickets).getByRole("alert")).toHaveTextContent('Sadece kurumsal üyeler "Konnektora online satış" ayarını tercih edebilir.');
     expect(platform).toHaveValue("door");
     await userEvent.selectOptions(platform, "external");
+    expect(within(tickets).queryByRole("spinbutton", { name: "Kişi başına maksimum bilet" })).not.toBeInTheDocument();
     expect(within(tickets).getByRole("textbox", { name: "Dış satış URL'si" })).toHaveAttribute("type", "url");
   });
 

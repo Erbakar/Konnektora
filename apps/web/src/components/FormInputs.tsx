@@ -1,4 +1,5 @@
-import type { InputHTMLAttributes } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { useState, type InputHTMLAttributes } from "react";
 
 type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type">;
 
@@ -43,5 +44,22 @@ export function VerificationCodeInput(props: InputProps) {
         props.onChange?.(event);
       }}
     />
+  );
+}
+
+export function PasswordInput(props: InputProps) {
+  const [visible, setVisible] = useState(false);
+  const isTurkish = document.documentElement.lang !== "en";
+  return (
+    <span className="password-input">
+      <input {...props} type={visible ? "text" : "password"} />
+      <button
+        aria-label={visible ? (isTurkish ? "Şifreyi gizle" : "Hide password") : (isTurkish ? "Şifreyi göster" : "Show password")}
+        onClick={() => setVisible((current) => !current)}
+        type="button"
+      >
+        {visible ? <EyeOff size={18}/> : <Eye size={18}/>}
+      </button>
+    </span>
   );
 }

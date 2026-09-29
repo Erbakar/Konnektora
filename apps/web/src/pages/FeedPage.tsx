@@ -65,16 +65,7 @@ export function FeedPage() {
     </div>
     </section>
     <section className="post-list" aria-live="polite">{feed.isLoading || discovery.isLoading ? <div className="feed-state">{language === "tr" ? "Akış yükleniyor…" : "Loading feed…"}</div> : feed.isError || discovery.isError ? <div className="feed-state">{language === "tr" ? "Akış şu anda yüklenemedi." : "The feed is currently unavailable."}</div> : !timeline.length ? <div className="feed-state"><strong>{language === "tr" ? "Bu filtrede içerik yok." : "There is no content for this filter."}</strong><span>{language === "tr" ? "Başka bir zaman aralığı deneyebilirsin." : "Try a different time range."}</span></div> : timeline.map((item) => item.type === "post" ? <PostCard key={`post-${item.post.id}`} language={language} post={item.post} userId={user?.id} onChanged={refresh}/> : <ActivityCard activity={item.activity} key={`activity-${item.activity.kind}-${item.activity.id}`} language={language} userId={user?.id} onChanged={() => { void discovery.refetch(); }}/>)}</section>
-    <section className="feed-discovery-widgets">
-      {contentType === "all" || contentType === "events" ? <DiscoveryWidget language={language} title={language === "tr" ? "Popüler etkinlikler" : "Popular events"} items={discovery.data?.localEvents ?? []}/> : null}
-      {contentType === "all" || contentType === "places" ? <DiscoveryWidget language={language} title={language === "tr" ? "Popüler mekânlar" : "Popular places"} items={discovery.data?.popularPlaces ?? []}/> : null}
-      {contentType === "all" || contentType === "tags" ? <DiscoveryWidget language={language} title={language === "tr" ? "Trend etiketler" : "Trending interests"} items={discovery.data?.trendingTags ?? []}/> : null}
-    </section>
   </div>;
-}
-
-function DiscoveryWidget({ language, title, items }: { language: "tr" | "en"; title: string; items: Array<{ id: string; title: string; href: string; meta?: string | null }> }) {
-  return <section className="admin-form"><h2>{title}</h2>{items.slice(0, 5).map((item) => <Link className="admin-list-row" key={item.id} to={item.href}><div><strong>{item.title}</strong><span>{localizeMetaText(item.meta, language)}</span></div></Link>)}{!items.length ? <p className="form-help">{language === "tr" ? "Ülkende içerik bulunamadı; global içerikler hazırlanıyor." : "No content was found in your country; global content is being prepared."}</p> : null}</section>;
 }
 
 function ActivityCard({ activity, language, userId, onChanged }: { activity: DiscoveryFeed["activities"][number]; language: "tr" | "en"; userId?: string; onChanged: () => void }) {

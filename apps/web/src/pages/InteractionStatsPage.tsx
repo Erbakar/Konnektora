@@ -343,6 +343,7 @@ export function InteractionStatsPage() {
     {stats.isError ? <section className="stats-access-gate"><h2>{t("Gelişmiş analiz erişimi gerekli", "Advanced analytics access required")}</h2><p>{t("Bu rapor yalnız içerik yöneticileri ile admin, küratör veya uygun paket sahipleri tarafından kullanılabilir.", "This report is available only to content managers and admins, curators or members with an eligible plan.")}</p><Link className="primary-action" to="/store">{t("Paketleri incele", "View plans")}</Link></section> : null}
     {stats.data && !hasMetrics ? <section className="stats-access-gate"><h2>{t("Bu rapora erişiminiz yok", "You do not have access to this report")}</h2><p>{t("Kendi profil istatistikleriniz uygun paketle; başka profillerin istatistikleri yalnız yetkili rollerle görüntülenebilir.", "Your own profile analytics require an eligible plan; analytics for other profiles are restricted to authorised roles.")}</p><Link className="primary-action" to="/store">{t("Paketleri incele", "View plans")}</Link></section> : null}
     {stats.data && hasMetrics ? <>
+      <AnalyticsVisuals entries={Object.entries(data)} language={language}/>
       <StatsSection title={t("Genel bakış", "Overview")} description={t("En önemli performans göstergeleri", "The most important performance indicators")} icon={<BarChart3 size={21}/>}><MetricGrid entries={overview}/></StatsSection>
       {funnel.length > 1 ? <StatsSection title={t("Dönüşüm hunisi", "Conversion funnel")} description={t("İlk temastan gerçek katılıma kadar kullanıcı akışı", "The user journey from first contact to real participation")} icon={<TrendingUp size={21}/>}><BarList entries={funnel}/></StatsSection> : null}
       {conversions.length ? <StatsSection title={t("Dönüşüm ve etkileşim", "Conversion and engagement")} icon={<TrendingUp size={21}/>}><MetricGrid entries={conversions}/></StatsSection> : null}
@@ -353,5 +354,26 @@ export function InteractionStatsPage() {
       <StatsSection title={t("Veriye dayalı içgörüler", "Data-driven insights")} description={t("Aşağıdaki öneriler yalnızca bu sayfadaki ölçümlerden türetilir.", "The recommendations below are derived only from the metrics on this page.")} icon={<Lightbulb size={21}/>}><div className="stats-insights">{insights.map((insight) => <p key={insight}>{insight}</p>)}</div></StatsSection>
       <aside className="stats-unmeasured"><strong>{t("Ölçüm kapsamı", "Measurement scope")}</strong><p>{t("Konnektora içindeki liste ve arama gösterimleri, detay görüntülemeleri ve paylaşım kanalları gerçek etkileşimlerden kaydedilir. Harici arama motorlarının gösterim sayısı ve cihazlar arası kullanıcı eşleştirmesi tutulmadığı için bu alanlarda tahmini veya örnek rakam gösterilmez.", "Listing and search impressions, detail views and share channels inside Konnektora are recorded from real interactions. External search-engine impression counts and cross-device identity matching are not stored, so no estimated or sample figures are shown for those areas.")}</p></aside>
     </> : null}
+  </section>;
+}
+
+function AnalyticsVisuals({ entries, language }: { entries: Array<[string, number]>; language: "tr" | "en" }) {
+  const values = entries.slice(0, 8);
+  if (!values.length) return null;
+  const max = Math.max(...values.map(([, value]) => value), 1);
+  const total = values.reduce((sum, [, value]) => sum + Math.max(0, value), 0) || 1;
+  let cursor = 0;
+  const colors = ["#21724e", "#58b183", "#e2a84b", "#6d8fc7", "#b96f87", "#76a5a9", "#8d78b8", "#d27d55"];
+  const stops = values.map(([, value], index) => {
+    const start = cursor;
+    cursor += Math.max(0, value) / total * 360;
+    return `${colors[index % colors.length]} ${start}deg ${cursor}deg`;
+  }).join(", ");
+  const points = values.map(([, value], index) => `${values.length === 1 ? 50 : index / (values.length - 1) * 100},${100 - value / max * 86}`).join(" ");
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
+  return <section className="stats-visual-grid" aria-label={t("İstatistik grafikleri", "Analytics charts")}>
+    <article aria-label={t("Çubuk grafik", "Bar chart")}><h2>{t("Ölçüm karşılaştırması", "Metric comparison")}</h2><div className="stats-mini-bars">{values.map(([key, value]) => <span key={key} title={`${prettyKey(key, language)}: ${value}`} style={{ height: `${Math.max(5, value / max * 100)}%` }}/>)}</div></article>
+    <article aria-label={t("Pasta grafik", "Pie chart")}><h2>{t("Dağılım", "Distribution")}</h2><div className="stats-donut" style={{ background: `conic-gradient(${stops})` }}><span>{values.length}</span></div></article>
+    <article aria-label={t("Çizgi grafik", "Line chart")}><h2>{t("Eğilim", "Trend")}</h2><svg className="stats-line-chart" role="img" viewBox="0 0 100 100"><polyline fill="none" points={points} stroke="#21724e" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4"/></svg></article>
   </section>;
 }

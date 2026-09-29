@@ -49,6 +49,7 @@ describe("EventsService", () => {
         update: jest.fn(),
         updateMany: jest.fn(),
         upsert: jest.fn(),
+        delete: jest.fn(),
       },
       $transaction: jest.fn(),
     };
@@ -392,6 +393,16 @@ describe("EventsService", () => {
     await expect(
       service.requestAttendance("event-1", actor.id),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it("lets an attendee leave but protects event managers", async () => {
+    const { service, prisma } = createService();
+    prisma.eventParticipant.findUnique.mockResolvedValue({ id: "participant-1", role: EventParticipantRole.attendee });
+    await expect(service.leaveEvent("event-1", actor.id)).resolves.toEqual({ left: true });
+    expect(prisma.eventParticipant.delete).toHaveBeenCalledWith({ where: { id: "participant-1" } });
+
+    prisma.eventParticipant.findUnique.mockResolvedValue({ id: "manager-1", role: EventParticipantRole.manager });
+    await expect(service.leaveEvent("event-1", actor.id)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it("allows the event creator to manage the guest list", async () => {

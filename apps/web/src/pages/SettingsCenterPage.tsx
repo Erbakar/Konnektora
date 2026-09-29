@@ -28,10 +28,12 @@ import {
   getProfileAffinities,
   getUserSession,
   listProfileMedia,
+  listBlocks,
   listSocialAccounts,
   listTags,
   makeProfilePicture,
   removeSocialAccount,
+  removeBlock,
   requestEmailVerification,
   requestPhoneVerification,
   resolveMediaUrl,
@@ -46,6 +48,7 @@ import {
 import { CountryCityFields } from "../components/CountryCityFields";
 import {
   EmailInput,
+  PasswordInput,
   PhoneInput,
   VerificationCodeInput,
 } from "../components/FormInputs";
@@ -681,31 +684,28 @@ function AccountSettings() {
         <h2>{t("Şifreyi değiştir", "Change password")}</h2>
         <label>
           {t("Mevcut şifre", "Current password")}
-          <input
+          <PasswordInput
             autoComplete="current-password"
             name="currentPassword"
             required
-            type="password"
           />
         </label>
         <label>
           {t("Yeni şifre", "New password")}
-          <input
+          <PasswordInput
             autoComplete="new-password"
             minLength={8}
             name="newPassword"
             required
-            type="password"
           />
         </label>
         <label>
           {t("Yeni şifre tekrar", "Confirm new password")}
-          <input
+          <PasswordInput
             autoComplete="new-password"
             minLength={8}
             name="confirmation"
             required
-            type="password"
           />
         </label>
         <button className="primary-action" disabled={change.isPending}>
@@ -737,7 +737,7 @@ function AccountSettings() {
         </label>
         <label>
           {t("Mevcut şifre", "Current password")}
-          <input name="currentPassword" required type="password" />
+          <PasswordInput name="currentPassword" required />
         </label>
         <button className="danger-action" disabled={freeze.isPending}>
           {t("Hesabı dondur", "Freeze account")}
@@ -871,6 +871,11 @@ function PrivacySettings() {
     onSuccess: () =>
       client.invalidateQueries({ queryKey: ["privacy-settings"] }),
   });
+  const blocks = useQuery({ queryKey: ["blocks"], queryFn: listBlocks });
+  const unblock = useMutation({
+    mutationFn: (target: { targetType: "user" | "event" | "place"; targetId: string }) => removeBlock(target.targetType, target.targetId),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["blocks"] }),
+  });
   if (!privacy.data)
     return <div className="identity-panel">{language === "tr" ? "Gizlilik ayarları yükleniyor…" : "Loading privacy settings…"}</div>;
   const visibleFields = privacyFields.filter((field) =>
@@ -949,6 +954,13 @@ function PrivacySettings() {
       {save.isSuccess ? (
         <p className="form-success">{language === "tr" ? "Gizlilik ayarları kaydedildi." : "Privacy settings saved."}</p>
       ) : null}
+      <section className="blocked-lists" aria-label={language === "tr" ? "Engellenen içerikler" : "Blocked content"}>
+        {(["user", "event", "place"] as const).map((targetType) => {
+          const items = (blocks.data ?? []).filter((block) => block.targetType === targetType);
+          const title = targetType === "user" ? (language === "tr" ? "Engellenen hesaplar" : "Blocked accounts") : targetType === "event" ? (language === "tr" ? "Engellenen etkinlikler" : "Blocked events") : (language === "tr" ? "Engellenen mekânlar" : "Blocked places");
+          return <div className="admin-form" key={targetType}><h2>{title}</h2>{items.length ? <div className="admin-list">{items.map((item) => <article className="admin-list-row" key={item.targetId}><div><strong>{item.label}</strong>{item.subtitle ? <span>{item.subtitle}</span> : null}</div><button disabled={unblock.isPending} onClick={() => unblock.mutate({ targetType, targetId: item.targetId })} type="button">{language === "tr" ? "Engeli kaldır" : "Unblock"}</button></article>)}</div> : <p className="form-help">{language === "tr" ? "Bu grupta engellenen içerik yok." : "There is no blocked content in this group."}</p>}</div>;
+        })}
+      </section>
     </form>
   );
 }

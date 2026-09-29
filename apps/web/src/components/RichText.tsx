@@ -14,8 +14,11 @@ export function RichText({ text, hideEmbeddableUrls = false }: { text: string; h
         .body.textContent?.trim() ?? text
     : text;
   const displayText = hideEmbeddableUrls
-    ? plainText.replace(/https?:\/\/[^\s]+/gi, (match) => {
+    ? plainText.replace(/https?:\/\/[^\s]+/gi, (match, offset: number, source: string) => {
         const url = match.replace(/[),.!?;:]+$/g, "");
+        const before = source.slice(0, offset);
+        const insideNamedLink = ((before.match(/""/g)?.length ?? 0) % 2 === 1) || ((before.match(/“”/g)?.length ?? 0) % 2 === 1);
+        if (insideNamedLink) return match;
         return /(?:youtu\.be|youtube\.com|soundcloud\.com)\//i.test(url) ? "" : match;
       }).replace(/[ \t]{2,}/g, " ").trim()
     : plainText;

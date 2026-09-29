@@ -165,8 +165,8 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
     await waitFor(() => expect(apiMocks.createContentComment).toHaveBeenCalledWith("place", "place-1", ""));
     expect(apiMocks.uploadContentMedia).toHaveBeenCalledWith("place_comment", "post-1", image);
     await userEvent.click(screen.getByText("İpuçları"));
-    expect(screen.getByText("“görünen etiket|gidilecek etiket”")).toBeVisible();
-    expect(screen.getByText("“bağlantının adı|https://ornek.com”")).toBeVisible();
+    expect(screen.getByText('""görünen etiket|gidilecek etiket""')).toBeVisible();
+    expect(screen.getByText('""bağlantının adı|https://ornek.com""')).toBeVisible();
     expect(screen.getByText("email@domain.com")).toBeVisible();
     expect(screen.getByText("@Username")).toBeVisible();
     expect(screen.getByText(/YouTube ve SoundCloud/)).toBeVisible();

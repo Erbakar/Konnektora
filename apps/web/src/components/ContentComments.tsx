@@ -391,6 +391,10 @@ function CommentActions({
   const [reportOpen, setReportOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editBody, setEditBody] = useState(comment.body);
+  const [replying, setReplying] = useState(false);
+  const [replyBody, setReplyBody] = useState("");
   const like = useMutation({
     mutationFn: () => toggleContentCommentLike(comment.id),
     onSuccess: onChanged,
@@ -404,7 +408,7 @@ function CommentActions({
   });
   const edit = useMutation({
     mutationFn: (body: string) => updateContentComment(comment.id, body),
-    onSuccess: onChanged,
+    onSuccess: () => { setEditing(false); onChanged(); },
   });
   const reply = useMutation({
     mutationFn: (body: string) =>
@@ -414,7 +418,7 @@ function CommentActions({
         body,
         comment.parentId ?? comment.id,
       ),
-    onSuccess: onChanged,
+    onSuccess: () => { setReplyBody(""); setReplying(false); onChanged(); },
   });
   const follow = useMutation({
     mutationFn: () =>
@@ -463,10 +467,7 @@ function CommentActions({
           {comment.likeCount || (language === "tr" ? "Beğen" : "Like")}
         </button>
         <button
-          onClick={() => {
-            const body = window.prompt(language === "tr" ? "Yanıtını yaz" : "Write your reply");
-            if (body?.trim()) reply.mutate(body.trim());
-          }}
+          onClick={() => setReplying((current) => !current)}
           type="button"
         >
           <Reply size={14} />
@@ -530,11 +531,7 @@ function CommentActions({
             ) : null}
             {comment.authorId === currentUserId ? (
               <button
-                onClick={() => {
-                  const body = window.prompt(language === "tr" ? "Yorumu düzenle" : "Edit comment", comment.body);
-                  if (body?.trim() && body.trim() !== comment.body)
-                    edit.mutate(body.trim());
-                }}
+                onClick={() => { setEditBody(comment.body); setEditing(true); }}
                 type="button"
               >
                 <Edit3 size={14} />
@@ -558,6 +555,8 @@ function CommentActions({
           </div>
         </details>
       </div>
+      {editing ? <form className="comment-inline-editor" onSubmit={(event) => { event.preventDefault(); if (editBody.trim() && editBody.trim() !== comment.body) edit.mutate(editBody.trim()); }}><textarea aria-label={language === "tr" ? "Yorumu düzenle" : "Edit comment"} maxLength={3000} onChange={(event) => setEditBody(event.target.value)} value={editBody}/><div><button onClick={() => setEditing(false)} type="button">{language === "tr" ? "Vazgeç" : "Cancel"}</button><button className="primary-action" disabled={!editBody.trim() || edit.isPending} type="submit">{language === "tr" ? "Kaydet" : "Save"}</button></div></form> : null}
+      {replying ? <form className="comment-inline-editor" onSubmit={(event) => { event.preventDefault(); if (replyBody.trim()) reply.mutate(replyBody.trim()); }}><textarea aria-label={language === "tr" ? "Yanıtını yaz" : "Write your reply"} maxLength={3000} onChange={(event) => setReplyBody(event.target.value)} value={replyBody}/><div><button onClick={() => setReplying(false)} type="button">{language === "tr" ? "Vazgeç" : "Cancel"}</button><button className="primary-action" disabled={!replyBody.trim() || reply.isPending} type="submit">{language === "tr" ? "Yanıtla" : "Reply"}</button></div></form> : null}
       {deleteOpen ? (
         <div className="emotion-modal" role="presentation" onMouseDown={() => setDeleteOpen(false)}>
           <section aria-labelledby={`delete-comment-title-${comment.id}`} aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog">
@@ -582,6 +581,7 @@ function CommentActions({
         targetId={comment.id}
         targetType="post"
         title={comment.body.trim().slice(0, 120) || (language === "tr" ? "Konnektora postu" : "Konnektora post")}
+        text={comment.body.trim().slice(0, 500)}
         url={`${window.location.href.split("#")[0]}#post-${comment.id}`}
       />
     </>

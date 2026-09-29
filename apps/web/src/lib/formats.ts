@@ -138,3 +138,16 @@ export function formatEventDateRange(
     ? `${range} (${formatEventDuration(startsAt, endsAt, locale)})`
     : range;
 }
+
+export function formatTimeZoneOffset(timeZone: string, value: string | Date) {
+  try {
+    const part = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      timeZoneName: "longOffset",
+    }).formatToParts(new Date(value)).find((item) => item.type === "timeZoneName")?.value;
+    if (!part || part === "GMT") return "GMT+0";
+    return part.replace(/^GMT([+-])0?(\d+):00$/, "GMT$1$2").replace(/^GMT([+-])0?(\d+):/, "GMT$1$2:");
+  } catch {
+    return timeZone;
+  }
+}

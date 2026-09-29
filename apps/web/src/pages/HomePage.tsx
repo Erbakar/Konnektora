@@ -245,29 +245,66 @@ export function HomePage() {
     <div className="corp-home">
       <section className="corp-hero">
         <div className="corp-hero-inner">
-          <p className="corp-eyebrow">{c.eyebrow}</p>
-          <h1>
-            {c.title.split(" ").slice(0, 3).join(" ")}
-            <span> {c.title.split(" ").slice(3).join(" ")}</span>
-          </h1>
-          <p className="corp-hero-lead">{c.lead}</p>
-          <div className="corp-hero-actions">
-            <Link className="corp-btn corp-btn-primary" to="/events">
-              {c.explore}
-            </Link>
-            {user ? <Link className="corp-btn corp-btn-secondary" to="/tags">{language === "tr" ? "İlgi alanlarını gör" : "View your interests"}</Link> : <a className="corp-btn corp-btn-secondary" href={publicSiteHref("/onboarding")}>{c.join}</a>}
+          <div className="corp-hero-copy">
+            <p className="corp-eyebrow">{c.eyebrow}</p>
+            <h1>
+              {c.title.split(" ").slice(0, 3).join(" ")}
+              <span> {c.title.split(" ").slice(3).join(" ")}</span>
+            </h1>
+            <p className="corp-hero-lead">{language === "tr" ? <><strong>Konnektora</strong>, insanların <strong>ilgi alanları, etkinlikler, mekânlar ve ortak tutkular</strong> üzerinden birbirlerini keşfetmesini ve gerçek hayatta bağlantı kurmasını sağlayan sosyal keşif platformudur. İnsanlar nelerle ilgileniyor, ne yapmak istiyor ve bunu kimlerle birlikte yapabilir sorusuna odaklanır.</> : <><strong>Konnektora</strong> is a social discovery platform that helps people discover one another and connect in real life through <strong>interests, events, places and shared passions</strong>. It focuses on what people care about, what they want to do and who they can do it with.</>}</p>
+            <div className="corp-hero-actions">
+              <Link className="corp-btn corp-btn-primary" to="/events">
+                {c.explore}
+              </Link>
+              {user ? <Link className="corp-btn corp-btn-secondary" to="/tags">{language === "tr" ? "İlgi alanlarını gör" : "View your interests"}</Link> : <a className="corp-btn corp-btn-secondary" href={publicSiteHref("/onboarding")}>{c.join}</a>}
+            </div>
+            <form className="hero-search" action="/search">
+              <Search size={20} />
+              <input
+                aria-label={c.searchPlaceholder}
+                name="q"
+                placeholder={c.searchPlaceholder}
+                minLength={2}
+                required
+              />
+              <button type="submit">{c.search}</button>
+            </form>
           </div>
-          <form className="hero-search" action="/search">
-            <Search size={20} />
-            <input
-              aria-label={c.searchPlaceholder}
-              name="q"
-              placeholder={c.searchPlaceholder}
-              minLength={2}
-              required
-            />
-            <button type="submit">{c.search}</button>
-          </form>
+
+          <aside className="hero-discovery-network" aria-label={language === "tr" ? "Konnektora keşif akışı" : "Konnektora discovery flow"}>
+            <span className="hero-network-orbit hero-network-orbit-one" aria-hidden="true" />
+            <span className="hero-network-orbit hero-network-orbit-two" aria-hidden="true" />
+            <section className="hero-network-step hero-network-interests">
+              <span className="hero-network-step-number">1</span>
+              <small>{language === "tr" ? "İLGİ ALANINI SEÇ" : "CHOOSE AN INTEREST"}</small>
+              <div className="hero-interest-cloud">
+                <span><Hash size={13} />{language === "tr" ? "Müzik" : "Music"}</span>
+                <span><Hash size={13} />Startup</span>
+                <span><Hash size={13} />{language === "tr" ? "Sanat" : "Art"}</span>
+              </div>
+            </section>
+            <ArrowRight className="hero-network-arrow hero-network-arrow-one" aria-hidden="true" size={22} />
+            <section className="hero-network-step hero-network-event">
+              <div className="hero-event-cover" aria-hidden="true"><Sparkles size={28} /></div>
+              <div>
+                <span className="hero-network-step-number">2</span>
+                <small>{language === "tr" ? "ETKİNLİĞİ KEŞFET" : "DISCOVER AN EVENT"}</small>
+                <strong>{language === "tr" ? "Yaratıcılar Buluşması" : "Creators Meetup"}</strong>
+                <p><MapPin size={13} /> İstanbul · {language === "tr" ? "Bu hafta" : "This week"}</p>
+              </div>
+            </section>
+            <ArrowRight className="hero-network-arrow hero-network-arrow-two" aria-hidden="true" size={22} />
+            <section className="hero-network-step hero-network-people">
+              <span className="hero-network-step-number">3</span>
+              <div className="hero-network-avatars" aria-hidden="true">
+                <span>EK</span><span>MD</span><span>+8</span>
+              </div>
+              <div>
+                <small>{language === "tr" ? "BİRLİKTE KATIL" : "JOIN TOGETHER"}</small>
+                <strong>{language === "tr" ? "Senin gibi insanlarla tanış" : "Meet people like you"}</strong>
+              </div>
+            </section>
+          </aside>
         </div>
       </section>
 

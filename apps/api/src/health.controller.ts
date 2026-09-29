@@ -33,6 +33,8 @@ export class HealthController {
       database: "ready",
       providers: {
         email: Boolean(this.config.get("RESEND_API_KEY") && this.config.get("EMAIL_FROM")),
+        googleAuth: Boolean(this.config.get("GOOGLE_CLIENT_ID")),
+        facebookAuth: Boolean(this.config.get("FACEBOOK_APP_ID") && this.config.get("FACEBOOK_APP_SECRET")),
         sms: Boolean(this.config.get("SMS_WEBHOOK_URL")),
         push: Boolean(this.config.get("VAPID_PUBLIC_KEY") && this.config.get("VAPID_PRIVATE_KEY")),
         profileVerification: Boolean(this.config.get("FACE_VERIFICATION_URL"))

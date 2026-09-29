@@ -94,6 +94,26 @@ describe("ContentService profile media", () => {
     expect(mediaFile.create).toHaveBeenCalledWith({ data: expect.objectContaining({ contentType: ReportTargetType.event, contentId: "event-1", sortOrder: 1 }) });
   });
 
+  it("uploads event media to a user-bound pending batch and claims it after event creation", async () => {
+    const actor = { id: "owner-1", role: "user" } as never;
+    const batchId = "11111111-1111-4111-8111-111111111111";
+    const pending = [{ id: "media-pending", type: "image", url: "/uploads/pending.webp", sortOrder: 0, createdAt: new Date() }];
+    mediaFile.count.mockResolvedValueOnce(0);
+    mediaFile.create.mockResolvedValue({ ...pending[0], contentId: `pending:owner-1:${batchId}` });
+
+    await service.createPendingEventMedia(batchId, actor, "/uploads/pending.webp", "image");
+
+    expect(mediaFile.create).toHaveBeenCalledWith({ data: expect.objectContaining({ contentType: ReportTargetType.event, contentId: `pending:owner-1:${batchId}`, uploadedById: "owner-1" }) });
+
+    prisma.event.findUnique.mockResolvedValue({ createdById: "owner-1" });
+    mediaFile.count.mockResolvedValueOnce(0);
+    mediaFile.findMany.mockResolvedValueOnce(pending).mockResolvedValueOnce([]);
+    await service.claimPendingEventMedia("event-1", batchId, actor);
+
+    expect(mediaFile.update).toHaveBeenCalledWith({ where: { id: "media-pending" }, data: { contentId: "event-1", sortOrder: 0 } });
+    expect(prisma.event.update).toHaveBeenCalledWith({ where: { id: "event-1" }, data: { coverImageUrl: "/uploads/pending.webp" } });
+  });
+
   it("reorders event media and promotes the first photo to cover", async () => {
     prisma.event.findUnique.mockResolvedValue({ createdById: "owner-1" });
     const album = [

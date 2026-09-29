@@ -3,6 +3,8 @@ import {
   BadgeCheck,
   Ban,
   CalendarDays,
+  BarChart3,
+  Bell,
   Flag,
   Globe2,
   Heart,
@@ -387,11 +389,13 @@ export function PublicProfilePage() {
                     <Share2 size={18} /> {t("Paylaş", "Share")}
                   </button>
                   {!profile.relationship.blockedByViewer ? <button onClick={() => setNotificationOpen(true)} type="button">
+                    <Bell size={18} />
                     {notification.data?.enabled
                       ? t("Bildirimleri kapat", "Turn off notifications")
                       : t("Bildirim ayarla", "Set a notification")}
                   </button> : null}
                   <Link to={`/stats/user/${profile.id}`}>
+                    <BarChart3 size={18} />
                     {t("Etkileşim istatistikleri", "Interaction statistics")}
                   </Link>
                   {!profile.relationship.blockedByViewer ? <GuestListAction canUse={canUseGuestLists} className="" target={{ id: profile.id, name: profile.name, username: profile.username, avatarUrl: profile.media[0]?.url ?? null, accountType: profile.accountType, role: profile.systemRole, plan: profile.plan }}/> : null}
@@ -506,6 +510,7 @@ export function PublicProfilePage() {
         targetId={profile.id}
         targetType="user"
         title={profile.name}
+        text={[profile.name, profile.username ? `@${profile.username}` : "", [profile.city, profile.country].filter(Boolean).join(", ")].filter(Boolean).join("\n")}
         url={window.location.href}
       />
       {galleryIndex != null && profile.media[galleryIndex] ? (
@@ -685,20 +690,9 @@ export function PublicProfilePage() {
                 </b>{" "}
                 {interest.tag.name}
               </span>
-              <small>
-                {interest.sentiment === "like"
-                  ? t("Beğeniyor", "Likes")
-                  : interest.sentiment === "dislike"
-                    ? t("Beğenmiyor", "Dislikes")
-                    : t("Nötr", "Neutral")}
-                {interest.commentCount ? (
-                  <>
-                    {" "}
-                    · <MessageCircle size={13} /> {interest.commentCount}{" "}
-                    {t("gönderi", "posts")}
-                  </>
-                ) : null}
-              </small>
+              {interest.commentCount ? (
+                <small><MessageCircle size={13} /> {interest.commentCount} {t("gönderi", "posts")}</small>
+              ) : null}
             </Link>
           ))}
           {!profile.interests.length ? (
@@ -856,7 +850,7 @@ export function PublicProfilePage() {
             onClick={() => setProfileEventTab("future")}
             type="button"
           >
-            {t("Gelecek", "Future")}
+            {t("Güncel", "Current")}
           </button>
           <button
             className={profileEventTab === "past" ? "active" : ""}
@@ -884,7 +878,7 @@ export function PublicProfilePage() {
                 : new Date(date) < new Date();
             })
             .map((item) => (
-              <DiscoveryCard hideSubtitle item={item} key={item.id} />
+              <DiscoveryCard hideSubtitle item={item} key={item.id} standard />
             ))}
         </div>
         {!profile.events.length ? (
@@ -921,7 +915,7 @@ export function PublicProfilePage() {
           {profile.places
             .filter((item) => profilePlaceTab === "all" || item.organizer)
             .map((item) => (
-              <DiscoveryCard hideSubtitle item={item} key={item.id} />
+              <DiscoveryCard hideSubtitle item={item} key={item.id} standard />
             ))}
         </div>
         {!profile.places.length ? (

@@ -2705,6 +2705,16 @@ function getMockResponse<T>(
   }
 
   if (
+    pathname.startsWith("/events/") &&
+    pathname.endsWith("/attend") &&
+    method === "DELETE"
+  ) {
+    return schema.parse(
+      leaveMockEvent(pathname.slice("/events/".length, -"/attend".length)),
+    );
+  }
+
+  if (
     (pathname.startsWith("/event-stats/") ||
       pathname.startsWith("/place-stats/")) &&
     method === "GET"
@@ -4148,6 +4158,20 @@ function requestMockAttendance(eventId: string): EventParticipant {
   ]);
 
   return participant;
+}
+
+function leaveMockEvent(eventId: string): { left: boolean } {
+  const user = getUserSession();
+  if (!user) throw new Error("Mock user session not found");
+  const participants = readStorage<EventParticipant[]>(MOCK_PARTICIPANTS_KEY, []);
+  writeStorage(
+    MOCK_PARTICIPANTS_KEY,
+    participants.filter(
+      (item) =>
+        !(item.eventId === eventId && item.userId === user.id && item.role === "attendee"),
+    ),
+  );
+  return { left: true };
 }
 
 function inviteMockParticipant(
@@ -8338,6 +8362,21 @@ export function uploadContentMedia(
   );
 }
 
+export function uploadPendingEventMedia(batchId: string, file: File): Promise<ProfileMedia> {
+  if (isMockApiMode) {
+    const now = new Date().toISOString();
+    return Promise.resolve({ id: crypto.randomUUID(), url: URL.createObjectURL(file), type: file.type.startsWith("image/") ? "image" : "video", sortOrder: 0, isProfilePicture: false, status: "active", contentType: "event", contentId: `pending:${batchId}`, uploadedById: getUserSession()?.id ?? null, createdAt: now, updatedAt: now });
+  }
+  const form = new FormData();
+  form.append("file", file);
+  return requestJson(`/media/event/pending/${encodeURIComponent(batchId)}/upload`, profileMediaSchema, { auth: "user", method: "POST", body: form });
+}
+
+export function claimPendingEventMedia(eventId: string, batchId: string): Promise<ProfileMedia[]> {
+  if (isMockApiMode) return Promise.resolve([]);
+  return requestJson(`/media/event/${encodeURIComponent(eventId)}/claim/${encodeURIComponent(batchId)}`, profileMediaListSchema, { auth: "user", method: "POST" });
+}
+
 export function reorderContentMedia(targetType: "event" | "place", targetId: string, mediaIds: string[]): Promise<ProfileMedia[]> {
   return requestJson(`/media/${targetType}/${targetId}/order`, profileMediaListSchema, {
     auth: "user",
@@ -10689,6 +10728,13 @@ export function requestEventAttendance(
   return requestJson(`/events/${eventId}/attend`, eventParticipantSchema, {
     auth: "user",
     method: "POST",
+  });
+}
+
+export function leaveEvent(eventId: string): Promise<{ left: boolean }> {
+  return requestJson(`/events/${eventId}/attend`, z.object({ left: z.boolean() }), {
+    auth: "user",
+    method: "DELETE",
   });
 }
 

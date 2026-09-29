@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, Check, ImagePlus, Sparkles, UserPlus } from "luc
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { TagSentiment } from "@konnektora/shared";
-import { EmailInput, PhoneInput, VerificationCodeInput } from "../components/FormInputs";
+import { EmailInput, PasswordInput, PhoneInput, VerificationCodeInput } from "../components/FormInputs";
 import { ServiceFeedback } from "../components/ServiceFeedback";
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
 import { CountryCityFields } from "../components/CountryCityFields";
@@ -298,12 +298,12 @@ export function OnboardingPage() {
             </label>
             <label>
               {t("Şifre", "Password")}
-              <input name="password" minLength={8} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required type="password" />
+              <PasswordInput name="password" minLength={8} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required />
               <span className="form-help">{t("En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam içermeli.", "At least 8 characters, including an uppercase letter, a lowercase letter and a number.")}</span>
             </label>
             <label>
               {t("Şifre tekrar", "Repeat password")}
-              <input name="passwordAgain" minLength={8} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required type="password" />
+              <PasswordInput name="passwordAgain" minLength={8} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}" required />
             </label>
             <label className="check-row">
               <input required type="checkbox" />{" "}

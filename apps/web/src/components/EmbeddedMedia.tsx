@@ -8,7 +8,11 @@ function youtubeId(value: string) {
 }
 
 function embeddedUrls(text: string) {
-  return (text.match(/https?:\/\/[^\s]+/g) ?? []).map((url) =>
+  const textWithoutNamedLinks = text.replace(
+    /(?:""|““)[^\n|]+\|https?:\/\/[^\s]+?(?:""|””)/g,
+    "",
+  );
+  return (textWithoutNamedLinks.match(/https?:\/\/[^\s]+/g) ?? []).map((url) =>
     url.replace(/[),.!?;:]+$/g, ""),
   );
 }

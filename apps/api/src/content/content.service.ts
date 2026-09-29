@@ -48,6 +48,29 @@ export class ContentService {
     return this.prisma.mediaFile.create({ data: { url, type, contentType: targetType, contentId: targetId, uploadedById: user.id, sortOrder: count } });
   }
 
+  async createPendingEventMedia(batchId: string, user: User, url: string, type: "image" | "video") {
+    if (!/^[0-9a-f-]{36}$/i.test(batchId)) throw new BadRequestException("Geçersiz medya yükleme oturumu.");
+    const contentId = `pending:${user.id}:${batchId}`;
+    const count = await this.prisma.mediaFile.count({ where: { contentType: ReportTargetType.event, contentId, uploadedById: user.id, status: "active" } });
+    if (count >= 20) throw new BadRequestException("Bir etkinlikte en fazla 20 medya bulunabilir.");
+    return this.prisma.mediaFile.create({ data: { url, type, contentType: ReportTargetType.event, contentId, uploadedById: user.id, sortOrder: count } });
+  }
+
+  async claimPendingEventMedia(eventId: string, batchId: string, user: User) {
+    await this.ensureContentMediaManager(ReportTargetType.event, eventId, user);
+    const contentId = `pending:${user.id}:${batchId}`;
+    const [currentCount, pending] = await Promise.all([
+      this.prisma.mediaFile.count({ where: { contentType: ReportTargetType.event, contentId: eventId, status: "active" } }),
+      this.prisma.mediaFile.findMany({ where: { contentType: ReportTargetType.event, contentId, uploadedById: user.id, status: "active" }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }),
+    ]);
+    if (currentCount + pending.length > 20) throw new BadRequestException("Bir etkinlikte en fazla 20 medya bulunabilir.");
+    if (!pending.length) return this.listMedia(ReportTargetType.event, eventId);
+    await this.prisma.$transaction(pending.map((item, index) => this.prisma.mediaFile.update({ where: { id: item.id }, data: { contentId: eventId, sortOrder: currentCount + index } })));
+    const firstImage = pending.find((item) => item.type === "image");
+    if (currentCount === 0 && firstImage) await this.prisma.event.update({ where: { id: eventId }, data: { coverImageUrl: firstImage.url } });
+    return this.listMedia(ReportTargetType.event, eventId);
+  }
+
   async reorderContentMedia(targetType: ReportTargetType, targetId: string, mediaIds: string[], user: User) {
     if (targetType !== ReportTargetType.event && targetType !== ReportTargetType.place) throw new BadRequestException("Bu medya albümü sıralanamaz.");
     await this.ensureContentMediaManager(targetType, targetId, user);

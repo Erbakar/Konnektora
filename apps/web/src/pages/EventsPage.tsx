@@ -1,6 +1,6 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import type { Event, EventList } from "@konnektora/shared";
-import { CalendarX, ListFilter, LoaderCircle, MapPinned, Plus, RefreshCw } from "lucide-react";
+import { CalendarX, Instagram, ListFilter, LoaderCircle, MapPinned, Plus, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { EventCard } from "../components/EventCard";
@@ -8,11 +8,12 @@ import { LocationMap } from "../components/LocationMap";
 import { getDiscoveryFeed, getMyProfile, getUserSession, listEvents, listTags } from "../lib/api";
 import { mockTags } from "../lib/mockData";
 import { useLanguage } from "../lib/i18n";
+import { createWeeklyEventFiles, getCurrentWeekWindow, shareOrDownloadSocialFiles } from "../lib/socialTemplates";
 
 const pageCopy = {
   tr: {
     filters: "Filtreler", filterSearch: "Filtrele & Ara", search: "Arama", searchPlaceholder: "Kurucu, SaaS, yatırımcı...",
-    format: "Format", all: "Tümü", online: "Çevrim içi", offline: "Fiziksel", hybrid: "Hibrit", date: "Tarih",
+    format: "Format", all: "Tümü", online: "Çevrim içi", offline: "Yüz yüze", hybrid: "Hibrit", date: "Tarih",
     city: "Şehir", cityPlaceholder: "İstanbul", country: "Ülke", countryPlaceholder: "Türkiye", trendTags: "Trend etiketler",
     clearFilters: "Filtreleri temizle", title: "Etkinlikler", loading: "Yükleniyor…", unavailable: "Veri alınamadı",
     showMap: "Haritada göster", showList: "Listeyi göster", create: "Etkinlik oluştur", groups: "Etkinlik grupları",
@@ -25,6 +26,7 @@ const pageCopy = {
     loadingEvents: "Etkinlikler yükleniyor…", loadFailed: "Etkinlikler yüklenemedi", retryCopy: "Bağlantını kontrol edip yeniden deneyebilirsin.",
     retry: "Yeniden dene", noResults: "Bu filtrelerle etkinlik bulunamadı.", previous: "Önceki", next: "Sonraki",
     page: (page: number, size: number) => `Sayfa ${page} · ${size} kayıt/sayfa`, goToPage: (page: number) => `${page}. sayfaya git`, result: (total: number) => `${total} sonuç`, global: "Global",
+    weeklyCard: "Haftalık keşif kartları", weeklyPreparing: "Kartlar hazırlanıyor…", weeklyDownloaded: "Haftalık etkinlik kartları indirildi.", weeklyShared: "Haftalık etkinlik kartları paylaşım için hazırlandı.", weeklyFailed: "Haftalık etkinlik kartları hazırlanamadı.",
   },
   en: {
     filters: "Filters", filterSearch: "Filter & Search", search: "Search", searchPlaceholder: "Founder, SaaS, investor...",
@@ -41,6 +43,7 @@ const pageCopy = {
     loadingEvents: "Loading events…", loadFailed: "Events could not be loaded", retryCopy: "Check your connection and try again.",
     retry: "Try again", noResults: "No events match these filters.", previous: "Previous", next: "Next",
     page: (page: number, size: number) => `Page ${page} · ${size} per page`, goToPage: (page: number) => `Go to page ${page}`, result: (total: number) => `${total} results`, global: "Global",
+    weeklyCard: "Weekly discovery cards", weeklyPreparing: "Preparing cards…", weeklyDownloaded: "Weekly event cards were downloaded.", weeklyShared: "Weekly event cards are ready to share.", weeklyFailed: "Weekly event cards could not be prepared.",
   },
 } as const;
 
@@ -63,6 +66,8 @@ export function EventsPage() {
   const c = pageCopy[language];
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
+  const [weeklyPending, setWeeklyPending] = useState(false);
+  const [weeklyMessage, setWeeklyMessage] = useState("");
   const [activePeriod, setActivePeriod] = useState("future");
   const [searchParams, setSearchParams] = useSearchParams();
   const user = getUserSession();
@@ -93,6 +98,12 @@ export function EventsPage() {
   const { data: eventList, isLoading, isError, refetch } = useQuery({
     queryKey: ["events", eventRequestParams.toString()],
     queryFn: () => listEvents(eventRequestParams)
+  });
+  const weeklyWindow = getCurrentWeekWindow();
+  const weeklyCardsQuery = useQuery({
+    queryKey: ["events", "weekly-social-cards", weeklyWindow.dateFrom, weeklyWindow.dateTo],
+    queryFn: () => listAllDiscoveryEvents({ dateFrom: weeklyWindow.dateFrom, dateTo: weeklyWindow.dateTo }),
+    enabled: false,
   });
   const events = eventList?.items ?? [];
   const totalPages = eventList ? Math.max(1, Math.ceil(eventList.total / eventList.pageSize)) : 1;
@@ -157,6 +168,23 @@ export function EventsPage() {
     setSearchParams(next);
   }
 
+  async function createWeeklyCards() {
+    setWeeklyPending(true);
+    setWeeklyMessage("");
+    try {
+      const weeklyResult = await weeklyCardsQuery.refetch();
+      if (weeklyResult.isError) throw weeklyResult.error;
+      const files = await createWeeklyEventFiles(weeklyResult.data?.items ?? [], language, weeklyWindow);
+      if (!files.length) throw new Error("No upcoming events");
+      const shareResult = await shareOrDownloadSocialFiles(files, c.weeklyCard);
+      setWeeklyMessage(shareResult === "shared" ? c.weeklyShared : c.weeklyDownloaded);
+    } catch {
+      setWeeklyMessage(c.weeklyFailed);
+    } finally {
+      setWeeklyPending(false);
+    }
+  }
+
   return (
     <section className="page two-column events-page">
       <button className="mobile-filter-toggle secondary-action" aria-expanded={filtersOpen} aria-controls="event-filters" onClick={() => setFiltersOpen((open) => !open)} type="button"><ListFilter size={18} /> {c.filterSearch}</button>
@@ -199,8 +227,9 @@ export function EventsPage() {
       <div className="events-content">
         <div className="section-header events-page-header">
           <h1>{c.title}</h1>
-          <div className="row-actions"><span>{isLoading ? c.loading : isError ? c.unavailable : c.result(eventList?.total ?? 0)}</span><button className="create-inline-link" onClick={() => setMapOpen((open) => !open)}><MapPinned size={16}/>{mapOpen ? c.showList : c.showMap}</button><Link className="create-inline-link events-create-button" to="/events/create"><Plus size={16}/> {c.create}</Link></div>
+          <div className="row-actions"><span>{isLoading ? c.loading : isError ? c.unavailable : c.result(eventList?.total ?? 0)}</span><button className="create-inline-link" disabled={weeklyPending} onClick={() => void createWeeklyCards()} type="button"><Instagram size={16}/>{weeklyPending ? c.weeklyPreparing : c.weeklyCard}</button><button className="create-inline-link" onClick={() => setMapOpen((open) => !open)}><MapPinned size={16}/>{mapOpen ? c.showList : c.showMap}</button><Link className="create-inline-link events-create-button" to="/events/create"><Plus size={16}/> {c.create}</Link></div>
         </div>
+        {weeklyMessage ? <p className={weeklyMessage === c.weeklyFailed ? "form-error" : "form-success"} role="status">{weeklyMessage}</p> : null}
         <nav className="discovery-tabs" aria-label={c.groups}>
           {([["future", c.future], ["24h", c.next24], ["tomorrow", c.tomorrow], ["week", c.week], ["weekend", c.weekend], ["next_week", c.nextWeek], ["month", c.month], ["past", c.past]] as const).map(([scope, label]) => (
             <button key={scope} className={currentDiscovery === scope ? "active" : ""} onClick={() => selectDiscovery(scope)} type="button">{label}</button>
@@ -217,7 +246,7 @@ export function EventsPage() {
             const allParams = new URLSearchParams(definition.params);
             return <section className={`event-discovery-section event-discovery-${definition.key}`} key={definition.key}><header><h2>{definition.title}</h2>{items.length ? <Link to={`/events?${allParams.toString()}`}>{c.seeAll}</Link> : null}</header>{items.length ? <div className="event-grid">{items.map((event) => <EventCard event={event} key={event.id}/>)}</div> : <p className="empty-state">{c.myEmpty}</p>}</section>;
           }) : null}
-        </div> : mapOpen ? <LocationMap items={events.map((event) => ({ id: event.id, title: event.title, latitude: event.latitude, longitude: event.longitude, location: [event.city, event.country].filter(Boolean).join(", ") || "Online" }))}/> : <div className="event-grid events-results-grid">
+        </div> : mapOpen ? <LocationMap showLinks={false} items={events.map((event) => ({ id: event.id, title: event.title, latitude: event.latitude, longitude: event.longitude, location: [event.city, event.country].filter(Boolean).join(", ") || "Online" }))}/> : <div className="event-grid events-results-grid">
           {events.map((event) => (
             <EventCard event={event} key={event.id} />
           ))}

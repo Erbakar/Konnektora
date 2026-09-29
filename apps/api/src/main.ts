@@ -21,6 +21,7 @@ async function bootstrap() {
 
   app.set("trust proxy", 1);
   app.use(helmet({
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
     crossOriginResourcePolicy: false,
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
     contentSecurityPolicy: {

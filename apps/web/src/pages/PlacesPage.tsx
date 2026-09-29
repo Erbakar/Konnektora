@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, ListFilter, LoaderCircle, MapPinned, Plus, RefreshCw } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { createPlace, getUserSession, invitePlaceMember, listMemberSuggestions, listPlaces, listTags, uploadContentMedia, type PlaceInput } from "../lib/api";
 import { LocationMap } from "../components/LocationMap";
 import { LocationPicker } from "../components/LocationPicker";
@@ -40,6 +40,7 @@ export function PlacesPage() {
   const queryClient = useQueryClient();
   const selectedPage = Number(searchParams.get("page") ?? "1");
   const selectedScope = searchParams.get("scope") ?? "all";
+  useEffect(() => setCreateOpen(searchParams.get("create") === "1"), [searchParams]);
   useEffect(() => {
     if (selectedScope !== "near" || searchParams.has("latitude") || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(({ coords }) => { const next = new URLSearchParams(searchParams); next.set("latitude", String(coords.latitude)); next.set("longitude", String(coords.longitude)); next.delete("page"); setSearchParams(next, { replace: true }); });
@@ -50,7 +51,7 @@ export function PlacesPage() {
   const createMutation = useMutation({
     mutationFn: async (input: PlaceInput & { mediaFiles?: File[]; managerUsernames?: string[] }) => { const { mediaFiles = [], managerUsernames = [], ...data } = input; const created = await createPlace(data); await Promise.allSettled([...mediaFiles.map((file) => uploadContentMedia("place", created.id, file)), ...managerUsernames.map((username) => invitePlaceMember(created.id, { username, role: "manager" }))]); return created; },
     onSuccess: () => {
-      setCreateOpen(false);
+      setSearchParams({});
       void queryClient.invalidateQueries({ queryKey: ["places"] });
     }
   });
@@ -90,8 +91,8 @@ export function PlacesPage() {
   const placeList = placesQuery.data;
   const hasFilters = [...searchParams.keys()].some((key) => key !== "page");
   return (
-    <section className="page two-column places-page">
-      <button className="mobile-filter-toggle secondary-action" aria-expanded={filtersOpen} aria-controls="place-filters" onClick={() => setFiltersOpen((open) => !open)} type="button"><ListFilter size={18}/> {c.filterSearch}</button>
+    <section className={`page two-column places-page${createOpen ? " place-create-page" : ""}`}>
+      {!createOpen ? <><button className="mobile-filter-toggle secondary-action" aria-expanded={filtersOpen} aria-controls="place-filters" onClick={() => setFiltersOpen((open) => !open)} type="button"><ListFilter size={18}/> {c.filterSearch}</button>
       <aside className={`filters places-filters ${filtersOpen ? "mobile-filters-open" : ""}`} id="place-filters">
         <h2>{c.filters}</h2>
         <label>{c.search}<input value={searchParams.get("q") ?? ""} onChange={(event) => updateFilter("q", event.target.value)} placeholder={c.searchPlaceholder} /></label>
@@ -99,14 +100,14 @@ export function PlacesPage() {
         <label>{c.country}<input value={searchParams.get("country") ?? ""} onChange={(event) => updateFilter("country", event.target.value)} placeholder={c.countryPlaceholder} /></label>
         {tagsQuery.data?.length ? <div className="place-trendy-tags"><strong>{c.trending}</strong><div className="tag-cloud">{[...tagsQuery.data].filter((tag) => (tag.placeCount ?? 0) > 0).sort((a, b) => (b.placeCount ?? 0) - (a.placeCount ?? 0) || b.usageCount - a.usageCount).slice(0, 10).map((tag) => <button className={searchParams.get("tag") === tag.slug ? "active" : ""} key={tag.id} onClick={() => updateFilter("tag", searchParams.get("tag") === tag.slug ? "" : tag.slug)} type="button">#{tag.name} ({tag.placeCount})</button>)}</div></div> : null}
         {hasFilters ? <button className="clear-filters-link" onClick={() => setSearchParams({})} type="button">{c.clear}</button> : null}
-      </aside>
+      </aside></> : null}
       <div className="places-content">
-        <div className="section-header"><h1>{c.title}</h1><div className="row-actions"><span>{placesQuery.isLoading ? c.loading : c.result(placeList?.total ?? 0)}</span><button className="create-inline-link" onClick={() => setMapOpen((open) => !open)}><MapPinned size={16}/>{mapOpen ? c.showList : c.showMap}</button>{user ? <button className="create-inline-link" onClick={() => setCreateOpen((open) => !open)} type="button"><Plus size={16}/> {c.create}</button> : null}</div></div>
-        <nav className="discovery-tabs" aria-label={c.groups}>
+        <div className="section-header"><h1>{createOpen ? c.newPlace : c.title}</h1><div className="row-actions">{!createOpen ? <><span>{placesQuery.isLoading ? c.loading : c.result(placeList?.total ?? 0)}</span><button className="create-inline-link" onClick={() => setMapOpen((open) => !open)}><MapPinned size={16}/>{mapOpen ? c.showList : c.showMap}</button></> : <Link className="create-inline-link" to="/places">{c.title}</Link>}{user && !createOpen ? <button className="create-inline-link" onClick={() => { setCreateOpen(true); setSearchParams({ create: "1" }); }} type="button"><Plus size={16}/> {c.create}</button> : null}</div></div>
+        {!createOpen ? <nav className="discovery-tabs" aria-label={c.groups}>
           {([["all", c.all], ["near", c.near], ["popular", c.popular], ["for_you", c.forYou], ["following", c.following], ["mine", c.mine]] as const).map(([scope, label]) => (
             <button key={scope} className={selectedScope === scope ? "active" : ""} disabled={!user && ["near", "for_you", "following", "mine"].includes(scope)} onClick={() => updateFilter("scope", scope === "all" ? "" : scope)} type="button">{label}</button>
           ))}
-        </nav>
+        </nav> : null}
         {createOpen ? (
           <form className="admin-form" onSubmit={submitPlace}>
             <h2>{c.newPlace}</h2>
@@ -124,17 +125,17 @@ export function PlacesPage() {
             {createMutation.isError ? <p className="form-error">{c.createFailed}</p> : null}
           </form>
         ) : null}
-        {placesQuery.isLoading ? <div className="empty-state"><LoaderCircle className="spin" size={34}/><p>{c.loadingPlaces}</p></div> : null}
+        {!createOpen ? <>{placesQuery.isLoading ? <div className="empty-state"><LoaderCircle className="spin" size={34}/><p>{c.loadingPlaces}</p></div> : null}
         {placesQuery.isError ? <div className="empty-state"><Building2 size={40}/><h2>{c.loadFailed}</h2><p>{c.retryCopy}</p><button className="secondary-action" onClick={() => void placesQuery.refetch()}><RefreshCw size={17}/>{c.retry}</button></div> : null}
-        {mapOpen ? <LocationMap items={(placeList?.items ?? []).map((place) => ({ id: place.id, title: place.name, latitude: place.latitude, longitude: place.longitude, location: [place.city, place.country].filter(Boolean).join(", ") || c.locationMissing }))}/> : <div className="event-grid place-grid">
+        {mapOpen ? <LocationMap showLinks={false} items={(placeList?.items ?? []).map((place) => ({ id: place.id, title: place.name, latitude: place.latitude, longitude: place.longitude, location: [place.city, place.country].filter(Boolean).join(", ") || c.locationMissing }))}/> : <div className="event-grid place-grid">
           {placeList?.items.map((place) => <PlaceCard key={place.id} place={place}/>) }
         </div>}
-        {!placesQuery.isLoading && !placesQuery.isError && !placeList?.items.length ? <div className="empty-state"><Building2 size={40}/><h2>{selectedScope === "mine" ? c.mine : searchParams.size ? c.noMatch : c.none}</h2><p>{selectedScope === "mine" ? c.mineEmpty : searchParams.size ? c.changeFilters : c.noneCopy}</p>{user && !searchParams.size ? <button className="primary-action" onClick={() => setCreateOpen(true)}><Plus size={18}/>{c.first}</button> : null}</div> : null}
+        {!placesQuery.isLoading && !placesQuery.isError && !placeList?.items.length ? <div className="empty-state"><Building2 size={40}/><h2>{selectedScope === "mine" ? c.mine : searchParams.size ? c.noMatch : c.none}</h2><p>{selectedScope === "mine" ? c.mineEmpty : searchParams.size ? c.changeFilters : c.noneCopy}</p>{user && !searchParams.size ? <button className="primary-action" onClick={() => { setCreateOpen(true); setSearchParams({ create: "1" }); }}><Plus size={18}/>{c.first}</button> : null}</div> : null}
         {placeList ? <div className="pagination-row">
           <button className="secondary-action" disabled={selectedPage <= 1} onClick={() => updateFilter("page", String(selectedPage - 1))}>{c.previous}</button>
           <span>{c.page(placeList.page)}</span>
           <button className="secondary-action" disabled={!placeList.hasNextPage} onClick={() => updateFilter("page", String(selectedPage + 1))}>{c.next}</button>
-        </div> : null}
+        </div> : null}</> : null}
       </div>
     </section>
   );

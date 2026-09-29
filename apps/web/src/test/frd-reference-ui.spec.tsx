@@ -121,6 +121,7 @@ describe("FRD referanslı ekran davranışları", () => {
     expect(dialog).toBeVisible();
     expect(within(dialog).queryByText(event.description)).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Etkinlik haritası" })).toBeVisible();
+    expect(within(dialog).getByText(/GMT\+3/)).toBeVisible();
     expect(screen.getByRole("link", { name: event.place.name })).toHaveAttribute("href", `/places/${event.place.slug}`);
     expect(screen.getByRole("link", { name: event.liveUrl })).toHaveAttribute("target", "_blank");
     await userEvent.click(screen.getByRole("button", { name: "Kapat" }));
@@ -217,6 +218,26 @@ describe("FRD referanslı ekran davranışları", () => {
     expect(apiMocks.purchaseEventTickets.mock.calls[0]?.[1]).toBe(1);
   });
 
+  it("dış satış platformu bağlantısını adet seçmeden açılabilir tutar", async () => {
+    const event = { ...mockEvents[0]!, price: 0 };
+    const externalTicket = {
+      id: "external-ticket", name: "Partner Bileti", description: null, price: 250, currency: "TRY",
+      remaining: 20, status: "active", salesPlatform: "external", externalSalesUrl: "https://tickets.example.com/event",
+      perUserLimit: null, saleStartsAt: null, saleEndsAt: null,
+    };
+    apiMocks.getUserSession.mockReturnValue({ id: "viewer-2", username: "ada", role: "user" });
+    apiMocks.getEvent.mockResolvedValue(event);
+    apiMocks.listEventTicketTypes.mockResolvedValue([externalTicket]);
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+
+    render(providers(<Routes><Route path="/events/:slug" element={<EventDetailPage />} /></Routes>, `/events/${event.slug}`));
+    await userEvent.click((await screen.findAllByRole("button", { name: "Biletleri gör" })).at(-1)!);
+    const externalButton = within(screen.getByRole("dialog", { name: "Biletler" })).getByRole("button", { name: "Satış sayfasına git" });
+    expect(externalButton).toBeEnabled();
+    await userEvent.click(externalButton);
+    expect(open).toHaveBeenCalledWith(externalTicket.externalSalesUrl, "_blank", "noopener,noreferrer");
+  });
+
   it("etkinlik analizinde FRD performans, keşif, huni, demografi ve gelir gruplarını gösterir", async () => {
     apiMocks.getInteractionStats.mockResolvedValue({
       views: 1200,
@@ -245,6 +266,9 @@ describe("FRD referanslı ekran davranışları", () => {
     }
     expect(screen.getAllByText("1.200").length).toBeGreaterThan(0);
     expect(screen.getByText("25.800 TRY")).toBeVisible();
+    expect(screen.getByLabelText("Çubuk grafik")).toBeVisible();
+    expect(screen.getByLabelText("Pasta grafik")).toBeVisible();
+    expect(screen.getByLabelText("Çizgi grafik")).toBeVisible();
   });
 
   it("mekân analizinde trafik, doluluk, sadakat ve organizatör ölçümlerini gösterir", async () => {

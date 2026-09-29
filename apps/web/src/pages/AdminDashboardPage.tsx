@@ -21,6 +21,7 @@ import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "rea
 import { useSearchParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
 import { AnnouncementPopup } from "../components/AnnouncementPopup";
+import { PasswordInput } from "../components/FormInputs";
 import {
   type AdminEventInput,
   type AnnouncementInput,
@@ -735,7 +736,7 @@ export function AdminDashboardPage() {
           </label>
           <label>
             Şifre
-            <input autoComplete="current-password" minLength={8} name="password" placeholder="Şifrenizi girin" required type="password" />
+            <PasswordInput autoComplete="current-password" minLength={8} name="password" placeholder="Şifrenizi girin" required />
           </label>
           {loginError ? <p className="form-error">{loginError}</p> : null}
           <button className="primary-action" disabled={loginMutation.isPending} type="submit">
@@ -4045,9 +4046,9 @@ function EventAdminPanel({
           <label>
             Format
             <select key={`${editingEvent?.id ?? "new"}-format`} name="format" defaultValue={editingEvent?.format ?? "online"}>
-              <option value="online">Online</option>
-              <option value="offline">Offline</option>
-              <option value="hybrid">Hybrid</option>
+              <option value="online">Çevrim içi</option>
+              <option value="offline">Yüz yüze</option>
+              <option value="hybrid">Hibrit</option>
             </select>
           </label>
           <label>

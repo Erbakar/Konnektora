@@ -53,4 +53,9 @@ describe("post içi YouTube ve SoundCloud oynatıcıları", () => {
       "https://w.soundcloud.com/player/?visual=true&url=https%3A%2F%2Fapi.soundcloud.com%2Ftracks%2F123",
     ));
   });
+
+  it("çift tırnaklı adlandırılmış medya bağlantısını oynatıcıya dönüştürmez", () => {
+    const { container } = render(<LanguageProvider><EmbeddedMedia text={'""Canlı kayıt|https://www.youtube.com/watch?v=AbCdEf12345""'} /></LanguageProvider>);
+    expect(container).toBeEmptyDOMElement();
+  });
 });

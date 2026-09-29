@@ -154,6 +154,8 @@ function TicketOrderCard({
   const active = order.tickets.filter((ticket) => ticket.status === "active");
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const statusText = eventStatusText(order, language);
+  const saleWindow = ticketWindowText(order.ticketType.saleStartsAt, order.ticketType.saleEndsAt, "sale", language);
+  const gateWindow = ticketWindowText(order.ticketType.gateOpensAt, order.ticketType.gateClosesAt, "gate", language);
   return (
     <article className="admin-list-row ticket-order-card">
       {order.event.coverImageUrl ? (
@@ -179,6 +181,9 @@ function TicketOrderCard({
         <b>
           {order.ticketType.name} · {order.quantity} {t("adet", "tickets")}
         </b>
+        {order.ticketType.description ? <span>{order.ticketType.description}</span> : null}
+        {saleWindow ? <span>{saleWindow}</span> : null}
+        {gateWindow ? <span>{gateWindow}</span> : null}
         <span>
           {new Intl.NumberFormat(language === "tr" ? "tr-TR" : "en-GB", {
             style: "currency",
@@ -225,6 +230,37 @@ function TicketOrderCard({
       </div>
     </article>
   );
+}
+
+function ticketWindowText(
+  startsAt: string | null,
+  endsAt: string | null,
+  kind: "sale" | "gate",
+  language: "tr" | "en",
+) {
+  if (!startsAt && !endsAt) return "";
+  const locale = language === "tr" ? "tr-TR" : "en-GB";
+  const format = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  const start = startsAt ? format(startsAt) : "";
+  const end = endsAt ? format(endsAt) : "";
+  if (language === "tr") {
+    if (kind === "sale") {
+      if (start && end) return `${start} ile ${end} arasında bu bilet alınabilir.`;
+      if (start) return `${start} tarihi itibarıyla bu bilet alınabilir.`;
+      return `${end} tarihine kadar bu bilet alınabilir.`;
+    }
+    if (start && end) return `${start} ile ${end} arasında giriş yapmalısınız.`;
+    if (start) return `${start} zamanından sonra giriş yapmalısınız.`;
+    return `${end} zamanından önce giriş yapmalısınız.`;
+  }
+  if (kind === "sale") {
+    if (start && end) return `This ticket is available between ${start} and ${end}.`;
+    if (start) return `This ticket is available from ${start}.`;
+    return `This ticket is available until ${end}.`;
+  }
+  if (start && end) return `Enter between ${start} and ${end}.`;
+  if (start) return `Enter after ${start}.`;
+  return `Enter before ${end}.`;
 }
 
 function TicketQr({ payload, status, language }: { payload: string; status: string; language: "tr" | "en" }) {

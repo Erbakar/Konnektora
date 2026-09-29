@@ -963,6 +963,21 @@ export class EventsService {
     });
   }
 
+  async leaveEvent(eventId: string, userId: string) {
+    const participant = await this.prisma.eventParticipant.findUnique({
+      where: { eventId_userId: { eventId, userId } },
+    });
+    if (!participant) throw new NotFoundException("Etkinlik katılımı bulunamadı.");
+    if (
+      participant.role === EventParticipantRole.organizer ||
+      participant.role === EventParticipantRole.manager
+    ) {
+      throw new ForbiddenException("Etkinlik yöneticileri katılımdan ayrılamaz.");
+    }
+    await this.prisma.eventParticipant.delete({ where: { id: participant.id } });
+    return { left: true };
+  }
+
   async issueCheckInTicket(eventId: string, userId: string) {
     const participant = await this.prisma.eventParticipant.findUnique({
       where: { eventId_userId: { eventId, userId } },

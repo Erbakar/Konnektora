@@ -703,6 +703,7 @@ export function TagsPage() {
         targetId={tag.id}
         targetType="tag"
         title={`#${tag.name}`}
+        text={`${language === "tr" ? "Konnektora'da bu ilgi alanını keşfet" : "Explore this interest on Konnektora"}: #${tag.name}`}
         url={window.location.href}
       />
     </section>
