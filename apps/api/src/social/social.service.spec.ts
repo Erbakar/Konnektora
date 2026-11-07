@@ -1,3 +1,4 @@
+import { privacyContext } from "../common/privacy-context";
 import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { SocialService } from "./social.service";
 
@@ -112,4 +113,23 @@ describe("SocialService", () => {
       take: 1,
     }));
   });
+  it.each([
+    ["nobody",false,false], ["everybody",false,true],
+    ["following",true,true], ["following",false,false],
+    ["network",true,true], ["network",false,false],
+  ])("enforces %s location visibility for related=%s",async(audience,related,visible)=>{
+    const {service,prisma}=createService();
+    prisma.userInterestTag.findMany.mockResolvedValue([]);prisma.userFollow.findMany.mockResolvedValue([]);prisma.userBlock.findMany.mockResolvedValue([]);
+    prisma.user.findMany.mockResolvedValue([{id:"target",name:"Ada",username:"ada",accountType:"individual",city:"İstanbul",country:"TR",followerCount:0,interestTags:[],privacySettings:{demographicsAudience:"nobody",locationAudience:audience}}]);
+    const context={viewerId:"viewer",following:new Set(related?["target"]:[]),network:new Set(related?["target"]:[]),blocked:new Set<string>()};
+    const result=await privacyContext.run(context,()=>service.newMembers("viewer"));
+    expect(result[0]!.city).toBe(visible?"İstanbul":null);expect(result[0]!.country).toBe(visible?"TR":null);
+    expect(prisma.user.findMany.mock.calls[0][0].select.privacySettings.select.locationAudience).toBe(true);
+  });
+  it("keeps the owner's own location visible to them",async()=>{
+    const {service,prisma}=createService();prisma.userInterestTag.findMany.mockResolvedValue([]);prisma.userFollow.findMany.mockResolvedValue([]);prisma.userBlock.findMany.mockResolvedValue([]);
+    prisma.user.findMany.mockResolvedValue([{id:"viewer",name:"Ada",username:"ada",accountType:"individual",city:"İstanbul",country:"TR",followerCount:0,interestTags:[],privacySettings:{demographicsAudience:"nobody",locationAudience:"nobody"}}]);
+    const result=await privacyContext.run({viewerId:"viewer",following:new Set<string>(),network:new Set<string>(),blocked:new Set<string>()},()=>service.newMembers("viewer"));expect(result[0]!.city).toBe("İstanbul");
+  });
+
 });

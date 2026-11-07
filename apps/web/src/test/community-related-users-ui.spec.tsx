@@ -10,7 +10,7 @@ import { RelatedUsersPage } from "../pages/RelatedUsersPage";
 
 const apiMocks = vi.hoisted(() => ({
   getEvent: vi.fn(),
-  getFinanceDashboard: vi.fn(),
+  getMembership: vi.fn(),
   getPlace: vi.fn(),
   getUserSession: vi.fn(),
   listEventRelatedUsers: vi.fn(),
@@ -86,7 +86,7 @@ const ada = {
 beforeEach(() => {
   window.localStorage.clear();
   apiMocks.getUserSession.mockReturnValue(session);
-  apiMocks.getFinanceDashboard.mockResolvedValue({ business: { plan: "starter" } });
+  apiMocks.getMembership.mockResolvedValue({ business: { plan: "starter" } });
   apiMocks.listFollowing.mockResolvedValue([]);
   apiMocks.listGuestLists.mockResolvedValue([]);
   apiMocks.listMemberSuggestions.mockResolvedValue([]);
@@ -132,7 +132,7 @@ describe("topluluk ve ilgili kullanıcı gereksinimleri", () => {
     expect(screen.queryByRole("button", { name: /Check-in/ })).not.toBeInTheDocument();
     expect(await screen.findAllByText("Beğeniyorum dedi · paylaşım yaptı")).toHaveLength(2);
     expect(screen.queryByText("5 ortak ilgi alanı")).not.toBeInTheDocument();
-    expect(await screen.findByText("2 ortak ilgi alanı")).toBeVisible();
+    expect(await screen.findByText("Ortak ilgi alanı")).toBeVisible();
     expect(screen.queryByText("Profili gör")).not.toBeInTheDocument();
 
     const tagActions = document.querySelector('summary[aria-label="Kullanıcı aksiyonları"]');
@@ -151,11 +151,11 @@ describe("topluluk ve ilgili kullanıcı gereksinimleri", () => {
     ));
 
     expect(await screen.findByRole("heading", { name: event.title })).toBeVisible();
-    expect(await screen.findByText("2 ortak ilgi alanı")).toBeVisible();
+    expect(await screen.findByText("Ortak ilgi alanı")).toBeVisible();
     const eventActions = document.querySelector('summary[aria-label="Kullanıcı aksiyonları"]');
     expect(eventActions).toBeInTheDocument();
     fireEvent.click(eventActions!);
-    expect(screen.getByRole("button", { name: "Etkinlik sahibi yap" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Etkinlik yöneticisi yap" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Organizatör yap" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Etkinliğe yasakla" })).toBeVisible();
   });
@@ -176,7 +176,7 @@ describe("topluluk ve ilgili kullanıcı gereksinimleri", () => {
     ));
 
     expect(await screen.findByRole("heading", { name: place.name })).toBeVisible();
-    await screen.findByText("2 ortak ilgi alanı");
+    await screen.findByText("Ortak ilgi alanı");
     expect(screen.getByText("Filtrele").closest("details")).not.toHaveAttribute("open");
     expect(screen.getByRole("button", { name: /Üyeler/ })).toBeVisible();
     const placeTabs = screen.getByRole("tablist");
@@ -190,7 +190,7 @@ describe("topluluk ve ilgili kullanıcı gereksinimleri", () => {
     const placeActions = document.querySelector('summary[aria-label="Kullanıcı aksiyonları"]');
     expect(placeActions).toBeInTheDocument();
     fireEvent.click(placeActions!);
-    expect(screen.getByRole("button", { name: "Mekân sahibi yap" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Mekân yöneticisi yap" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Organizatör yap" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Mekâna yasakla" })).toBeVisible();
   });

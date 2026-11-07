@@ -45,7 +45,7 @@ describe("MailService branded account emails", () => {
     const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
     expect(request.html).toContain("ETKİNLİK DAVETİ");
     expect(request.html).toContain("background:#103c2c");
-    expect(request.html).toContain("/events/tasarim-bulusmasi");
+    expect(request.html).toContain("/notifications?tab=waiting");
   });
 
   it("sends detailed curator applications to the curator inbox and replies to the applicant", async () => {
@@ -58,8 +58,35 @@ describe("MailService branded account emails", () => {
     expect(request.html).toContain("https://example.com/cv");
   });
 
+  it("sends a manager invitation with the registration link for an unregistered place manager", async () => {
+    await service.sendPlaceInviteEmail({ to: "user@example.com", name: "Ada", placeName: "Studio", placeSlug: "studio", invitedByName: "@deniz", manager: true, acceptToken: "manager-token" });
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(request.subject).toBe("Mekân yöneticiliği daveti — Studio");
+    expect(request.html).toContain("yönetici olarak");
+    expect(request.html).toContain("accept-invite?token=manager-token");
+  });
+
+  it("attaches the transferred ticket PDF and links existing members to their tickets", async () => {
+    const pdf = Buffer.from("%PDF-test-ticket");
+    await service.sendTicketTransferEmail({ to: "user@example.com", name: "Ada", eventTitle: "Konser", invitedByName: "@deniz", quantity: 2, pdf });
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(request.attachments).toEqual([{ filename: "konnektora-biletler.pdf", content: pdf.toString("base64") }]);
+    expect(request.html).toContain("https://konnektora.com/tickets");
+    expect(request.html).not.toContain("accept-invite");
+  });
+
   it("fails visibly when production mail credentials are missing", async () => {
     const productionService = new MailService({ get: jest.fn((key: string) => key === "NODE_ENV" ? "production" : undefined) } as never);
     await expect(productionService.sendVerificationEmail({ to: "user@example.com", name: "Ada", token: "token" })).rejects.toThrow("E-posta servisi yapılandırılmamış");
   });
+  it.each([["suspend_7_days",7],["suspend_30_days",30]])("explains %s and links the rules",async(action,days)=>{
+    await service.sendAdminUserInterventionEmail({to:"user@example.com",name:"Ada",action});
+    const message=JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(message.subject).toContain(`${days} günlüğüne`);expect(message.html).toContain("kalıcı olarak kapatılacaktır");expect(message.html).toContain("https://konnektora.com/help/rules");
+  });
+  it("explains a permanent account closure",async()=>{
+    await service.sendAdminUserInterventionEmail({to:"user@example.com",name:"Ada",action:"ban_user"});
+    const message=JSON.parse(fetchMock.mock.calls[0][1].body as string);expect(message.subject).toContain("kapatılmıştır");expect(message.html).toContain("kalıcı olarak kapatılmıştır");
+  });
+
 });

@@ -13,6 +13,8 @@ type NotificationInput = {
   body: string;
   targetType?: string;
   targetId?: string;
+  skipEmail?: boolean;
+  context?: import("./activity-events").ActivityContext;
 };
 
 const topicByType: Record<string, NotificationTopic> = {
@@ -53,10 +55,10 @@ export class NotificationsService {
       this.prisma.notificationPreference.findUnique({ where: { userId_topic: { userId: input.userId, topic: input.topic } } })
     ]);
     if (!user) return null;
-    const channel = preference?.channel ?? (emailOnly.has(input.topic) ? DeliveryChannel.email : DeliveryChannel.both);
+    const channel = emailOnly.has(input.topic) && preference?.channel === DeliveryChannel.none ? DeliveryChannel.email : preference?.channel ?? (emailOnly.has(input.topic) ? DeliveryChannel.email : DeliveryChannel.both);
     if (channel === DeliveryChannel.none) return null;
 
-    const channels = channel === DeliveryChannel.both ? ["email", "push"] : [channel];
+    const channels = (channel === DeliveryChannel.both ? ["email", "push"] : [channel]).filter(item => !(input.skipEmail && item === "email"));
     const notification = await this.prisma.notification.create({
       data: {
         userId: input.userId,
@@ -65,12 +67,37 @@ export class NotificationsService {
         body: input.body,
         targetType: input.targetType,
         targetId: input.targetId,
+        context: input.context as import("@prisma/client").Prisma.InputJsonValue | undefined,
         deliveries: { create: channels.map((item) => ({ userId: input.userId, channel: item })) }
       }
     });
 
     await Promise.all(channels.map((item) => this.deliver(notification.id, item, user, input)));
     return notification;
+  }
+
+  async respondToInvitation(userId: string, id: string, action: string) {
+    if (!["accept", "decline"].includes(action)) throw new BadRequestException("Geçersiz davet yanıtı.");
+    const notification = await this.prisma.notification.findFirst({ where: { id, userId } });
+    if (!notification || !["event_invite", "event_manager", "place_invite", "place_manager"].includes(notification.type) || !notification.targetId) throw new NotFoundException("Yanıtlanabilir davet bulunamadı.");
+    const targetId=notification.targetId;
+    await this.prisma.$transaction(async tx => {
+      if (notification.targetType === "event") {
+        const event=await tx.event.findUnique({where:{id:targetId}});
+        if(!event||event.status!=="published")throw new NotFoundException("Etkinlik bulunamadı.");
+        if(action==="accept"&&event.capacity){const count=await tx.eventParticipant.count({where:{eventId:targetId,status:{in:["accepted","attended"]}}});if(count>=event.capacity)throw new BadRequestException("Etkinlik kapasitesi doldu.");}
+        const changed=await tx.eventParticipant.updateMany({where:{eventId:targetId,userId,status:"invited"},data:{status:action==="accept"?"accepted":"declined"}});
+        if(changed.count!==1)throw new BadRequestException("Davet zaten yanıtlanmış.");
+      } else {
+        const changed=await tx.placeMember.updateMany({where:{placeId:targetId,userId,status:"invited",place:{status:"active"}},data:{status:action==="accept"?"accepted":"declined"}});
+        if(changed.count!==1)throw new BadRequestException("Davet zaten yanıtlanmış veya mekân kapalı.");
+      }
+      await tx.notification.update({where:{id},data:{readAt:new Date()}});
+    },{isolationLevel:"Serializable"}).catch((error:unknown)=>{
+      if(error&&typeof error==="object"&&"code" in error&&error.code==="P2034")throw new BadRequestException("Davet veya kapasite az önce değişti. Yenileyip tekrar deneyiniz.");
+      throw error;
+    });
+    return {ok:true};
   }
 
   async getContentSubscription(userId: string, targetType: string, targetId: string) {
@@ -155,12 +182,14 @@ export class NotificationsService {
 
   private async deliver(notificationId: string, channel: string, user: { id: string; name: string; email: string }, input: NotificationInput) {
     try {
-      const targetUrl = await this.targetUrl(input);
+      const entityUrl = await this.targetUrl(input);
+      const targetUrl = input.type === "profile_tag_suggestion" ? "/notifications?tab=waiting" : entityUrl;
+      const labelLink = input.context?.targetLabel && input.targetType && ["tag", "event", "place"].includes(input.targetType) ? { label: input.context.targetLabel, url: entityUrl } : undefined;
       let provider = channel === "email" ? "resend" : "web-push";
       let providerId: string | undefined;
       let skipped = false;
       if (channel === "email") {
-        const result = await this.mail.sendNotificationEmail({ to: user.email, name: user.name, title: input.title, body: input.body, targetType: input.targetType, targetId: input.targetId, targetUrl });
+        const result = await this.mail.sendNotificationEmail({ to: user.email, name: user.name, title: input.title, body: input.body, targetType: input.targetType, targetId: input.targetId, targetUrl, labelLink });
         provider = result.provider;
         providerId = result.providerId;
       } else {

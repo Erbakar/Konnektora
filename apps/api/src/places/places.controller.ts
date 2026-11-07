@@ -30,6 +30,16 @@ import { PlacesService } from "./places.service";
 export class PlacesController {
   constructor(private readonly placesService: PlacesService) {}
 
+  @Get("places/:id/invite-recommendations")
+  @UseGuards(JwtAuthGuard)
+  recommendations(@Param("id") id:string,@CurrentUser() user:User){return this.placesService.inviteRecommendations(id,user);}
+  @Get("places/:id/past-events")
+  @UseGuards(JwtAuthGuard)
+  pastEvents(@Param("id") id:string,@CurrentUser() user:User){return this.placesService.pastEvents(id,user);}
+  @Get("places/:id/past-attendees")
+  @UseGuards(JwtAuthGuard)
+  pastAttendees(@Param("id") id:string,@Query("eventId") eventId:string,@CurrentUser() user:User){return this.placesService.pastAttendees(id,eventId,user);}
+
   @Get("places")
   @UseGuards(OptionalJwtAuthGuard)
   list(@Query() query: PlaceQueryDto, @CurrentUser() user?: User) {
@@ -46,6 +56,12 @@ export class PlacesController {
   @UseGuards(JwtAuthGuard)
   stats(@Param("id") id: string, @CurrentUser() user: User) {
     return this.placesService.getInteractionStats(id, user);
+  }
+
+  @Get("place-stats/:id/references")
+  @UseGuards(JwtAuthGuard)
+  statsReferences(@Param("id") id: string, @CurrentUser() user: User) {
+    return this.placesService.getAnalyticsReferences(id, user);
   }
 
   @Get("places/:id/related-users")

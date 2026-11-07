@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Check, ImagePlus, Sparkles, UserPlus } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, ArrowRight, Check, ThumbsUp, ThumbsDown, Minus, ImagePlus, Sparkles, UserPlus } from "lucide-react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { TagSentiment } from "@konnektora/shared";
 import { EmailInput, PasswordInput, PhoneInput, VerificationCodeInput } from "../components/FormInputs";
 import { ServiceFeedback } from "../components/ServiceFeedback";
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
-import { CountryCityFields } from "../components/CountryCityFields";
-import { checkAvailability, completeOnboarding, confirmPhoneVerification, followUser, getDiscoveryFeed, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, resolveMediaUrl, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, updateUserSession, uploadProfileMedia } from "../lib/api";
+import { CountryCityFields, normalizeCountry } from "../components/CountryCityFields";
+import { checkAvailability, clearUserSession, completeOnboarding, confirmPhoneVerification, followUser, getDiscoveryFeed, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, resolveMediaUrl, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, updateUserSession, uploadProfileMedia } from "../lib/api";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
 import { useLanguage } from "../lib/i18n";
 
@@ -26,15 +26,6 @@ const statusStep: Record<string, number> = {
   interests: 4,
   people: 5,
 };
-const inferredCountries: Record<string, string> = {
-  DE: "Almanya", ES: "İspanya", FR: "Fransa", GB: "Birleşik Krallık", IT: "İtalya",
-  NL: "Hollanda", TR: "Türkiye", US: "Amerika Birleşik Devletleri",
-};
-
-function normalizeInferredCountry(country?: string | null) {
-  if (!country) return "";
-  return inferredCountries[country.toUpperCase()] ?? country;
-}
 
 export function OnboardingPage() {
   const { language } = useLanguage();
@@ -43,7 +34,7 @@ export function OnboardingPage() {
   const queryClient = useQueryClient();
   const [session, setSession] = useState(getUserSession());
   const [step, setStep] = useState(session ? 1 : 0);
-  const [accountType, setAccountType] = useState<"individual" | "corporate">("individual");
+  const [accountType, setAccountType] = useState<"individual" | "corporate">(() => new URLSearchParams(window.location.search).get("type") === "corporate" ? "corporate" : "individual");
   const [phone, setPhone] = useState("");
   const [expires, setExpires] = useState(0);
   const [demoCode, setDemoCode] = useState("");
@@ -54,7 +45,10 @@ export function OnboardingPage() {
   const [photoPreview, setPhotoPreview] = useState("");
   const [photoZoom, setPhotoZoom] = useState(1);
   const [photoRotation, setPhotoRotation] = useState(0);
+  const emailCheck = useRef(0);
+  const usernameCheck = useRef(0);
   const [availabilityText, setAvailabilityText] = useState("");
+  const [usernameAvailabilityText, setUsernameAvailabilityText] = useState("");
   const [registrationError, setRegistrationError] = useState("");
   const [verificationEmailSent, setVerificationEmailSent] = useState<boolean | undefined>();
   const [sentiments, setSentiments] = useState<Record<string, TagSentiment>>({});
@@ -74,7 +68,7 @@ export function OnboardingPage() {
   const inferredLocation = useQuery({
     queryKey: ["onboarding-location", session?.id],
     queryFn: () => getDiscoveryFeed({ scope: "local" }),
-    enabled: Boolean(session && isCorporate),
+    enabled: Boolean(session),
   });
   const media = useQuery({
     queryKey: ["profile-media", session?.id],
@@ -146,7 +140,8 @@ export function OnboardingPage() {
   });
   const phoneConfirm = useMutation({
     mutationFn: (code: string) => confirmPhoneVerification(phone, code),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result.phoneVerified) { setDemoCode(result.demoCode ?? result.developmentCode ?? ""); setVerificationCode(""); return; }
       void queryClient.invalidateQueries({ queryKey: ["profile"] });
       void queryClient.invalidateQueries({ queryKey: ["onboarding"] });
       setStep(2);
@@ -212,6 +207,13 @@ export function OnboardingPage() {
         </div>
         <strong>{Math.round(((step + 1) / steps.length) * 100)}%</strong>
       </header>
+      {session ? <button className="ghost-action" type="button" onClick={async () => {
+        await queryClient.cancelQueries();
+        clearUserSession();
+        queryClient.clear();
+        setSession(null);
+        navigate("/login", { replace: true });
+      }}>{t("Çıkış yap ve başka bir hesapla devam et", "Sign out and continue with another account")}</button> : null}
       <nav className="onboarding-progress" aria-label={t("Onboarding adımları", "Onboarding steps")}>
         {steps.map((label, index) => (
           <span className={index < step ? "is-complete" : index === step ? "is-active" : ""} key={label}>
@@ -228,7 +230,7 @@ export function OnboardingPage() {
             onRetry={() => void onboarding.refetch()}
           />
         ) : null}
-        {session?.status === "pending" && step === 1 ? <div className="onboarding-verification-choice"><Sparkles size={22}/><p>{verificationEmailSent === false ? t("Hesabın oluşturuldu ancak aktivasyon e-postası şu an teslim edilemedi. Aşağıda ekranda üretilen demo GSM kodunu girerek üyeliğini hemen aktifleştirebilirsin.", "Your account was created, but the activation email could not be delivered. Use the demo mobile code shown below to activate your membership now.") : t("Hesabın oluşturuldu. Aktivasyon e-postasındaki bağlantıyı açabilir veya aşağıda ekranda üretilen demo GSM kodunu girerek hemen devam edebilirsin.", "Your account was created. Open the activation link in the email or continue immediately with the demo mobile code shown below.")}</p></div> : null}
+        {session?.status === "pending" && step === 1 ? <div className="onboarding-verification-choice"><Sparkles size={22}/><p>{session.emailVerified ? t("E-posta adresin doğrulandı. Üyeliğini tamamlamak için telefonunu doğrula ve profil bilgilerini doldur.", "Your email address is verified. Verify your phone and complete your profile to finish signing up.") : verificationEmailSent === false ? t("Hesabın oluşturuldu ancak aktivasyon e-postası şu an teslim edilemedi. Aşağıda ekranda üretilen demo GSM kodunu girerek üyeliğini hemen aktifleştirebilirsin.", "Your account was created, but the activation email could not be delivered. Use the demo mobile code shown below to activate your membership now.") : t("Hesabın oluşturuldu. Aktivasyon e-postasındaki bağlantıyı açabilir veya aşağıda ekranda üretilen demo GSM kodunu girerek hemen devam edebilirsin.", "Your account was created. Open the activation link in the email or continue immediately with the demo mobile code shown below.")}</p></div> : null}
         {step === 0 ? (
           <form
             onSubmit={(event: FormEvent<HTMLFormElement>) => {
@@ -287,7 +289,10 @@ export function OnboardingPage() {
             ) : null}
             <label>
               {t("E-posta", "Email")}
-              <EmailInput name="email" onBlur={(event) => void checkAvailability({ email: normalizeEmail(event.target.value) }).then((data) => setAvailabilityText(data.emailAvailable ? t("E-posta kullanılabilir", "Email is available") : t("E-posta kullanımda", "Email is in use")))} required />
+              <EmailInput name="email" onChange={() => { emailCheck.current++; setAvailabilityText(""); register.reset(); }} onBlur={(event) => {
+                const revision = ++emailCheck.current;
+                void checkAvailability({ email: normalizeEmail(event.target.value) }).then((data) => { if (revision === emailCheck.current) setAvailabilityText(data.emailAvailable ? t("E-posta kullanılabilir", "Email is available") : t("E-posta kullanımda", "Email is in use")); }).catch(() => { if (revision === emailCheck.current) setAvailabilityText(""); });
+              }} required />
               <span className="form-help">{t("Örnek: ada@ornek.com", "Example: ada@example.com")}</span>
               {availabilityText ? <span className={/kullanımda|in use/i.test(availabilityText) ? "field-error" : "form-help"}>{availabilityText}</span> : null}
             </label>
@@ -327,11 +332,11 @@ export function OnboardingPage() {
 
         {step === 0 ? (
           <SocialAuthButtons
-            action={socialLogin}
+            action={(provider, credential) => socialLogin(provider, credential, accountType)}
             onSuccess={(response) => {
               setUserSession(response);
               setSession(response.user);
-              if (response.user.status === "active") navigate("/feed");
+              if (response.user.status === "active" && response.user.onboardingCompleted) navigate("/feed");
               else setStep(1);
             }}
           />
@@ -413,12 +418,13 @@ export function OnboardingPage() {
               profileSave.mutate({
                 name: profile.data.name,
                 username: String(form.get("username")),
+                region: String(form.get("region") || ""), postalCode: String(form.get("postalCode") || ""),
                 country: String(form.get("country")),
                 city: String(form.get("city")),
                 birthDate,
-                gender: (String(form.get("gender")) as "male" | "female") || undefined,
+                gender: form.get("gender") ? String(form.get("gender")) as "male" | "female" : undefined,
                 website: normalizeWebsite(String(form.get("website"))),
-                ...(profile.data.accountType === "corporate" ? { district: String(form.get("district") || "") } : {}),
+                ...(profile.data.accountType === "corporate" ? { district: String(form.get("district") || ""), companyName: String(form.get("companyName") || ""), tradeName: String(form.get("tradeName") || "") } : {}),
               });
             }}
           >
@@ -426,16 +432,21 @@ export function OnboardingPage() {
             <label>
               {t("Kullanıcı adı", "Username")}
               <input defaultValue={profile.data.username ?? ""} name="username" onChange={(event) => {
+                const revision = ++usernameCheck.current;
                 const value = event.target.value.trim();
-                if (value.length < 2) return setAvailabilityText(t("Kullanıcı adı en az 2 karakter olmalı", "Username must be at least 2 characters"));
-                void checkAvailability({ username: value }).then((data) => setAvailabilityText(data.usernameAvailable || value === profile.data?.username ? t("Kullanıcı adı uygun", "Username is available") : t("Kullanıcı adı kullanımda", "Username is in use")));
+                if (value.length < 2) return setUsernameAvailabilityText(t("Kullanıcı adı en az 2 karakter olmalı", "Username must be at least 2 characters"));
+                void checkAvailability({ username: value }).then((data) => { if (revision === usernameCheck.current) setUsernameAvailabilityText(data.usernameAvailable || value === profile.data?.username ? t("Kullanıcı adı uygun", "Username is available") : t("Kullanıcı adı kullanımda", "Username is in use")); }).catch(() => { if (revision === usernameCheck.current) setUsernameAvailabilityText(""); });
               }} pattern="[A-Za-z0-9 .-]+" required />
-              {availabilityText ? <span className={/uygun|available/i.test(availabilityText) ? "form-success" : "form-error"}>{availabilityText}</span> : null}
+              {usernameAvailabilityText ? <span className={/uygun|available/i.test(usernameAvailabilityText) ? "form-success" : "form-error"}>{usernameAvailabilityText}</span> : null}
             </label>
-            <CountryCityFields
+            {profile.data.accountType === "corporate" ? <>
+              <label>{t("Firma unvanı", "Company legal name")}<input defaultValue={profile.data.companyName ?? ""} name="companyName" required /></label>
+              <label>{t("Ticari ad", "Trading name")}<input defaultValue={profile.data.tradeName ?? ""} name="tradeName" required /></label>
+            </> : null}
+            <CountryCityFields addressFields defaultRegion={profile.data.region} defaultPostalCode={profile.data.postalCode}
+              detectLocation
               defaultCity={profile.data.city || inferredLocation.data?.city}
-              defaultCountry={profile.data.country || normalizeInferredCountry(inferredLocation.data?.country)}
-              key={`${profile.data.country || inferredLocation.data?.country || ""}:${profile.data.city || inferredLocation.data?.city || ""}`}
+              defaultCountry={profile.data.country || normalizeCountry(inferredLocation.data?.country ?? "")}
               requiredCountry
             />
             {profile.data.accountType === "corporate" ? <label>
@@ -444,7 +455,7 @@ export function OnboardingPage() {
             </label> : null}
             {profile.data.accountType === "individual" ? <><label>
               {t("Doğum tarihi", "Date of birth")}
-              <input defaultValue={profile.data.birthDate ? String(profile.data.birthDate).slice(0, 10) : ""} name="birthDate" required type="date" />
+              <input defaultValue={profile.data.birthDate ? String(profile.data.birthDate).slice(0, 10) : ""} name="birthDate" required max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().slice(0, 10)} type="date" />
             </label>
             <label>
               {t("Cinsiyet", "Gender")}
@@ -670,7 +681,7 @@ export function OnboardingPage() {
                 }}
                 type="button"
               >
-                {sentimentLabel(sentiment, language)}
+                {sentiment === "like" ? <ThumbsUp aria-hidden="true" size={20}/> : sentiment === "dislike" ? <ThumbsDown aria-hidden="true" size={20}/> : <Minus aria-hidden="true" size={20}/>} {sentimentLabel(sentiment, language)}
               </button>
             ))}
           </div>

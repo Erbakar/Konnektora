@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Bell, BellOff } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ServiceFeedback } from "./ServiceFeedback";
 import { getPushPublicKey, registerPushSubscription, removePushSubscription } from "../lib/api";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
@@ -12,12 +12,42 @@ function decodeKey(value: string) {
   return Uint8Array.from([...raw].map((character) => character.charCodeAt(0)));
 }
 
+export function devicePushSupported() {
+  return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+/** Tarayıcı izni ister ve bu cihazı push aboneliğine kaydeder. Kullanıcı hareketiyle çağrılmalıdır. */
+export async function enableDevicePush(tr = true) {
+  const publicKey = await getPushPublicKey();
+  if (!publicKey) throw new Error(tr ? "Push kanalı henüz yapılandırılmamış." : "The push channel has not been configured yet.");
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") throw new Error(tr ? "Bildirim izni verilmedi." : "Notification permission was not granted.");
+  const registration = await navigator.serviceWorker.register("/notification-worker.js");
+  await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.getSubscription() ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeKey(publicKey) });
+  const json = subscription.toJSON();
+  if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new Error(tr ? "Push aboneliği oluşturulamadı." : "The push subscription could not be created.");
+  await registerPushSubscription({ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });
+}
+
 export function PushNotificationControl() {
   const { language } = useLanguage();
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-  const [enabled, setEnabled] = useState(Notification.permission === "granted");
+  const [enabled, setEnabled] = useState(false);
   const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!supported || Notification.permission !== "granted") return;
+    let cancelled = false;
+    void navigator.serviceWorker.getRegistration("/notification-worker.js").then(async registration => {
+      const subscription = await registration?.pushManager.getSubscription();
+      const json = subscription?.toJSON();
+      if (!json?.endpoint || !json.keys?.p256dh || !json.keys.auth) return;
+      await registerPushSubscription({ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });
+      if (!cancelled) setEnabled(true);
+    }).catch(() => { if (!cancelled) setEnabled(false); });
+    return () => { cancelled = true; };
+  }, [supported]);
   const publicKey = useQuery({ queryKey: ["push-public-key"], queryFn: getPushPublicKey, enabled: supported });
   const enable = useMutation({
     mutationFn: async () => {
@@ -25,7 +55,8 @@ export function PushNotificationControl() {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") throw new Error(t("Bildirim izni verilmedi.", "Notification permission was not granted."));
       const registration = await navigator.serviceWorker.register("/notification-worker.js");
-      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeKey(publicKey.data) });
+      await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription() ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeKey(publicKey.data) });
       const json = subscription.toJSON();
       if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new Error(t("Push aboneliği oluşturulamadı.", "The push subscription could not be created."));
       await registerPushSubscription({ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });

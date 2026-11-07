@@ -13,7 +13,7 @@ export class PlaceCheckInDecisionDto {
 }
 
 export class PlaceQueryDto {
-  @IsOptional() @IsIn(["near", "popular", "for_you", "following", "mine"]) scope?: "near" | "popular" | "for_you" | "following" | "mine";
+  @IsOptional() @IsIn(["near", "popular", "trendy", "for_you", "following", "mine"]) scope?: "trendy" | "near" | "popular" | "for_you" | "following" | "mine";
   @IsOptional() @IsString() @MaxLength(120) q?: string;
   @IsOptional() @IsString() @MaxLength(120) city?: string;
   @IsOptional() @IsString() @MaxLength(120) country?: string;
@@ -25,6 +25,8 @@ export class PlaceQueryDto {
 }
 
 export class CreatePlaceDto {
+  @IsOptional() @IsString() @MaxLength(120) region?: string;
+  @IsOptional() @IsString() @MaxLength(24) postalCode?: string;
   @IsString() @MinLength(2) @MaxLength(160) name!: string;
   @IsOptional() @IsString() @MaxLength(2000) description?: string;
   @IsOptional() @IsIn(["food_drink", "nightlife_music", "events_venues", "arts_culture", "sports_activities", "cafes", "outdoors", "games_hobbies", "work_networking", "wellness", "shopping", "hotels_hostels", "community", "coworking", "cafe", "restaurant", "venue", "studio", "office", "other"]) placeType?: string;
@@ -39,6 +41,8 @@ export class CreatePlaceDto {
 }
 
 export class UpdatePlaceDto {
+  @IsOptional() @IsString() @MaxLength(120) region?: string;
+  @IsOptional() @IsString() @MaxLength(24) postalCode?: string;
   @IsOptional() @IsString() @MinLength(2) @MaxLength(160) name?: string;
   @IsOptional() @IsString() @MaxLength(2000) description?: string;
   @IsOptional() @IsIn(["food_drink", "nightlife_music", "events_venues", "arts_culture", "sports_activities", "cafes", "outdoors", "games_hobbies", "work_networking", "wellness", "shopping", "hotels_hostels", "community", "coworking", "cafe", "restaurant", "venue", "studio", "office", "other"]) placeType?: string;

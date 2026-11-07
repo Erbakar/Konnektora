@@ -3,7 +3,7 @@ import { UserStatus } from "@prisma/client";
 import { ChatService } from "./chat.service";
 
 describe("ChatService", () => {
-  const privateMessage = { findMany: jest.fn(), count: jest.fn(), create: jest.fn(), updateMany: jest.fn() };
+  const privateMessage = { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn(), count: jest.fn(), create: jest.fn(), updateMany: jest.fn() };
   const userBlock = { findMany: jest.fn(), findFirst: jest.fn() };
   const user = { findUnique: jest.fn() };
   const privacySettings = { findUnique: jest.fn() };
@@ -13,7 +13,7 @@ describe("ChatService", () => {
   const conversationPreference = { findMany: jest.fn(), findUnique: jest.fn(), upsert: jest.fn() };
   const notifications = { dispatch: jest.fn() };
   const messageReaction = { findUnique: jest.fn(), create: jest.fn(), delete: jest.fn() };
-  const tx = { privateMessage, notification };
+  const tx = { privateMessage, notification, $queryRaw: jest.fn().mockResolvedValue([]) };
   const prisma = {
     privateMessage, userBlock, user, privacySettings, userFollow, notificationPreference, notification, conversationPreference, messageReaction,
     $transaction: jest.fn(async (operation: unknown) =>
@@ -34,6 +34,20 @@ describe("ChatService", () => {
     notificationPreference.findUnique.mockResolvedValue(null);
     conversationPreference.findMany.mockResolvedValue([]);
     conversationPreference.findUnique.mockResolvedValue(null);
+  });
+
+  it("allows editing within 30 minutes and rejects the exact expiry boundary", async () => {
+    const createdAt = new Date("2026-10-08T09:00:00Z");
+    const now = jest.spyOn(Date, "now").mockReturnValue(createdAt.getTime() + 29 * 60_000);
+    privateMessage.findUnique.mockResolvedValue({ id: "m1", status: "active", senderId: sender.id, createdAt });
+    privateMessage.update.mockResolvedValue({ id: "m1", body: "edited" });
+    try {
+      await expect(service.edit(sender.id, "m1", { body: "edited" })).resolves.toMatchObject({ body: "edited" });
+      now.mockReturnValue(createdAt.getTime() + 30 * 60_000);
+      await expect(service.edit(sender.id, "m1", { body: "too late" })).rejects.toBeInstanceOf(BadRequestException);
+      expect(privateMessage.update).toHaveBeenCalledTimes(1);
+      await expect(service.edit(peer.id, "m1", { body: "another author" })).rejects.toBeInstanceOf(ForbiddenException);
+    } finally { now.mockRestore(); }
   });
 
   it("groups messages by peer and counts unread messages", async () => {
@@ -95,6 +109,14 @@ describe("ChatService", () => {
     user.findUnique.mockResolvedValue(peer);
     privacySettings.findUnique.mockResolvedValue({ messageAudience: "following" });
     userFollow.findMany.mockResolvedValue([]);
+    await expect(service.send(sender, { recipientId: peer.id, body: "hello" })).rejects.toBeInstanceOf(ForbiddenException);
+    expect(privateMessage.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects messages when privacy is nobody even if the recipient follows the sender", async () => {
+    user.findUnique.mockResolvedValue(peer);
+    privacySettings.findUnique.mockResolvedValue({ messageAudience: "nobody" });
+    userFollow.findMany.mockResolvedValue([{ targetId: sender.id }]);
     await expect(service.send(sender, { recipientId: peer.id, body: "hello" })).rejects.toBeInstanceOf(ForbiddenException);
     expect(privateMessage.create).not.toHaveBeenCalled();
   });

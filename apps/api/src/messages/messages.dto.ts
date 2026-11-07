@@ -74,3 +74,9 @@ export class UpdateUserMessageDto {
   @IsEnum(UserMessageStatus)
   status!: UserMessageStatus;
 }
+
+export class ConfirmDeletionRequestDto {
+  @IsString()
+  @MaxLength(2048)
+  token!: string;
+}

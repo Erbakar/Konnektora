@@ -1,3 +1,6 @@
+import { compatibilityScores } from "../common/compatibility";
+import { effectivePlan } from "../plans/plan-runtime";
+import { consumeQuota } from "../common/usage-quota";
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrivacyAudience } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
@@ -12,15 +15,15 @@ export class PublicProfileService {
     return this.getProfile({ username: { equals: username, mode: "insensitive" } }, viewerId, viewerRole);
   }
 
-  async getById(id: string, viewerId?: string, viewerRole?: string) {
-    return this.getProfile({ id }, viewerId, viewerRole);
+  async getById(id: string, viewerId?: string, viewerRole?: string, analyticsRequest?: string) {
+    return this.getProfile({ id }, viewerId, viewerRole, analyticsRequest);
   }
 
-  private async getProfile(identifier: { id: string } | { username: { equals: string; mode: "insensitive" } }, viewerId?: string, viewerRole?: string) {
+  private async getProfile(identifier: { id: string } | { username: { equals: string; mode: "insensitive" } }, viewerId?: string, viewerRole?: string, analyticsRequest?: string) {
     const profile = await this.prisma.user.findFirst({
       where: { ...identifier, status: "active", role: { in: ["user", "curator", "admin", "super_admin"] } },
       select: {
-        id: true, name: true, username: true, role: true, accountType: true, businessPlan: true, memberPlan: true, website: true, city: true, country: true, district: true, address: true, gender: true, birthDate: true, companyName: true, tradeName: true, companyType: true, businessCategory: true,
+        id: true, name: true, username: true, role: true, accountType: true, businessPlan: true, memberPlan: true, planGifts: true, website: true, city: true, region: true, country: true, district: true, address: true, gender: true, birthDate: true, companyName: true, tradeName: true, companyType: true, businessCategory: true,
         followerCount: true, followingCount: true, createdAt: true, profileVerifiedAt: true,
         privacySettings: { select: { messageAudience: true, eventAudience: true, placeAudience: true, profileNameAudience: true, demographicsAudience: true, locationAudience: true, websiteAudience: true, businessAudience: true, addressAudience: true, tradeNameAudience: true } },
         interestTags: { where: { tag: { status: "active" } }, include: { tag: true }, orderBy: { createdAt: "desc" } }
@@ -35,7 +38,12 @@ export class PublicProfileService {
     }
     const relationship = await this.relationship(profile.id, viewerId);
     const privacy = profile.privacySettings ?? { messageAudience: "everybody" as const, eventAudience: "everybody" as const, placeAudience: "everybody" as const, profileNameAudience: "everybody" as const, demographicsAudience: "everybody" as const, locationAudience: "everybody" as const, websiteAudience: "everybody" as const, businessAudience: "everybody" as const, addressAudience: "everybody" as const, tradeNameAudience: "everybody" as const };
-    const canViewStats = ["admin", "super_admin", "curator"].includes(viewerRole ?? "") || viewerId === profile.id && canUseAdvancedAnalytics({ role: viewerRole ?? "user", accountType: profile.accountType, businessPlan: profile.businessPlan, memberPlan: profile.memberPlan });
+    if (analyticsRequest) {
+      if (!/^[0-9a-f-]{36}$/i.test(analyticsRequest)) throw new ForbiddenException("Geçersiz istatistik oturumu.");
+      if (!viewerId || viewerId !== profile.id && !["admin","super_admin","curator"].includes(viewerRole ?? "")) throw new ForbiddenException("Yalnız kendi profilinizin istatistiklerini görebilirsiniz.");
+      if (viewerId === profile.id) await this.prisma.$transaction(tx => consumeQuota(tx, { ...profile, role: profile.role }, "profile", analyticsRequest));
+    }
+    const canViewStats = Boolean(analyticsRequest) || ["admin", "super_admin", "curator"].includes(viewerRole ?? "") || viewerId === profile.id && canUseAdvancedAnalytics({ ...profile, role: viewerRole ?? "user" });
     const [media, ownInterests, events, places, profileViews, authoredComments, sentMessages, profileViewDetails, followerDetails, connectionDetails, ownedEventStats, scans, profileViewSources, profileSharesByChannel, profileActions] = await Promise.all([
       this.prisma.mediaFile.findMany({ where: { contentType: "user", contentId: profile.id, status: "active" }, select: { id: true, url: true, type: true, sortOrder: true, isProfilePicture: true }, orderBy: { sortOrder: "asc" }, take: 50 }),
       viewerId ? this.prisma.userInterestTag.findMany({ where: { userId: viewerId }, select: { tagId: true, sentiment: true } }) : [],
@@ -197,9 +205,10 @@ export class PublicProfileService {
       id: profile.id, name: this.canView(privacy.profileNameAudience ?? "everybody", relationship) ? profile.name : profile.username ?? "Konnektora üyesi", username: profile.username ?? profile.id,
       accountType: profile.accountType === "corporate" ? "corporate" as const : "individual" as const,
       systemRole: profile.role,
-      plan: profile.accountType === "corporate" ? (profile.businessPlan === "starter" ? null : profile.businessPlan) : (profile.memberPlan === "free" ? null : profile.memberPlan),
+      plan: effectivePlan(profile).key === "free" ? null : effectivePlan(profile).key,
       website: this.canView(privacy.websiteAudience ?? "everybody", relationship) ? profile.website : null,
       city: this.canView(privacy.locationAudience ?? "everybody", relationship) ? profile.city : null,
+      region: this.canView(privacy.locationAudience ?? "everybody", relationship) ? profile.region : null,
       country: this.canView(privacy.locationAudience ?? "everybody", relationship) ? profile.country : null,
       district: this.canView(privacy.addressAudience ?? "everybody", relationship) ? profile.district : null,
       address: this.canView(privacy.addressAudience ?? "everybody", relationship) ? profile.address : null,
@@ -213,8 +222,8 @@ export class PublicProfileService {
       media, interests, commonInterestCount: interests.filter((item) => item.common).length, mutualism,
       relationship: { isSelf: viewerId === profile.id, following: relationship.viewerFollowsOwner, blockedByViewer, canMessage: !blockedByViewer && viewerId !== undefined && viewerId !== profile.id && this.canView(privacy.messageAudience, relationship) },
       stats: profileStats,
-      events: events.map((event) => ({ kind: "event" as const, id: event.id, title: event.title, subtitle: event.summary, href: `/events/${event.slug}`, imageUrl: event.coverImageUrl, meta: `${event.locationName ?? event.city ?? "Online"} · ${event.startsAt.toISOString()}`, latitude: event.latitude == null ? null : Number(event.latitude), longitude: event.longitude == null ? null : Number(event.longitude), attendeeCount: event._count.participants, organizer: event.createdById === profile.id })),
-      places: places.map((place) => ({ kind: "place" as const, id: place.id, title: place.name, subtitle: place.description, href: `/places/${place.slug}`, imageUrl: place.coverImageUrl, meta: `${place.followerCount} members${place.city ? ` · ${place.city}` : ""}`, latitude: place.latitude == null ? null : Number(place.latitude), longitude: place.longitude == null ? null : Number(place.longitude), organizer: place.createdById === profile.id }))
+      events: events.map((event) => ({ kind: "event" as const, visibility: event.visibility, id: event.id, title: event.title, subtitle: event.summary, href: `/events/${event.slug}`, imageUrl: event.coverImageUrl, meta: `${event.locationName ?? event.city ?? "Online"} · ${event.startsAt.toISOString()}`, latitude: event.latitude == null ? null : Number(event.latitude), longitude: event.longitude == null ? null : Number(event.longitude), attendeeCount: event._count.participants, startsAt: event.startsAt, endsAt: event.endsAt, organizer: event.createdById === profile.id })),
+      places: places.map((place) => ({ kind: "place" as const, visibility: place.visibility, id: place.id, title: place.name, subtitle: place.description, href: `/places/${place.slug}`, imageUrl: place.coverImageUrl, meta: `${place.followerCount} members${place.city ? ` · ${place.city}` : ""}`, latitude: place.latitude == null ? null : Number(place.latitude), longitude: place.longitude == null ? null : Number(place.longitude), organizer: place.createdById === profile.id }))
     };
   }
 
@@ -226,23 +235,16 @@ export class PublicProfileService {
     places: Array<any>;
   }) {
     const { viewerId, profile, interests, events, places } = input;
-    const [sharedEventRows, sharedPlaceRows, followRows, reactionRows, commentRows, viewerProfile] = await Promise.all([
+    const [sharedEventRows, sharedPlaceRows, reactionRows, commentRows, viewerProfile] = await Promise.all([
       events.length ? this.prisma.event.findMany({ where: { id: { in: events.map((item) => item.id) }, OR: [{ createdById: viewerId }, { participants: { some: { userId: viewerId, status: { in: ["accepted", "attended"] } } } }] }, select: { id: true } }) : [],
       places.length ? this.prisma.place.findMany({ where: { id: { in: places.map((item) => item.id) }, OR: [{ createdById: viewerId }, { members: { some: { userId: viewerId, status: "accepted" } } }] }, select: { id: true } }) : [],
-      this.prisma.userFollow.findMany({ where: { followerId: { in: [viewerId, profile.id] } }, select: { followerId: true, followingId: true, following: { select: { id: true, name: true, username: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } }, take: 10_000 }),
       this.prisma.contentReaction.findMany({ where: { userId: { in: [viewerId, profile.id] } }, select: { userId: true, targetType: true, targetId: true }, take: 20_000 }),
       this.prisma.contentComment.findMany({ where: { authorId: { in: [viewerId, profile.id] }, status: "active" }, select: { authorId: true, targetType: true, targetId: true }, take: 20_000 }),
       this.prisma.user.findUnique({ where: { id: viewerId }, select: { city: true, country: true } }),
     ]);
     const sharedEventIds = new Set(sharedEventRows.map((item) => item.id));
     const sharedPlaceIds = new Set(sharedPlaceRows.map((item) => item.id));
-    const followGroups = new Map<string, { users: Set<string>; person: (typeof followRows)[number]["following"] }>();
-    for (const row of followRows) {
-      const current = followGroups.get(row.followingId) ?? { users: new Set<string>(), person: row.following };
-      current.users.add(row.followerId);
-      followGroups.set(row.followingId, current);
-    }
-    const people = [...followGroups.values()].filter((item) => item.users.size === 2).map(({ person }) => ({ id: person.id, name: person.name, username: person.username, avatarUrl: person.uploadedMedia[0]?.url ?? null })).slice(0, 24);
+    const people: never[] = [];
     const intersectTargets = (rows: Array<{ userId?: string; authorId?: string | null; targetType: string; targetId: string }>, userKey: "userId" | "authorId") => {
       const groups = new Map<string, Set<string>>();
       for (const row of rows) {
@@ -260,24 +262,17 @@ export class PublicProfileService {
     const sameSentimentTags = interests.filter((item) => item.common);
     const sharedEvents = events.filter((item) => sharedEventIds.has(item.id));
     const sharedPlaces = places.filter((item) => sharedPlaceIds.has(item.id));
-    const eventItems = sharedEvents.map((event) => ({ kind: "event" as const, id: event.id, title: event.title, subtitle: event.summary, href: `/events/${event.slug}`, imageUrl: event.coverImageUrl, meta: `${event.locationName ?? event.city ?? "Online"} · ${event.startsAt.toISOString()}`, latitude: event.latitude == null ? null : Number(event.latitude), longitude: event.longitude == null ? null : Number(event.longitude), attendeeCount: event._count.participants, organizer: event.createdById === profile.id }));
-    const placeItems = sharedPlaces.map((place) => ({ kind: "place" as const, id: place.id, title: place.name, subtitle: place.description, href: `/places/${place.slug}`, imageUrl: place.coverImageUrl, meta: `${place.followerCount} members${place.city ? ` · ${place.city}` : ""}`, latitude: place.latitude == null ? null : Number(place.latitude), longitude: place.longitude == null ? null : Number(place.longitude), organizer: place.createdById === profile.id }));
+    const eventItems = sharedEvents.map((event) => ({ kind: "event" as const, visibility: event.visibility, id: event.id, title: event.title, subtitle: event.summary, href: `/events/${event.slug}`, imageUrl: event.coverImageUrl, meta: `${event.locationName ?? event.city ?? "Online"} · ${event.startsAt.toISOString()}`, latitude: event.latitude == null ? null : Number(event.latitude), longitude: event.longitude == null ? null : Number(event.longitude), attendeeCount: event._count.participants, startsAt: event.startsAt, endsAt: event.endsAt, organizer: event.createdById === profile.id }));
+    const placeItems = sharedPlaces.map((place) => ({ kind: "place" as const, visibility: place.visibility, id: place.id, title: place.name, subtitle: place.description, href: `/places/${place.slug}`, imageUrl: place.coverImageUrl, meta: `${place.followerCount} members${place.city ? ` · ${place.city}` : ""}`, latitude: place.latitude == null ? null : Number(place.latitude), longitude: place.longitude == null ? null : Number(place.longitude), organizer: place.createdById === profile.id }));
     const sameLocation = Boolean(viewerProfile && ((viewerProfile.city && profile.city && viewerProfile.city.localeCompare(profile.city, undefined, { sensitivity: "accent" }) === 0) || (viewerProfile.country && profile.country && viewerProfile.country.localeCompare(profile.country, undefined, { sensitivity: "accent" }) === 0)));
-    const score = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
-    const friendship = score(sameSentimentTags.length * 8 + people.length * 14 + sharedReactionCount * 4 + sharedCommentTargetCount * 5);
-    const networking = score(people.length * 16 + sharedEvents.length * 16 + sameSentimentTags.length * 5);
-    const eventPartner = score(sharedEvents.length * 28 + sameSentimentTags.length * 7 + sharedPlaces.length * 10);
-    const travel = score(sharedPlaces.length * 24 + (sameLocation ? 12 : 0) + sameSentimentTags.length * 4);
-    const business = score(sharedEvents.length * 14 + people.length * 10 + sameSentimentTags.length * 6 + (profile.accountType === "corporate" ? 10 : 0));
-    const overall = score((friendship + networking + eventPartner + travel + business) / 5);
-    const total = sameSentimentTags.length + sharedEvents.length + sharedPlaces.length + people.length + sharedReactionCount + sharedCommentTargetCount;
+    const { overall, friendship, networking, eventPartner, travel, business } = compatibilityScores({ tags: sameSentimentTags.length, events: sharedEvents.length, places: sharedPlaces.length, reactions: sharedReactionCount, comments: sharedCommentTargetCount, sameLocation, corporate: profile.accountType === "corporate" });
+    const total = sameSentimentTags.length + sharedEvents.length + sharedPlaces.length + sharedReactionCount + sharedCommentTargetCount;
     const strongest = [["arkadaşlık", friendship], ["networking", networking], ["etkinlik partnerliği", eventPartner], ["seyahat", travel], ["iş", business]].sort((a, b) => Number(b[1]) - Number(a[1]))[0]!;
-    const explanation = total ? `${total} doğrulanmış ortak sinyal bulundu. En güçlü uyum alanı ${strongest[0]} (%${strongest[1]}); skor ortak ilgi duyguları, etkinlikler, mekânlar, takipler ve içerik etkileşimlerinden hesaplandı.` : "Henüz doğrulanmış ortak bir sinyal bulunamadı. Yeni etkinlik ve ilgi alanı etkileşimleri oluştukça analiz güncellenecek.";
+    const explanation = total ? `${total} doğrulanmış ortak sinyal bulundu. En güçlü uyum alanı ${strongest[0]} (%${strongest[1]}); skor ortak ilgi duyguları, etkinlikler, mekânlar ve içerik etkileşimlerinden hesaplandı.` : "Henüz doğrulanmış ortak bir sinyal bulunamadı. Yeni etkinlik ve ilgi alanı etkileşimleri oluştukça analiz güncellenecek.";
     const actions = [
       sharedEvents[0] ? `${sharedEvents[0].title} etkinliği hakkında sohbet başlatın.` : null,
       sameSentimentTags[0] ? `${sameSentimentTags[0].tag.name} ortak ilgi alanından bir sohbet açın.` : null,
       sharedPlaces[0] ? `${sharedPlaces[0].name} mekânındaki gelecek etkinliklere birlikte göz atın.` : null,
-      people[0] ? `${people[0].name} ortak bağlantınız üzerinden tanışma bağlamı oluşturun.` : null,
     ].filter((item): item is string => Boolean(item));
     return { total, hiddenCount: 0, sameSentimentTags, events: eventItems, places: placeItems, people, sharedReactionCount, sharedCommentTargetCount, scores: { overall, friendship, networking, eventPartner, travel, business }, explanation, actions };
   }
@@ -287,9 +282,9 @@ export class PublicProfileService {
     const direct = await this.prisma.userFollow.findMany({ where: { OR: [{ followerId: viewerId, followingId: ownerId }, { followerId: ownerId, followingId: viewerId }] }, select: { followerId: true, followingId: true } });
     const viewerFollowsOwner = direct.some((item) => item.followerId === viewerId);
     const ownerFollowsViewer = direct.some((item) => item.followerId === ownerId);
-    let inNetwork = ownerFollowsViewer;
+    let inNetwork = false;
     if (!inNetwork) {
-      const ownerFollowing = await this.prisma.userFollow.findMany({ where: { followerId: ownerId }, select: { followingId: true }, take: 500 });
+      const ownerFollowing = await this.prisma.userFollow.findMany({ where: { followerId: ownerId }, select: { followingId: true } });
       if (ownerFollowing.length) inNetwork = Boolean(await this.prisma.userFollow.findFirst({ where: { followerId: { in: ownerFollowing.map((item) => item.followingId) }, followingId: viewerId }, select: { followerId: true } }));
     }
     return { viewerFollowsOwner, ownerFollowsViewer, inNetwork };

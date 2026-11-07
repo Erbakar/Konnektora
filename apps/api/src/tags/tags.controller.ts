@@ -1,3 +1,4 @@
+import { contentMediaExtensions, contentMediaHelp } from "../common/media-policy";
 import {
   BadRequestException,
   Body,
@@ -13,7 +14,7 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { diskStorage } from "multer";
+import { durableStorage, removeDurableUpload } from "../media-storage/durable-storage";
 import { randomUUID } from "crypto";
 import { resolve } from "path";
 import { User } from "@prisma/client";
@@ -102,47 +103,40 @@ export class TagsController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor("file", {
-      storage: diskStorage({
+      storage: durableStorage({
         destination: resolve(process.cwd(), "uploads"),
         filename: (_request, file, callback) =>
           callback(
             null,
-            `${randomUUID()}${file.mimetype.startsWith("video/") ? ".mp4" : ".jpg"}`,
+            `${randomUUID()}${contentMediaExtensions[file.mimetype] ?? ""}`,
           ),
       }),
       limits: { fileSize: 20 * 1024 * 1024 },
       fileFilter: (_request, file, callback) => {
-        const allowed = [
-          "image/jpeg",
-          "image/png",
-          "image/webp",
-          "image/gif",
-          "video/mp4",
-          "video/webm",
-        ].includes(file.mimetype);
+        const allowed = Boolean(contentMediaExtensions[file.mimetype]);
         callback(
           allowed
             ? null
             : new BadRequestException(
-                "Yalnız fotoğraf veya video yüklenebilir.",
+                contentMediaHelp,
               ),
           allowed,
         );
       },
     }),
   )
-  uploadCommentMedia(
+  async uploadCommentMedia(
     @Param("commentId") commentId: string,
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: User,
   ) {
     if (!file) throw new BadRequestException("Dosya gereklidir.");
-    return this.tagsService.addCommentMedia(
+    try { return await this.tagsService.addCommentMedia(
       commentId,
       user,
       `/uploads/${file.filename}`,
       file.mimetype.startsWith("video/") ? "video" : "image",
-    );
+    ); } catch (error) { await removeDurableUpload(file.path).catch(() => undefined); throw error; }
   }
 
   @Delete("tags/:tagId/comments/:commentId")

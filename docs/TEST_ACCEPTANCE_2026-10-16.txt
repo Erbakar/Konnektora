@@ -1,0 +1,77 @@
+CANLI YAYIN GÜNCELLEMESİ — 16 EKİM 2026
+Railway b9c213ea-33ba-4a3f-aaf6-a58277b3573d SUCCESS. Uygulama ve API konnektora.com üzerinde yayımlandı. Yayın öncesi şifreli veritabanı yedeği doğrulandı. Ayrıntılı yayın doğrulaması docs/RELEASE_2026-10-16.txt dosyasındadır. Aşağıdaki raporun canlıya alınmadığına dair ifadeleri yayın öncesi durumu anlatır; 30 maddenin tamamının canlı uçtan uca kabul edildiği anlamına gelmez.
+
+KONNEKTORA — 16 EKİM 2026 MADDE BAZLI KABUL RAPORU
+
+Kaynaklar:
+https://docs.google.com/spreadsheets/d/1tZdzPN7diSJJR7omUtJJp_bdMWERAICPFI4S2bngHSk/edit?gid=601200529
+https://docs.google.com/document/d/1XMOadoZpnHs1-6xxcJHuHHH-aNJxaLq_JtDrmF_4laQ/edit
+
+Kapsam ve durum
+Kaynak listenin 16/10 sekmesindeki 30 dolu madde tek tek incelendi. 29. ve 30. maddeler son güncellemede eklenmişti. 30 maddenin geliştirme düzeltmeleri ve aşağıdaki yerel doğrulamaları tamamlandı. Aşağıdaki yerel doğrulamalar canlı ortam kabulü anlamına gelmez. Uygulama kodu üretime yayımlanmadı; kullanıcı açıklaması sonrasında 64 örnek medya dosyası canlı kalıcı depoya eklendi; kaynak Google belgeleri değiştirilmedi. Depodaki önceden mevcut çalışmalar korundu.
+Bilet kapasitesi bildirimleri için 20261016120000_ticket_availability_activity veritabanı geçişi yayında uygulanmalıdır.
+
+TEST LİSTESİ
+1. Profil etkinlik tarihi: yaklaşanlar artan, geçmişler azalan sıralandı. requirements-55-66-ui testi.
+2. Kurumsal gizlilik: ad/soyad ve demografi alanları kaldırıldı; bireysel alanlar korundu. oct16-acceptance iki hesap testi.
+3. Ana sayfa isim gizliliği: publicName kuralları; nobody değerinde gerçek ad sızmaması discovery.service testi.
+4. Uzun mesaj kaydırma: gerçek MessagesPage bileşeninde 120 mesaj, 3 sayfa, eski mesaj yükleme ve başa eklenirken okuma konumunun korunması doğrulandı. Son mesaja erişim scrollTop=8438/max=8438. useInfiniteQuery ile ilk 50 mesajdan eski geçmişe erişim eklendi; sayfalar kimliğe göre tekilleştirildi ve tarihe göre sıralandı. API sırası createdAt+id ile kararlı. messages-composer-requirements-ui: 120 mesaj testi.
+5. Etiket iç içe yorum aksiyonları: gerçek ContentComments bileşeninde ana/alt yorum düğmeleri masaüstü ve 390px mobil ekranda yatay ve aynı merkez çizgisinde; sayfa taşması yok.
+6. Etiket takipten çık ikonu: UserMinus/UserPlus düzeltildi. tag-event-discovery-ui testi.
+7. Etkinlik yorum/yanıt aksiyonları: gerçek ContentComments bileşeninde masaüstü ve 390px mobilde ana/alt yorum düğmeleri yatay; ölçüm kaydı browser-evidence.json.
+8. Mekân yorum/yanıt aksiyonları: aynı gerçek bileşenin place hedefiyle masaüstü/mobil ölçümü; yatay düzen ve taşma kontrolü başarılı.
+9. Mekân Paylaş: kaynak sırası doğru olsa da eski CSS order kuralının Paylaş düğmesini sola aldığı bulundu ve kaldırıldı. Gerçek PlaceDetailPage ölçümü: masaüstü Davet x169.82 / Paylaş x299.30; mobil Davet x112.10 / Paylaş x237.62. Her iki boyutta aynı y çizgisinde, Paylaş sağda. place-detail-requirements-ui testi de başarılı.
+10. Etkinlik pasaport avatarı: gerçek EventInviteManagementPage üzerinden pasaport açıldı; yüklenmiş avatar80x80 ve medya160x120. Mobil modal ekran genişliğini aşmıyor.
+11. Mekân pasaport avatarı: gerçek PlaceInviteManagementPage üzerinden pasaport açıldı; yüklenmiş avatar80x80 ve medya160x120.
+12. Mekân check-in rol seçimi kaldırıldı. oct16-acceptance testi.
+13. Paylaşım adaylarının isim gizliliği: social.service nobody senaryosu testi.
+14. Telefon daveti: uluslararası numara normalizasyonu, mevcut aktif üyeye öncelik. events.service ve invite-phone testleri. Etkinlik/mekân listelerinde provisional iletişim bilgisi, davetli durumunun check-in filtresine dahil edilmesi. Mekân arayüz testi. places.service testine 0090 numarasıyla mevcut aktif üyeyi seçme ve yeni kullanıcı oluşturmama kontrolü eklendi. Canlı demo verisindeki bir eski mükerrer katılımcı düzeltildi: tek örnek bilet aktif üyeye aktarıldı, aktarım geçmişi oluşturuldu, QR korundu, mükerrer katılım kaldırıldı. Hesaplar korunuyor. İşlem öncesi yedek ve işlem sonrası bağımsız doğrulama mevcut; output/oct16-invite-repair-verification.json verified=true. Gerçek SMS gönderimi yapılmadı.
+15. Profil medyası sürükleme: sürükleme verisi ve hata geri bildirimi; UI sıra testi; API tekrar/yabancı medya ve profil fotoğrafı korunması testleri.
+16. Profil yan paneli video işareti: Play katmanı. requirements-55-66-ui testi.
+17. Etiket istatistik geri oku: ortak başlık önüne alındı. analytics-links testi.
+18. Etkinlik istatistik geri oku: analytics-links testi.
+19. Mekân istatistik geri oku: analytics-links testi.
+20. Kullanıcı istatistik geri oku: analytics-links testi.
+21. MEDYA KAYBI GİDERİLDİ (örnek içerikle): Kullanıcı tüm kayıtların demo olduğunu ve yeniden üretilebileceğini doğruladı. 62 görsel ve 2 adet 5 saniyelik MP4 üretildi; mevcut 64 dosya adına kalıcı depoda eklendi. Önceden korunan 4 dosyanın içeriği değişmedi. Son denetim: 78 aktif medya, 68 kalıcı yerel dosya, 10 harici bağlantı, 0 eksik yerel dosya. 64 dosyanın canlı HTTP içeriği SHA256 ile birebir doğrulandı; tarayıcı 62/62 görseli yükledi, iki video sonuna kadar oynadı, video Range istekleri 206 döndü. Kanıtlar output/demo-media altında. Üç AI kaynak görseli demo kayıtlarında tekrar kullanıldı; eski orijinal içerikler kurtarılmış gibi sunulmuyor.
+22. Kurumsal CTA: misafir onboarding; bireysel hesap işletme ayarı; kurumsal hesap işletme merkezi. Üç hesap durumuyla UI testi.
+23. Fatura/vergi bağlantısı: gerçek finans erişim akışı /wallet. UI hedef testi; gerçek SMS/OTP uçtan uca kabulü yapılmadı.
+24. Aktif paket: açılır detay, dönem/hediye bitişi, etkinlik/etiket/davet kalanları ve son 24/6 saat yeni sohbet kalanları. Sohbet tüketimi mevcut kota sorgusundan hesaplanıyor. oct16-acceptance kalan kota ve aç/kapa testi.
+25. Masaüstü etkinlik ülke taşması: CSS genişlik sınırı. Gerçek yerel etkinlik sayfasında select206px/ebeveyn206px, taşma yok.
+26. Yönetim konum alanları: kullanıcı/etkinlik ve finans/küratör filtreleri ortak ülke/şehir/bölge seçicilerine geçirildi. Küratör filtrelerinde kalan serbest metin alanları da ülke/şehir/bölge seçicilerine çevrildi. Küratör form etkileşim testi başarılı; tüm dünya veri seçenekleri tek tek denenmedi.
+27. Küratör oran alanı: mevcut Yönetim > Finans içindeki form doğrulandı; %25 kayıt isteği oct16-curator-form testiyle doğrulandı. Giriş düğmesi “Küratörler ve gelir oranları” olarak netleştirildi. Canlı mali kayıt yazılmadı.
+28. Misafir/üye popüler-yeni listeleri: konum ve kendini dışlama farkı kaldırıldı; engellenen kullanıcılar üyeye özel hariç tutulur. discovery.service aynı nüfus testi. Önbellek anahtarı kullanıcıyı içerir.
+
+29. İşletme merkezine git: kurumsal hesap CTA hedefi /business/center oldu. Bu rota gerçek BusinessCenterPage açar; eski /finance bağlantıları buraya yönlenir. Yinelenen CTA kaldırıldı. oct16-acceptance hedef/tek düğme testi başarılı.
+30. SSS komisyonu: ödeme sağlayıcısının işlem ücreti toplam %5'e dahildir. BusinessFaq ve mağaza TR/EN metinleri düzeltildi; ayrıca ücret alınacağı ifadesi kaldırıldı. oct16-acceptance metin testi başarılı.
+
+YENİ FEED İÇERİKLERİ (13 TÜR)
+1 Etiket oluşturulması: doğru eylem metni, etiket bağlantısı.
+2 Etiket iletisi: yazar/hedef bağlantıları, medya, uzun metin açılımı.
+3 Profile eklenen etiketler: kişi bazlı gruplama, en yeni 5, fazlasını açma.
+4 Etkinliğe katılım: mevcut kart, görünürlük kontrolü.
+5 Etkinlik iletisi: yeni etkinlik yorum kartı, medya/metin.
+6 Etkinlik oluşturulması: takip edilen yaratıcı/mekân/etiket/katılımcı ilişkileri; afiş, ilk5 etiket, tarih ve mekân. Takip edilen etiket sonradan eklendiğinde revizyon kartı; değişmeyen etiketler duyuru üretmez.
+7 Mekân oluşturulması: şehir, afiş, ilk5 etiket.
+8 Mekâna katılım: mevcut kart, görünürlük kontrolü.
+9 Mekân iletisi: yeni mekân yorum kartı.
+10 Katılınan mekânda yönetici iletisi: üyelik ve yönetici ilişkisiyle sınıflama.
+11 Katılınan etkinlikte yönetici iletisi: katılım ve yönetici ilişkisiyle sınıflama.
+12 Katılınan etkinlikte yeni bilet/kapasite: kapasite artışı/yeniden açılma tarihi ayrı saklanır; normal düzenleme duyuru üretmez.
+13 Katılınan etkinlikte ilk satış: satış başlangıcı geçmişse ve kullanılabilir kapasite varsa; gelecekteki satış duyurulmaz.
+
+Feed doğrulama: activity-cards.spec, discovery.service.spec, ticket-availability-activity.spec ve oct16-acceptance.spec. Özel/erişilemeyen hedeflerin sızmaması, tarih sınırları, benzersiz aktivite anahtarları, uzun metin/etiket açılımı ve bağlantı hedefleri test edildi. İleti yazarı ana etkinlik/mekânı silme yetkisi kazanmaz. Kartlar mevcut kayıt ilişkilerinden türetilir; tam tarihsel olay günlüğü değildir. Canlı kullanıcı hesaplarıyla 13 türün uçtan uca kabulü yayından sonra yapılmalıdır.
+
+TOPLU DOĞRULAMA
+API: 453 başarılı, 20 atlanan test; 58 başarılı paket, 1 atlanan paket.
+Web: 165 başarılı test, 42 başarılı dosya.
+Tür kontrolü başarılı. Lint başarılı. Son üretim derlemesi ayrıca kontrol edildi.
+Atlanan testler başarı sayılmadı. Birim/bileşen testleri gerçek SMS, ödeme veya tüm üretim verisiyle uçtan uca test yerine geçmez.
+Yeni tarayıcı kanıtı: output/oct16-final-acceptance/browser-evidence.json ve place.png. Gerçek React sayfa/bileşenleri kontrollü API örnekleriyle çalıştırıldı; bu canlı sunucu uçtan uca testi değildir. İlk hatalı ölçümler ve düzeltme sonrası -fixed ölçümler raporda birlikte korunmuştur. Önceki yapısal örnek yerine gerçek bileşenlerle yeniden doğrulama yapıldı.
+
+KAPANIŞ KOŞULLARI
+- 21. madde: örnek içerikle yenilenerek tamamlandı; yedek/orijinal beklenmiyor.
+- Yayın ve veritabanı geçişi sonrası gerçek hesaplarla yukarıda belirtilen canlı kabul kontrolleri.
+Bu koşullar tamamlanmadan tüm maddeler kapandı veya yüzde yüz hatasız ifadesi kullanılmamalıdır.
+
+16 EKİM EK DOĞRULAMA: Demo medya yenilemesi uygulama dağıtımı gerektirmeden tamamlandı. Eski hata yanıtları görüldüğü için önbelleksiz içerik doğrulaması da yapıldı. Her dosyanın boyutu/türü/özeti verification.json, tarayıcı yüklenmesi browser-verification.json, son depolama sayımı final-audit.json içinde.
+Ek kontrol: Orijinal, sorgu parametresiz 64 medya adresi de HTTP 200 döndü (original-url-check.json). Canlı Mangal etkinlik sayfasındaki 8 medya görseli başarıyla yüklendi; ekran kanıtı output/demo-media/live-event-review.png.

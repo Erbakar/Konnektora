@@ -9,6 +9,13 @@ import { publicSiteHref } from "../lib/domains";
 import { useLanguage } from "../lib/i18n";
 import { DialogAccessibilityManager } from "./DialogAccessibilityManager";
 import { CheckInDecisionDialog } from "./CheckInDecisionDialog";
+import { DevicePushPrompt } from "./DevicePushPrompt";
+
+const onboardingAccessiblePaths = new Set([
+  "/onboarding", "/verify-email", "/privacy", "/terms", "/cookies", "/about",
+  "/data-deletion", "/contact", "/help", "/reset-password",
+  "/kvkk", "/information", "/distance-selling", "/pre-information", "/cookie-preferences",
+]);
 
 export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -35,6 +42,15 @@ export function AppLayout() {
     enabled: Boolean(user),
     refetchInterval: 2_500,
   });
+  const profileMenuRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent) => { if (profileMenuRef.current && event.target instanceof Node && !profileMenuRef.current.contains(event.target)) profileMenuRef.current.open = false; };
+    const closeEscape = (event: KeyboardEvent) => { if (event.key === "Escape" && profileMenuRef.current) profileMenuRef.current.open = false; };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeEscape);
+    return () => { document.removeEventListener("pointerdown", closeOutside); document.removeEventListener("keydown", closeEscape); };
+  }, []);
+  useEffect(() => { if (profileMenuRef.current) profileMenuRef.current.open = false; }, [location.pathname, location.search]);
   const unreadNotifications = notificationsQuery.data?.filter((item) => !item.readAt).length ?? 0;
 
   useEffect(() => {
@@ -71,7 +87,7 @@ export function AppLayout() {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
-    if (!storedUser || storedUser.role !== "user" || storedUser.onboardingCompleted !== false || location.pathname === "/onboarding" || location.pathname === "/verify-email") return;
+    if (!storedUser || storedUser.role !== "user" || storedUser.onboardingCompleted !== false || onboardingAccessiblePaths.has(location.pathname)) return;
     navigate("/onboarding", { replace: true });
   }, [location.pathname, navigate, storedUser?.id, storedUser?.onboardingCompleted, storedUser?.role]);
 
@@ -129,6 +145,7 @@ export function AppLayout() {
     <div className={`app-shell${user ? " authenticated-shell" : ""}`}>
       <DialogAccessibilityManager />
       {liveCheckInDecision ? <CheckInDecisionDialog notification={liveCheckInDecision} onClose={() => { const id = liveCheckInDecision.id; setLiveCheckInDecision(null); void markMyNotificationRead(id).then(() => notificationsQuery.refetch()); }}/>: null}
+      <DevicePushPrompt userId={user && storedUser?.onboardingCompleted !== false ? user.id : null} blocked={locationIntroOpen || onboardingAccessiblePaths.has(location.pathname)} />
       {locationIntroOpen ? <div className="dialog-backdrop location-intro-backdrop" role="presentation"><section aria-describedby="location-intro-description" aria-labelledby="location-intro-title" aria-modal="true" className="content-dialog location-intro-dialog" role="dialog"><button aria-label={language === "tr" ? "Şimdi değil" : "Not now"} className="passport-close" onClick={dismissLocationIntro} type="button"><X size={20}/></button><span className="location-intro-icon"><Navigation size={25}/></span><p className="eyebrow">{language === "tr" ? "Konum tabanlı keşif" : "Location-based discovery"}</p><h2 id="location-intro-title">{language === "tr" ? "Size daha yakın deneyimleri gösterelim" : "Let us show experiences closer to you"}</h2><p id="location-intro-description">{language === "tr" ? "Konnektora, özellikle etkinlikler ve mekânlarda ilgi alanı ve konum bazlı bir deneyim sunar. İsterseniz konum erişimine izin verebilir veya şimdi kapatıp kartlardaki konum bağlantısından daha sonra açabilirsiniz." : "Konnektora uses interests and location to improve event and venue discovery. Allow location access now, or close this message and enable it later from the location link on a card."}</p><div className="location-intro-actions"><button className="primary-action" onClick={requestLocationPermission} type="button">{language === "tr" ? "Konuma izin ver" : "Allow location"}</button><button className="secondary-action" onClick={dismissLocationIntro} type="button">{language === "tr" ? "Şimdi değil" : "Not now"}</button></div></section></div> : null}
       <header className="corp-topbar">
         <a href={publicSiteHref()} className="brand" aria-label={t("brandHome")}>
@@ -173,7 +190,7 @@ export function AppLayout() {
           </div> : null}
           <NavLink aria-label={t("search")} className="corp-header-search" to="/search"><Search size={20}/><span>{t("search")}</span></NavLink>
           {user ? <>
-            <div className="corp-user-links"><div className="corp-profile-cluster"><NavLink className="corp-user-identity" to={`/users/id/${user.id}`}>{user.avatarUrl ? <img alt="" src={resolveMediaUrl(user.avatarUrl)}/> : <span className="corp-user-avatar">{user.name.slice(0, 1).toUpperCase()}</span>}<span>@{user.username ?? user.name}</span></NavLink><details className="corp-profile-menu"><summary aria-label={language === "tr" ? "Profil menüsünü aç" : "Open profile menu"}><ChevronDown size={15}/></summary><div><NavLink to={`/users/id/${user.id}`}><UserRound size={17}/>{t("profile")}</NavLink><NavLink to="/identity"><QrCode size={17}/>{t("memberId")}</NavLink><NavLink to="/tickets"><Ticket size={17}/>{t("myTickets")}</NavLink><NavLink to="/settings"><Settings size={17}/>{t("settingsCenter")}</NavLink><NavLink to="/contacts"><Users size={17}/>{t("findFriends")}</NavLink><section className="profile-language"><span>{t("language")}</span><button className={language === "tr" ? "active" : ""} onClick={() => setLanguage("tr")} type="button">TR</button><button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")} type="button">EN</button></section><button onClick={() => { clearUserSession(); window.location.assign("/"); }} type="button"><LogOut size={17}/>{t("logOut")}</button></div></details></div><NavLink className="corp-topbar-notifications" to="/notifications"><Bell size={15}/><span>{t("notifications")}</span>{unreadNotifications ? <b>{unreadNotifications}</b> : null}</NavLink></div>
+            <div className="corp-user-links"><div className="corp-profile-cluster"><NavLink className="corp-user-identity" to={`/users/id/${user.id}`}>{user.avatarUrl ? <img alt="" src={resolveMediaUrl(user.avatarUrl)}/> : <span className="corp-user-avatar">{user.name.slice(0, 1).toUpperCase()}</span>}<span>@{user.username ?? user.name}</span></NavLink><details ref={profileMenuRef} className="corp-profile-menu"><summary aria-label={language === "tr" ? "Profil menüsünü aç" : "Open profile menu"}><ChevronDown size={15}/>{unreadNotifications ? <b className="notification-count">{unreadNotifications}</b> : null}</summary><div><NavLink to={`/users/id/${user.id}`}><UserRound size={17}/>{t("profile")}</NavLink><NavLink to="/notifications"><Bell size={17}/>{t("notifications")}{unreadNotifications ? <b className="notification-count">{unreadNotifications}</b> : null}</NavLink><NavLink to="/identity"><QrCode size={17}/>{t("memberId")}</NavLink><NavLink to="/tickets"><Ticket size={17}/>{t("myTickets")}</NavLink><NavLink to="/settings"><Settings size={17}/>{t("settingsCenter")}</NavLink><NavLink to="/contacts"><Users size={17}/>{t("findFriends")}</NavLink><section className="profile-language"><span>{t("language")}</span><button className={language === "tr" ? "active" : ""} onClick={() => setLanguage("tr")} type="button">TR</button><button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")} type="button">EN</button></section><button onClick={() => { clearUserSession(); window.location.assign("/"); }} type="button"><LogOut size={17}/>{t("logOut")}</button></div></details></div></div>
           </> : <>
             <a className="corp-topbar-link" href={publicSiteHref("/login")}>{t("login")}</a>
             <a className="corp-topbar-cta" href={publicSiteHref("/onboarding")}>{t("signUp")}</a>
@@ -204,18 +221,18 @@ export function AppLayout() {
           onClick={() => setMenuOpen(false)}
         />
         <nav className="corp-mobile-menu-panel" aria-label={t("mobileNavigation")}>
-          <div className="language-switch language-switch-mobile" aria-label="Dil / Language">
-            <button className={language === "tr" ? "active" : ""} onClick={() => setLanguage("tr")} type="button">TR</button>
-            <button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")} type="button">EN</button>
-          </div>
           {user ? <>
-            <div className="mobile-menu-profile-block"><NavLink className="mobile-menu-profile" to={`/users/id/${user.id}`} onClick={() => setMenuOpen(false)}>{user.avatarUrl ? <img alt="" src={resolveMediaUrl(user.avatarUrl)}/> : <span>{user.name.slice(0, 1).toUpperCase()}</span>}<div><strong>@{user.username ?? user.name}</strong></div></NavLink><NavLink className="mobile-profile-notifications" to="/notifications" onClick={() => setMenuOpen(false)}><Bell size={15}/> {t("notifications")}{unreadNotifications ? <b className="mobile-notification-badge">{unreadNotifications}</b> : null}</NavLink></div>
-            <NavLink to="/search" onClick={() => setMenuOpen(false)}><Search size={18} /> {t("search")}</NavLink>
-            <NavLink to="/identity" onClick={() => setMenuOpen(false)}><QrCode size={18} /> {t("memberId")}</NavLink>
-            <NavLink to="/community" onClick={() => setMenuOpen(false)}><Users size={18} /> {t("membersAndLists")}</NavLink>
-            <NavLink to="/settings" onClick={() => setMenuOpen(false)}><Settings size={18} /> {t("settingsCenter")}</NavLink>
-            <NavLink to="/tickets" onClick={() => setMenuOpen(false)}><Ticket size={18} /> {t("myTickets")}</NavLink>
-            <button className="mobile-menu-logout" onClick={() => { clearUserSession(); window.location.assign("/"); }} type="button"><LogOut size={18} /> {t("logOut")}</button>
+            <div className="mobile-menu-profile-block"><NavLink className="mobile-menu-profile" to={`/users/id/${user.id}`} onClick={() => setMenuOpen(false)}>{user.avatarUrl ? <img alt="" src={resolveMediaUrl(user.avatarUrl)}/> : <span>{user.name.slice(0, 1).toUpperCase()}</span>}<div><strong>@{user.username ?? user.name}</strong></div></NavLink><button className="mobile-menu-logout" onClick={() => { clearUserSession(); window.location.assign("/"); }} type="button"><LogOut size={18} /> {t("logOut")}</button></div>
+            <NavLink to={`/users/id/${user.id}`} onClick={() => setMenuOpen(false)}><UserRound size={18}/>{t("profile")}</NavLink>
+            <NavLink to="/notifications" onClick={() => setMenuOpen(false)}><Bell size={18}/>{t("notifications")}{unreadNotifications ? <b className="notification-count">{unreadNotifications}</b> : null}</NavLink>
+            <NavLink to="/search" onClick={() => setMenuOpen(false)}><Search size={18}/>{t("search")}</NavLink>
+            <NavLink to="/identity" onClick={() => setMenuOpen(false)}><QrCode size={18}/>{t("memberId")}</NavLink>
+            <NavLink to="/community" onClick={() => setMenuOpen(false)}><Users size={18}/>{t("membersAndLists")}</NavLink>
+            <NavLink to="/tickets" onClick={() => setMenuOpen(false)}><Ticket size={18}/>{t("myTickets")}</NavLink>
+            <NavLink to="/contacts" onClick={() => setMenuOpen(false)}><Users size={18}/>{t("findFriends")}</NavLink>
+            <NavLink to="/settings" onClick={() => setMenuOpen(false)}><Settings size={18}/>{t("settingsCenter")}</NavLink>
+            <div className="language-switch language-switch-mobile" aria-label="Dil / Language"><span>{t("language")}</span><button className={language === "tr" ? "active" : ""} onClick={() => setLanguage("tr")} type="button">TR</button><button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")} type="button">EN</button></div>
+
           </> : <>
             <a className="corp-mobile-menu-link" href={publicSiteHref("/login")} onClick={() => setMenuOpen(false)}>{t("login")}</a>
             <a className="corp-mobile-menu-cta" href={publicSiteHref("/onboarding")} onClick={() => setMenuOpen(false)}>{t("signUp")}</a>
@@ -230,8 +247,8 @@ export function AppLayout() {
         <NavLink to="/events"><CalendarDays size={20}/><span>{t("events")}</span></NavLink>
         <NavLink to="/places"><MapPin size={20}/><span>{t("places")}</span></NavLink>
         <NavLink to="/messages"><MessageCircle size={20}/><span>{t("messages")}</span>{conversationsQuery.data?.totalUnread ? <b>{conversationsQuery.data.totalUnread}</b> : null}</NavLink>
-        <button aria-label={t("menuOpen")} onClick={() => setMenuOpen(true)} type="button"><Menu size={20}/><span>{t("menu")}</span></button>
-        </> : <><NavLink to="/"><Home size={20}/><span>{t("home")}</span></NavLink><NavLink to="/events"><CalendarDays size={20}/><span>{t("events")}</span></NavLink><NavLink to="/places"><MapPin size={20}/><span>{t("places")}</span></NavLink><NavLink to="/tags"><Tag size={20}/><span>{t("tags")}</span></NavLink><button aria-label={t("menuOpen")} onClick={() => setMenuOpen(true)} type="button"><Menu size={20}/><span>{t("menu")}</span></button></>}
+        <button aria-label={t("menuOpen")} aria-expanded={menuOpen} aria-controls="corp-mobile-menu" onClick={() => setMenuOpen(open => !open)} type="button"><Menu size={20}/><span>{t("menu")}</span></button>
+        </> : <><NavLink to="/"><Home size={20}/><span>{t("home")}</span></NavLink><NavLink to="/events"><CalendarDays size={20}/><span>{t("events")}</span></NavLink><NavLink to="/places"><MapPin size={20}/><span>{t("places")}</span></NavLink><NavLink to="/tags"><Tag size={20}/><span>{t("tags")}</span></NavLink><button aria-label={t("menuOpen")} aria-expanded={menuOpen} aria-controls="corp-mobile-menu" onClick={() => setMenuOpen(open => !open)} type="button"><Menu size={20}/><span>{t("menu")}</span></button></>}
       </nav>
 
       <main>

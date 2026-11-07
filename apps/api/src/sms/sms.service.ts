@@ -7,6 +7,14 @@ export class SmsService {
 
   constructor(private readonly config: ConfigService) {}
 
+  async sendWalletCode(phone: string, code: string) {
+    const url = this.config.get<string>("SMS_WEBHOOK_URL");
+    const key = this.config.get<string>("SMS_API_KEY");
+    if (!url || !key) throw new ServiceUnavailableException("Cüzdan SMS doğrulama servisi henüz yapılandırılmamış.");
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, body: JSON.stringify({ to: phone, message: `Konnektora cüzdan kodunuz: ${code}. 3 dakika geçerlidir. Kimseyle paylaşmayın.` }), signal: AbortSignal.timeout(8000) });
+    if (!response.ok) throw new ServiceUnavailableException("Cüzdan doğrulama SMS'i gönderilemedi.");
+  }
+
   async sendVerificationCode(phone: string, code: string) {
     const webhookUrl = this.config.get<string>("SMS_WEBHOOK_URL");
     const apiKey = this.config.get<string>("SMS_API_KEY");
@@ -38,6 +46,10 @@ export class SmsService {
     }
   }
 
+  async sendPhoneChangeCode(phone: string, code: string) {
+    return this.sendInviteMessage(phone, `Talebiniz üzerine kayıtlı telefon numaranızı değiştirmek istediğiniz için bu mesajı aldınız. Telefon numaranızı değiştirmeye devam etmek için ${code} kodunu ekrana giriniz. Kod 2 dakika geçerlidir. İşlemi yapan siz değilseniz şifrenizi değiştiriniz.`);
+  }
+
   async sendContactInvite(phone: string, invitedByName: string) {
     const webhookUrl = this.config.get<string>("SMS_WEBHOOK_URL");
     if (!webhookUrl) {
@@ -55,8 +67,9 @@ export class SmsService {
     return this.sendInviteMessage(phone, `${invitedByName} seni ${eventTitle} etkinliğine davet etti: ${targetUrl}`);
   }
 
-  async sendTicketTransfer(phone: string, invitedByName: string, eventTitle: string, quantity: number, acceptToken: string) {
-    const acceptUrl = `${this.config.get<string>("PUBLIC_APP_URL") ?? "https://konnektora.com"}/accept-invite?token=${encodeURIComponent(acceptToken)}`;
+  async sendTicketTransfer(phone: string, invitedByName: string, eventTitle: string, quantity: number, acceptToken?: string) {
+    const appUrl=this.config.get<string>("PUBLIC_APP_URL") ?? "https://konnektora.com";
+    const acceptUrl = acceptToken ? `${appUrl}/accept-invite?token=${encodeURIComponent(acceptToken)}` : `${appUrl}/tickets`;
     return this.sendInviteMessage(phone, `${invitedByName} sana ${eventTitle} etkinliği için ${quantity} bilet devretti. Biletlerini al: ${acceptUrl}`);
   }
 

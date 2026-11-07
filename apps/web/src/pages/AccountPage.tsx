@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -10,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import type {
   AccountType,
   Event,
@@ -30,6 +31,7 @@ import {
   PhoneInput,
   VerificationCodeInput,
 } from "../components/FormInputs";
+import { UsernameField } from "../components/UsernameField";
 import { ServiceFeedback } from "../components/ServiceFeedback";
 import { SocialAuthButtons } from "../components/SocialAuthButtons";
 import { ProfileVerificationPanel } from "../components/ProfileVerificationPanel";
@@ -37,17 +39,19 @@ import { PushNotificationControl } from "../components/PushNotificationControl";
 import { RichText } from "../components/RichText";
 import { LocationPicker } from "../components/LocationPicker";
 import { CountryCityFields } from "../components/CountryCityFields";
+import { ContentMediaGallery } from "../components/ContentMediaGallery";
 import { TagPicker } from "../components/TagPicker";
 import { userProfilePath } from "../components/UserIdentityLink";
 import { getSocialCredential } from "../lib/socialProviders";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
+import { businessCategories, businessLabel, companyTypes } from "../lib/businessLabels";
 import { useLanguage } from "../lib/i18n";
 import {
+  getTicketSalesEligibility,
   type AdminEventInput,
   type RegistrationInput,
   archiveMyEvent,
-  checkAvailability,
   changeEmail,
   changePassword,
   claimPendingEventMedia,
@@ -86,7 +90,6 @@ import {
   reactivateAccount,
   removeBlock,
   removeSocialAccount,
-  requestEmailVerification,
   requestPhoneVerification,
   requestPasswordReset,
   reorderProfileMedia,
@@ -100,6 +103,7 @@ import {
   updateNotificationPreferences,
   updatePrivacySettings,
   uploadContentMedia,
+  reorderContentMedia,
   uploadPendingEventMedia,
   uploadProfileMedia,
   userLogin,
@@ -158,6 +162,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [user, setUser] = useState(() => getUserSession());
+  const ticketSalesEligibility = useQuery({queryKey:["ticket-sales-eligibility",user?.id],queryFn:getTicketSalesEligibility,enabled:Boolean(user&&eventCreator),retry:false});
   const [mode, setMode] = useState<"login" | "register">(initialMode);
   const [registrationAccountType, setRegistrationAccountType] =
     useState<AccountType>("individual");
@@ -179,7 +184,20 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   const [eventTicketCount, setEventTicketCount] = useState(1);
   const [selectedEventPlaceId, setSelectedEventPlaceId] = useState("");
   const [eventMediaBatchId] = useState(() => crypto.randomUUID());
+  const savedEventRef = useRef<{ id: string; slug: string } | null>(null);
   const eventMediaUploadPromises = useRef<Promise<unknown>[]>([]);
+  const pendingEventMediaRef = useRef<Awaited<ReturnType<typeof uploadPendingEventMedia>>[]>([]);
+  const [pendingEventMedia, setPendingEventMedia] = useState<Awaited<ReturnType<typeof uploadPendingEventMedia>>[]>([]);
+  const [draggedEventMedia, setDraggedEventMedia] = useState<string | null>(null);
+  function movePendingMedia(from: string, to: string) {
+    const next = [...pendingEventMediaRef.current];
+    const source = next.findIndex(item => item.id === from), destination = next.findIndex(item => item.id === to);
+    if (source < 0 || destination < 0) return;
+    next.splice(destination, 0, next.splice(source, 1)[0]!);
+    if (next[0]?.type !== "image") return;
+    pendingEventMediaRef.current = next;
+    setPendingEventMedia(next);
+  }
   const [eventMediaUpload, setEventMediaUpload] = useState({ total: 0, completed: 0, failed: 0 });
   const [ticketSalesPlatforms, setTicketSalesPlatforms] = useState<Array<"door" | "konnektora" | "external">>(["door"]);
   const [restrictedTicketPlatformIndex, setRestrictedTicketPlatformIndex] = useState<number | null>(null);
@@ -192,7 +210,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     message: string;
   } | null>(null);
   useEffect(() => {
-    if (initialMode === "login" && user && !eventCreator) navigate("/settings", { replace: true });
+    if (initialMode === "login" && user?.status === "active" && user.onboardingCompleted !== false && !eventCreator) navigate("/feed", { replace: true });
   }, [eventCreator, initialMode, navigate, user]);
   const { data: tags = [] } = useQuery({
     queryKey: ["tags"],
@@ -201,74 +219,76 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   const myEventsQuery = useQuery({
     queryKey: ["my-events", user?.id],
     queryFn: listMyEvents,
-    enabled: Boolean(user),
+    enabled: user?.status === "active",
   });
   const editingEventId = eventCreator ? searchParams.get("edit") : null;
   const editingEvent = myEventsQuery.data?.find((item) => item.id === editingEventId);
+  const editingManagers = useQuery({queryKey:["event-participants",editingEventId,"editor"],queryFn:()=>listEventParticipants(editingEventId!,"user"),enabled:Boolean(editingEvent)});
   useEffect(() => {
     if (!editingEvent) return;
     setEventFormat(editingEvent.format);
+    setSelectedEventPlaceId(editingEvent.placeId ?? "");
     setEventStartsAt(toDateTimeLocal(editingEvent.startsAt));
     setLineupRows((editingEvent.lineup?.length ? editingEvent.lineup : [{ type: "session" as const }]).map((item) => ({ id: crypto.randomUUID(), type: item.type === "heading" || item.type === "subheading" ? item.type : "session" })));
     setEventTicketCount(Math.max(1, editingEvent.ticketTypes?.length ?? 0));
     setTicketSalesPlatforms(editingEvent.ticketTypes?.map((ticket) => ticket.salesPlatform ?? "door") ?? ["door"]);
   }, [editingEvent]);
-  const myPlacesQuery = useQuery({ queryKey: ["my-places", user?.id], queryFn: listMyPlaces, enabled: Boolean(user) });
+  const myPlacesQuery = useQuery({ queryKey: ["my-places", user?.id], queryFn: listMyPlaces, enabled: user?.status === "active" });
   const selectedEventPlace = myPlacesQuery.data?.find((place) => place.id === selectedEventPlaceId);
   const interestsQuery = useQuery({
     queryKey: ["profile-interests", user?.id],
     queryFn: getProfileAffinities,
-    enabled: Boolean(user),
+    enabled: user?.status === "active",
   });
   const profileQuery = useQuery({
     queryKey: ["my-profile", user?.id],
     queryFn: getMyProfile,
-    enabled: Boolean(user),
+    enabled: user?.status === "active",
   });
   const profileMediaQuery = useQuery({
     queryKey: ["profile-media", user?.id],
     queryFn: listProfileMedia,
-    enabled: Boolean(user),
+    enabled: user?.status === "active",
   });
   const privacyQuery = useQuery({
     queryKey: ["privacy-settings", user?.id],
     queryFn: getPrivacySettings,
-    enabled: Boolean(user),
+    enabled: user?.status === "active",
   });
   const socialAccountsQuery = useQuery({
     queryKey: ["social-accounts", user?.id],
     queryFn: listSocialAccounts,
-    enabled: Boolean(user),
+    enabled: user?.status === "active",
   });
   const notificationPreferencesQuery = useQuery({
     queryKey: ["notification-preferences", user?.id],
     queryFn: getNotificationPreferences,
-    enabled: Boolean(user),
+    enabled: user?.status === "active",
   });
   const blocksQuery = useQuery({
     queryKey: ["blocks", user?.id],
     queryFn: listBlocks,
-    enabled: Boolean(user),
+    enabled: user?.status === "active",
   });
   const followingQuery = useQuery({
     queryKey: ["following", user?.id],
     queryFn: listFollowing,
-    enabled: Boolean(user),
+    enabled: user?.status === "active",
   });
   const suggestionsQuery = useQuery({
     queryKey: ["member-suggestions", user?.id],
     queryFn: listMemberSuggestions,
-    enabled: Boolean(user),
+    enabled: user?.status === "active",
   });
   const notificationsQuery = useQuery({
     queryKey: ["my-notifications", user?.id],
     queryFn: listMyNotifications,
-    enabled: Boolean(user),
+    enabled: user?.status === "active",
   });
   const tagCommentsQuery = useQuery({
     queryKey: ["tag-comments", commentTagId],
     queryFn: () => listTagComments(commentTagId),
-    enabled: Boolean(user && commentTagId),
+    enabled: user?.status === "active" && Boolean(commentTagId),
   });
   const interestTagIds =
     interestsQuery.data?.map((affinity) => affinity.tag.id) ?? [];
@@ -414,34 +434,6 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         ),
       }),
   });
-  const resendVerificationMutation = useMutation({
-    mutationFn: requestEmailVerification,
-    onSuccess: (response) =>
-      setNotice({
-        tone: response.sent === false ? "error" : "success",
-        message: response.sent === false
-          ? t(
-              "E-posta servisi şu an teslimatı kabul etmedi. Demo telefon koduyla devam edebilirsin.",
-              "The email service did not accept delivery. You can continue with the demo phone code.",
-            )
-          : t(
-              "Doğrulama e-postası tekrar gönderildi.",
-              "The verification email was sent again.",
-            ),
-      }),
-    onError: (error) =>
-      setNotice({
-        tone: "error",
-        message: getServiceErrorMessage(
-          error,
-          t(
-            "Doğrulama e-postası gönderilemedi. Birkaç dakika sonra yeniden dene.",
-            "The verification email could not be sent. Try again in a few minutes.",
-          ),
-        ),
-      }),
-  });
-
   const eventMutation = useMutation({
     mutationFn: async (
       input: AdminEventInput & {
@@ -452,8 +444,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       const { managerUsernames = [], mediaFiles: _mediaFiles = [], ...eventInput } = input;
       void _mediaFiles;
       await Promise.all(eventMediaUploadPromises.current);
-      const created = editingEvent ? await updateMyEvent(editingEvent.id, eventInput) : await createUserEvent(eventInput);
-      await Promise.allSettled([
+      const savedId = editingEvent?.id ?? savedEventRef.current?.id;
+      const created = savedId ? await updateMyEvent(savedId, eventInput) : await createUserEvent(eventInput);
+      savedEventRef.current = created;
+      await Promise.all([
         ...managerUsernames.map((username) =>
           inviteEventParticipant(
             created.id,
@@ -461,7 +455,11 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
             "user",
           ),
         ),
-        ...(!editingEvent && eventMediaUpload.total ? [claimPendingEventMedia(created.id, eventMediaBatchId)] : []),
+        ...(!editingEvent && eventMediaUpload.total ? [claimPendingEventMedia(created.id, eventMediaBatchId).then(async claimed => {
+          const ordered = pendingEventMediaRef.current.map(item => item.id);
+          const ids = [...ordered, ...claimed.map(item => item.id).filter(id => !ordered.includes(id))];
+          if (ids.length && pendingEventMediaRef.current[0]?.type === "image") await reorderContentMedia("event", created.id, ids);
+        })] : []),
       ]);
       return created;
     },
@@ -479,14 +477,9 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       void queryClient.invalidateQueries({ queryKey: ["my-events", user?.id] });
       navigate(`/events/${created.slug}`);
     },
-    onError: () =>
-      setNotice({
-        tone: "error",
-        message: t(
-          "Etkinlik oluşturulamadı. Zorunlu alanları kontrol et.",
-          "The event could not be created. Check the required fields.",
-        ),
-      }),
+    onError: () => setNotice({ tone: "error", message: savedEventRef.current
+      ? t("Etkinlik kaydedildi ancak medya veya yönetici davetleri tamamlanamadı. Yeniden kaydetmeyi deneyin; etkinlik tekrar oluşturulmayacak.", "The event was saved but media or manager invitations failed. Retry saving; the event will not be duplicated.")
+      : t("Etkinlik kaydedilemedi. Alanları ve medya yüklemelerini kontrol edin.", "The event could not be saved. Check the fields and media uploads.") }),
   });
 
   function startEventMediaUpload(files: FileList | null) {
@@ -500,8 +493,9 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     const uploads = selected.map((file) => (editingEvent
       ? uploadContentMedia("event", editingEvent.id, file)
       : uploadPendingEventMedia(eventMediaBatchId, file))
-      .then((result) => { setEventMediaUpload((current) => ({ ...current, completed: current.completed + 1 })); return result; })
+      .then((result) => { if (!editingEvent) { const items = [...pendingEventMediaRef.current, result]; if (items[0]?.type !== "image") { const firstImage = items.findIndex(item => item.type === "image"); if (firstImage > 0) items.unshift(items.splice(firstImage, 1)[0]!); } pendingEventMediaRef.current = items; setPendingEventMedia(items); } setEventMediaUpload((current) => ({ ...current, completed: current.completed + 1 })); return result; })
       .catch((error) => { setEventMediaUpload((current) => ({ ...current, failed: current.failed + 1 })); throw error; }));
+    uploads.forEach(promise => { void promise.catch(() => {}); });
     if (retryingFailedFiles) eventMediaUploadPromises.current = uploads;
     else eventMediaUploadPromises.current.push(...uploads);
   }
@@ -637,7 +631,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   const confirmPhoneMutation = useMutation({
     mutationFn: (input: { phone: string; code: string }) =>
       confirmPhoneVerification(input.phone, input.code),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result.phoneVerified) { setDevelopmentPhoneCode(result.demoCode ?? result.developmentCode ?? null); setNotice({ tone: "success", message: t("Mevcut numaranız doğrulandı. Şimdi yeni numaranıza gelen kodu girin.", "Current phone verified. Now enter the code sent to your new phone.") }); return; }
       setPendingPhone(null);
       setDevelopmentPhoneCode(null);
       void queryClient.invalidateQueries({
@@ -799,22 +794,23 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       description: String(form.get("description")),
       startsAt: new Date(startsAt).toISOString(),
       timezone: String(form.get("timezone") || "Europe/Istanbul"),
-      endsAt: endsAt ? new Date(endsAt).toISOString() : undefined,
+      endsAt: endsAt ? new Date(endsAt).toISOString() : editingEvent ? null : undefined,
       format: String(form.get("format") || "online"),
       visibility: String(form.get("visibility") || "open"),
-      placeId: String(form.get("placeId") || "") || undefined,
+      placeId: String(form.get("placeId") || "") || (editingEvent ? null : undefined),
       status: "published",
       city: String(form.get("city") || ""),
       country: String(form.get("country") || ""),
+      region: String(form.get("region") || ""), postalCode: String(form.get("postalCode") || ""),
       latitude: form.get("latitude") ? Number(form.get("latitude")) : parsedLatitude,
       longitude: form.get("longitude")
         ? Number(form.get("longitude"))
         : parsedLongitude,
-      locationName: String(form.get("locationName") || "") || undefined,
-      locationAddress: address || undefined,
-      organizerName: user?.name ?? "Konnektora User",
+      locationName: String(form.get("locationName") || ""),
+      locationAddress: address,
+      organizerName: editingEvent?.organizerName ?? (profileQuery.data?.accountType === "corporate" ? profileQuery.data.companyName ?? user?.name ?? "Konnektora" : user?.username ?? user?.name ?? "Konnektora User"),
       tagIds: eventTagIds,
-      liveUrl: String(form.get("liveUrl") || "") || undefined,
+      liveUrl: String(form.get("liveUrl") || "") || (editingEvent ? null : undefined),
       lineup: form
         .getAll("lineupTitle")
         .map((title, index) => {
@@ -926,6 +922,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       name: String(form.get("name") || "").trim(),
       username: value("username"),
       phone: value("phone"),
+      region: value("region"), postalCode: value("postalCode"),
       country: value("country"),
       city: value("city"),
       district: value("district"),
@@ -1032,6 +1029,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     notificationPreferencesMutation.mutate(preferences);
   }
 
+  if (user?.status === "pending" || (user?.status === "active" && user.role === "user" && user.onboardingCompleted === false)) return <Navigate replace to="/onboarding" />;
+
   return (
     <section className={`page account-page${eventCreator ? " event-create-only" : ""}${eventCreator && !user ? " event-create-unauthenticated" : ""}`}>
       {!eventCreator || !user ? <div className="section-header">
@@ -1099,17 +1098,6 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         </div>
       ) : null}
       {frozenCredentials ? <div className="emotion-modal" role="dialog" aria-modal="true" aria-label={t("Hesabı yeniden aktifleştir", "Reactivate account")}><div><h2>{t("Tekrar hoş geldin!", "Welcome back!")}</h2><p>{t("Dondurduğun hesabı yeniden aktifleştirmek istiyor musun?", "Would you like to reactivate your frozen account?")}</p><div className="row-actions"><button className="ghost-action" onClick={() => setFrozenCredentials(null)} type="button">{t("İptal", "Cancel")}</button><button className="primary-action" disabled={reactivateMutation.isPending} onClick={() => reactivateMutation.mutate(frozenCredentials)} type="button">{t("Hesabı aktifleştir", "Reactivate account")}</button></div>{reactivateMutation.isError ? <ServiceFeedback compact error={reactivateMutation.error} fallback={t("Hesap yeniden aktifleştirilemedi.", "The account could not be reactivated.")}/> : null}</div></div> : null}
-      {user?.status === "pending" ? (
-        <button
-          className="secondary-action"
-          disabled={resendVerificationMutation.isPending}
-          onClick={() => resendVerificationMutation.mutate(user.email)}
-          type="button"
-        >
-          {t("Doğrulama e-postasını tekrar gönder", "Resend verification email")}
-        </button>
-      ) : null}
-
       {!user ? (
         <div className="account-grid">
           <div>
@@ -1334,7 +1322,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     "Signed in with your social account.",
                   ),
                 });
-                navigate(response.user.status === "pending" ? "/onboarding" : "/feed");
+                navigate(response.user.status === "pending" || !response.user.onboardingCompleted ? "/onboarding" : "/feed");
               }}
             />
           </form>
@@ -1469,35 +1457,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       maxLength={160}
                     />
                   </label>
-                  <label>
-                    {t("Kullanıcı adı", "Username")}
-                    <input
-                      defaultValue={profileQuery.data.username ?? ""}
-                      name="username"
-                      minLength={2}
-                      maxLength={80}
-                      pattern="[A-Za-zÀ-ž0-9 .-]+"
-                      onChange={(event) => {
-                        const value = event.target.value.trim();
-                        if (value.length < 2) return;
-                        void checkAvailability({ username: value }).then(
-                          (result) =>
-                            setNotice({
-                              tone:
-                                result.usernameAvailable ||
-                                value === profileQuery.data?.username
-                                  ? "success"
-                                  : "error",
-                              message:
-                                result.usernameAvailable ||
-                                value === profileQuery.data?.username
-                                  ? t("Kullanıcı adı uygun.", "Username is available.")
-                                  : t("Kullanıcı adı kullanımda.", "Username is already in use."),
-                            }),
-                        );
-                      }}
-                    />
-                  </label>
+                  <UsernameField initialValue={profileQuery.data.username ?? ""}/>
                   <label>
                     {t("Web sitesi", "Website")}
                     <input
@@ -1506,7 +1466,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       placeholder={t("ornek.com (isteğe bağlı)", "example.com (optional)")}
                     />
                   </label>
-                  <CountryCityFields defaultCity={profileQuery.data.city} defaultCountry={profileQuery.data.country}/>
+                  <CountryCityFields addressFields defaultRegion={profileQuery.data.region} defaultPostalCode={profileQuery.data.postalCode} defaultCity={profileQuery.data.city} defaultCountry={profileQuery.data.country}/>
                   {profileQuery.data.accountType === "individual" ? (
                     <>
                       <label>
@@ -1555,19 +1515,11 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       </label>
                       <label>
                         {t("Şirket türü", "Company type")}
-                        <input
-                          defaultValue={profileQuery.data.companyType ?? ""}
-                          name="companyType"
-                        />
+                        <select name="companyType" required defaultValue={profileQuery.data.companyType ?? ""}><option value="">{t("Seçiniz", "Select")}</option>{profileQuery.data.companyType && !companyTypes[profileQuery.data.companyType] ? <option value={profileQuery.data.companyType}>{profileQuery.data.companyType}</option> : null}{Object.keys(companyTypes).map((value) => <option key={value} value={value}>{businessLabel(value, language, companyTypes)}</option>)}</select>
                       </label>
                       <label>
                         {t("İşletme kategorisi", "Business category")}
-                        <input
-                          defaultValue={
-                            profileQuery.data.businessCategory ?? ""
-                          }
-                          name="businessCategory"
-                        />
+                        <select name="businessCategory" required defaultValue={profileQuery.data.businessCategory ?? ""}><option value="">{t("Seçiniz", "Select")}</option>{profileQuery.data.businessCategory && !businessCategories[profileQuery.data.businessCategory] ? <option value={profileQuery.data.businessCategory}>{profileQuery.data.businessCategory}</option> : null}{Object.keys(businessCategories).map((value) => <option key={value} value={value}>{businessLabel(value, language, businessCategories)}</option>)}</select>
                       </label>
                       <label>
                         {t("İlçe", "District")}
@@ -2059,7 +2011,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                               ? `@${comment.author.username}`
                               : (comment.author?.name ?? t("Silinmiş kullanıcı", "Deleted member"))}
                           </strong>
-                          <span>
+                          <span className="post-copy">
                             <RichText text={comment.body} />
                           </span>
                         </div>
@@ -2145,11 +2097,12 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     <select
                       key={`${profileQuery.data?.city}-${profileQuery.data?.country}`}
                       name="timezone"
-                      defaultValue={profileTimezone(
+                      defaultValue={editingEvent?.timezone ?? profileTimezone(
                         profileQuery.data?.city,
                         profileQuery.data?.country,
                       )}
                     >
+                      {editingEvent?.timezone && !timezoneOptions.some(item => item.value === editingEvent.timezone) ? <option value={editingEvent.timezone}>{editingEvent.timezone}</option> : null}
                       {timezoneOptions.map((item) => (
                         <option key={item.value} value={item.value}>
                           {item.label}
@@ -2170,8 +2123,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       name="startsAt"
                       required
                       type="datetime-local"
-                      value={eventStartsAt}
-                      onChange={(event) => {
+                      defaultValue={editingEvent?.startsAt ? toDateTimeLocal(editingEvent.startsAt) : ""}
+                      onBlur={(event) => {
                         setEventStartsAt(event.currentTarget.value);
                         const form = event.currentTarget.form;
                         form
@@ -2249,7 +2202,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       <input key={selectedEventPlace?.id ?? "custom-place-name"} defaultValue={selectedEventPlace?.name ?? editingEvent?.locationName ?? ""} name="locationName" />
                     </label>
                     <label>{t("Var olan mekânlarımdan seç", "Choose from my existing places")}<select name="placeId" onChange={(event) => setSelectedEventPlaceId(event.currentTarget.value)} value={selectedEventPlaceId}><option value="">{t("Mekân seçilmedi", "No place selected")}</option>{myPlacesQuery.data?.map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}</select></label>
-                    <div className="location-fields-group" key={selectedEventPlace?.id ?? "custom-location"}><CountryCityFields defaultCity={selectedEventPlace?.city ?? editingEvent?.city ?? profileQuery.data?.city} defaultCountry={selectedEventPlace?.country ?? editingEvent?.country ?? profileQuery.data?.country}/><LocationPicker addressName="locationAddress" defaultAddress={selectedEventPlace?.address ?? editingEvent?.locationAddress ?? ""} defaultLatitude={selectedEventPlace?.latitude ?? editingEvent?.latitude} defaultLongitude={selectedEventPlace?.longitude ?? editingEvent?.longitude}/></div>
+                    <div className="location-fields-group" key={selectedEventPlace?.id ?? "custom-location"}><CountryCityFields addressFields defaultRegion={selectedEventPlace?.region ?? editingEvent?.region} defaultPostalCode={selectedEventPlace?.postalCode ?? editingEvent?.postalCode} defaultCity={selectedEventPlace?.city ?? editingEvent?.city ?? profileQuery.data?.city} defaultCountry={selectedEventPlace?.country ?? editingEvent?.country ?? profileQuery.data?.country}/><LocationPicker addressName="locationAddress" defaultAddress={selectedEventPlace?.address ?? editingEvent?.locationAddress ?? ""} defaultLatitude={selectedEventPlace?.latitude ?? editingEvent?.latitude} defaultLongitude={selectedEventPlace?.longitude ?? editingEvent?.longitude}/></div>
                   </div>
                 ) : null}
                 {eventFormat !== "offline" ? (
@@ -2284,10 +2237,17 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 </div>
               </div>
               <div data-event-step="3" hidden={eventStep !== 3}>
+                {editingEvent ? <ContentMediaGallery targetType="event" targetId={editingEvent.id} canManage coverImageUrl={editingEvent.coverImageUrl}/> : null}
+                {!editingEvent && pendingEventMedia.length ? <div className="pending-media-grid">{pendingEventMedia.map((item, index) => <article key={item.id} draggable onDragStart={() => setDraggedEventMedia(item.id)} onDragOver={event => event.preventDefault()} onDrop={() => { if (draggedEventMedia) movePendingMedia(draggedEventMedia, item.id); setDraggedEventMedia(null); }}>
+                  {item.type === "video" ? <video controls src={resolveMediaUrl(item.url)}/> : <img alt="" src={resolveMediaUrl(item.url)}/>}
+                  <span>{index + 1}{index === 0 ? t(" · Etkinlik afişi", " · Event poster") : ""}</span>
+                  {item.type === "image" && index > 0 ? <button type="button" onClick={() => movePendingMedia(item.id, pendingEventMedia[0]!.id)}>{t("Etkinlik afişi yap", "Use as event poster")}</button> : null}
+                  {index > 0 ? <button type="button" onClick={() => movePendingMedia(item.id, pendingEventMedia[index - 1]!.id)}>{t("Öne taşı", "Move earlier")}</button> : null}
+                </article>)}</div> : null}
                 <label>
                   {t("Etkinlik fotoğraf ve videoları", "Event photos and videos")}
                   <input
-                    accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+                    accept="image/jpeg,image/png,image/webp,image/gif,image/avif,image/bmp,video/mp4,video/webm"
                     multiple
                     name="eventMedia"
                     onChange={(event) => startEventMediaUpload(event.currentTarget.files)}
@@ -2319,6 +2279,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               </div>
               <div data-event-step="4" hidden={eventStep !== 4}>
                 <h3>{t("Adım 4: Etkinlik yöneticileri", "Step 4: Event managers")}</h3>
+                {editingEvent ? <section aria-label={t("Mevcut yöneticiler", "Current managers")}>{editingManagers.isPending ? <p>{t("Yöneticiler yükleniyor…", "Loading managers…")}</p> : editingManagers.isError ? <p role="alert">{t("Yöneticiler yüklenemedi.", "Managers could not be loaded.")}</p> : editingManagers.data?.filter(p=>["manager","organizer"].includes(p.role)).map(p=><p key={p.userId}><Link to={`/users/id/${p.userId}`}>@{p.user?.username??p.user?.name??p.userId}</Link> · {p.role === "manager" ? t("Yönetici", "Manager") : t("Organizatör", "Organiser")} · {p.status === "invited" ? t("Davet bekliyor", "Invitation pending") : p.status === "accepted" ? t("Onaylandı", "Accepted") : p.status}</p>)}<Link to={`/events/${editingEvent.slug}/users?filter=organizers`}>{t("Yönetici rollerini düzenle", "Manage organizer roles")}</Link></section> : null}
                 <label>
                   {t("Yönetici kullanıcı adları", "Manager usernames")}
                   <input list="event-manager-suggestions" name="managerUsernames" placeholder="@ayse, @mehmet" />
@@ -2535,13 +2496,14 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       </label>
                       <label>
                         {t("Satış platformu", "Sales platform")}
-                        <select name="ticketSalesPlatform" value={ticketSalesPlatforms[index] ?? "door"} onChange={(event) => { const next = event.currentTarget.value as "door" | "konnektora" | "external"; if (next === "konnektora" && user?.accountType !== "corporate" && !["admin", "super_admin"].includes(user?.role ?? "user")) { setRestrictedTicketPlatformIndex(index); return; } setRestrictedTicketPlatformIndex(null); setTicketSalesPlatforms((items) => { const copy = [...items]; copy[index] = next; return copy; }); }}>
+                        <select name="ticketSalesPlatform" value={ticketSalesPlatforms[index] ?? "door"} onChange={(event) => { const next = event.currentTarget.value as "door" | "konnektora" | "external"; if (next === "konnektora" && !ticketSalesEligibility.data?.eligible) { setRestrictedTicketPlatformIndex(index); return; } setRestrictedTicketPlatformIndex(null); setTicketSalesPlatforms((items) => { const copy = [...items]; copy[index] = next; return copy; }); }}>
                           <option value="door">{t("Kapıda ödeme", "Pay at the door")}</option>
                           <option value="konnektora">{t("Konnektora online satış", "Konnektora online sales")}</option>
                           <option value="external">{t("Diğer platform", "Other platform")}</option>
                         </select>
                       </label>
-                      {restrictedTicketPlatformIndex === index ? <p className="form-error" role="alert">{t('Sadece kurumsal üyeler "Konnektora online satış" ayarını tercih edebilir.', 'Only corporate members can select "Konnektora online sales".')}</p> : null}
+
+                      {restrictedTicketPlatformIndex === index ? createPortal(<div className="dialog-backdrop"><section className="content-dialog" role="dialog" aria-modal="true" aria-label={t("Bilet satış koşulları", "Ticket sales requirements")}><h2>{t("Bilet satış koşulları", "Ticket sales requirements")}</h2><p>{t("Sadece kurumsal üyeler; vergi, bankacılık ayarlarını girmiş ve KYB/KYC sürecini tamamlamış kurumlar Konnektora’da bilet satışı yapabilir. Bu ayarları tamamlamak için Ayarlar Merkezini ziyaret ediniz.", "Only corporate members with completed tax and banking settings and approved KYB/KYC can sell tickets on Konnektora. Visit the Settings Centre to complete these requirements.")}</p><div className="row-actions"><Link to="/settings/business" className="primary-action">{t("Ayarlar Merkezi", "Settings Centre")}</Link><button type="button" className="secondary-action" onClick={()=>setRestrictedTicketPlatformIndex(null)}>{t("Kapat", "Close")}</button></div></section></div>,document.body) : null}
                       {ticketSalesPlatforms[index] === "external" ? <label>
                         {t("Dış satış URL'si", "External sales URL")}
                         <input defaultValue={editingEvent?.ticketTypes?.[index]?.externalSalesUrl ?? ""} name="ticketExternalSalesUrl" placeholder="https://" required type="url" />
@@ -2606,7 +2568,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 >
                   <Plus size={18} />
                   {editingEvent
-                    ? t("Değişiklikleri kaydet", "Save changes")
+                    ? t("Etkinliği güncelle", "Update event")
                     : t("Etkinlik yayınla", "Publish event")}
                 </button>
                 <div className="event-step-actions">
@@ -2795,7 +2757,7 @@ function ProfileMediaPanel({
         <label>
           {t("Yeni fotoğraf veya video", "New photo or video")}
           <input
-            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+            accept="image/jpeg,image/png,image/webp,image/gif,image/avif,image/bmp,video/mp4,video/webm"
             disabled={isPending || media.length >= 50}
             multiple
             name="profileMedia"

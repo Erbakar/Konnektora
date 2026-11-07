@@ -13,6 +13,13 @@ import {
 } from "../pages/InviteManagementPage";
 
 const apiMocks = vi.hoisted(() => ({
+  getInviteAssessment: vi.fn(async (_kind: string, _id: string, ids: string[]) => ids.map(id => ({
+    id, canInvite: true,
+    score: id === "recommended-1" ? 43 : id === "recommended-2" ? 21 : 50,
+    reasons: id === "recommended-1" ? ["shared_interests", "same_city", "following", "verified"] : id === "recommended-2" ? ["shared_interests", "past_attendee"] : [],
+    sharedInterestCount: id === "recommended-1" ? 2 : 1,
+    eventPartner: 45, attendeeCompatibility: 25,
+  }))),
   addGuestListMember: vi.fn(),
   decideEventCheckInPassport: vi.fn(),
   decidePlaceCheckInPassport: vi.fn(),
@@ -279,14 +286,17 @@ afterEach(() => {
 });
 
 describe("check-in yönetimi gereksinimleri", () => {
-  it("etkinlik yöneticisine şeffaf sinyalli AI Top 25 önerilerini ve toplu daveti sunar", async () => {
+  it("etkinlik yöneticisine şeffaf sinyalli AI Top 50 önerilerini ve toplu daveti sunar", async () => {
     renderEventManagement("");
 
-    await userEvent.click(await screen.findByRole("button", { name: "AI ile önerilen Top 25" }));
+    await userEvent.click(await screen.findByRole("button", { name: "AI ile önerilen Top 50" }));
     expect(apiMocks.listEventInviteRecommendations).toHaveBeenCalledWith(event.id);
     expect(await screen.findByRole("link", { name: "@ada-oneri" })).toHaveAttribute("href", "/users/id/recommended-1");
-    expect(screen.getByText(/Eşleşme puanı 43 · 2 ortak ilgi alanı · aynı şehir · takip ediyorsunuz · doğrulanmış profil/)).toBeVisible();
-    expect(screen.getByText(/Eşleşme puanı 21 · 1 ortak ilgi alanı · eski etkinlik katılımcısı/)).toBeVisible();
+    // 07/11 #1: uyum sinyalleri kutucuklu, tekrar yok; "eski etkinlik katılımcısı" gösterilmez.
+    expect(screen.getAllByText("Etkinlik eşleşme puanı").length).toBeGreaterThan(0);
+    expect(screen.getByText("43")).toBeVisible();
+    expect(screen.getByText("aynı şehir · takip ediyorsunuz · doğrulanmış profil")).toBeVisible();
+    expect(screen.queryByText(/eski etkinlik katılımcısı/)).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "Tümünü davet et" }));
     await waitFor(() => expect(apiMocks.inviteEventParticipant).toHaveBeenCalledTimes(2));

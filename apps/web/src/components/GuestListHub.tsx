@@ -1,3 +1,4 @@
+import { FollowStar, MemberCompatibility, MemberSignalsProvider } from "./MemberSignals";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronRight,
@@ -226,14 +227,14 @@ export function GuestListDetailPage() {
       </div>
     </section>
 
-    {members.length ? <section className="guest-list-member-grid">{members.map((member) => {
+    {members.length ? <MemberSignalsProvider ids={members.map(member=>member.user.id)}><section className="guest-list-member-grid">{members.map((member) => {
       const location = [member.user.city, member.user.country].filter(Boolean).join(", ") || (tr ? "Konum belirtilmedi" : "Location not specified");
       return <article className="guest-list-member-card" key={member.id}>
         <UserIdentityLink user={{ id: member.user.id, name: member.user.name, username: member.user.username, avatarUrl: member.user.uploadedMedia?.[0]?.url ?? null }} avatarClassName="guest-list-member-avatar" showName={false}/>
-        <div className="guest-list-member-copy"><Link to={userProfilePath(member.user)}><strong>{member.user.username ? `@${member.user.username}` : member.user.name}</strong></Link><span>{member.user.name}</span><small>{location}{member.user.birthDate ? ` · ${memberAge(member.user.birthDate)} ${tr ? "yaş" : "years"}` : ""}</small></div>
+        <div className="guest-list-member-copy"><div className="member-name-line"><FollowStar id={member.user.id}/><Link to={userProfilePath(member.user)}><strong>{member.user.username ? `@${member.user.username}` : member.user.name}</strong></Link></div><span>{member.user.name}</span><small>{location}{member.user.birthDate ? ` · ${memberAge(member.user.birthDate)} ${tr ? "yaş" : "years"}` : ""}</small><MemberCompatibility id={member.user.id} showFollowers/></div>
         {mine ? <button aria-label={tr ? "Listeden çıkar" : "Remove from list"} className="guest-list-remove-member" disabled={removeMember.isPending} onClick={() => removeMember.mutate(member.userId)} title={tr ? "Listeden çıkar" : "Remove from list"}><UserMinus size={17}/></button> : <span className="guest-list-member-view"><Eye size={15}/></span>}
       </article>;
-    })}</section> : <div className="guest-list-empty is-filtered"><div><Search size={25}/></div><strong>{tr ? "Filtreye uygun kişi bulunamadı." : "No people match these filters."}</strong><span>{tr ? "Arama veya filtrelerini değiştirerek tekrar dene." : "Try changing your search or filters."}</span></div>}
+    })}</section></MemberSignalsProvider> : <div className="guest-list-empty is-filtered"><div><Search size={25}/></div><strong>{tr ? "Filtreye uygun kişi bulunamadı." : "No people match these filters."}</strong><span>{tr ? "Arama veya filtrelerini değiştirerek tekrar dene." : "Try changing your search or filters."}</span></div>}
     {sharingOpen ? <GuestListSharingDialog list={list.data} onClose={() => setSharingOpen(false)}/> : null}
     {deleteOpen ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setDeleteOpen(false)}><section aria-modal="true" className="content-dialog guest-list-dialog guest-list-confirm-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><button aria-label={tr ? "Kapat" : "Close"} className="passport-close" onClick={() => setDeleteOpen(false)}>×</button><header className="guest-list-dialog-heading"><div><Trash2 size={21}/></div><span className="eyebrow">{list.data.name}</span><h2>{tr ? "Liste silinsin mi?" : "Delete this list?"}</h2><p>{tr ? "Liste ve paylaşım izinleri kalıcı olarak silinir. Kullanıcı hesapları etkilenmez." : "The list and its sharing permissions will be permanently deleted. User accounts are not affected."}</p></header><div className="guest-list-dialog-actions"><button className="secondary-action" onClick={() => setDeleteOpen(false)} type="button">{tr ? "Vazgeç" : "Cancel"}</button><button className="danger-action" disabled={deleteList.isPending} onClick={() => deleteList.mutate()} type="button"><Trash2 size={17}/>{tr ? "Listeyi sil" : "Delete list"}</button></div></section></div> : null}
   </div>;

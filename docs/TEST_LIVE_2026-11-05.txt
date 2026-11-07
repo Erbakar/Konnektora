@@ -1,0 +1,126 @@
+KONNEKTORA — 3/11 LİSTESİ CANLI KABUL / 4–5 KASIM 2026
+
+Kaynak: https://docs.google.com/spreadsheets/d/1tZdzPN7diSJJR7omUtJJp_bdMWERAICPFI4S2bngHSk/edit?gid=599477572
+Canlı: https://konnektora.com
+Yayın: d266a710-379c-4fe2-a342-784e2b0986b4 (Railway production SUCCESS)
+Yayın başlangıcı: 04.11.2026 16:57 UTC. Tarayıcı kabulü 04–05.11.2026.
+Yayınlanan ana dosya: /assets/index-vL10zgbJ.js
+Yayınlanan stil: /assets/index-DqEFlDvf.css
+
+SONUÇ
+40 madde ayrı değerlendirildi. 34 canlı doğrulandı; 24,25,26,32,39,40 açık.
+Yerelde geçen testler otomatik olarak canlı kabul sayılmadı.
+SMS kullanıcı hazır olmadığı için denenmedi. Gerçek Google/telefon rehberi ve davet teslimi yapılmadı.
+40: hedef sayfada kalma sekme/hata senaryosu canlıda doğrulandı; başarılı gerçek tarama sonucu beklediği için açık.
+23/10 sekmesindeki açık medya/video, SMS/Meta/ödeme ve kampanya maddeleri kapatılmadı.
+
+YÖNTEM VE KANIT
+Gerçek üretim HTTPS uçları, gerçek üretim veritabanı, Chrome masaüstü ve 390×844 dar görünüm.
+İzole amaçlı üç geçici QA hesabı, etkinlik/mekân, etiket, gönderi/yorum, konuşma ve bildirim kullanıldı.
+Dış kişilere mesaj/davet, SMS, ödeme veya satın alma yapılmadı. Gerçek kullanıcı kartları yalnız okundu.
+11 canlı API kontrol grubu başarılı. Dosya: output/nov03-live/api-results.json.
+Genel sağlık ve içerik kontrolleri başarılı. Dosya: output/nov03-live/smoke.log.
+Tarayıcı kanıtları: output/nov03-live/ui-results.json, privacy-options.json ve PNG dosyaları.
+1 ve 2 numaralı maddelerin etkinlik yıldızı/kalp tarayıcı kontrolleri 04.11 oturumunda yapıldı;
+diğer ekranlar 05.11 oturumunda tamamlandı. API geri okumaları ortak durumun kalıcılığını doğruladı.
+390 px görünüm gerçek telefon donanımı değildir. Görsel beğeni iddiası yerine uygulanan düzen ve taşma/hiza doğrulandı.
+
+MADDELER
+1. [TAMAMLANDI] Etkinlik gönderisi yıldızı canlıda boş→dolu→boş; sunucudan takip durumu doğrulandı.
+
+2. [TAMAMLANDI] Etkinlik alt yorum yıldızı canlıda takip et/bırak ile iki yönde değişti.
+
+3. [TAMAMLANDI] Mekân gönderisi yıldızı canlıda iki yönde değişti.
+
+4. [TAMAMLANDI] Mekân alt yorum yıldızı canlıda iki yönde değişti.
+
+5. [TAMAMLANDI] Etiket gönderisi yıldızı canlıda iki yönde değişti.
+
+6. [TAMAMLANDI] Mekân alt yorum yıldızı tekrar doğrulandı; etiket alt yorumu da iki yönde denendi.
+
+7. [TAMAMLANDI] Etkinlik davet kartında partner %7, katılımcı uyumu %14; canlı yanıtla eşleşti.
+
+8. [TAMAMLANDI] Mekân davet kartında partner %7, katılımcı uyumu %14; canlı yanıtla eşleşti.
+
+9. [TAMAMLANDI] Etkinlik ilgili kullanıcılar ekranı: davet düğmesi 44 px, beyaz metin ve hizalama doğrulandı.
+
+10. [TAMAMLANDI] Mekân ilgili kullanıcılar ekranı: davet düğmesi 44 px, beyaz metin ve hizalama doğrulandı.
+
+11. [TAMAMLANDI] Takvim penceresi açıldı; seçenekler paylaşım penceresinin ortak düğme düzeninde.
+
+12. [TAMAMLANDI] Akış yıldızı canlıda boş/dolu değişti; takip düğmesiyle durum eşleşti.
+
+13. [TAMAMLANDI] Akış düğmesiyle takip edildi, yıldızla geri alındı; ortak durum güncellendi.
+
+14. [TAMAMLANDI] Akış etkinlik metni kullanıcı adının yanında; ikisi de 15 px / 750 ağırlıkta.
+
+15. [TAMAMLANDI] Akış paylaş düğmesinin canlı hesaplanan imleç stili pointer.
+
+16. [TAMAMLANDI] Takip/mesaj/paylaş: 13 px yazı, 8×12 px boşluk, aynı çerçeve ve arka plan.
+
+17. [TAMAMLANDI] Üç nokta açıldı; Rapor et görünür ve kart tarafından kesilmiyor.
+
+18. [TAMAMLANDI] Tırnak metnin solunda; canlı ölçümde içerik tırnağın sağından başlıyor.
+
+19. [TAMAMLANDI] Akış kartlarının font, hizalama, bağlantı ve menü düzeni canlıda kontrol edildi.
+
+20. [TAMAMLANDI] Bilet özeti canlıda TL 100,00–TL 250,00 gösteriyor.
+
+21. [TAMAMLANDI] 390 px dar görünümde Satış sayfasına git tek satır; pencere mobil menünün üzerinde.
+
+22. [TAMAMLANDI] Mesaj başlığı yıldızı kullanıcı adının solunda; üst konumlar 137 / 138,25 px.
+
+23. [TAMAMLANDI] Mesaj başlığı yıldızı canlıda takip et/bırak ile iki yönde değişti.
+
+24. [AÇIK] Gerçek telefon rehberi seçicisi ve tümünü seç kabulü bekliyor; masaüstü desteklememe hatası görüldü.
+
+25. [AÇIK] Gerçek Google hesabında izin/rehber erişimi doğrulanmadı. Etkinlik içinde ekran/hata düzeni yayında.
+
+26. [AÇIK] Gerçek Google hesabında izin/rehber erişimi doğrulanmadı. Mekân içinde ekran/hata düzeni yayında.
+
+27. [TAMAMLANDI] Canlı Guest List özet/detay: gizli ad kullanıcı adına dönüyor; şehir, ülke, yaş/cinsiyet verileri gizli.
+
+28. [TAMAMLANDI] Bildirimde yıldız kullanıcı adının solunda; hizası canlı ölçümle doğrulandı.
+
+29. [TAMAMLANDI] Bildirim kartının arka plan, çerçeve, boşluk, başlık ve tarih düzeni canlıda görüldü.
+
+30. [TAMAMLANDI] Girişli yıldız isim solunda. Çıkış sonrası yıldız 0, ayrılmış sol boşluk 0 px.
+
+31. [TAMAMLANDI] Etkinlik/mekân/etiket gönderi ve alt yorumları canlıda beğenildi/geri alındı; dolu kırmızı ve boş durum doğrulandı.
+
+32. [AÇIK] SMS testi için hazır değiliz. Gerçek eski/yeni numara kod teslimi denenmedi; açık tutuldu.
+
+33. [TAMAMLANDI] Canlı konuşmada gizli kişisel ad görünmüyor; yalnız kullanıcı adı gösteriliyor.
+
+34. [TAMAMLANDI] Dokuz canlı gizlilik menüsü: Herkes → ağ → takip ettiklerim → varsa Hiç kimse; seçenekler korundu.
+
+35. [TAMAMLANDI] Boşluklu ad canlı alanda geçersiz. İç/baş/son boşluk ve sekme canlı sunucuda 400 ile reddedildi.
+
+36. [TAMAMLANDI] Ana sayfada kullanıcı adı 16 px, izin verilen kişisel/marka adı 12 px; canlı kartlar doğrulandı.
+
+37. [TAMAMLANDI] Kurumsal profilde 32 px kullanıcı adı ve küçük marka adı; gizli bireysel ad görünmüyor.
+
+38. [TAMAMLANDI] Mesaj listesinde kullanıcı adı; başlıkta kullanıcı adı ve izin verilen marka adı canlıda doğrulandı.
+
+39. [AÇIK] Gerçek Google/telefon rehberi ve davet teslimi kabulü bekliyor. Yerel seçim/eşleştirme testleri canlı kabul sayılmadı.
+
+40. [AÇIK] Telefon hata durumu ve Gmail sekmesi canlıda hedef davet sayfasında kaldı. Başarılı gerçek tarama sonrası kabul bekliyor.
+
+TEMİZLİK
+Yalnız manifestteki QA kayıtları silindi; dış katılımcı/takipçi/ödeme bulunmadığı önceden kontrol edildi.
+05.11.2026 08:29 UTC temizliği doğrulandı. output/nov03-live/cleanup.json.
+Önce/sonra aynı: 24 kullanıcı,26 etkinlik,9 mekân,40 etiket,0 post,72 yorum,
+109 medya kaydı,81 saklanan yükleme,4 sahip olunan bilet.
+Şifreli veritabanı yedeği QA kurulumu öncesi alındı; anahtar ve test kimlik bilgileri raporda tutulmadı.
+Yerel önceki doğrulama ayrıntısı: docs/TEST_REVIEW_2026-11-03.txt.
+
+TABLO
+3/11!C4:C43: her maddeye durum ve canlı kabul notu.
+Yalnız 34 doğrulanan maddenin A:C arka planı önceki tamamlanmış satırlarla aynı açık yeşil.
+6 açık maddeye “AÇIK” notu; eski arka planları korundu.
+A/B açıklamaları, diğer sekmeler ve eski açık maddeler korunur.
+Yazma sonrası 40 durum notu ve 34 yeşil / 6 açık satır yeniden okundu; A/B açıklamaları birebir aynı.
+Google Sheets içinde tamamlanan, SMS ve rehber satırları görsel olarak doğrulandı.
+Kanıt: output/nov03-live/sheet-verification.json ve sheet-*.png.
+Temizlik sonrası canlı sağlık, ana sayfa ve mevcut üç medya URL'si 200 döndü; final-smoke.json.
+

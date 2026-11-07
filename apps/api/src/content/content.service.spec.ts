@@ -1,3 +1,4 @@
+jest.mock("../notifications/activity-events", () => ({ notifyEntityCreated: jest.fn().mockResolvedValue(undefined), notifyEntityChanges: jest.fn().mockResolvedValue(undefined), notifyUserActivity: jest.fn().mockResolvedValue(undefined), notifyEventAvailability: jest.fn().mockResolvedValue(undefined), isUndiscoverable: jest.fn().mockResolvedValue(false), notifyRegistration: jest.fn().mockResolvedValue(undefined), notifyMembershipInvite: jest.fn().mockResolvedValue(undefined), notifyComment: jest.fn().mockResolvedValue(undefined), notifyProfileMediaAdded: jest.fn().mockResolvedValue(undefined), recordActivity: jest.fn().mockResolvedValue(undefined) }));
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { ReportTargetType } from "@prisma/client";
 import { ContentService } from "./content.service";
@@ -30,6 +31,15 @@ describe("ContentService profile media", () => {
   const service = new ContentService(prisma as never);
 
   beforeEach(() => jest.clearAllMocks());
+
+  it("13/10 #15 persists the complete media order and refuses foreign or duplicate ids", async () => {
+    mediaFile.findMany.mockResolvedValue([{id:"photo",isProfilePicture:true},{id:"a"},{id:"b"}]);
+    await service.reorderProfileMedia("user-1",["photo","b","a"]);
+    expect(mediaFile.update).toHaveBeenCalledWith({where:{id:"b"},data:{sortOrder:1}});
+    await expect(service.reorderProfileMedia("user-1",["photo","a","a"])).rejects.toThrow();
+    await expect(service.reorderProfileMedia("user-1",["photo","a","foreign"])).rejects.toThrow();
+    await expect(service.reorderProfileMedia("user-1",["a","photo","b"])).rejects.toThrow();
+  });
 
   it("creates the first image as the profile picture", async () => {
     mediaFile.findMany.mockResolvedValue([]);
@@ -174,5 +184,23 @@ describe("ContentService profile media", () => {
 
   it("rejects ratings outside the supported range", async () => {
     await expect(service.createReaction({ targetType: ReportTargetType.place, targetId: "place-1", reaction: "rating_7" }, { id: "user-1" } as never)).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe("Content comment reply boundaries", () => {
+  it.each([
+    null,
+    { status: "deleted", targetType: "event", targetId: "event" },
+    { status: "active", targetType: "event", targetId: "other" },
+    { status: "active", targetType: "place", targetId: "event" },
+    { status: "active", targetType: "event", targetId: "event", parentId: "root" },
+  ])("rejects missing, hidden, cross-content or nested parents: %j", async parent => {
+    const prisma = { contentComment: { findUnique: jest.fn().mockResolvedValue(parent), create: jest.fn() } };
+    await expect(new ContentService(prisma as never).createComment({ targetType: ReportTargetType.event, targetId: "event", parentId: "parent", body: "Reply" }, { id: "viewer" } as never)).rejects.toThrow();
+    expect(prisma.contentComment.create).not.toHaveBeenCalled();
+  });
+  it("accepts a first-level reply on the same content", async () => {
+    const prisma = { contentComment: { findUnique: jest.fn().mockResolvedValue({ status: "active", targetType: "event", targetId: "event", parentId: null }), create: jest.fn().mockResolvedValue({ id: "reply" }) } };
+    await expect(new ContentService(prisma as never).createComment({ targetType: ReportTargetType.event, targetId: "event", parentId: "parent", body: "Reply" }, { id: "viewer" } as never)).resolves.toEqual({ id: "reply" });
   });
 });

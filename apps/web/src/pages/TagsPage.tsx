@@ -1,17 +1,19 @@
+import { FollowStar } from "../components/MemberSignals";
+import { MediaAlbum } from "../components/MediaAlbum";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
-  CalendarDays,
-  Eye,
+  UserMinus,
+  UserPlus,
+  BarChart3,
+  ImagePlus,
   Edit3,
   Flag,
   Hash,
   Heart,
   LoaderCircle,
   Mail,
-  MapPin,
   MessageCircle,
-  Minus,
   MoreVertical,
   RefreshCw,
   Search,
@@ -19,9 +21,8 @@ import {
   SlidersHorizontal,
   Trash2,
   ThumbsDown,
-  Users,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
 import { ContentComments } from "../components/ContentComments";
@@ -40,7 +41,6 @@ import {
   followUser,
   getContentNotification,
   getProfileAffinities,
-  getTagStats,
   getUserSession,
   likeTagComment,
   listFollowing,
@@ -56,6 +56,7 @@ import {
   updateTagComment,
   uploadTagCommentMedia,
 } from "../lib/api";
+import { ThinkingIcon } from "../components/ThinkingIcon";
 import { useLanguage } from "../lib/i18n";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
@@ -87,6 +88,7 @@ export function TagsPage() {
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [sharedPost, setSharedPost] = useState<{ id: string; body: string; author: string; likes: number } | null>(null);
   const [selectedTagMedia, setSelectedTagMedia] = useState<File[]>([]);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
   const tags = useQuery({
@@ -108,7 +110,7 @@ export function TagsPage() {
     enabled: Boolean(user),
   });
   const comments = useQuery({
-    queryKey: ["tag-comments", tag?.id],
+    queryKey: ["tag-comments", tag?.id, user?.id],
     queryFn: () => listTagComments(tag!.id),
     enabled: Boolean(tag),
   });
@@ -116,11 +118,6 @@ export function TagsPage() {
     if (!comments.data || !window.location.hash.startsWith("#post-")) return;
     window.requestAnimationFrame(() => document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: "center" }));
   }, [comments.data]);
-  const stats = useQuery({
-    queryKey: ["tag-stats", tag?.id],
-    queryFn: () => getTagStats(tag!.id),
-    enabled: Boolean(tag && user && ["admin", "super_admin", "curator"].includes(user.role)),
-  });
   const relatedUsers = useQuery({ queryKey: ["tag", tag?.id, "related-users"], queryFn: () => listTagRelatedUsers(tag!.id), enabled: Boolean(tag) });
   const relatedEvents = useQuery({ queryKey: ["tag", tag?.id, "future-events"], queryFn: () => listEvents(new URLSearchParams({ tag: tag!.slug, dateFrom: new Date().toISOString().slice(0, 10), pageSize: "1" })), enabled: Boolean(tag) });
   const following = useQuery({
@@ -150,7 +147,7 @@ export function TagsPage() {
         ...(affinities.data ?? [])
           .filter((item) => item.tag.id !== tag?.id)
           .map((item) => ({ tagId: item.tag.id, sentiment: item.sentiment })),
-        { tagId: tag!.id, sentiment: next },
+        ...(sentiment === next ? [] : [{ tagId: tag!.id, sentiment: next }]),
       ]),
     onSuccess: async () => {
       await Promise.all([
@@ -160,11 +157,23 @@ export function TagsPage() {
       ]);
     },
   });
+  const pendingUpload = useRef<{ tagId: string; id: string; body: string; files: File[] } | null>(null);
   const post = useMutation({
     mutationFn: async ({ body, files }: { body: string; files: File[] }) => {
-      const created = await createTagComment(tag!.id, body);
-      await Promise.all(files.map((file) => uploadTagCommentMedia(created.id, file)));
-      return created;
+      let draft = pendingUpload.current?.tagId === tag!.id ? pendingUpload.current : null;
+      if (!draft) {
+        const created = await createTagComment(tag!.id, body);
+        draft = { tagId: tag!.id, id: created.id, body, files: [...files] };
+        pendingUpload.current = draft;
+      } else if (draft.body !== body) {
+        await updateTagComment(draft.id, body);
+        draft.body = body;
+      }
+      while (draft.files.length) {
+        await uploadTagCommentMedia(draft.id, draft.files[0]!);
+        draft.files.shift();
+      }
+      pendingUpload.current = null;
     },
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["tag-comments", tag?.id] });
@@ -178,11 +187,15 @@ export function TagsPage() {
     onSuccess: () =>
       void client.invalidateQueries({ queryKey: ["tag-comments", tag?.id] }),
   });
+  const [editingPost, setEditingPost] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState("");
   const edit = useMutation({
     mutationFn: ({ id, body }: { id: string; body: string }) =>
       updateTagComment(id, body),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["tag-comments", tag?.id] }),
+    onSuccess: () => {
+      setEditingPost(null);
+      void client.invalidateQueries({ queryKey: ["tag-comments", tag?.id] });
+    },
   });
   const remove = useMutation({
     mutationFn: (id: string) => deleteTagComment(tag!.id, id),
@@ -197,6 +210,7 @@ export function TagsPage() {
   const create = useMutation({
     mutationFn: () => createUserTag({ name: query.trim() }),
     onSuccess: (created) => {
+      setQuery("");
       void client.invalidateQueries({ queryKey: ["tags"] });
       navigate(`/tags/${created.slug}`);
     },
@@ -226,6 +240,8 @@ export function TagsPage() {
   const followingIds = new Set(
     (following.data ?? []).map((member) => member.id),
   );
+  const filteredAuthor = (comments.data ?? []).find((item) => authorIdFilter ? item.author?.id === authorIdFilter : authorFilter && item.author?.username?.toLocaleLowerCase("tr") === authorFilter)?.author;
+  const authorNotice = filteredAuthor ? <div className="filter-notice"><span>{t(`${filteredAuthor.username ? `@${filteredAuthor.username}` : filteredAuthor.name} gönderileri filtreleniyor.`, `Filtering posts by ${filteredAuthor.username ? `@${filteredAuthor.username}` : filteredAuthor.name}.`)}</span><button onClick={() => { const next = new URLSearchParams(searchParams); next.delete("author"); next.delete("authorId"); setSearchParams(next); }} type="button">{t("Temizle", "Clear")}</button></div> : null;
   const visibleComments = [...(comments.data ?? [])]
     .filter((comment) => {
       const matches =
@@ -234,8 +250,8 @@ export function TagsPage() {
           .toLocaleLowerCase("tr")
           .includes(commentQuery.toLocaleLowerCase("tr"));
       if (!matches) return false;
-      if (authorIdFilter && comment.author?.id !== authorIdFilter) return false;
-      if (!authorIdFilter && authorFilter && comment.author?.username?.toLocaleLowerCase("tr") !== authorFilter) return false;
+      if (authorIdFilter && (comments.data ?? []).some((item) => item.author?.id === authorIdFilter) && comment.author?.id !== authorIdFilter) return false;
+      if (!authorIdFilter && authorFilter && (comments.data ?? []).some((item) => item.author?.username?.toLocaleLowerCase("tr") === authorFilter) && comment.author?.username?.toLocaleLowerCase("tr") !== authorFilter) return false;
       if (postTab === "following")
         return Boolean(comment.author && followingIds.has(comment.author.id));
       if (postTab === "photo" || postTab === "video")
@@ -384,7 +400,7 @@ export function TagsPage() {
       <div className="section-header">
         <div>
           <p className="eyebrow">{t("İlgi alanı", "Interest")}</p>
-          <h1>#{tag.name}</h1>
+          <h1><Link to={`/tags/${tag.slug}`}>#{tag.name}</Link></h1>
         </div>
         <div className="row-actions">
           <button
@@ -406,7 +422,7 @@ export function TagsPage() {
             {t("Paylaş", "Share")}
           </button>
           <details className="detail-action-menu"><summary aria-label={t("Etiket işlemleri", "Tag actions")}><MoreVertical size={20}/></summary><div>
-            <Link to={user ? `/stats/tag/${tag.id}` : `/login?next=${encodeURIComponent(`/stats/tag/${tag.id}`)}`}><Eye size={17}/>{t("Etkileşim istatistikleri", "Engagement statistics")}</Link>
+            <Link to={user ? `/stats/tag/${tag.id}` : `/login?next=${encodeURIComponent(`/stats/tag/${tag.id}`)}`}><BarChart3 size={17}/>{t("Etkileşim istatistikleri", "Engagement statistics")}</Link>
             {user ? <button onClick={() => setReportTarget({ type: "tag", id: tag.id })}><Flag size={17}/>{t("Etiketi rapor et", "Report tag")}</button> : null}
           </div></details>
         </div>
@@ -424,7 +440,7 @@ export function TagsPage() {
               key={value}
               onClick={() => save.mutate(value)}
             >
-              {value === "like" ? <><Heart size={17}/> {t("Beğeniyorum", "Like")}</> : value === "ok" ? <><Minus size={17}/> {t("Sorun değil", "Neutral")}</> : <><ThumbsDown size={17}/> {t("Beğenmiyorum", "Dislike")}</>}
+              {value === "like" ? <><Heart size={17}/> {t("Beğeniyorum", "Like")}</> : value === "ok" ? <><ThinkingIcon size={17}/> {t("Kararsızım", "Neutral")}</> : <><ThumbsDown size={17}/> {t("Beğenmiyorum", "Dislike")}</>}
             </button>
           ))}
         </div>
@@ -437,36 +453,8 @@ export function TagsPage() {
         <div><span className="attendee-avatar-stack">{(relatedUsers.data ?? []).slice(0, 8).map((member) => <Link key={member.id} title={t(`${member.name} profilini aç`, `Open ${member.name}'s profile`)} to={userProfilePath(member)}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/tags/${tag.slug}/users`}><strong>{t(`${relatedUsers.data?.length ?? tag.usageCount} kullanıcının tümünü göster`, `Show all ${relatedUsers.data?.length ?? tag.usageCount} users`)}</strong></Link></div>
       </section>
       {relatedEvents.data?.total ? <Link className="tag-related-events-notice" to={`/events?tag=${encodeURIComponent(tag.slug)}`}>{t(`${relatedEvents.data.total} ilişkili etkinlik bulundu.`, `${relatedEvents.data.total} related events found.`)}</Link> : null}
-      {user && ["admin", "super_admin", "curator"].includes(user.role) ? <section className="tag-public-stats" id="tag-stats">
-        {[
-          { Icon: Users, value: stats.data?.followers ?? 0, label: t("takipçi", "followers") },
-          { Icon: Heart, value: stats.data?.likes ?? 0, label: t("beğeni", "likes") },
-          { Icon: Minus, value: stats.data?.ok ?? 0, label: t("nötr", "neutral") },
-          { Icon: ThumbsDown, value: stats.data?.dislikes ?? 0, label: t("beğenmeme", "dislikes") },
-          {
-            Icon: CalendarDays,
-            value: stats.data?.events ?? 0,
-            label: t("etkinlik", "events"),
-          },
-          { Icon: MapPin, value: stats.data?.places ?? 0, label: t("mekân", "places") },
-          {
-            Icon: MessageCircle,
-            value: stats.data?.posts ?? 0,
-            label: t("gönderi", "posts"),
-          },
-          { Icon: Eye, value: stats.data?.views ?? 0, label: t("görüntülenme", "views") },
-          { Icon: MessageCircle, value: stats.data?.reactions ?? 0, label: t("post beğenisi", "post likes") },
-          { Icon: Eye, value: stats.data?.engagementRate ?? 0, label: t("% etkileşim", "% engagement") },
-        ].map(({ Icon, value, label }) => (
-          <article key={label}>
-            <Icon size={19} />
-            <strong>{value}</strong>
-            <span>{label}</span>
-          </article>
-        ))}
-      </section> : null}
       <section className="admin-form">
-        {authorFilter || authorIdFilter ? <div className="filter-notice"><span>{t(`${authorFilter ? `@${authorFilter}` : "Seçilen kullanıcı"} gönderileri filtreleniyor.`, `Filtering posts by ${authorFilter ? `@${authorFilter}` : "the selected user"}.`)}</span><button onClick={() => { const next = new URLSearchParams(searchParams); next.delete("author"); next.delete("authorId"); setSearchParams(next); }} type="button">{t("Temizle", "Clear")}</button></div> : null}
+
         <div className="section-header compact">
           <h2>
             <MessageCircle size={18} /> {t("Bu etiketteki gönderiler", "Posts for this tag")}
@@ -504,13 +492,14 @@ export function TagsPage() {
             className="tag-post-composer"
             onSubmit={(event: FormEvent<HTMLFormElement>) => {
               event.preventDefault();
-              const input = event.currentTarget.elements.namedItem(
+              const form = event.currentTarget;
+              const input = form.elements.namedItem(
                 "body",
               ) as HTMLTextAreaElement;
               if (input.value.trim() || selectedTagMedia.length)
                 post.mutate(
                   { body: input.value.trim(), files: selectedTagMedia },
-                  { onSuccess: () => event.currentTarget.reset() },
+                  { onSuccess: () => form.reset() },
                 );
             }}
           >
@@ -525,7 +514,7 @@ export function TagsPage() {
                 {t("Yayınla", "Publish")}
               </button>
               <label className="secondary-action">
-                {t("Resim/video ekle", "Add image/video")}
+                <ImagePlus aria-label={t("Resim/video ekle", "Add image/video")} size={20}/>
                 <input
                   accept="image/*,video/mp4,video/webm"
                   hidden
@@ -540,6 +529,8 @@ export function TagsPage() {
             </div>
           </form>
         ) : null}
+        {post.isError ? <p className="form-error" role="alert">{t("Yayın tamamlanamadı. Kalan dosyalar için yeniden yayınlayın; gönderiniz çoğaltılmaz.", "Publishing could not finish. Publish again to retry remaining files without duplicating your post.")}</p> : null}
+        {authorNotice}
         <div className="tag-post-list">
           {visibleComments.map((comment) => (
             <article className="tag-post-card" id={`post-${comment.id}`} key={comment.id}>
@@ -557,8 +548,8 @@ export function TagsPage() {
                       .toLocaleUpperCase("tr-TR")
                   )}
                 </Link> : <span className="post-avatar" aria-hidden="true">K</span>}
-                <strong>
-                  {comment.author ? (
+                <strong className="member-name-line">
+                  {comment.author ? <FollowStar id={comment.author.id}/> : null}{comment.author ? (
                     <Link to={userProfilePath(comment.author)}>
                       {comment.author.username
                         ? `@${comment.author.username}`
@@ -569,32 +560,14 @@ export function TagsPage() {
                   )}
                 </strong>
                 <time>
-                  {formatPostDateTime(comment.createdAt, language)}
+                  <Link to={`/tags/${tag.slug}#post-${comment.id}`}>{formatPostDateTime(comment.createdAt, language)}</Link>
                 </time>
               </header>
-              <p>
+              <p className="post-copy">
                 <RichText hideEmbeddableUrls text={comment.body} />
               </p>
               <EmbeddedMedia text={comment.body}/>
-              {comment.media?.length ? (
-                <div className="tag-post-media">
-                  {comment.media.map((media) =>
-                    media.type === "video" ? (
-                      <video
-                        controls
-                        key={media.id}
-                        src={resolveMediaUrl(media.url)}
-                      />
-                    ) : (
-                      <img
-                        alt=""
-                        key={media.id}
-                        src={resolveMediaUrl(media.url)}
-                      />
-                    ),
-                  )}
-                </div>
-              ) : null}
+              {comment.media?.length ? <MediaAlbum items={comment.media} owner={{ contentType: "tag_comment", contentId: comment.id, ownerId: comment.author?.id, queryKeys: [["tag-comments"]] }}/> : null}
               <footer>
                 <button
                   className={comment.liked ? "active" : ""}
@@ -618,7 +591,7 @@ export function TagsPage() {
                   {comment.replyCount ? t(`${comment.replyCount} yorum`, `${comment.replyCount} comments`) : t("Yorum yap", "Comment")}
                 </button>
                 <button
-                  onClick={() => void shareTagPost(comment.id, `#${tag.name}`, comment.body)}
+                  onClick={() => setSharedPost({ id: comment.id, body: comment.body, author: comment.author?.username ? `@${comment.author.username}` : comment.author?.name ?? t("Üye", "Member"), likes: comment.likeCount })}
                 >
                   <Share2 size={17} />
                   {t("Paylaş", "Share")}
@@ -631,6 +604,7 @@ export function TagsPage() {
                       <>
                         <Link to={`/messages?peer=${comment.author.id}`}><Mail size={17}/>{t("Mesaj gönder", "Send message")}</Link>
                         <button disabled={follow.isPending} onClick={() => follow.mutate({ id: comment.author!.id, active: followingIds.has(comment.author!.id) })} type="button">
+                          {followingIds.has(comment.author.id) ? <UserMinus size={17}/> : <UserPlus size={17}/>}
                           {followingIds.has(comment.author.id) ? t("Takibi bırak", "Unfollow") : t("Takip et", "Follow")}
                         </button>
                         <GuestListAction
@@ -649,14 +623,7 @@ export function TagsPage() {
                       <>
                     <button
                       disabled={edit.isPending}
-                      onClick={() => {
-                        const body = window.prompt(
-                          t("Gönderiyi düzenle", "Edit post"),
-                          comment.body,
-                        );
-                        if (body?.trim() && body.trim() !== comment.body)
-                          edit.mutate({ id: comment.id, body: body.trim() });
-                      }}
+                      onClick={() => { setEditingPost(comment.id); setEditBody(comment.body); }}
                     >
                       <Edit3 size={17} />
                       {t("Düzenle", "Edit")}
@@ -677,6 +644,11 @@ export function TagsPage() {
                   </details>
                 ) : null}
               </footer>
+              {editingPost === comment.id ? <form className="inline-post-editor" onSubmit={event => { event.preventDefault(); if (editBody.trim()) edit.mutate({ id: comment.id, body: editBody.trim() }); }}>
+                <label>{t("Gönderiyi düzenle", "Edit post")}<textarea value={editBody} onChange={event => setEditBody(event.target.value)} maxLength={5000}/></label>
+                <div className="row-actions"><button className="primary-action" disabled={!editBody.trim() || edit.isPending}>{t("Kaydet", "Save")}</button><button type="button" className="secondary-action" onClick={() => setEditingPost(null)}>{t("İptal", "Cancel")}</button></div>
+                {edit.isError ? <p role="alert">{t("Gönderi kaydedilemedi. Yeniden deneyin.", "The post could not be saved. Try again.")}</p> : null}
+              </form> : null}
               {commentPostId === comment.id ? (
                 <ContentComments
                   targetType="tag_comment"
@@ -688,6 +660,13 @@ export function TagsPage() {
           ))}
         </div>
       </section>
+      {authorNotice}
+      <ShareDialog open={Boolean(sharedPost)} onClose={() => setSharedPost(null)} targetType="post" targetId={sharedPost?.id ?? ""} title={`#${tag.name}`} text={sharedPost ? `${sharedPost.author} ${t("paylaştı", "shared a post in")} #${tag.name}
+“${sharedPost.body}”
+
+✨ ${sharedPost.likes} ${t("kişi bu gönderiyi beğendi.", "people like this post.")}
+
+🌎 ${t("Konnektora’da gönderiyi gör →", "See this post on Konnektora →")}` : ""} url={new URL(`/tags/${tag.slug}#post-${sharedPost?.id ?? ""}`, window.location.origin).toString()}/>
       <NotificationDialog
         open={notificationOpen}
         onClose={() => setNotificationOpen(false)}
@@ -703,16 +682,14 @@ export function TagsPage() {
         targetId={tag.id}
         targetType="tag"
         title={`#${tag.name}`}
-        text={`${language === "tr" ? "Konnektora'da bu ilgi alanını keşfet" : "Explore this interest on Konnektora"}: #${tag.name}`}
-        url={window.location.href}
+        text={`#${tag.name}
+✨ ${tag.usageCount} ${t("üye bu etiketi profiline ekledi.", "members added this tag into their profile.")}
+
+${t("Bu ilgi alanına bağlı etkinlikleri, mekânları ve insanları keşfet.", "Discover events, places & people connected to this interest.")}
+
+🌎 Konnektora →`}
+        url={new URL(`/tags/${tag.slug}`, window.location.origin).toString()}
       />
     </section>
   );
-}
-
-async function shareTagPost(id: string, title: string, text: string) {
-  const url = new URL(window.location.href);
-  url.hash = `post-${id}`;
-  if (navigator.share) await navigator.share({ title, text, url: url.toString() });
-  else await navigator.clipboard.writeText(url.toString());
 }

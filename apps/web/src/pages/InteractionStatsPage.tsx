@@ -1,12 +1,36 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Download, Lightbulb, TrendingUp, Users, WalletCards } from "lucide-react";
+import { ArrowLeft, BarChart3, Download, Lightbulb, TrendingUp, Users, WalletCards } from "lucide-react";
 import type { TableCell, TDocumentDefinitions } from "pdfmake/interfaces";
-import { type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { getInteractionStats, getPublicProfileById, getTagStats } from "../lib/api";
+import { getInteractionStats, getPublicProfileById, getTagStats, listTags, getPlaceAnalyticsReferences } from "../lib/api";
+import { analyticsSeries } from "../lib/analyticsSeries";
 import { useLanguage } from "../lib/i18n";
 
 type Stats = Record<string, number>;
+type EntityRef = { name: string; to: string; metricKey?: string; kind: "tag" | "event" | "place" | "user" };
+const StatsLinks = createContext<EntityRef[]>([]);
+const metricName = (value: string) => value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+function LinkedMetric({ label, prefix, metricKey }: { label: string; prefix?: string; metricKey: string }) {
+  const refs = useContext(StatsLinks);
+  const kind = prefix?.toLowerCase().includes("interest") ? "tag" : prefix === "fullEvent_" || prefix === "emptyEvent_" ? "event" : undefined;
+  const matches = refs.filter(ref => ref.metricKey ? ref.metricKey === metricKey : kind && ref.kind === kind && metricName(ref.name) === metricName(label));
+  const reference = new Set(matches.map(ref => ref.to)).size === 1 ? matches[0] : undefined;
+  if (reference) return <Link to={reference.to}>{reference.name}</Link>;
+  return <>{label}</>;
+}
+function LinkedInsight({ text }: { text: string }) {
+  const refs = useContext(StatsLinks);
+  const parts = text.split(/(“[^”]+”)/g);
+  return <>{parts.map((part, index) => {
+    const label = part.startsWith("“") ? part.slice(1, -1) : "";
+    const matches = label ? refs.filter(ref => metricName(ref.name) === metricName(label)) : [];
+    const reference = new Set(matches.map(ref => ref.to)).size === 1 ? matches[0] : undefined;
+    return reference ? <Link key={index} to={reference.to}>“{reference.name}”</Link> : part;
+  })}</>;
+}
+
 
 const labels: Record<string, string> = {
   accepted: "Katılım kararı", attended: "Check-in", requested: "Bekleyen talep", invited: "Davet",
@@ -168,7 +192,7 @@ function BarList({ entries, prefix }: { entries: Array<[string, number]>; prefix
   return <div className="stats-bar-list">{entries.map(([key, value]) => {
     const rawLabel = prefix ? key.slice(prefix.length) : key;
     return <div key={key} className="stats-bar-row">
-      <div><span>{prettyKey(rawLabel, language)}</span><strong>{prefix === "ticketTypeRevenue_" ? displayValue("ticketRevenue", value, language) : prefix?.toLowerCase().includes("rate") ? `${value.toLocaleString(locale)}%` : value.toLocaleString(locale)}</strong></div>
+      <div><span><LinkedMetric label={prettyKey(rawLabel, language)} prefix={prefix} metricKey={key}/></span><strong>{prefix === "ticketTypeRevenue_" ? displayValue("ticketRevenue", value, language) : prefix?.toLowerCase().includes("rate") ? `${value.toLocaleString(locale)}%` : value.toLocaleString(locale)}</strong></div>
       <span className="stats-bar-track"><span style={{ "--bar-width": `${value / maximum * 100}%` } as CSSProperties}/></span>
     </div>;
   })}</div>;
@@ -312,15 +336,32 @@ export function InteractionStatsPage() {
   const t = (tr: string, en: string) => (language === "tr" ? tr : en);
   const { targetType = "event", targetId = "" } = useParams();
   const navigate = useNavigate();
+  const [analyticsRequest] = useState(() => crypto.randomUUID());
   const stats = useQuery({
     queryKey: ["interaction-stats-page", targetType, targetId],
     queryFn: async () => {
       if (targetType === "tag") return getTagStats(targetId);
-      if (targetType === "user") return (await getPublicProfileById(targetId)).stats ?? {};
+      if (targetType === "user") return (await getPublicProfileById(targetId, analyticsRequest)).stats ?? {};
       if (targetType === "event" || targetType === "place") return getInteractionStats(targetType, targetId);
       throw new Error("Desteklenmeyen istatistik türü.");
     },
     enabled: Boolean(targetId),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const references = useQuery({
+    queryKey: ["stats-entity-references", targetType, targetId],
+    enabled: Boolean(stats.data && (targetType === "place" || Object.keys(stats.data).some(key => /interest_|Interest_/.test(key)))),
+    queryFn: async () => {
+      if (targetType === "place") return getPlaceAnalyticsReferences(targetId);
+      const data = stats.data ?? {};
+      const refs: EntityRef[] = [];
+      if (Object.keys(data).some(key => /interest_|Interest_/.test(key))) {
+        const tags = await listTags();
+        refs.push(...tags.map(tag => ({ name: tag.name, to: `/tags/${tag.slug}`, kind: "tag" as const })));
+      }
+      return refs;
+    },
   });
   const title = targetType === "event" ? t("Etkinlik", "Event") : targetType === "place" ? t("Mekân", "Place") : targetType === "tag" ? t("İlgi alanı", "Interest") : t("Profil", "Profile");
   const data = stats.data ?? {};
@@ -337,8 +378,8 @@ export function InteractionStatsPage() {
   const insights = buildInsights(data, targetType, language);
   const hasMetrics = Object.keys(data).length > 0;
 
-  return <section className="page interaction-stats-page">
-    <header className="section-header stats-page-header"><div><p className="eyebrow">{t("Analiz merkezi", "Analytics centre")}</p><h1>{title} {t("istatistikleri", "analytics")}</h1><p>{t("Topluluk, erişim, dönüşüm ve gelir metriklerinin güncel görünümü.", "A current view of community, reach, conversion and revenue metrics.")}</p></div><div className="stats-header-actions"><button className="secondary-action" disabled={!stats.data} onClick={() => { void downloadStatsPdf(`${title} ${t("istatistikleri", "analytics")}`, data, insights, language); }} type="button"><Download size={17}/> {t("PDF indir", "Download PDF")}</button><button className="secondary-action" onClick={() => navigate(-1)} type="button">{t("Geri dön", "Go back")}</button></div></header>
+  return <StatsLinks.Provider value={references.data ?? []}><section className="page interaction-stats-page">
+    <button className="secondary-action stats-back" onClick={() => navigate(-1)} type="button"><ArrowLeft size={18}/>{t("Geri dön", "Go back")}</button><header className="section-header stats-page-header"><div><p className="eyebrow">{t("Analiz merkezi", "Analytics centre")}</p><h1>{title} {t("istatistikleri", "analytics")}</h1><p>{t("Topluluk, erişim, dönüşüm ve gelir metriklerinin güncel görünümü.", "A current view of community, reach, conversion and revenue metrics.")}</p></div><div className="stats-header-actions"><button className="secondary-action" disabled={!stats.data} onClick={() => { void downloadStatsPdf(`${title} ${t("istatistikleri", "analytics")}`, data, insights, language); }} type="button"><Download size={17}/> {t("PDF indir", "Download PDF")}</button></div></header>
     {stats.isLoading ? <p className="empty-state">{t("İstatistikler hazırlanıyor…", "Preparing analytics…")}</p> : null}
     {stats.isError ? <section className="stats-access-gate"><h2>{t("Gelişmiş analiz erişimi gerekli", "Advanced analytics access required")}</h2><p>{t("Bu rapor yalnız içerik yöneticileri ile admin, küratör veya uygun paket sahipleri tarafından kullanılabilir.", "This report is available only to content managers and admins, curators or members with an eligible plan.")}</p><Link className="primary-action" to="/store">{t("Paketleri incele", "View plans")}</Link></section> : null}
     {stats.data && !hasMetrics ? <section className="stats-access-gate"><h2>{t("Bu rapora erişiminiz yok", "You do not have access to this report")}</h2><p>{t("Kendi profil istatistikleriniz uygun paketle; başka profillerin istatistikleri yalnız yetkili rollerle görüntülenebilir.", "Your own profile analytics require an eligible plan; analytics for other profiles are restricted to authorised roles.")}</p><Link className="primary-action" to="/store">{t("Paketleri incele", "View plans")}</Link></section> : null}
@@ -347,33 +388,35 @@ export function InteractionStatsPage() {
       <StatsSection title={t("Genel bakış", "Overview")} description={t("En önemli performans göstergeleri", "The most important performance indicators")} icon={<BarChart3 size={21}/>}><MetricGrid entries={overview}/></StatsSection>
       {funnel.length > 1 ? <StatsSection title={t("Dönüşüm hunisi", "Conversion funnel")} description={t("İlk temastan gerçek katılıma kadar kullanıcı akışı", "The user journey from first contact to real participation")} icon={<TrendingUp size={21}/>}><BarList entries={funnel}/></StatsSection> : null}
       {conversions.length ? <StatsSection title={t("Dönüşüm ve etkileşim", "Conversion and engagement")} icon={<TrendingUp size={21}/>}><MetricGrid entries={conversions}/></StatsSection> : null}
-      {trends.length ? <StatsSection title={t("Zaman içindeki eğilim", "Trends over time")} description={t("Yakın dönem ilgi ve görüntülenme hareketi", "Recent interest and view activity")} icon={<TrendingUp size={21}/>}><BarList entries={trends}/></StatsSection> : null}
+      {trends.length ? <StatsSection title={t("Dönem toplamları", "Period totals")} description={t("Bu dönemler birbiriyle örtüşür; günlük değişim değildir.", "These periods overlap; they are not daily changes.")} icon={<TrendingUp size={21}/>}><BarList entries={trends}/></StatsSection> : null}
       {money.length ? <StatsSection title={t("Bilet ve gelir", "Tickets and revenue")} description={t("Satış, komisyon, organizatör geliri ve iade özeti", "Sales, commission, organiser revenue and refund summary")} icon={<WalletCards size={21}/>}><MetricGrid entries={money}/></StatsSection> : null}
       {distributions.length ? <div className="stats-distribution-grid">{distributions.map((group) => <StatsSection key={group.prefix} title={(language === "tr" ? distributionTitles : distributionTitlesEn)[group.prefix] ?? prettyKey(group.prefix, language)} icon={<Users size={20}/>}><BarList entries={group.entries} prefix={group.prefix}/></StatsSection>)}</div> : null}
       {remaining.length ? <StatsSection title={t("Diğer ölçümler", "Other metrics")} icon={<BarChart3 size={20}/>}><MetricGrid entries={remaining}/></StatsSection> : null}
-      <StatsSection title={t("Veriye dayalı içgörüler", "Data-driven insights")} description={t("Aşağıdaki öneriler yalnızca bu sayfadaki ölçümlerden türetilir.", "The recommendations below are derived only from the metrics on this page.")} icon={<Lightbulb size={21}/>}><div className="stats-insights">{insights.map((insight) => <p key={insight}>{insight}</p>)}</div></StatsSection>
+      <StatsSection title={t("Veriye dayalı içgörüler", "Data-driven insights")} description={t("Aşağıdaki öneriler yalnızca bu sayfadaki ölçümlerden türetilir.", "The recommendations below are derived only from the metrics on this page.")} icon={<Lightbulb size={21}/>}><div className="stats-insights">{insights.map((insight) => <p key={insight}><LinkedInsight text={insight}/></p>)}</div></StatsSection>
       <aside className="stats-unmeasured"><strong>{t("Ölçüm kapsamı", "Measurement scope")}</strong><p>{t("Konnektora içindeki liste ve arama gösterimleri, detay görüntülemeleri ve paylaşım kanalları gerçek etkileşimlerden kaydedilir. Harici arama motorlarının gösterim sayısı ve cihazlar arası kullanıcı eşleştirmesi tutulmadığı için bu alanlarda tahmini veya örnek rakam gösterilmez.", "Listing and search impressions, detail views and share channels inside Konnektora are recorded from real interactions. External search-engine impression counts and cross-device identity matching are not stored, so no estimated or sample figures are shown for those areas.")}</p></aside>
     </> : null}
-  </section>;
+  </section></StatsLinks.Provider>;
 }
 
 function AnalyticsVisuals({ entries, language }: { entries: Array<[string, number]>; language: "tr" | "en" }) {
-  const values = entries.slice(0, 8);
-  if (!values.length) return null;
-  const max = Math.max(...values.map(([, value]) => value), 1);
-  const total = values.reduce((sum, [, value]) => sum + Math.max(0, value), 0) || 1;
+  const { counts, pie, pieKind, daily, dailyKind } = analyticsSeries(Object.fromEntries(entries));
+  const max = Math.max(...daily.map(([, value]) => value), 1);
+  const total = pie.reduce((sum, [, value]) => sum + value, 0);
   let cursor = 0;
   const colors = ["#21724e", "#58b183", "#e2a84b", "#6d8fc7", "#b96f87", "#76a5a9", "#8d78b8", "#d27d55"];
-  const stops = values.map(([, value], index) => {
+  const stops = pie.map(([, value], index) => {
     const start = cursor;
-    cursor += Math.max(0, value) / total * 360;
+    cursor += total ? value / total * 360 : 0;
     return `${colors[index % colors.length]} ${start}deg ${cursor}deg`;
   }).join(", ");
-  const points = values.map(([, value], index) => `${values.length === 1 ? 50 : index / (values.length - 1) * 100},${100 - value / max * 86}`).join(" ");
+  // X positions follow elapsed days, rather than equally spacing unrelated metrics.
+  const first = daily.length ? Date.parse(daily[0]![0]) : 0;
+  const span = daily.length > 1 ? Date.parse(daily[daily.length - 1]![0]) - first : 1;
+  const points = daily.map(([date, value]) => `${daily.length === 1 ? 50 : (Date.parse(date) - first) / Math.max(1, span) * 100},${100 - value / max * 86}`).join(" ");
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
   return <section className="stats-visual-grid" aria-label={t("İstatistik grafikleri", "Analytics charts")}>
-    <article aria-label={t("Çubuk grafik", "Bar chart")}><h2>{t("Ölçüm karşılaştırması", "Metric comparison")}</h2><div className="stats-mini-bars">{values.map(([key, value]) => <span key={key} title={`${prettyKey(key, language)}: ${value}`} style={{ height: `${Math.max(5, value / max * 100)}%` }}/>)}</div></article>
-    <article aria-label={t("Pasta grafik", "Pie chart")}><h2>{t("Dağılım", "Distribution")}</h2><div className="stats-donut" style={{ background: `conic-gradient(${stops})` }}><span>{values.length}</span></div></article>
-    <article aria-label={t("Çizgi grafik", "Line chart")}><h2>{t("Eğilim", "Trend")}</h2><svg className="stats-line-chart" role="img" viewBox="0 0 100 100"><polyline fill="none" points={points} stroke="#21724e" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4"/></svg></article>
+    <article aria-label={t("Çubuk grafik", "Bar chart")}><h2>{t("Etkileşim sayıları", "Interaction counts")}</h2><BarList entries={counts}/></article>
+    <article aria-label={t("Pasta grafik", "Pie chart")}><h2>{pieKind === "sentiment" ? t("İlgi dağılımı", "Interest distribution") : t("Keşif kaynakları dağılımı", "Discovery source distribution")}</h2>{total > 0 ? <><div className="stats-donut" role="img" aria-label={pie.map(([key, value]) => `${prettyKey(key.replace(/^source_/, ""), language)}: ${value}`).join(", ")} style={{ background: `conic-gradient(${stops})` }}><span>{total.toLocaleString(language === "tr" ? "tr-TR" : "en-GB")}</span></div><ul className="stats-chart-legend">{pie.map(([key, value], index) => <li key={key}><i style={{ background: colors[index % colors.length] }}/>{prettyKey(key.replace(/^source_/, ""), language)}: {value} ({Math.round(value / total * 100)}%)</li>)}</ul></> : <p>{t("Dağılım için henüz veri yok.", "No distribution data yet.")}</p>}</article>
+    <article aria-label={t("Çizgi grafik", "Line chart")}><h2>{dailyKind === "ticketOrders" ? t("Günlük bilet siparişleri (UTC)", "Daily ticket orders (UTC)") : t("Günlük görüntülenmeler (UTC)", "Daily views (UTC)")}</h2>{daily.length > 1 ? <><svg className="stats-line-chart" role="img" aria-label={daily.map(([date, value]) => `${date}: ${value}`).join(", ")} viewBox="0 0 100 100"><polyline fill="none" points={points} stroke="#21724e" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/></svg><ul className="stats-chart-legend">{daily.map(([date, value]) => <li key={date}>{date}: {value}</li>)}</ul></> : <p>{t("Zaman çizgisi için en az iki güne ait ölçüm gerekli.", "A time series requires measurements on at least two days.")}</p>}</article>
   </section>;
 }

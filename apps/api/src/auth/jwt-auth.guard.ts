@@ -18,10 +18,10 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException("Token gerekli.");
     }
 
-    let payload: { sub: string; role: string };
+    let payload: { sub: string; role: string; sessionVersion?: number };
 
     try {
-      payload = await this.jwtService.verifyAsync<{ sub: string; role: string }>(token);
+      payload = await this.jwtService.verifyAsync<{ sub: string; role: string; sessionVersion?: number }>(token);
     } catch {
       throw new UnauthorizedException("Geçersiz token.");
     }
@@ -31,6 +31,8 @@ export class JwtAuthGuard implements CanActivate {
     if (!user || !this.isAllowedUser(user)) {
       throw new UnauthorizedException("Aktif kullanıcı gerekli.");
     }
+
+    if ((payload.sessionVersion ?? 0) !== (user.sessionVersion ?? 0)) throw new UnauthorizedException("Oturumunuz sona erdi. Yeniden giriş yapın.");
 
     request.user = user;
     return true;

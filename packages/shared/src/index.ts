@@ -105,6 +105,7 @@ export const passwordSchema = z
   .regex(/[^A-Za-z0-9]/, "Şifre en az bir özel karakter içermelidir.");
 export const phoneSchema = z.string().regex(/^\+[1-9]\d{7,14}$/);
 export const phoneVerificationResponseSchema = z.object({
+  stage: z.enum(["current_phone", "new_phone"]).optional(),
   ok: z.literal(true),
   expiresInSeconds: z.number().int().positive(),
   demoCode: z.string().length(6).optional(),
@@ -171,6 +172,7 @@ export const blockedTargetTypeSchema = z.enum([
   "place",
 ]);
 export const userBlockSchema = z.object({
+  href: z.string().nullable().optional(),
   targetType: blockedTargetTypeSchema,
   targetId: z.string().uuid(),
   label: z.string(),
@@ -263,6 +265,7 @@ export const memberScanSchema = z.object({
 });
 export const memberScansSchema = z.array(memberScanSchema);
 export const discoveryItemSchema = z.object({
+  visibility: z.enum(["open", "approval_required", "invite_only"]).optional(),
   kind: z.enum(["user", "tag", "event", "place"]),
   id: z.string().uuid(),
   title: z.string(),
@@ -274,11 +277,22 @@ export const discoveryItemSchema = z.object({
   longitude: z.number().nullable().optional(),
   attendeeCount: z.number().int().nonnegative().optional(),
   organizer: z.boolean().optional(),
+  startsAt: z.string().datetime().or(z.date()).optional(),
+  endsAt: z.string().datetime().or(z.date()).nullable().optional(),
 });
 export const discoveryActivitySchema = discoveryItemSchema.extend({
+  activityId: z.string().optional(),
+  city: z.string().nullable().optional(),
+  locationName: z.string().nullable().optional(),
+  body: z.string().optional(),
+  media: z.array(z.object({ id: z.string(), url: z.string(), type: z.string() })).optional(),
+  tags: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() })).optional(),
+  place: z.object({ name: z.string(), slug: z.string() }).nullable().optional(),
+  canManageContent: z.boolean().optional(),
   action: z.string(),
   occurredAt: z.string().datetime().or(z.date()),
   ownerId: z.string().uuid().nullable(),
+  actor: z.object({ id: z.string().uuid(), name: z.string(), username: z.string().nullable(), avatarUrl: z.string().nullable() }).nullable().optional(),
 });
 export const discoveryFeedSchema = z.object({
   popularMembers: z.array(discoveryItemSchema),
@@ -292,6 +306,7 @@ export const discoveryFeedSchema = z.object({
   city: z.string().nullable().optional(),
   country: z.string().nullable().optional(),
   activities: z.array(discoveryActivitySchema),
+  hiddenParticipantCount: z.number().int().nonnegative().optional(),
 });
 export const discoverySearchSchema = z.object({
   query: z.string(),
@@ -309,6 +324,7 @@ export const userStatusSchema = z.enum([
   "banned",
 ]);
 export const eventParticipantStatusSchema = z.enum([
+  "not_attending",
   "invited",
   "requested",
   "accepted",
@@ -558,6 +574,7 @@ export const mutualismAnalysisSchema = z.object({
   actions: z.array(z.string()),
 });
 export const publicProfileSchema = z.object({
+  region: z.string().nullable().optional(),
   id: z.string().uuid(),
   name: z.string(),
   username: z.string(),
@@ -700,12 +717,13 @@ export const tagCommentSchema = z.object({
 export const tagCommentsSchema = z.array(tagCommentSchema);
 
 export const eventSchema = z.object({
+  postalCode: z.string().max(24).nullable().optional(),
   id: z.string().uuid(),
   placeId: z.string().uuid().nullable().optional(),
   createdById: z.string().uuid().nullable().optional(),
   title: z.string().min(3).max(160),
   slug: slugSchema,
-  summary: z.string().min(10).max(300),
+  summary: z.string().max(300),
   description: z.string().min(10),
   status: eventStatusSchema,
   startsAt: z.string().datetime(),
@@ -715,6 +733,7 @@ export const eventSchema = z.object({
   visibility: eventVisibilitySchema,
   city: z.string().max(120).nullable(),
   country: z.string().max(120).nullable(),
+  region: z.string().max(120).nullable().optional(),
   latitude: z.number().min(-90).max(90).nullable().optional(),
   longitude: z.number().min(-180).max(180).nullable().optional(),
   locationName: z.string().max(180).nullable().optional(),
@@ -752,7 +771,7 @@ export const eventSchema = z.object({
         currency: z.string(),
         salesPlatform: z.enum(["door", "konnektora", "external"]).optional(),
         externalSalesUrl: z.string().url().optional(),
-        capacity: z.number().int().positive().optional(),
+        capacity: z.number().int().positive().nullable().optional(),
         perUserLimit: z.number().int().positive().optional(),
         saleStartsAt: z.string().optional(),
         saleEndsAt: z.string().optional(),
@@ -763,7 +782,7 @@ export const eventSchema = z.object({
     )
     .nullable()
     .optional(),
-  coverImageUrl: z.string().url().nullable(),
+  coverImageUrl: z.string().refine(value => /^https?:\/\//i.test(value) || /^\/(?!\/)[^\s\\]*$/.test(value), "Invalid media URL").nullable(),
   capacity: z.number().int().positive().nullable(),
   price: z.number().nonnegative(),
   currency: z.enum(["TRY", "EUR", "USD", "GBP"]),
@@ -796,6 +815,7 @@ export const financeAccountSchema = z.object({
   kycProvider: z.string().nullable(),
   availableBalance: z.coerce.number(),
   pendingBalance: z.coerce.number(),
+  heldBalance: z.coerce.number().optional(),
   createdAt: z.string().datetime().or(z.date()),
   updatedAt: z.string().datetime().or(z.date()),
 });
@@ -806,6 +826,7 @@ export const billingProfileSchema = z.object({
   taxOffice: z.string().nullable(),
   billingEmail: z.string().nullable(),
   country: z.string().nullable(),
+  region: z.string().nullable().optional(),
   city: z.string().nullable(),
   postalCode: z.string().nullable(),
   addressLine: z.string().nullable(),
@@ -852,11 +873,11 @@ export const financeDashboardSchema = z.object({
   transactions: z.array(paymentTransactionSchema),
   payouts: z.array(payoutSchema),
   member: z.object({
-    plan: z.enum(["free", "plus", "premium"]),
+    plan: z.enum(["free", "premium", "platinum"]),
     planStartedAt: z.string().datetime().or(z.date()).nullable(),
   }),
   business: z.object({
-    plan: z.enum(["starter", "growth", "scale"]),
+    plan: z.enum(["free", "pro", "venue", "festival"]),
     planStartedAt: z.string().datetime().or(z.date()).nullable(),
     companyName: z.string().nullable(),
     category: z.string().nullable(),
@@ -866,11 +887,13 @@ export const financeDashboardSchema = z.object({
   summary: z.object({
     availableBalance: z.number(),
     pendingBalance: z.number(),
+    heldBalance: z.number().optional(),
     lifetimeNetRevenue: z.number(),
     currency: z.string(),
   }),
 });
 export const beneficialOwnerSchema = z.object({
+  controlBasis: z.string().max(500).optional(),
   name: z.string(),
   nationality: z.string(),
   ownershipPercent: z.coerce.number(),
@@ -934,8 +957,10 @@ export const adminDashboardSchema = z.object({
 });
 
 export const adminUserSchema = z.object({
+  region: z.string().nullable().optional(), postalCode: z.string().nullable().optional(),
   id: z.string().uuid(),
   email: z.string().email(),
+  phone: z.string().nullable().optional(),
   name: z.string(),
   username: z.string().nullable().optional(),
   city: z.string().nullable().optional(),
@@ -951,6 +976,8 @@ export const adminUserSchema = z.object({
 });
 
 export const profileSchema = z.object({
+  region: z.string().max(120).nullable().optional(),
+  postalCode: z.string().max(24).nullable().optional(),
   id: z.string().uuid(),
   accountType: accountTypeSchema,
   name: z.string().min(2).max(160),
@@ -1207,6 +1234,7 @@ export const moderationDecisionSchema = z.object({
 });
 
 export const adminPlaceSchema = z.object({
+  region: z.string().max(120).nullable().optional(), postalCode: z.string().max(24).nullable().optional(),
   id: z.string().uuid(),
   name: z.string(),
   slug: slugSchema,
@@ -1241,6 +1269,7 @@ export const placeMemberStatusSchema = z.enum([
 export const placeMemberRoleSchema = z.enum(["member", "manager", "organizer"]);
 export const placeSchema = adminPlaceSchema
   .pick({
+    region: true, postalCode: true,
     id: true,
     name: true,
     slug: true,
@@ -1262,6 +1291,7 @@ export const placeSchema = adminPlaceSchema
   })
   .extend({
     tags: z.array(tagSchema).optional(),
+    createdBy: z.object({ id: z.string().uuid(), name: z.string(), username: z.string().nullable() }).nullable().optional(),
     isFollowing: z.boolean(),
     memberCount: z.number().int().nonnegative().optional(),
     followingMemberCount: z.number().int().nonnegative().optional(),
@@ -1521,6 +1551,13 @@ export const userMessageListSchema = z.object({
 });
 
 export const notificationSchema = z.object({
+  actors: z.array(z.object({id:z.string(),name:z.string(),username:z.string().nullable(),avatarUrl:z.string().nullable(),following:z.boolean(),canMessage:z.boolean()})).optional(),
+  entity: z.object({id:z.string(),type:z.enum(["event","place"]),title:z.string(),imageUrl:z.string().nullable(),location:z.string(),startsAt:z.string().datetime().or(z.date()).optional(),endsAt:z.string().datetime().or(z.date()).nullable().optional(),url:z.string()}).nullable().optional(),
+  canRespond:z.boolean().optional(),
+  admin:z.boolean().optional(),
+  mediaUrl:z.string().nullable().optional(),
+  targetLabel: z.string().nullable().optional(),
+  targetUrl: z.string().nullable().optional(),
   id: z.string().uuid(),
   userId: z.string().uuid(),
   type: z.string(),
@@ -1682,3 +1719,8 @@ export type AdminManagedUserDetail = z.infer<
   typeof adminManagedUserDetailSchema
 >;
 export type Profile = z.infer<typeof profileSchema>;
+
+export { injectSocialPreview, type SocialPreview } from "./socialPreview.js";
+
+// Approved curator revenue document, 12 October 2026. Defaults apply only to new agreements.
+export const curatorDefaultRates: Record<string, number> = { event_gate: 50, sponsorship: 30, ticket_commission: 30, corporate_subscription: 30, individual_subscription: 10, researcher_subscription: 20, extra_invite: 30, extra_message: 30, event_banner_ad: 30, tag_sponsorship_ad: 30, tag_theme_ad: 30, referral: 5 };

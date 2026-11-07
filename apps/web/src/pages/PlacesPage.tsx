@@ -1,8 +1,9 @@
+import { PendingPlaceMedia } from "../components/PendingPlaceMedia";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, ListFilter, LoaderCircle, MapPinned, Plus, RefreshCw } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { createPlace, getUserSession, invitePlaceMember, listMemberSuggestions, listPlaces, listTags, uploadContentMedia, type PlaceInput } from "../lib/api";
+import { createPlace, getUserSession, invitePlaceMember, listMemberSuggestions, listPlaces, listTags, reorderContentMedia, uploadContentMedia, type PlaceInput } from "../lib/api";
 import { LocationMap } from "../components/LocationMap";
 import { LocationPicker } from "../components/LocationPicker";
 import { TagPicker } from "../components/TagPicker";
@@ -34,6 +35,9 @@ export function PlacesPage() {
   const c = placeCopy[language];
   const [searchParams, setSearchParams] = useSearchParams();
   const [createOpen, setCreateOpen] = useState(false);
+  const [createStep, setCreateStep] = useState<"details" | "media">("details");
+  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
+  const [creationWarning, setCreationWarning] = useState<{slug: string; count: number} | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const user = getUserSession();
@@ -49,8 +53,19 @@ export function PlacesPage() {
   const tagsQuery = useQuery({ queryKey: ["tags"], queryFn: () => listTags() });
   const suggestionsQuery = useQuery({ queryKey: ["member-suggestions", user?.id], queryFn: listMemberSuggestions, enabled: Boolean(user && createOpen) });
   const createMutation = useMutation({
-    mutationFn: async (input: PlaceInput & { mediaFiles?: File[]; managerUsernames?: string[] }) => { const { mediaFiles = [], managerUsernames = [], ...data } = input; const created = await createPlace(data); await Promise.allSettled([...mediaFiles.map((file) => uploadContentMedia("place", created.id, file)), ...managerUsernames.map((username) => invitePlaceMember(created.id, { username, role: "manager" }))]); return created; },
+    mutationFn: async (input: PlaceInput & { mediaFiles?: File[]; managerUsernames?: string[] }) => {
+      const { mediaFiles = [], managerUsernames = [], ...data } = input;
+      const created = await createPlace(data);
+      const media = await Promise.allSettled(mediaFiles.map(file => uploadContentMedia("place", created.id, file)));
+      const managers = await Promise.allSettled(managerUsernames.map(username => invitePlaceMember(created.id, { username, role: "manager" })));
+      let failures = [...media, ...managers].filter(result => result.status === "rejected").length;
+      const ids = media.flatMap(result => result.status === "fulfilled" ? [result.value.id] : []);
+      if (ids.length) { try { await reorderContentMedia("place", created.id, ids); } catch { failures += 1; } }
+      setCreationWarning(failures ? { slug: created.slug, count: failures } : null);
+      return created;
+    },
     onSuccess: () => {
+      setMediaFiles([]); setCreateStep("details");
       setSearchParams({});
       void queryClient.invalidateQueries({ queryKey: ["places"] });
     }
@@ -77,12 +92,13 @@ export function PlacesPage() {
       placeType: String(form.get("placeType") || "events_venues"),
       visibility: String(form.get("visibility") || "open"),
       tagIds,
+      region: String(form.get("region") || ""), postalCode: String(form.get("postalCode") || ""),
       country: String(form.get("country") || "") || undefined,
       city: String(form.get("city") || "") || undefined,
       address: address || undefined,
       latitude: form.get("latitude") ? Number(form.get("latitude")) : coordinateMatch ? Number(coordinateMatch[1]) : undefined,
       longitude: form.get("longitude") ? Number(form.get("longitude")) : coordinateMatch ? Number(coordinateMatch[2]) : undefined,
-      mediaFiles: form.getAll("placeMedia").filter((item): item is File => item instanceof File && item.size > 0).slice(0, 20),
+      mediaFiles,
       managerUsernames: String(form.get("managerUsernames") || "").split(",").map((item) => item.trim().replace(/^@/, "")).filter(Boolean)
     };
     createMutation.mutate(input);
@@ -92,6 +108,7 @@ export function PlacesPage() {
   const hasFilters = [...searchParams.keys()].some((key) => key !== "page");
   return (
     <section className={`page two-column places-page${createOpen ? " place-create-page" : ""}`}>
+      {creationWarning ? <p className="form-error" role="alert">{language === "tr" ? `Mekân kaydedildi; ${creationWarning.count} medya veya yönetici daveti tamamlanamadı.` : `The place was saved; ${creationWarning.count} media uploads or manager invitations failed.`} <Link to={`/places/${creationWarning.slug}`}>{language === "tr" ? "Mekânı açıp eksikleri tamamla" : "Open the place to finish"}</Link></p> : null}
       {!createOpen ? <><button className="mobile-filter-toggle secondary-action" aria-expanded={filtersOpen} aria-controls="place-filters" onClick={() => setFiltersOpen((open) => !open)} type="button"><ListFilter size={18}/> {c.filterSearch}</button>
       <aside className={`filters places-filters ${filtersOpen ? "mobile-filters-open" : ""}`} id="place-filters">
         <h2>{c.filters}</h2>
@@ -109,18 +126,19 @@ export function PlacesPage() {
           ))}
         </nav> : null}
         {createOpen ? (
-          <form className="admin-form" onSubmit={submitPlace}>
+          <form className="admin-form" onSubmit={submitPlace} onInvalidCapture={() => setCreateStep("details")}>
             <h2>{c.newPlace}</h2>
-            <div className="form-grid">
+            <div className="feed-tabs"><button type="button" className={createStep === "details" ? "active" : ""} onClick={() => setCreateStep("details")}>{language === "tr" ? "Mekân bilgileri" : "Place details"}</button><button type="button" className={createStep === "media" ? "active" : ""} onClick={() => setCreateStep("media")}>{c.media} ({mediaFiles.length})</button></div>
+            <div className="form-grid" style={{ display: createStep === "details" ? undefined : "none" }}>
               <label>{c.name}<input name="name" required minLength={2} maxLength={160} /></label>
               <label>{c.placeType}<select name="placeType"><option value="food_drink">🍽️ {language === "tr" ? "Yeme & İçme" : "Food & Drink"}</option><option value="nightlife_music">🎵 {language === "tr" ? "Gece Hayatı & Müzik" : "Nightlife & Music"}</option><option value="events_venues">🎭 {language === "tr" ? "Etkinlik & Mekân" : "Events & Venues"}</option><option value="arts_culture">🎨 {language === "tr" ? "Sanat & Kültür" : "Arts & Culture"}</option><option value="sports_activities">🏃 {language === "tr" ? "Spor & Aktiviteler" : "Sports & Activities"}</option><option value="cafes">☕ {language === "tr" ? "Kafeler" : "Cafés"}</option><option value="outdoors">🌳 {language === "tr" ? "Açık Hava" : "Outdoors"}</option><option value="games_hobbies">🎮 {language === "tr" ? "Oyun & Hobiler" : "Games & Hobbies"}</option><option value="work_networking">💼 {language === "tr" ? "İş & Networking" : "Work & Networking"}</option><option value="wellness">🧘 {language === "tr" ? "Sağlık & İyi Yaşam" : "Wellness"}</option><option value="shopping">🛍️ {language === "tr" ? "Alışveriş" : "Shopping"}</option><option value="hotels_hostels">🏨 {language === "tr" ? "Otel / Hostel" : "Hotels / Hostels"}</option><option value="other">{language === "tr" ? "Diğer" : "Other"}</option></select></label>
               <label>{c.visibility}<select name="visibility"><option value="open">{c.open}</option><option value="approval_required">{c.approval}</option><option value="invite_only">{c.inviteOnly}</option></select></label>
               <TagPicker label={language === "tr" ? "Mekân etiketleri" : "Place tags"} tags={tagsQuery.data ?? []}/>
-              <div className="location-fields-group"><CountryCityFields/><LocationPicker addressName="address" /></div>
-              <label>{c.media}<input accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" multiple name="placeMedia" type="file" /></label>
+              <div className="location-fields-group"><CountryCityFields addressFields/><LocationPicker addressName="address" /></div>
               <label>{c.managers}<input list="place-manager-suggestions" name="managerUsernames" placeholder="@ayse, @mehmet" /><datalist id="place-manager-suggestions">{suggestionsQuery.data?.map((member) => member.username ? <option key={member.id} value={`@${member.username}`}>{member.name}</option> : null)}</datalist></label>
               <label>{c.description}<textarea name="description" rows={4} maxLength={2000} /></label>
             </div>
+            <div hidden={createStep !== "media"}><PendingPlaceMedia files={mediaFiles} onChange={setMediaFiles} disabled={createMutation.isPending}/></div>
             <button className="primary-action" disabled={createMutation.isPending} type="submit">{createMutation.isPending ? c.creating : c.createPlace}</button>
             {createMutation.isError ? <p className="form-error">{c.createFailed}</p> : null}
           </form>

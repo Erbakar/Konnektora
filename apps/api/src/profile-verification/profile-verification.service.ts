@@ -26,6 +26,7 @@ export class ProfileVerificationService {
     const request = await this.prisma.profileVerification.findFirst({
       where: { userId },
       orderBy: { createdAt: "desc" },
+      omit: { selfieBytes: true },
     });
     return {
       eligible: user.accountType === "individual",
@@ -35,7 +36,7 @@ export class ProfileVerificationService {
     };
   }
 
-  async submit(userId: string, selfieUrl: string, challenge: string) {
+  async submit(userId: string, selfieUrl: string, challenge: string, selfieBytes?: Uint8Array) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { accountType: true, profileVerifiedAt: true },
@@ -68,17 +69,19 @@ export class ProfileVerificationService {
       throw new BadRequestException(
         "Önce bir profil fotoğrafı yüklemelisiniz.",
       );
-    const decision = await this.verify(reference.url, selfieUrl, challenge);
+    const decision = await this.verify(reference.url, selfieUrl, challenge, selfieBytes);
     const request = await this.prisma.$transaction(async (tx) => {
       const created = await tx.profileVerification.create({
         data: {
           userId,
           referenceMediaId: reference.id,
           selfieUrl,
+          selfieBytes: selfieBytes ? new Uint8Array(selfieBytes) : undefined,
           challenge,
           ...decision,
           reviewedAt: decision.status === "pending" ? null : new Date(),
         },
+        omit: { selfieBytes: true },
       });
       if (decision.status === "approved")
         await tx.user.update({
@@ -98,6 +101,7 @@ export class ProfileVerificationService {
   listAdmin(status?: "pending" | "approved" | "rejected") {
     return this.prisma.profileVerification.findMany({
       where: { status },
+      omit: { selfieBytes: true },
       include: {
         user: {
           select: {
@@ -133,6 +137,7 @@ export class ProfileVerificationService {
           reviewedById: reviewerId,
           reviewedAt: new Date(),
         },
+        omit: { selfieBytes: true },
       });
       await tx.user.update({
         where: { id: request.userId },
@@ -144,23 +149,21 @@ export class ProfileVerificationService {
     });
   }
 
-  async evidencePath(id: string) {
+  async evidence(id: string) {
     const request = await this.prisma.profileVerification.findUnique({
-      where: { id },
-      select: { selfieUrl: true },
+      where: { id }, select: { selfieUrl: true, selfieBytes: true },
     });
     if (!request) throw new NotFoundException("Doğrulama kanıtı bulunamadı.");
-    return resolve(
-      process.cwd(),
-      "verification-uploads",
-      basename(request.selfieUrl),
-    );
+    if (request.selfieBytes) return Buffer.from(request.selfieBytes);
+    try { return await readFile(resolve(process.cwd(), "verification-uploads", basename(request.selfieUrl))); }
+    catch { throw new NotFoundException("Doğrulama kanıtı bulunamadı."); }
   }
 
   private async verify(
     referenceUrl: string,
     selfieUrl: string,
     challenge: string,
+    selfieBytes?: Uint8Array,
   ) {
     const webhook = this.config.get<string>("FACE_VERIFICATION_URL");
     if (!webhook) {
@@ -178,15 +181,16 @@ export class ProfileVerificationService {
         decisionReason: "Geliştirme ortamı otomatik doğrulaması.",
       };
     }
-    const selfieBase64 = (
+    const selfieBase64 = Buffer.from(selfieBytes ?? (
       await readFile(
         resolve(process.cwd(), "verification-uploads", basename(selfieUrl)),
       )
-    ).toString("base64");
+    )).toString("base64");
     const apiUrl =
       this.config.get<string>("PUBLIC_API_URL")?.replace(/\/$/, "") ??
       "http://localhost:3000";
     const response = await fetch(webhook, {
+      signal: AbortSignal.timeout(20000),
       method: "POST",
       headers: {
         "Content-Type": "application/json",

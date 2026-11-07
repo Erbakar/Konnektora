@@ -1,3 +1,4 @@
+import { notifyEventAvailability } from "../notifications/activity-events";
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { MailService } from "../mail/mail.service";
@@ -9,6 +10,7 @@ export class AutomationsService {
   constructor(private readonly prisma: PrismaService, private readonly mail: MailService, private readonly sms: SmsService, private readonly config: ConfigService) {}
   assertSecret(secret?: string) { const expected = this.config.get<string>("CRON_SECRET"); if (!expected || secret !== expected) throw new UnauthorizedException("Otomasyon anahtarı geçersiz."); }
   async sendEventReminders(now = new Date()) {
+    await notifyEventAvailability(this.prisma, now);
     const from = new Date(now.getTime() + 23 * 60 * 60 * 1000); const to = new Date(now.getTime() + 25 * 60 * 60 * 1000);
     const participants = await this.prisma.eventParticipant.findMany({ where: { status: { in: ["accepted", "invited"] }, event: { status: "published", startsAt: { gte: from, lte: to } } }, include: { event: { select: { id: true, title: true, slug: true, startsAt: true } }, user: { select: { id: true, name: true, email: true, phone: true, phoneVerified: true, notificationPreferences: { where: { topic: "event_invite" }, select: { channel: true } } } } } });
     let sent = 0; let skipped = 0; let failed = 0;

@@ -1,3 +1,4 @@
+import { ProductGuide } from "../components/ProductGuide";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, BookOpen, LifeBuoy, MessageCircle, Search, ShieldCheck } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
@@ -172,6 +173,7 @@ export function HelpCenterPage() {
         <div><LifeBuoy size={22} /><h2>{copy("Popüler sorular", "Popular questions")}</h2></div>
         <div className="help-faq-list">{faqs.slice(0, 5).map((faq) => <Link key={faq.id} to={`/help/faq/${faq.id}`}><span>{faq.title}</span><ArrowRight size={18} /></Link>)}</div>
       </section>
+      <ProductGuide kind="help"/>
     </div>
   );
 }

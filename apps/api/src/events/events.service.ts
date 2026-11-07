@@ -1,3 +1,12 @@
+import { audienceAllows } from "../common/privacy-context";
+import { assessInvitees } from "../common/invite-assessment";
+import { actorLabel, isUndiscoverable, notifyEntityCreated, notifyEntityChanges, notifyUserActivity, notifyMembershipInvite, recordActivity } from "../notifications/activity-events";
+import { ticketSalesEligibility, ticketSalesRequirement } from "../common/ticket-sales-eligibility";
+import { invitePhone, invitePhoneVariants } from "../common/invite-phone";
+import { privacyContext } from "../common/privacy-context";
+import { consumeQuota, paidCorporateEvent, quotaLock } from "../common/usage-quota";
+import { publicName } from "../common/public-name";
+import { reverseStoredPayment } from "../finance/payment-ledger";
 import {
   BadRequestException,
   ConflictException,
@@ -11,7 +20,6 @@ import {
   EventStatus,
   EventVisibility,
   OwnedTicketStatus,
-  PaymentStatus,
   Prisma,
   TicketOrderStatus,
   User,
@@ -94,7 +102,7 @@ export class EventsService {
     }
 
     if (query.format) {
-      where.format = query.format;
+      where.format = query.format === "hybrid" ? "hybrid" : { in: [query.format, "hybrid"] };
     }
 
     if (query.tag) {
@@ -169,7 +177,7 @@ export class EventsService {
           orderBy: { startsAt: "asc" },
           take: 2000,
           include: {
-            tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
+            createdBy: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: { select: { profileNameAudience: true } } } }, tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
             participants: {
               where: { status: { in: ["accepted", "attended", "invited"] } },
               select: { status: true, userId: true, user: { select: { followers: { where: { followerId: userId ?? "" }, select: { followerId: true }, take: 1 } } } },
@@ -210,7 +218,7 @@ export class EventsService {
         skip: query.scope === "near" ? 0 : (page - 1) * pageSize,
         take: query.scope === "near" ? 200 : pageSize,
         include: {
-          tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
+          createdBy: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: { select: { profileNameAudience: true } } } }, tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
           participants: {
             where: { status: { in: ["accepted", "attended", "invited"] } },
             select: { status: true, userId: true, user: { select: { followers: { where: { followerId: userId ?? "" }, select: { followerId: true }, take: 1 } } } },
@@ -267,7 +275,7 @@ export class EventsService {
         ],
       },
       include: {
-        tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
+        createdBy: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: { select: { profileNameAudience: true } } } }, tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
         place: { select: { id: true, name: true, slug: true, address: true, city: true, country: true } },
         participants: userId ? { where: { userId }, select: { role: true, status: true }, take: 1 } : false,
         _count: {
@@ -290,7 +298,7 @@ export class EventsService {
   async listAdminEvents() {
     const events = await this.prisma.event.findMany({
       orderBy: { startsAt: "desc" },
-      include: { tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } },
+      include: { createdBy: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: { select: { profileNameAudience: true } } } }, tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } },
     });
 
     return events.map(this.mapEvent);
@@ -306,7 +314,7 @@ export class EventsService {
             participants: {
               some: {
                 userId: user.id,
-                status: EventParticipantStatus.accepted,
+                status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended, EventParticipantStatus.not_attending] },
                 role: {
                   in: [
                     EventParticipantRole.organizer,
@@ -320,7 +328,7 @@ export class EventsService {
       },
       orderBy: { startsAt: "desc" },
       include: {
-        tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
+        createdBy: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: { select: { profileNameAudience: true } } } }, tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
         ticketTypeRecords: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
         place: { select: { id: true, name: true, slug: true, address: true, city: true, country: true } },
       },
@@ -332,7 +340,10 @@ export class EventsService {
   async getInteractionStats(eventId: string, actor?: User) {
     if (actor) {
       await this.ensureCanManageParticipants(eventId, actor, true);
-      if (!canUseAdvancedAnalytics(actor)) throw new ForbiddenException("Gelişmiş istatistikler admin, küratör ve uygun paket sahipleri tarafından kullanılabilir.");
+      if (!canUseAdvancedAnalytics(actor)) {
+        const paid = await this.prisma.event.findUnique({ where: { id: eventId }, select: { price: true, ticketTypes: true } });
+        if (!paid || !paidCorporateEvent(actor, paid)) throw new ForbiddenException("Bu analiz için uygun paket veya ücretli kurumsal etkinlik gerekir.");
+      }
     }
     const exists = await this.prisma.event.findUnique({
       where: { id: eventId },
@@ -487,7 +498,10 @@ export class EventsService {
     const slug = await this.uniqueSlug(input.title);
     const tagIds = await this.resolveEventTagIds(input.tagIds ?? [], input.lineup, userId);
 
-    const event = await this.prisma.event.create({
+    const event = await this.prisma.$transaction(async (tx) => {
+      const owner = userId ? await tx.user.findUniqueOrThrow({ where: { id: userId } }) : null;
+      if (owner) await quotaLock(tx, `event-create:${owner.id}`);
+      const created = await tx.event.create({
       data: {
         title: input.title,
         slug,
@@ -504,7 +518,9 @@ export class EventsService {
         locationName: input.locationName ?? null,
         locationAddress: input.locationAddress ?? null,
         city: input.city ?? null,
+        postalCode: input.postalCode?.trim() || null,
         country: input.country ?? null,
+        region: input.region ?? null,
         latitude: input.latitude,
         longitude: input.longitude,
         language: input.language ?? "en",
@@ -561,7 +577,12 @@ export class EventsService {
             }
           : undefined,
       },
-      include: { tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } },
+      include: { createdBy: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: { select: { profileNameAudience: true } } } }, tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } },
+    });
+
+      if (owner && !paidCorporateEvent(owner, created)) await consumeQuota(tx, owner, "event", created.id);
+      await notifyEntityCreated(tx as PrismaService, "event", created.id, userId);
+      return created;
     });
 
     await this.refreshTagUsageCounts(tagIds);
@@ -580,7 +601,7 @@ export class EventsService {
           ],
         },
       },
-      include: { event: { include: { tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } } } },
+      include: { event: { include: { createdBy: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: { select: { profileNameAudience: true } } } }, tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } } } },
       orderBy: { event: { startsAt: "asc" } },
     });
     return participants.map((item) => ({
@@ -601,7 +622,9 @@ export class EventsService {
           select: {
             id: true,
             email: true,
+            phone: true,
             name: true,
+            privacySettings: { select: { profileNameAudience: true } },
             username: true,
             role: true,
             accountType: true,
@@ -628,7 +651,8 @@ export class EventsService {
         user: {
           id: user.id,
           email: user.email,
-          name: user.name,
+          phone: user.status === "invited" ? user.phone : null,
+          name: publicName(user),
           username: user.username,
           role: user.role,
           accountType: user.accountType,
@@ -651,7 +675,8 @@ export class EventsService {
         invitee: {
           select: {
             id: true,
-            name: true,
+            name: true, status: true,
+            privacySettings: { select: { profileNameAudience: true } },
             username: true,
             uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
           },
@@ -660,7 +685,7 @@ export class EventsService {
     });
     return invitations.map((invitation) => ({
       id: invitation.invitee.id,
-      name: invitation.invitee.name,
+      name: publicName(invitation.invitee),
       username: invitation.invitee.username,
       avatarUrl: invitation.invitee.uploadedMedia[0]?.url ?? null,
       invitedAt: invitation.createdAt,
@@ -713,7 +738,7 @@ export class EventsService {
               participants: {
                 some: {
                   userId: actor.id,
-                  status: EventParticipantStatus.accepted,
+                  status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended, EventParticipantStatus.not_attending] },
                   role: { in: [EventParticipantRole.organizer, EventParticipantRole.manager] },
                 },
               },
@@ -757,6 +782,7 @@ export class EventsService {
       select: {
         id: true,
         name: true,
+            privacySettings: { select: { profileNameAudience: true } },
         username: true,
         city: true,
         country: true,
@@ -779,13 +805,16 @@ export class EventsService {
     const normalize = (value?: string | null) => value?.trim().toLocaleLowerCase("tr-TR") ?? "";
     const recentThreshold = Date.now() - 30 * 24 * 60 * 60 * 1000;
 
+    const assessments = new Map((await assessInvitees(this.prisma,actor.id,"event",eventId,candidates.map(candidate=>candidate.id))).map(row=>[row.id,row]));
     return candidates
+      .filter(candidate=>assessments.get(candidate.id)?.canInvite!==false)
       .map((candidate) => {
         const matchingInterests = candidate.interestTags.filter((item) => eventTagIds.has(item.tagId));
         const likedInterests = matchingInterests.filter((item) => item.sentiment === "like").length;
         const okayInterests = matchingInterests.filter((item) => item.sentiment === "ok").length;
-        const reasons: string[] = [];
-        let score = likedInterests * 12 + okayInterests * 5;
+        const assessment=assessments.get(candidate.id);
+        const reasons: string[] = [...(assessment?.reasons??[])];
+        let score = likedInterests * 12 + okayInterests * 5 + (assessment?.score??0);
         if (matchingInterests.length) reasons.push("shared_interests");
         if (event.city && normalize(candidate.city) === normalize(event.city)) {
           score += 8;
@@ -818,7 +847,7 @@ export class EventsService {
         if (candidate.followerCount >= 10) reasons.push("popular");
         return {
           id: candidate.id,
-          name: candidate.name,
+          name: publicName(candidate),
           username: candidate.username,
           avatarUrl: candidate.uploadedMedia[0]?.url ?? null,
           score,
@@ -831,7 +860,7 @@ export class EventsService {
         right.sharedInterestCount - left.sharedInterestCount ||
         (left.username ?? "").localeCompare(right.username ?? "", "tr"),
       )
-      .slice(0, 25);
+      .slice(0, 50);
   }
 
   async listRelatedUsers(eventId: string, actor?: User) {
@@ -845,7 +874,7 @@ export class EventsService {
     });
     if (!event) throw new NotFoundException("Etkinlik bulunamadı.");
     const viewerParticipant = event.participants?.[0];
-    const canManage = Boolean(actor && (["admin", "super_admin", "curator"].includes(actor.role) || event.createdById === actor.id || viewerParticipant?.status === "accepted" && ["organizer", "manager"].includes(viewerParticipant.role)));
+    const canManage = Boolean(actor && (["admin", "super_admin", "curator"].includes(actor.role) || event.createdById === actor.id || ["accepted", "attended", "not_attending"].includes(viewerParticipant?.status ?? "") && ["organizer", "manager"].includes(viewerParticipant!.role)));
     const ownInvitedUserIds = actor && !canManage
       ? (await this.prisma.eventInvitation.findMany({
           where: { eventId, inviterId: actor.id },
@@ -866,7 +895,7 @@ export class EventsService {
               }
             : { status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] } }),
       },
-      orderBy: [{ role: "desc" }, { createdAt: "asc" }],
+      orderBy: [{ createdAt: "desc" }, { userId: "asc" }],
       take: 100,
       include: {
         user: {
@@ -878,9 +907,9 @@ export class EventsService {
             country: true,
             gender: true,
             birthDate: true,
-            profileVerifiedAt: true,
+            status: true, profileVerifiedAt: true,
             uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
-            privacySettings: { select: { demographicsAudience: true, locationAudience: true } },
+            accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true, demographicsAudience: true, locationAudience: true } },
             interestTags: { select: { tagId: true } },
           },
         },
@@ -889,16 +918,17 @@ export class EventsService {
     const viewerTagIds = new Set(viewerInterests.map((item) => item.tagId));
     return participants.map((participant) => ({
       id: participant.user.id,
-      name: participant.user.name,
+      name: publicName(participant.user),
+      isProvisional: participant.user.status === "invited",
       username: participant.user.username,
       city: actor?.id === participant.user.id ? participant.user.city : null,
       country: actor?.id === participant.user.id ? participant.user.country : null,
-      gender: actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.gender : null,
-      birthDate: actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.birthDate : null,
+      gender: privacyContext.getStore()?.advancedFilters ? (actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.gender : null) : null,
+      birthDate: privacyContext.getStore()?.advancedFilters ? (actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.birthDate : null) : null,
       profileVerifiedAt: participant.user.profileVerifiedAt,
       avatarUrl: participant.user.uploadedMedia?.[0]?.url ?? null,
       commonTagCount: (participant.user.interestTags ?? []).filter((item) => viewerTagIds.has(item.tagId)).length,
-      relation: participant.role,
+      relation: participant.user.id === event.createdById ? "creator" : participant.role,
       status: participant.status,
       checkedIn: Boolean(participant.checkedInAt),
     }));
@@ -919,7 +949,8 @@ export class EventsService {
     if (
       event.visibility === "invite_only" &&
       existing?.status !== EventParticipantStatus.invited &&
-      existing?.status !== EventParticipantStatus.accepted
+      existing?.status !== EventParticipantStatus.accepted &&
+      !(existing?.status === EventParticipantStatus.not_attending && ["organizer", "manager"].includes(existing.role)) && event.createdById !== userId
     ) {
       throw new ForbiddenException(
         "Bu etkinliğe yalnız davet edilen kullanıcılar katılabilir.",
@@ -927,7 +958,7 @@ export class EventsService {
     }
 
     const status =
-      event.visibility === "approval_required"
+      event.visibility === "approval_required" && event.createdById !== userId && !(["organizer", "manager"].includes(existing?.role ?? "") && existing?.status === EventParticipantStatus.not_attending)
         ? EventParticipantStatus.requested
         : EventParticipantStatus.accepted;
 
@@ -951,7 +982,7 @@ export class EventsService {
         throw new ConflictException("Etkinlik kapasitesi doldu.");
     }
 
-    return this.prisma.eventParticipant.upsert({
+    const participation = await this.prisma.eventParticipant.upsert({
       where: { eventId_userId: { eventId, userId } },
       update: { status },
       create: {
@@ -961,6 +992,8 @@ export class EventsService {
         role: EventParticipantRole.attendee,
       },
     });
+    if (participation.status === "accepted" && existing?.status !== "accepted") await notifyUserActivity(this.prisma, userId, "event", eventId, "joined", `join:event:${eventId}:${userId}`);
+    return participation;
   }
 
   async leaveEvent(eventId: string, userId: string) {
@@ -972,7 +1005,9 @@ export class EventsService {
       participant.role === EventParticipantRole.organizer ||
       participant.role === EventParticipantRole.manager
     ) {
-      throw new ForbiddenException("Etkinlik yöneticileri katılımdan ayrılamaz.");
+      if (["banned", "declined", "invited"].includes(participant.status)) throw new ForbiddenException("Bu katılım değiştirilemez.");
+      await this.prisma.eventParticipant.update({ where: { id: participant.id }, data: { status: EventParticipantStatus.not_attending, checkedInAt: null } });
+      return { left: true };
     }
     await this.prisma.eventParticipant.delete({ where: { id: participant.id } });
     return { left: true };
@@ -1071,8 +1106,8 @@ export class EventsService {
         event: { select: { id: true, title: true, placeId: true, place: { select: { id: true, name: true } } } },
         user: {
           select: {
-            id: true, email: true, name: true, username: true, role: true, status: true,
-            accountType: true, memberPlan: true, businessPlan: true, followerCount: true, profileVerifiedAt: true,
+            id: true, email: true, phone: true, name: true, username: true, role: true, status: true,
+            accountType: true, companyName: true, memberPlan: true, businessPlan: true, followerCount: true, profileVerifiedAt: true,
             uploadedMedia: {
               where: { contentType: "user", status: "active" },
               orderBy: [{ isProfilePicture: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
@@ -1123,7 +1158,7 @@ export class EventsService {
       targetType: "event" as const,
       targetId: eventId,
       targetName: participant.event.title,
-      user: { id: participant.user.id, email: participant.user.email, name: participant.user.name, username: participant.user.username, role: participant.user.role, status: participant.user.status, accountType: participant.user.accountType, avatarUrl, followerCount: participant.user.followerCount, plan: this.getPassportPlan(participant.user), profileVerifiedAt: participant.user.profileVerifiedAt, media },
+      user: { id: participant.user.id, email: participant.user.email, phone: participant.user.status === "invited" ? participant.user.phone : null, name: publicName(participant.user), username: participant.user.username, role: participant.user.role, status: participant.user.status, accountType: participant.user.accountType, avatarUrl, followerCount: participant.user.followerCount, plan: this.getPassportPlan(participant.user), profileVerifiedAt: participant.user.profileVerifiedAt, media },
       status: participant.status,
       role: participant.role,
       alreadyInside: participant.status === EventParticipantStatus.attended || Boolean(participant.checkedInAt),
@@ -1141,7 +1176,7 @@ export class EventsService {
   private getPassportPlan(user: { role: string; accountType: string; memberPlan: string; businessPlan: string }) {
     if (["admin", "super_admin"].includes(user.role)) return "Admin";
     if (user.role === "curator") return "Küratör";
-    if (user.accountType === "corporate") return user.businessPlan === "starter" ? "Kurumsal Başlangıç" : `Kurumsal ${user.businessPlan}`;
+    if (user.accountType === "corporate") return user.businessPlan === "free" ? "Kurumsal Free" : `Kurumsal ${user.businessPlan}`;
     return user.memberPlan === "free" ? "Standart" : user.memberPlan;
   }
 
@@ -1180,18 +1215,12 @@ export class EventsService {
       let refundedCurrency = "";
       for (const order of refundableOrders) {
         if (!order.payment) continue;
-        const reversal = Number(order.payment.netAmount);
-        const account = await tx.financialAccount.findUnique({ where: { userId: order.payment.payeeId } });
-        if (!account || Number(account.availableBalance) < reversal) {
-          throw new BadRequestException("Bilet iadesi için organizatör bakiyesi yetersiz; giriş reddi kaydedilmedi.");
-        }
-        await tx.financialAccount.update({ where: { userId: order.payment.payeeId }, data: { availableBalance: { decrement: reversal } } });
-        await tx.paymentTransaction.update({ where: { id: order.payment.id }, data: { status: PaymentStatus.refunded, refundedAmount: order.payment.grossAmount } });
-        await tx.ticketRefund.create({ data: { eventId, userId, paymentId: order.payment.id, amount: order.payment.grossAmount, currency: order.currency, provider: order.payment.provider, status: "refunded", reason: "Check-in kontrolünde giriş reddedildi." } });
+        const refundAmount = await reverseStoredPayment(tx, order.payment);
+        if (refundAmount > 0) await tx.ticketRefund.create({ data: { eventId, userId, paymentId: order.payment.id, amount: refundAmount, currency: order.currency, provider: order.payment.provider, status: "refunded", reason: "Check-in kontrolünde giriş reddedildi." } });
         await tx.ownedEventTicket.updateMany({ where: { orderId: order.id }, data: { status: OwnedTicketStatus.refunded } });
         await tx.eventTicketType.update({ where: { id: order.ticketTypeId }, data: { soldCount: { decrement: order.quantity }, status: "active" } });
         await tx.eventTicketOrder.update({ where: { id: order.id }, data: { status: TicketOrderStatus.refunded } });
-        refundedAmount += Number(order.payment.grossAmount);
+        refundedAmount += refundAmount;
         refundedCurrency = order.currency;
       }
       return { updated, refundedAmount, refundedCurrency };
@@ -1225,6 +1254,9 @@ export class EventsService {
       where: { id: eventId },
       select: {
         id: true,
+        createdBy: true,
+        price: true,
+        ticketTypes: true,
         title: true,
         slug: true,
         startsAt: true,
@@ -1258,21 +1290,36 @@ export class EventsService {
     }
 
     const invitee = await this.resolveInvitee(input);
-    const existingParticipant = await this.prisma.eventParticipant.findUnique({
+    const [invitePrivacy, inviteBlocks] = await Promise.all([
+      this.prisma.privacySettings.findUnique({ where: { userId: invitee.id }, select: { eventInviteAudience: true } }),
+      this.prisma.userBlock.findMany({ where: { targetType: "user", OR: [{ userId: invitee.id, targetId: actor.id }, { userId: actor.id, targetId: invitee.id }] }, select: { userId: true } }),
+    ]);
+    if (inviteBlocks.length) throw new ForbiddenException("Engellenen kullanıcıya etkinlik daveti gönderilemez.");
+    const audience = invitePrivacy?.eventInviteAudience ?? "everybody";
+    if (audience !== "everybody") {
+      const direct = await this.prisma.userFollow.findMany({ where: { followerId: invitee.id }, select: { followingId: true } });
+      const allowed = audience === "following" ? direct.some(row => row.followingId === actor.id)
+        : audience === "network" && direct.length > 0 && Boolean(await this.prisma.userFollow.findFirst({ where: { followerId: { in: direct.map(row => row.followingId) }, followingId: actor.id }, select: { followerId: true } }));
+      if (!allowed) throw new ForbiddenException("Kullanıcının etkinlik daveti gizlilik ayarı bu davete izin vermiyor.");
+    }
+    const participant = await this.prisma.$transaction(async (tx) => {
+    await quotaLock(tx, `event-invite:${eventId}`);
+    const existingParticipant = await tx.eventParticipant.findUnique({
       where: { eventId_userId: { eventId, userId: invitee.id } },
       select: { status: true },
     });
 
     if (invitee.status === "active") {
-      const existingInvitation = await this.prisma.eventInvitation.findUnique({
+      const existingInvitation = await tx.eventInvitation.findUnique({
         where: { eventId_inviterId_inviteeId: { eventId, inviterId: actor.id, inviteeId: invitee.id } },
         select: { id: true },
       });
       if (existingInvitation) throw new ConflictException("Bu kullanıcıyı bu etkinliğe daha önce davet ettiniz.");
-      await this.prisma.eventInvitation.create({ data: { eventId, inviterId: actor.id, inviteeId: invitee.id } });
+      if (canManage && event.createdBy && !["admin", "super_admin", "curator"].includes(actor.role) && !paidCorporateEvent(event.createdBy, event)) await consumeQuota(tx, event.createdBy, "invite", invitee.id, eventId);
+      await tx.eventInvitation.create({ data: { eventId, inviterId: actor.id, inviteeId: invitee.id } });
     }
 
-    const participant = await this.prisma.eventParticipant.upsert({
+    return tx.eventParticipant.upsert({
       where: { eventId_userId: { eventId, userId: invitee.id } },
       update: {
         status: existingParticipant && (existingParticipant.status === EventParticipantStatus.accepted || existingParticipant.status === EventParticipantStatus.attended)
@@ -1299,15 +1346,26 @@ export class EventsService {
       },
     });
 
+    });
+
+    const inviteRole = canManage ? input.role ?? EventParticipantRole.attendee : EventParticipantRole.attendee;
+    const inviteType = inviteRole === "attendee" ? "event_invite" : "event_manager";
+    await recordActivity(this.prisma, { userId: invitee.id, type: inviteType, title: inviteRole === "attendee" ? "Etkinliğe davet edildiniz" : "Etkinlik yöneticiliği daveti", body: `@${actor.username ?? actor.name} sizi etkinliğe davet etti.`, targetType: "event", targetId: eventId, key: `${inviteType}:${eventId}:${actor.id}`, context: { actorId: actor.id, groupKey: `${inviteType}:${eventId}` } });
+    if (invitee.status === "invited" || (input.email || input.phone) && await isUndiscoverable(this.prisma, invitee.id)) await notifyMembershipInvite(this.prisma, actor, invitee, `event:${eventId}`, Boolean(input.email || input.phone));
+
     const acceptToken =
       invitee.status === "invited"
         ? await this.authService.createInviteAcceptToken(invitee.id)
         : undefined;
 
+    if(invitee.status === "invited") {
+      if(input.phone && invitee.phone)await this.smsService.sendContactInvite(invitee.phone,actorLabel(actor));
+      else if(!invitee.email.endsWith("@invite.konnektora.local"))await this.mailService.sendContactInviteEmail({to:invitee.email,name:invitee.name,invitedByName:actorLabel(actor)});
+    }
     if (input.phone && invitee.phone) {
       await this.smsService.sendEventInvite(
         invitee.phone,
-        actor.name,
+        actor.username ? `@${actor.username}` : "Bir üye",
         event.title,
         event.slug,
         acceptToken,
@@ -1318,7 +1376,7 @@ export class EventsService {
         name: invitee.name,
         eventTitle: event.title,
         eventSlug: event.slug,
-        invitedByName: actor.name,
+        invitedByName: actor.username ? `@${actor.username}` : "Bir üye",
         acceptToken,
       });
     }
@@ -1343,6 +1401,7 @@ export class EventsService {
       throw new NotFoundException("Katılımcı bulunamadı.");
     }
 
+    if (event?.createdById === userId && (input.status === "banned" || input.status === "declined" || input.role && input.role !== "organizer")) throw new ForbiddenException("Etkinlik sahibi etkinlikten çıkarılamaz veya yasaklanamaz.");
     if (
       input.role &&
       (input.role === EventParticipantRole.manager || participant.role === EventParticipantRole.manager) &&
@@ -1428,7 +1487,7 @@ export class EventsService {
       description: input.description,
       status: input.status,
       startsAt: input.startsAt ? new Date(input.startsAt) : undefined,
-      endsAt: input.endsAt ? new Date(input.endsAt) : undefined,
+      endsAt: input.endsAt === undefined ? undefined : input.endsAt ? new Date(input.endsAt) : null,
       timezone:
         input.timezone ??
         (input.city !== undefined || input.country !== undefined
@@ -1440,7 +1499,9 @@ export class EventsService {
       locationName: input.locationName,
       locationAddress: input.locationAddress,
       city: input.city,
+      postalCode: input.postalCode,
       country: input.country,
+      region: input.region,
       latitude: input.latitude,
       longitude: input.longitude,
       language: input.language,
@@ -1478,10 +1539,20 @@ export class EventsService {
       };
     }
 
-    const event = await this.prisma.event.update({
+    const event = await this.prisma.$transaction(async (tx) => {
+      await quotaLock(tx, `event-edit:${id}`);
+      const current = await tx.event.findUniqueOrThrow({ where: { id }, include: { createdBy: true } });
+      if (current.createdBy && !paidCorporateEvent(current.createdBy, { price: input.price ?? current.price, ticketTypes: input.ticketTypes ?? current.ticketTypes })) await consumeQuota(tx, current.createdBy, "event", id);
+      const updated = await tx.event.update({
       where: { id },
       data,
-      include: { tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } },
+      include: { createdBy: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: { select: { profileNameAudience: true } } } }, tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } },
+    });
+      const snapshot = (row: typeof current | typeof updated) => ({ startsAt: row.startsAt.toISOString(), endsAt: row.endsAt?.toISOString() ?? null, timezone: row.timezone, placeId: row.placeId, locationName: row.locationName, locationAddress: row.locationAddress, country: row.country, region: row.region, city: row.city, postalCode: row.postalCode });
+      const before={...snapshot(current), tagIds: previousTagIds}, after={...snapshot(updated), tagIds: nextTagIds ?? previousTagIds};
+      if(JSON.stringify(before)!==JSON.stringify(after)) await tx.eventRevision.create({data:{eventId:id,actorId:userId,before,after}});
+      await notifyEntityChanges(tx as PrismaService, "event", current, updated);
+      return updated;
     });
 
     if (input.ticketTypes) await this.syncTicketTypes(id, input.ticketTypes);
@@ -1554,11 +1625,13 @@ export class EventsService {
         status: ticket.status === "inactive" ? "inactive" as const : "active" as const,
         sortOrder: index,
       };
-      if (current) await this.prisma.eventTicketType.update({ where: { id: current.id }, data });
+      if (current) await this.prisma.eventTicketType.update({ where: { id: current.id }, data: { ...data, ...(data.status === "active" && (capacity > current.capacity || current.status !== "active") ? { availabilityChangedAt: new Date() } : {}) } });
       else await this.prisma.eventTicketType.create({ data: { eventId, ...data } });
     }
     if (existing.length > ticketTypes.length) await this.prisma.eventTicketType.updateMany({ where: { id: { in: existing.slice(ticketTypes.length).map((item) => item.id) } }, data: { status: "inactive" } });
   }
+
+  ticketSalesEligibility(user: User) { return ticketSalesEligibility(this.prisma, user); }
 
   private async validateTicketPlatforms(ticketTypes?: CreateEventDto["ticketTypes"], userId?: string) {
     if (!ticketTypes?.length) return;
@@ -1568,8 +1641,8 @@ export class EventsService {
       catch { throw new BadRequestException(`${ticket.name} için geçerli bir dış satış URL'si girin.`); }
     }
     if (!ticketTypes.some((ticket) => ticket.salesPlatform === "konnektora")) return;
-    const owner = userId ? await this.prisma.user.findUnique({ where: { id: userId }, select: { accountType: true, role: true } }) : null;
-    if (!owner || owner.accountType !== "corporate" && !["admin", "super_admin"].includes(owner.role)) throw new BadRequestException('Sadece kurumsal üyeler "Konnektora online satış" ayarını tercih edebilir.');
+    const owner = userId ? await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, accountType: true, role: true } }) : null;
+    if (!owner || !(await ticketSalesEligibility(this.prisma, owner)).eligible) throw new BadRequestException(ticketSalesRequirement);
   }
 
   async updateManagedEvent(
@@ -1594,24 +1667,17 @@ export class EventsService {
   async archiveEvent(id: string, userId?: string) {
     const tagIds = await this.getEventTagIds(id);
     const orders = await this.prisma.eventTicketOrder.findMany({ where: { eventId: id, status: TicketOrderStatus.paid }, include: { payment: true } });
-    const reversals = new Map<string, number>();
-    for (const order of orders) if (order.payment) reversals.set(order.payment.payeeId, (reversals.get(order.payment.payeeId) ?? 0) + Number(order.payment.netAmount));
-    for (const [payeeId, amount] of reversals) {
-      const account = await this.prisma.financialAccount.findUnique({ where: { userId: payeeId }, select: { availableBalance: true } });
-      if (!account || Number(account.availableBalance) < amount) throw new BadRequestException("Etkinlik iptali ve otomatik bilet iadeleri için organizatör bakiyesi yetersiz.");
-    }
     const event = await this.prisma.$transaction(async (tx) => {
-      for (const [payeeId, amount] of reversals) await tx.financialAccount.update({ where: { userId: payeeId }, data: { availableBalance: { decrement: amount } } });
       for (const order of orders) {
         if (order.payment) {
-          await tx.paymentTransaction.update({ where: { id: order.payment.id }, data: { status: PaymentStatus.refunded, refundedAmount: order.payment.grossAmount } });
-          await tx.ticketRefund.create({ data: { eventId: id, userId: order.buyerId, paymentId: order.payment.id, amount: order.payment.grossAmount, currency: order.currency, provider: order.payment.provider, status: "refunded", reason: "Etkinlik organizatör tarafından iptal edildi." } });
+          const refundAmount = await reverseStoredPayment(tx, order.payment);
+          if (refundAmount > 0) await tx.ticketRefund.create({ data: { eventId: id, userId: order.buyerId, paymentId: order.payment.id, amount: refundAmount, currency: order.currency, provider: order.payment.provider, status: "refunded", reason: "Etkinlik organizatör tarafından iptal edildi." } });
         }
         await tx.ownedEventTicket.updateMany({ where: { orderId: order.id }, data: { status: OwnedTicketStatus.refunded } });
         await tx.eventTicketType.updateMany({ where: { id: order.ticketTypeId, soldCount: { gte: order.quantity } }, data: { soldCount: { decrement: order.quantity } } });
         await tx.eventTicketOrder.update({ where: { id: order.id }, data: { status: TicketOrderStatus.refunded } });
       }
-      return tx.event.update({ where: { id }, data: { status: EventStatus.archived, updatedBy: userId ? { connect: { id: userId } } : undefined }, include: { tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } } });
+      return tx.event.update({ where: { id }, data: { status: EventStatus.archived, updatedBy: userId ? { connect: { id: userId } } : undefined }, include: { createdBy: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: { select: { profileNameAudience: true } } } }, tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } } } });
     });
 
     await this.refreshTagUsageCounts(tagIds);
@@ -1630,6 +1696,7 @@ export class EventsService {
       : null;
     const mapped = {
       ...event,
+      organizerName: event.createdBy ? publicName(event.createdBy) : event.organizerName,
       price: Number(event.price),
       startsAt: event.startsAt.toISOString(),
       endsAt: event.endsAt?.toISOString() ?? null,
@@ -1660,6 +1727,7 @@ export class EventsService {
           }))
         : event.ticketTypes,
     };
+    delete mapped.createdBy;
     delete mapped.legacySlugs;
     delete mapped.participants;
     delete mapped._count;
@@ -1766,8 +1834,9 @@ export class EventsService {
     }
 
     if (input.phone) {
-      const phone = input.phone.replace(/[\s()-]/g, "");
-      const user = await this.prisma.user.findUnique({ where: { phone } });
+      const phone = invitePhone(input.phone);
+      const user = await this.prisma.user.findFirst({ where: { phone: { in: invitePhoneVariants(phone) }, status: "active" } })
+        ?? await this.prisma.user.findFirst({ where: { phone: { in: invitePhoneVariants(phone) } }, orderBy: { createdAt: "asc" } });
       if (user) return user;
       const digest = createHash("sha256").update(phone).digest("hex").slice(0, 20);
       return this.prisma.user.create({
@@ -1816,6 +1885,15 @@ export class EventsService {
     });
   }
 
+  private guestIdentity<T extends { id: string; name: string; username: string | null; privacySettings?: { profileNameAudience?: string; locationAudience?: string; demographicsAudience?: string } | null; city?: string | null; country?: string | null; birthDate?: Date | null; gender?: string | null }>(user: T) {
+    const { privacySettings, ...identity } = user;
+    return { ...identity, name: publicName(user),
+      city: audienceAllows(user.id, privacySettings?.locationAudience ?? "everybody") ? user.city : null,
+      country: audienceAllows(user.id, privacySettings?.locationAudience ?? "everybody") ? user.country : null,
+      birthDate: audienceAllows(user.id, privacySettings?.demographicsAudience ?? "everybody") ? user.birthDate : null,
+      gender: audienceAllows(user.id, privacySettings?.demographicsAudience ?? "everybody") ? user.gender : null };
+  }
+
   async listGuestLists(user: User) {
     const canOwnLists = await this.canUseGuestLists(user);
     if (!canOwnLists) {
@@ -1828,31 +1906,31 @@ export class EventsService {
         : { shares: { some: { userId: user.id } } },
       orderBy: { updatedAt: "desc" },
       include: {
-        owner: { select: { id: true, name: true, username: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } },
+        owner: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } },
         shares: {
           orderBy: { createdAt: "asc" },
-          include: { user: { select: { id: true, name: true, username: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } },
+          include: { user: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } },
         },
         members: {
           orderBy: { createdAt: "desc" },
-          include: { user: { select: { id: true, name: true, username: true, city: true, country: true, gender: true, birthDate: true, followerCount: true, accountType: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } },
+          include: { user: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: true, city: true, country: true, gender: true, birthDate: true, followerCount: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } },
         },
       },
     });
-    return lists.map((list) => ({ ...list, shares: list.ownerId === user.id ? list.shares : [], access: list.ownerId === user.id ? "owner" as const : "read" as const }));
+    return lists.map((list) => ({ ...list, owner: list.owner ? this.guestIdentity(list.owner) : list.owner, members: list.members.map(member => ({...member, user: this.guestIdentity(member.user)})), shares: list.ownerId === user.id ? list.shares.map(share => ({...share, user: this.guestIdentity(share.user)})) : [], access: list.ownerId === user.id ? "owner" as const : "read" as const }));
   }
 
   async getGuestList(id: string, user: User) {
     const list = await this.prisma.guestList.findFirst({
       where: { id, OR: [{ ownerId: user.id }, { shares: { some: { userId: user.id } } }] },
       include: {
-        owner: { select: { id: true, name: true, username: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } },
-        shares: { orderBy: { createdAt: "asc" }, include: { user: { select: { id: true, name: true, username: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } } },
-        members: { orderBy: { createdAt: "desc" }, include: { user: { select: { id: true, name: true, username: true, city: true, country: true, gender: true, birthDate: true, followerCount: true, accountType: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } } },
+        owner: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } },
+        shares: { orderBy: { createdAt: "asc" }, include: { user: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } } },
+        members: { orderBy: { createdAt: "desc" }, include: { user: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: true, city: true, country: true, gender: true, birthDate: true, followerCount: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } } },
       },
     });
     if (!list) throw new NotFoundException("Guest list bulunamadı veya sizinle paylaşılmadı.");
-    return { ...list, shares: list.ownerId === user.id ? list.shares : [], access: list.ownerId === user.id ? "owner" as const : "read" as const };
+    return { ...list, owner: list.owner ? this.guestIdentity(list.owner) : list.owner, members: list.members.map(member => ({...member, user: this.guestIdentity(member.user)})), shares: list.ownerId === user.id ? list.shares.map(share => ({...share, user: this.guestIdentity(share.user)})) : [], access: list.ownerId === user.id ? "owner" as const : "read" as const };
   }
 
   async createGuestList(name: string, user: User) {
@@ -1942,7 +2020,7 @@ export class EventsService {
         status: "published",
         OR: [
           { createdById: user.id },
-          { participants: { some: { userId: user.id, status: "accepted", role: { in: ["organizer", "manager"] } } } },
+          { participants: { some: { userId: user.id, status: { in: ["accepted", "attended", "not_attending"] }, role: { in: ["organizer", "manager"] } } } },
         ],
         AND: [
           { OR: [{ endsAt: { gte: new Date() } }, { endsAt: null, startsAt: { gte: new Date() } }] },
@@ -1973,7 +2051,7 @@ export class EventsService {
     if (!event) throw new NotFoundException("Etkinlik bulunamadı.");
     if (event.createdById === user.id) return true;
     const participant = await this.prisma.eventParticipant.findUnique({ where: { eventId_userId: { eventId, userId: user.id } }, select: { role: true, status: true } });
-    return participant?.status === EventParticipantStatus.accepted && (participant.role === EventParticipantRole.organizer || participant.role === EventParticipantRole.manager);
+    return Boolean(participant && ["accepted", "attended", "not_attending"].includes(participant.status)) && (participant!.role === EventParticipantRole.organizer || participant!.role === EventParticipantRole.manager);
   }
 }
 

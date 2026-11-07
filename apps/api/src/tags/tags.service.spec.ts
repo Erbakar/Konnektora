@@ -1,3 +1,4 @@
+jest.mock("../notifications/activity-events", () => ({ notifyEntityCreated: jest.fn().mockResolvedValue(undefined), notifyEntityChanges: jest.fn().mockResolvedValue(undefined), notifyUserActivity: jest.fn().mockResolvedValue(undefined), notifyEventAvailability: jest.fn().mockResolvedValue(undefined), isUndiscoverable: jest.fn().mockResolvedValue(false), notifyRegistration: jest.fn().mockResolvedValue(undefined), notifyMembershipInvite: jest.fn().mockResolvedValue(undefined), notifyComment: jest.fn().mockResolvedValue(undefined), recordActivity: jest.fn().mockResolvedValue(undefined) }));
 import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import { TagsService } from "./tags.service";
 
@@ -26,10 +27,12 @@ describe("TagsService comments", () => {
       userInterestTag: { count: jest.fn(), groupBy: jest.fn(), findMany: jest.fn() },
       contentView: { count: jest.fn(), findMany: jest.fn(), groupBy: jest.fn() },
       contentShare: { groupBy: jest.fn() },
-      $transaction: jest.fn(async (operations: Promise<unknown>[]) =>
-        Promise.all(operations),
-      ),
+      user: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: "curator-1", role: "curator", createdAt: new Date("2026-01-01") }) },
+      $queryRaw: jest.fn(),
+      planUsage: { findUnique: jest.fn(), count: jest.fn().mockResolvedValue(0), create: jest.fn() },
+      $transaction: jest.fn(),
     };
+    prisma.$transaction.mockImplementation(async operation => typeof operation === "function" ? operation(prisma) : Promise.all(operation));
     return { service: new TagsService(prisma as never), prisma };
   };
 

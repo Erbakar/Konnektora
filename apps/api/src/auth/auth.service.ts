@@ -1,3 +1,5 @@
+import { notifyRegistration } from "../notifications/activity-events";
+import { OAuth2Client } from "google-auth-library";
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
@@ -29,7 +31,7 @@ export class AuthService {
 
   async login(input: LoginDto, options: { adminOnly?: boolean } = {}) {
     const user = await this.prisma.user.findUnique({
-      where: { email: input.email },
+      where: { email: input.email.trim().toLowerCase() },
     });
 
     if (!user) {
@@ -41,7 +43,7 @@ export class AuthService {
     if (user.status === "frozen") {
       throw new UnauthorizedException("Dondurulmuş hesap yeniden etkinleştirme onayı gerektiriyor.");
     }
-    if (user.status !== "active") throw new UnauthorizedException("Geçersiz kullanıcı hesabı.");
+    if (!["active", "pending"].includes(user.status)) throw new UnauthorizedException("Geçersiz kullanıcı hesabı.");
 
     if (options.adminOnly && !["admin", "super_admin"].includes(user.role)) {
       throw new UnauthorizedException("Admin yetkisi gerekli.");
@@ -58,44 +60,10 @@ export class AuthService {
     const email = input.email.toLowerCase().trim();
     const emailOwner = await this.prisma.user.findUnique({ where: { email } });
     const phoneOwner = await this.prisma.user.findFirst({ where: { phone: input.phone, email: { not: email } } });
-    if (phoneOwner && phoneOwner.status !== "invited") throw new ConflictException("Bu telefon numarası zaten kullanılıyor.");
-    if (emailOwner && phoneOwner && emailOwner.id !== phoneOwner.id) throw new ConflictException("E-posta ve telefon farklı hesaplara ait.");
-    const existing = emailOwner ?? phoneOwner;
-
-    if (existing) {
-      if (existing.status === "active") {
-        throw new ConflictException("Bu email adresi zaten kullanılıyor.");
-      }
-
-      const pendingUser = await this.prisma.user.update({
-        where: { id: existing.id },
-        data: {
-          email,
-          name: input.name.trim(),
-          phone: input.phone,
-          phoneVerified: false,
-          accountType: input.accountType ?? existing.accountType,
-          companyName: input.accountType === "corporate" ? input.companyName?.trim() : null,
-          tradeName: input.accountType === "corporate" ? input.tradeName?.trim() : null,
-          companyType: input.accountType === "corporate" ? input.companyType : null,
-          businessCategory: input.accountType === "corporate" ? input.businessCategory : null,
-          passwordHash: await hash(input.password, 10),
-          emailVerified: false,
-          status: "pending",
-        },
-      });
-
-      const token = await this.createEmailToken(pendingUser.id, "verify_email");
-      const verificationEmailSent = await this.sendVerificationEmailSafely({
-        to: pendingUser.email,
-        name: pendingUser.name,
-        token,
-      });
-
-      return {
-        ...(await this.createLoginResponse(pendingUser)),
-        verificationEmailSent,
-      };
+    if (phoneOwner) throw new ConflictException("Bu telefon numarası zaten kullanılıyor. Davet aldıysanız davet bağlantısını kullanın.");
+    if (emailOwner) {
+      // Registration must never replace credentials or disclose an existing account.
+      throw new ConflictException("Bu e-posta adresi zaten kullanılıyor. Giriş, şifre sıfırlama veya davet bağlantısını kullanın.");
     }
 
     const user = await this.prisma.user.create({
@@ -115,6 +83,7 @@ export class AuthService {
       },
     });
 
+    await notifyRegistration(this.prisma, user);
     const token = await this.createEmailToken(user.id, "verify_email");
     const verificationEmailSent = await this.sendVerificationEmailSafely({
       to: user.email,
@@ -156,28 +125,27 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({
       where: { email: identity.email },
     });
-    if (existing && !["active", "pending"].includes(existing.status)) throw new UnauthorizedException("Bu hesapla giriş yapılamıyor.");
-    const user =
-      existing ??
-      (await this.prisma.user.create({
-        data: {
-          email: identity.email,
-          name: identity.name,
-          passwordHash: await hash(randomBytes(32).toString("hex"), 10),
-          emailVerified: true,
-          status: "pending",
-        },
-      }));
-    await this.prisma.socialAccount.create({
+    if (existing) throw new ConflictException("Bu e-posta ile bir hesap mevcut. Önce mevcut hesabınıza giriş yapıp Ayarlar bölümünden sosyal hesabınızı bağlayın.");
+    const user = await this.prisma.user.create({
       data: {
-        userId: user.id,
-        provider: input.provider,
-        providerUserId: identity.id,
         email: identity.email,
-        displayName: identity.name,
-        avatarUrl: identity.avatarUrl,
+        name: identity.name,
+        accountType: input.accountType ?? "individual",
+        passwordHash: await hash(randomBytes(32).toString("hex"), 10),
+        emailVerified: true,
+        status: "pending",
+        socialAccounts: {
+          create: {
+            provider: input.provider,
+            providerUserId: identity.id,
+            email: identity.email,
+            displayName: identity.name,
+            avatarUrl: identity.avatarUrl,
+          },
+        },
       },
     });
+    await notifyRegistration(this.prisma, user);
     return this.createLoginResponse(user);
   }
 
@@ -234,7 +202,7 @@ export class AuthService {
   }
 
   private async verifySocialCredential(input: SocialAuthDto) {
-    if (this.config.get("NODE_ENV") !== "production" && input.credential.startsWith("demo-")) {
+    if (this.config.get("NODE_ENV") === "test" && input.credential === `demo-${input.provider}`) {
       const provider = input.provider;
       return {
         id: `${provider}-demo-user`,
@@ -248,34 +216,27 @@ export class AuthService {
     const facebookAppSecret = this.config.get<string>("FACEBOOK_APP_SECRET");
     if (input.provider === "google" && !googleClientId) throw new UnauthorizedException("Google girişi yapılandırılmamış.");
     if (input.provider === "facebook" && (!facebookAppId || !facebookAppSecret)) throw new UnauthorizedException("Facebook girişi yapılandırılmamış.");
-    if (input.provider === "facebook") {
-      const debug = await fetch(`https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(input.credential)}&access_token=${encodeURIComponent(`${facebookAppId}|${facebookAppSecret}`)}`);
-      const payload = (await debug.json()) as {
-        data?: { is_valid?: boolean; app_id?: string };
-      };
-      if (!debug.ok || !payload.data?.is_valid || payload.data.app_id !== facebookAppId) throw new UnauthorizedException("Facebook token uygulama doğrulaması başarısız.");
+    try {
+      if (input.provider === "google") {
+        const ticket = await new OAuth2Client().verifyIdToken({ idToken: input.credential, audience: googleClientId });
+        const data = ticket.getPayload();
+        if (!data?.sub || !data.email || !data.email_verified) throw new UnauthorizedException("Doğrulanmış Google e-postası gerekli.");
+        return { id: data.sub, email: data.email.trim().toLowerCase(), name: data.name || data.email, avatarUrl: data.picture || null };
+      }
+      const debug = await fetch(`https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(input.credential)}&access_token=${encodeURIComponent(`${facebookAppId}|${facebookAppSecret}`)}`, { signal: AbortSignal.timeout(10000) });
+      const payload = await debug.json() as { data?: { is_valid?: boolean; app_id?: string; user_id?: string; expires_at?: number; data_access_expires_at?: number } };
+      const token = payload.data;
+      const now = Date.now() / 1000;
+      if (!debug.ok || !token?.is_valid || token.app_id !== facebookAppId || !token.user_id || (token.expires_at && token.expires_at <= now) || (token.data_access_expires_at && token.data_access_expires_at <= now)) throw new UnauthorizedException("Facebook oturumu geçersiz veya süresi dolmuş.");
+      const response = await fetch(`https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${encodeURIComponent(input.credential)}`, { signal: AbortSignal.timeout(10000) });
+      const data = await response.json() as { id?: string; email?: string; name?: string; picture?: { data?: { url?: string } } };
+      if (!response.ok || data.id !== token.user_id) throw new UnauthorizedException("Facebook hesabı doğrulanamadı.");
+      if (!data.email) throw new UnauthorizedException("Facebook hesabınızda e-posta bulunmalı ve e-posta paylaşımına izin vermelisiniz.");
+      return { id: data.id, email: data.email.trim().toLowerCase(), name: data.name || data.email, avatarUrl: data.picture?.data?.url || null };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+      throw new UnauthorizedException("Sosyal hesap doğrulanamadı. Lütfen yeniden giriş yapın.");
     }
-    const url = input.provider === "google" ? `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(input.credential)}` : `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${encodeURIComponent(input.credential)}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new UnauthorizedException("Sosyal giriş doğrulanamadı.");
-    const data = (await response.json()) as Record<string, any>;
-    if (input.provider === "google") {
-      if (data.aud !== googleClientId) throw new UnauthorizedException("Google istemci kimliği geçersiz.");
-      if (!data.sub || !data.email || data.email_verified !== "true") throw new UnauthorizedException("Doğrulanmış Google e-postası gerekli.");
-      return {
-        id: String(data.sub),
-        email: String(data.email).toLowerCase(),
-        name: String(data.name || data.email),
-        avatarUrl: data.picture ? String(data.picture) : null,
-      };
-    }
-    if (!data.id || !data.email) throw new UnauthorizedException("Facebook hesabı e-posta izni vermelidir.");
-    return {
-      id: String(data.id),
-      email: String(data.email).toLowerCase(),
-      name: String(data.name || data.email),
-      avatarUrl: data.picture?.data?.url ? String(data.picture.data.url) : null,
-    };
   }
 
   async requestEmailVerification(input: EmailDto) {
@@ -366,6 +327,7 @@ export class AuthService {
       where: { id: token.userId },
       data: {
         passwordHash: await hash(input.password, 10),
+        sessionVersion: { increment: 1 },
       },
     });
 
@@ -384,7 +346,7 @@ export class AuthService {
 
     await this.prisma.user.update({
       where: { id: userId },
-      data: { passwordHash: await hash(input.newPassword, 10) },
+      data: { passwordHash: await hash(input.newPassword, 10), sessionVersion: { increment: 1 } },
     });
     return { ok: true };
   }
@@ -473,6 +435,8 @@ export class AuthService {
   }
 
   async requestPhoneVerification(userId: string, input: RequestPhoneVerificationDto) {
+    const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { phone: true, phoneVerified: true } });
+    const previousPhone = account?.phoneVerified && account.phone && account.phone !== input.phone ? account.phone : null;
     const demoMode =
       !this.config.get<string>("SMS_WEBHOOK_URL") &&
       this.config.get<string>("ALLOW_SMS_VERIFICATION_BYPASS") === "true";
@@ -493,11 +457,14 @@ export class AuthService {
     }
 
     const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
-    await this.smsService.sendVerificationCode(input.phone, code);
+    if (previousPhone) await this.smsService.sendPhoneChangeCode(previousPhone, code);
+    else await this.smsService.sendVerificationCode(input.phone, code);
     await this.prisma.phoneVerification.create({
       data: {
         userId,
         phone: input.phone,
+        previousPhone,
+        purpose: previousPhone ? "current_phone" : "new_phone",
         codeHash: this.hashToken(code),
         expiresAt: new Date(Date.now() + 120_000),
       },
@@ -506,6 +473,7 @@ export class AuthService {
     return {
       ok: true as const,
       expiresInSeconds: 120,
+      ...(previousPhone ? { stage: "current_phone" as const } : {}),
       verificationMode: demoMode ? ("demo" as const) : ("sms" as const),
       ...(demoMode ? { demoCode: code } : {}),
       ...(this.config.get<string>("NODE_ENV") === "production" || demoMode ? {} : { developmentCode: code }),
@@ -520,7 +488,7 @@ export class AuthService {
       }),
       this.prisma.user.findUnique({
         where: { id: userId },
-        select: { email: true, name: true, status: true },
+        select: { email: true, name: true, status: true, phone: true, phoneVerified: true },
       }),
     ]);
     if (owner) {
@@ -541,6 +509,17 @@ export class AuthService {
         data: { attempts: { increment: 1 } },
       });
       throw new BadRequestException("Kod hatalı.");
+    }
+
+    const changingVerifiedPhone = account.phoneVerified && account.phone && account.phone !== input.phone;
+    if (changingVerifiedPhone && verification.previousPhone !== account.phone) throw new BadRequestException("Mevcut telefon numaranız doğrulanmalıdır. İşlemi yeniden başlatın.");
+    if (verification.purpose === "current_phone") {
+      if (!changingVerifiedPhone) throw new BadRequestException("Telefon bilgisi değişti. İşlemi yeniden başlatın.");
+      const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+      await this.smsService.sendVerificationCode(input.phone, code);
+      await this.prisma.phoneVerification.update({ where: { id: verification.id }, data: { purpose: "new_phone", codeHash: this.hashToken(code), attempts: 0, expiresAt: new Date(Date.now() + 120_000) } });
+      const demoMode = !this.config.get<string>("SMS_WEBHOOK_URL") && this.config.get<string>("ALLOW_SMS_VERIFICATION_BYPASS") === "true";
+      return { ok: true as const, phone: input.phone, phoneVerified: false, stage: "new_phone" as const, ...(demoMode ? { demoCode: code } : {}), ...(this.config.get<string>("NODE_ENV") !== "production" && !demoMode ? { developmentCode: code } : {}) };
     }
 
     const [, user] = await this.prisma.$transaction([
@@ -590,6 +569,7 @@ export class AuthService {
       (this.prisma as any).emailToken.update({ where: { id: token.id }, data: { consumedAt: new Date() } }),
     ]);
 
+    await notifyRegistration(this.prisma, user);
     await this.sendAccountActivatedEmailOnce({
       userId: user.id,
       to: user.email,
@@ -695,6 +675,7 @@ export class AuthService {
       accessToken: await this.jwtService.signAsync({
         sub: user.id,
         role: user.role,
+        sessionVersion: user.sessionVersion ?? 0,
       }),
       user: {
         id: user.id,

@@ -1,0 +1,13 @@
+BİLET PENCERESİ — 24 EKİM 2026
+İletilen 84. madde 1–2 kapsamı tamamlandı.
+
+Kapıda ödeme: kalan stok, adet azalt/artır ve Bileti ayır gösterilmiyor.
+Başka uygulamada satış: kalan stok ve adet seçimi gösterilmiyor; Satış sayfasına git korunuyor. Dış satış, Konnektora stok adedi sıfır diye engellenmiyor. URL yoksa dış satış düğmesi pasif; online satın almaya düşmez.
+Konnektora online satış: kalan stok, adet seçimi, limitler ve satın alma korunuyor.
+
+181/181 arayüz testi, lint ve üretim derlemesi geçti. Yeni kapıda ödeme testi eklendi, dış satış testi stok 0 durumunu ve adet/stok alanlarının görünmemesini doğruluyor. Mevcut ücretsiz online satın alma testi geçti.
+Yayın: 63e14bc8-f646-47d8-8699-e5adc64b30d6 — SUCCESS.
+Canlı Chrome: Daft Punk & Tiesto Night kapıda ödeme ve dış satış alanları doğru; Paintball Turnuvasi online bileti 50 kalan/adet seçimi ve artırma sonrası aktif Satın al düğmesiyle doğrulandı. Gerçek rezervasyon/satın alma yapılmadı. Genel sağlık/içerik kontrolleri geçti. DB geçişi gerekmedi.
+
+Kanıt: tmp/oct24-ticket-tests.log, tmp/oct24-ticket-lint.log, tmp/oct24-ticket-build.log; output/oct23-live/item84-deployment.json, item84-smoke.log, item84-tickets.png.
+Tablodaki 84. madde sonunda yer alan tamamlanmamış '3- Bilet' metni tanımlı bir istek olmadığı için bu kapsamda değerlendirilmedi. Bu turda tablo satırına renk veya içerik güncellemesi yapılmadı.

@@ -1,3 +1,5 @@
+import { normalizeMediaFile } from "./mediaPolicy";
+import { walletHeader, setWalletGrant, clearWalletGrant } from "./wallet-session";
 import {
   adminDashboardSchema,
   adminActivityLogListSchema,
@@ -272,6 +274,8 @@ type MockUser = {
 };
 
 export type ProfileUpdateInput = {
+  region?: string;
+  postalCode?: string;
   name: string;
   email?: string;
   username?: string;
@@ -405,6 +409,10 @@ export function setUserSession(response: LoginResponse) {
 
 export function getUserSession() {
   return readStorage<LoginResponse["user"] | null>(USER_KEY, null);
+}
+
+export function reverseGeocodeLocation(latitude: number, longitude: number) {
+  return requestJson(`/locations/reverse?${new URLSearchParams({ latitude: String(latitude), longitude: String(longitude) })}`, z.object({ country: z.string(), city: z.string() }));
 }
 
 export function geocodeAddress(query: string, language: "tr" | "en") {
@@ -863,7 +871,7 @@ async function requestJson<T>(
   headers.set("X-App-Version", import.meta.env.VITE_APP_VERSION ?? "web");
   const timeoutController = options.signal ? null : new AbortController();
   const timeoutId = timeoutController
-    ? window.setTimeout(() => timeoutController.abort(), 8_000)
+    ? window.setTimeout(() => timeoutController.abort(), options.body instanceof FormData ? 120_000 : 8_000)
     : null;
 
   if (
@@ -879,6 +887,8 @@ async function requestJson<T>(
 
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
+      const wallet = walletHeader(token);
+      if (wallet) headers.set("X-Wallet-Token", wallet);
     }
   }
 
@@ -890,7 +900,7 @@ async function requestJson<T>(
     });
 
     if (!response.ok) {
-      if (response.status === 401 && options.auth === "user") {
+      if (response.status === 401 && options.auth === "user" && headers.get("Authorization") === `Bearer ${getUserToken()}`) {
         clearUserSession();
       }
       throw new ApiHttpError(
@@ -975,7 +985,7 @@ function getMockResponse<T>(
     const plan = readStorage<
       Record<
         string,
-        { plan: "starter" | "growth" | "scale"; planStartedAt: string }
+        { plan: "free" | "pro" | "venue" | "festival"; planStartedAt: string }
       >
     >(MOCK_BUSINESS_PLANS_KEY, {})[session.id];
     return schema.parse({
@@ -998,14 +1008,14 @@ function getMockResponse<T>(
       member: readStorage<
         Record<
           string,
-          { plan: "free" | "plus" | "premium"; planStartedAt: string }
+          { plan: "free" | "premium" | "platinum"; planStartedAt: string }
         >
       >(MOCK_MEMBER_PLANS_KEY, {})[session.id] ?? {
         plan: "free",
         planStartedAt: null,
       },
       business: {
-        plan: plan?.plan ?? "starter",
+        plan: plan?.plan ?? "free",
         planStartedAt: plan?.planStartedAt ?? null,
         companyName: session.name,
         category: null,
@@ -1024,12 +1034,12 @@ function getMockResponse<T>(
   if (pathname === "/me/finance/plan" && method === "POST") {
     const session = getUserSession();
     if (!session) return undefined;
-    const input = parseBody<{ plan: "starter" | "growth" | "scale" }>(options);
+    const input = parseBody<{ plan: "free" | "pro" | "venue" | "festival" }>(options);
     const planStartedAt = new Date().toISOString();
     const plans = readStorage<
       Record<
         string,
-        { plan: "starter" | "growth" | "scale"; planStartedAt: string }
+        { plan: "free" | "pro" | "venue" | "festival"; planStartedAt: string }
       >
     >(MOCK_BUSINESS_PLANS_KEY, {});
     writeStorage(MOCK_BUSINESS_PLANS_KEY, {
@@ -1041,12 +1051,12 @@ function getMockResponse<T>(
   if (pathname === "/me/finance/member-plan" && method === "POST") {
     const session = getUserSession();
     if (!session) throw new Error("User session required");
-    const input = parseBody<{ plan: "free" | "plus" | "premium" }>(options);
+    const input = parseBody<{ plan: "free" | "premium" | "platinum" }>(options);
     const planStartedAt = new Date().toISOString();
     const plans = readStorage<
       Record<
         string,
-        { plan: "free" | "plus" | "premium"; planStartedAt: string }
+        { plan: "free" | "premium" | "platinum"; planStartedAt: string }
       >
     >(MOCK_MEMBER_PLANS_KEY, {});
     writeStorage(MOCK_MEMBER_PLANS_KEY, {
@@ -2720,9 +2730,9 @@ function getMockResponse<T>(
     method === "GET"
   ) {
     const analyticsUser = getUserSession();
-    const memberPlan = analyticsUser ? readStorage<Record<string, { plan: "free" | "plus" | "premium" }>>(MOCK_MEMBER_PLANS_KEY, {})[analyticsUser.id]?.plan ?? "free" : "free";
-    const businessPlan = analyticsUser ? readStorage<Record<string, { plan: "starter" | "growth" | "scale" }>>(MOCK_BUSINESS_PLANS_KEY, {})[analyticsUser.id]?.plan ?? "starter" : "starter";
-    const hasAnalyticsAccess = Boolean(analyticsUser && (["admin", "super_admin", "curator"].includes(analyticsUser.role) || (analyticsUser.accountType === "corporate" ? businessPlan !== "starter" : memberPlan !== "free")));
+    const memberPlan = analyticsUser ? readStorage<Record<string, { plan: "free" | "premium" | "platinum" }>>(MOCK_MEMBER_PLANS_KEY, {})[analyticsUser.id]?.plan ?? "free" : "free";
+    const businessPlan = analyticsUser ? readStorage<Record<string, { plan: "free" | "pro" | "venue" | "festival" }>>(MOCK_BUSINESS_PLANS_KEY, {})[analyticsUser.id]?.plan ?? "free" : "free";
+    const hasAnalyticsAccess = Boolean(analyticsUser && (["admin", "super_admin", "curator"].includes(analyticsUser.role) || (analyticsUser.accountType === "corporate" ? businessPlan !== "free" : memberPlan !== "free")));
     if (!hasAnalyticsAccess) return undefined;
     const targetType = pathname.startsWith("/event-stats/") ? "event" : "place";
     const targetId = pathname.slice(
@@ -6494,6 +6504,7 @@ function mockTagDiscoveryItem(tag: Tag): DiscoveryItem {
 }
 function mockEventDiscoveryItem(event: Event): DiscoveryItem {
   return {
+    visibility: event.visibility,
     kind: "event",
     id: event.id,
     title: event.title,
@@ -6505,6 +6516,7 @@ function mockEventDiscoveryItem(event: Event): DiscoveryItem {
 }
 function mockPlaceDiscoveryItem(place: AdminPlace): DiscoveryItem {
   return {
+    visibility: place.visibility,
     kind: "place",
     id: place.id,
     title: place.name,
@@ -8231,7 +8243,7 @@ export function updateMyProfile(input: ProfileUpdateInput): Promise<Profile> {
   });
 }
 
-export function upgradeCorporateAccount(input: { companyName: string; tradeName: string; companyType: string; businessCategory: string; country: string; city?: string; district?: string; address?: string }): Promise<{ ok: boolean; accountType: "corporate" }> {
+export function upgradeCorporateAccount(input: { companyName: string; tradeName: string; companyType: string; businessCategory: string; country: string; region?: string; postalCode?: string; city?: string; district?: string; address?: string }): Promise<{ ok: boolean; accountType: "corporate" }> {
   return requestJson("/profile/upgrade-corporate", z.object({ ok: z.boolean(), accountType: z.literal("corporate") }), {
     auth: "user", method: "POST", body: JSON.stringify(input),
   });
@@ -8244,6 +8256,7 @@ export function listProfileMedia(): Promise<ProfileMedia[]> {
 }
 
 export async function uploadProfileMedia(file: File): Promise<ProfileMedia> {
+  file = normalizeMediaFile(file);
   const body = new FormData();
   body.append("file", file);
   const media = await requestJson("/profile/media/upload", profileMediaSchema, {
@@ -8353,6 +8366,7 @@ export function uploadContentMedia(
   targetId: string,
   file: File,
 ): Promise<ProfileMedia> {
+  file = normalizeMediaFile(file);
   const form = new FormData();
   form.append("file", file);
   return requestJson(
@@ -8363,6 +8377,7 @@ export function uploadContentMedia(
 }
 
 export function uploadPendingEventMedia(batchId: string, file: File): Promise<ProfileMedia> {
+  file = normalizeMediaFile(file);
   if (isMockApiMode) {
     const now = new Date().toISOString();
     return Promise.resolve({ id: crypto.randomUUID(), url: URL.createObjectURL(file), type: file.type.startsWith("image/") ? "image" : "video", sortOrder: 0, isProfilePicture: false, status: "active", contentType: "event", contentId: `pending:${batchId}`, uploadedById: getUserSession()?.id ?? null, createdAt: now, updatedAt: now });
@@ -8385,7 +8400,7 @@ export function reorderContentMedia(targetType: "event" | "place", targetId: str
   });
 }
 
-export function deleteContentMedia(targetType: "event" | "place", targetId: string, mediaId: string): Promise<ProfileMedia[]> {
+export function deleteContentMedia(targetType: "event" | "place" | "tag_comment" | "event_comment" | "place_comment" | "comment_reply", targetId: string, mediaId: string): Promise<ProfileMedia[]> {
   return requestJson(`/media/${targetType}/${targetId}/${mediaId}`, profileMediaListSchema, {
     auth: "user",
     method: "DELETE",
@@ -8685,7 +8700,7 @@ export function getFinanceDashboard(): Promise<FinanceDashboard> {
   return requestJson("/me/finance", financeDashboardSchema, { auth: "user" });
 }
 export function changeBusinessPlan(
-  plan: "starter" | "growth" | "scale",
+  plan: "free" | "pro" | "venue" | "festival",
   paymentMethodToken?: string,
 ): Promise<{ plan: string; planStartedAt: string | Date | null }> {
   return requestJson(
@@ -8702,7 +8717,7 @@ export function changeBusinessPlan(
   );
 }
 export function changeMemberPlan(
-  plan: "free" | "plus" | "premium",
+  plan: "free" | "premium" | "platinum",
   paymentMethodToken?: string,
 ): Promise<{ plan: string; planStartedAt: string | Date | null }> {
   return requestJson(
@@ -8751,7 +8766,7 @@ export function submitCuratorApplication(input: {
   return requestJson(
     "/curators/applications",
     z.object({ id: z.string() }).passthrough(),
-    { method: "POST", body: JSON.stringify(input) },
+    { method: "POST", body: JSON.stringify(input), ...(getUserSession() ? { auth: "user" as const } : {}) },
   );
 }
 export type CuratorDashboard = {
@@ -8976,7 +8991,7 @@ export async function getDiscoveryFeed(params?: {
   const result = await requestJson(
     `/discover/feed${query.size ? `?${query}` : ""}`,
     discoveryFeedSchema,
-    { auth: "user" },
+    { auth: getUserSession()?.status === "active" ? "user" : undefined },
   );
   const isEmpty =
     result.popularMembers.length === 0 &&
@@ -8991,9 +9006,9 @@ export function getPublicProfile(username: string): Promise<PublicProfile> {
     { auth: "user" },
   );
 }
-export function getPublicProfileById(id: string): Promise<PublicProfile> {
+export function getPublicProfileById(id: string, analyticsRequest?: string): Promise<PublicProfile> {
   return requestJson(
-    `/users/id/${encodeURIComponent(id)}`,
+    `/users/id/${encodeURIComponent(id)}${analyticsRequest ? `?analyticsRequest=${encodeURIComponent(analyticsRequest)}` : ""}`,
     publicProfileSchema,
     { auth: "user" },
   );
@@ -9057,7 +9072,7 @@ export function updateProfileAffinities(
 }
 
 export function listTagComments(tagId: string): Promise<TagComment[]> {
-  return requestJson(`/tags/${tagId}/comments`, tagCommentsSchema);
+  return requestJson(`/tags/${tagId}/comments`, tagCommentsSchema, { auth: "user" });
 }
 
 export function listTagRelatedUsers(tagId: string): Promise<RelatedUser[]> {
@@ -9105,6 +9120,7 @@ export function uploadTagCommentMedia(
   commentId: string,
   file: File,
 ): Promise<unknown> {
+  file = normalizeMediaFile(file);
   const form = new FormData();
   form.set("file", file);
   return requestJson(`/tags/comments/${commentId}/media`, z.unknown(), {
@@ -9241,12 +9257,43 @@ export type ContentThreadComment = {
   authorId: string | null;
   body: string;
   likeCount: number;
+  liked?: boolean;
   createdAt: string;
   updatedAt: string;
   author?: { id: string; name: string; username?: string | null; avatarUrl?: string | null } | null;
   media?: Array<{ id: string; url: string; type: string }>;
+  poll?: ContentPollSummary | null;
   replies?: ContentThreadComment[];
 };
+
+export const contentPollSummarySchema = z.object({
+  id: z.string(),
+  question: z.string(),
+  allowMultiple: z.boolean(),
+  maxChoices: z.number(),
+  allowOpenAnswer: z.boolean(),
+  audience: z.enum(["everyone", "participants"]).or(z.string()),
+  closesAt: z.string().nullable(),
+  closed: z.boolean(),
+  canVote: z.boolean(),
+  viewerVoted: z.boolean(),
+  viewerOptionIds: z.array(z.string()),
+  resultsVisible: z.boolean(),
+  totalVoters: z.number().nullable(),
+  eligibleCount: z.number(),
+  participationRate: z.number().nullable(),
+  options: z.array(z.object({ id: z.string(), label: z.string(), isOpenAnswer: z.boolean(), votes: z.number().nullable(), percent: z.number().nullable() })),
+});
+export type ContentPollSummary = z.infer<typeof contentPollSummarySchema>;
+export type ContentPollInput = { question: string; options: string[]; allowMultiple?: boolean; maxChoices?: number; allowOpenAnswer?: boolean; audience?: "everyone" | "participants"; closesAt?: string };
+
+export function createContentPoll(commentId: string, input: ContentPollInput): Promise<ContentPollSummary> {
+  return requestJson(`/comments/${commentId}/poll`, contentPollSummarySchema, { auth: "user", method: "POST", body: JSON.stringify(input) });
+}
+
+export function voteContentPoll(pollId: string, input: { optionIds: string[]; openAnswer?: string }): Promise<ContentPollSummary> {
+  return requestJson(`/polls/${pollId}/vote`, contentPollSummarySchema, { auth: "user", method: "POST", body: JSON.stringify(input) });
+}
 
 const contentThreadCommentSchema: z.ZodType<ContentThreadComment> = z.lazy(() =>
   z.object({
@@ -9257,6 +9304,7 @@ const contentThreadCommentSchema: z.ZodType<ContentThreadComment> = z.lazy(() =>
     authorId: z.string().nullable(),
     body: z.string(),
     likeCount: z.number(),
+    liked: z.boolean().optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
     author: z
@@ -9269,6 +9317,7 @@ const contentThreadCommentSchema: z.ZodType<ContentThreadComment> = z.lazy(() =>
       .nullable()
       .optional(),
     media: z.array(z.object({ id: z.string(), url: z.string(), type: z.string() })).optional(),
+    poll: contentPollSummarySchema.nullable().optional(),
     replies: z.array(contentThreadCommentSchema).optional(),
   }),
 );
@@ -9280,6 +9329,7 @@ export function listContentComments(
   return requestJson(
     `/comments?targetType=${targetType}&targetId=${encodeURIComponent(targetId)}`,
     z.array(contentThreadCommentSchema),
+    { auth: "user" },
   );
 }
 
@@ -9343,10 +9393,11 @@ export function userLogin(
 export function socialLogin(
   provider: SocialProvider,
   credential: string,
+  accountType?: "individual" | "corporate",
 ): Promise<LoginResponse> {
   return requestJson("/auth/social", loginResponseSchema, {
     method: "POST",
-    body: JSON.stringify({ provider, credential }),
+    body: JSON.stringify({ provider, credential, accountType }),
   });
 }
 export function listSocialAccounts(): Promise<SocialAccount[]> {
@@ -9525,7 +9576,10 @@ export function confirmPhoneVerification(phone: string, code: string) {
     z.object({
       ok: z.literal(true),
       phone: phoneSchema,
-      phoneVerified: z.literal(true),
+      phoneVerified: z.boolean(),
+      stage: z.enum(["current_phone", "new_phone"]).optional(),
+      demoCode: z.string().optional(),
+      developmentCode: z.string().optional(),
     }),
     { auth: "user", method: "POST", body: JSON.stringify({ phone, code }) },
   );
@@ -9633,6 +9687,10 @@ export function updateAdminRoleGroup(
     method: "PATCH",
     body: JSON.stringify(input),
   });
+}
+
+export function confirmDeletionRequest(token: string) {
+  return requestJson("/messages/deletion/confirm", z.object({ ok: z.literal(true) }), { method: "POST", body: JSON.stringify({ token }) });
 }
 
 export function createUserMessage(
@@ -10036,17 +10094,19 @@ export function archiveAdminEvent(id: string): Promise<Event> {
 }
 
 export type AdminEventInput = {
+  postalCode?: string;
   title: string;
   summary?: string;
   description: string;
   startsAt: string;
-  endsAt?: string;
+  endsAt?: string | null;
   timezone?: string;
   format: string;
   visibility?: string;
-  placeId?: string;
+  placeId?: string | null;
   city?: string;
   country?: string;
+  region?: string;
   latitude?: number;
   longitude?: number;
   language?: string;
@@ -10054,7 +10114,7 @@ export type AdminEventInput = {
   locationName?: string;
   locationAddress?: string;
   externalRegistrationUrl?: string;
-  liveUrl?: string;
+  liveUrl?: string | null;
   timeline?: string;
   lineup?: Array<{
     type?: "heading" | "subheading" | "session" | "break";
@@ -10262,6 +10322,8 @@ export type OwnedTicketOrder = {
     endsAt: string | null;
     city: string | null;
     country: string | null;
+    locationName?: string | null;
+    locationAddress?: string | null;
     coverImageUrl: string | null;
   };
   ticketType: TicketTypeRecord;
@@ -10421,8 +10483,8 @@ export function transferOwnedTickets(input: {
   email?: string;
   phone?: string;
   name?: string;
-}): Promise<unknown> {
-  return requestJson("/me/tickets/transfer", z.any(), {
+}): Promise<{ transferred: number; deliveryFailed?: boolean }> {
+  return requestJson("/me/tickets/transfer", z.object({ transferred: z.number(), deliveryFailed: z.boolean().optional() }), {
     auth: "user",
     method: "POST",
     body: JSON.stringify(input),
@@ -10672,6 +10734,7 @@ export type RelatedUser = {
   relation: string;
   status?: string;
   checkedIn: boolean;
+  isProvisional?: boolean;
 };
 const relatedUserSchema: z.ZodType<RelatedUser> = z.object({
   id: z.string(),
@@ -10688,6 +10751,7 @@ const relatedUserSchema: z.ZodType<RelatedUser> = z.object({
   relation: z.string(),
   status: z.string().optional(),
   checkedIn: z.boolean(),
+  isProvisional: z.boolean().optional(),
 });
 export function listEventRelatedUsers(eventId: string): Promise<RelatedUser[]> {
   return requestJson(
@@ -10840,6 +10904,8 @@ export function checkInEventParticipant(
 }
 
 export type PlaceInput = {
+  region?: string;
+  postalCode?: string;
   name: string;
   description?: string;
   placeType?: string;
@@ -11021,3 +11087,81 @@ export function respondPlaceInvite(
     body: JSON.stringify({ status }),
   });
 }
+
+const adminFinanceUserSchema = z.object({ id: z.string().uuid(), name: z.string(), email: z.string() });
+const adminFinanceAccountSchema = financeDashboardSchema.shape.account.extend({ user: adminFinanceUserSchema.extend({ accountType: z.string() }) });
+const adminFinancePayoutSchema = financeDashboardSchema.shape.payouts.element.extend({ user: adminFinanceUserSchema });
+export function listAdminFinanceAccounts() { return requestJson("/admin/finance/accounts", z.array(adminFinanceAccountSchema), { auth: "admin" }); }
+export function listAdminFinancePayouts() { return requestJson("/admin/finance/payouts", z.array(adminFinancePayoutSchema), { auth: "admin" }); }
+export function listAdminFinanceTransactions() { return requestJson("/admin/finance/transactions", financeDashboardSchema.shape.transactions, { auth: "admin" }); }
+
+export function getPlaceAnalyticsReferences(id: string) {
+  return requestJson(`/place-stats/${id}/references`, z.array(z.object({ metricKey: z.string(), name: z.string(), to: z.string(), kind: z.enum(["tag", "event", "user", "place"]) })), { auth: "user" });
+}
+
+export function listHeldFinanceEvents() {
+  return requestJson("/admin/finance/held-events", z.array(z.object({ id: z.string(), title: z.string(), slug: z.string(), status: z.string(), endsAt: z.string().datetime().or(z.date()).nullable(), startsAt: z.string().optional(), createdAt: z.string().optional(), country: z.string().nullable().optional(), region: z.string().nullable().optional(), city: z.string().nullable().optional(), locationName: z.string().nullable().optional(), creatorUsername: z.string().nullable().optional(), eligibleAt: z.string().datetime().or(z.date()).nullable(), totals: z.array(z.object({ currency: z.string(), amount: z.number() })), curatorTotals: z.array(z.object({ currency: z.string(), amount: z.number() })).default([]) })), { auth: "admin" });
+}
+export function releaseHeldFinanceEvent(id: string) {
+  return requestJson(`/admin/finance/held-events/${id}/release`, z.object({ released: z.number(), releasedSources: z.number().optional() }), { auth: "admin", method: "POST" });
+}
+
+const curatorAgreementSchema = z.object({ id: z.string(), userId: z.string(), version: z.number(), active: z.boolean(), territories: z.array(z.object({ country: z.string(), city: z.string(), region: z.string().optional() })), rates: z.record(z.number()), referrerId: z.string().nullable(), referralRate: z.coerce.number(), bankName: z.string().nullable(), accountName: z.string().nullable(), iban: z.string().nullable(), paymentDetails: z.string().nullable(), effectiveAt: z.string().or(z.date()) });
+export type CuratorAgreement = z.infer<typeof curatorAgreementSchema>;
+export type CuratorAgreementInput = Omit<CuratorAgreement, "id" | "userId" | "version" | "effectiveAt" | "referrerId" | "bankName" | "accountName" | "iban" | "paymentDetails"> & { referrerId?: string; bankName?: string; accountName?: string; iban?: string; paymentDetails?: string };
+const curatorLedgerSchema = z.object({ items: z.array(z.object({ id: z.string(), kind: z.string(), category: z.string(), description: z.string(), amount: z.number(), currency: z.string(), balance: z.number(), held: z.boolean(), sourceKey: z.string(), occurredAt: z.string().or(z.date()), eventId: z.string().nullable(), event: z.object({ title: z.string(), slug: z.string() }).nullable() })), total: z.number(), page: z.number(), pageSize: z.number(), balances: z.record(z.object({ available: z.number(), held: z.number(), total: z.number() })) });
+export function listFinanceCurators() { return requestJson("/admin/finance/curators", z.array(z.object({ id: z.string(), name: z.string(), username: z.string().nullable(), status: z.string(), curatorCity: z.string().nullable(), curatorAgreements: z.array(curatorAgreementSchema) })), { auth: "admin" }); }
+export function findCuratorCandidates(q: string) { return requestJson(`/admin/finance/curators/candidates?q=${encodeURIComponent(q)}`, z.array(z.object({ id: z.string(), name: z.string(), username: z.string().nullable() })), { auth: "admin" }); }
+export function saveCuratorAgreement(id: string, input: CuratorAgreementInput) { return requestJson(`/admin/finance/curators/${id}/agreements`, curatorAgreementSchema, { auth: "admin", method: "POST", body: JSON.stringify(input) }); }
+export function getCuratorLedger(query: URLSearchParams, id?: string) { return requestJson(`${id ? `/admin/finance/curators/${id}/ledger` : "/curators/finance"}?${query}`, curatorLedgerSchema, { auth: id ? "admin" : "user" }); }
+export type CuratorManualEntry = { kind: "income" | "payment"; category: string; description: string; amount: number; currency: string; occurredAt: string; eventId?: string; method: string; requestId: string };
+export function saveCuratorEntry(id: string, input: CuratorManualEntry, replacesId?: string) { return requestJson(`/admin/finance/curators/${id}/ledger${replacesId ? `/${replacesId}/correction` : ""}`, z.object({ id: z.string() }), { auth: "admin", method: "POST", body: JSON.stringify(input) }); }
+
+export function listCuratorSourceEvents(q: string) { return requestJson(`/admin/finance/curators/events?q=${encodeURIComponent(q)}`, z.array(z.object({ id: z.string(), title: z.string(), startsAt: z.string().or(z.date()) })), { auth: "admin" }); }
+
+export function getFinanceTransactionsPage(query: URLSearchParams, admin = false) { return requestJson(`${admin ? "/admin/finance/transactions/page" : "/me/finance/transactions"}?${query}`, z.object({ items: financeDashboardSchema.shape.transactions, total: z.number(), page: z.number(), pageSize: z.number() }), { auth: admin ? "admin" : "user" }); }
+const financeInvoicesSchema = z.array(z.object({ id: z.string(), number: z.string(), documentType: z.string(), issuedAt: z.string().or(z.date()), paymentId: z.string(), payment: z.object({ currency: z.string(), grossAmount: z.coerce.number(), event: z.object({ title: z.string(), slug: z.string() }) }) }));
+export function listFinanceInvoices(admin = false) { return requestJson(`${admin ? "/admin" : "/me"}/finance/invoices`, financeInvoicesSchema, { auth: admin ? "admin" : "user" }); }
+export function uploadFinanceInvoice(body: FormData) { return requestJson("/admin/finance/invoices", z.object({ id: z.string() }), { auth: "admin", method: "POST", body }); }
+export async function downloadFinanceInvoice(id: string, admin = false) { const token = admin ? getAdminToken() : getUserToken(); const response = await fetch(`${API_URL}${admin ? "/admin" : "/me"}/finance/invoices/${encodeURIComponent(id)}/pdf`, { headers: { Authorization: `Bearer ${token ?? ""}` }, signal: AbortSignal.timeout(30_000) }); if (!response.ok) throw new Error((await readApiErrorMessage(response)) ?? "Fatura indirilemedi."); if (!response.headers.get("content-type")?.includes("application/pdf")) throw new Error("Fatura PDF olarak alınamadı."); const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `konnektora-fatura-${id}.pdf`; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+
+export function getMembership() { return requestJson("/me/membership", z.object({ member: z.object({ plan: z.string() }), business: z.object({ plan: z.string() }), limits: z.object({ events: z.number().nullable(), tags: z.number().nullable(), invites: z.number().nullable(), messages: z.number().nullable().optional(), sixHours: z.number().nullable().optional() }), capabilities: z.object({ advanced: z.boolean(), guest: z.boolean(), profileViews: z.number().nullable() }).optional(), gift: z.object({ plan: z.string(), expiresAt: z.string() }).nullable().optional(), researcherGift: z.object({ plan: z.string(), expiresAt: z.string() }).nullable().optional(), chats: z.object({ daily: z.number(), recent: z.number() }).optional(), used: z.object({ events: z.number(), tags: z.number() }), period: z.object({ start: z.string(), end: z.string() }), eventInvites: z.array(z.object({ eventId: z.string(), used: z.number() })) }), { auth: "user" }); }
+export function requestWalletCode() { return requestJson("/me/wallet/request", z.object({ expiresAt: z.string(), phoneHint: z.string() }), { auth: "user", method: "POST" }); }
+export async function verifyWalletCode(code: string) {
+ const data = await requestJson("/me/wallet/verify", z.object({ token: z.string(), expiresAt: z.string() }), { auth: "user", method: "POST", body: JSON.stringify({ code }) });
+ setWalletGrant(data.token, getUserToken() ?? "", data.expiresAt); return data;
+}
+export async function closeWallet() { clearWalletGrant(); return requestJson("/me/wallet/close", z.object({ ok: z.boolean() }), { auth: "user", method: "POST" }); }
+
+const platformRevenueSchema = z.object({ id: z.string(), sourceKey: z.string(), category: z.string(), amount: z.coerce.number(), refundedAmount: z.coerce.number(), currency: z.string(), country: z.string(), city: z.string(), region: z.string().nullable(), description: z.string(), occurredAt: z.string(), entries: z.array(z.object({ userId: z.string(), amount: z.coerce.number(), category: z.string(), agreementId: z.string().nullable() })).optional() });
+export type PlatformRevenueInput = { customerId?: string; sourceKey: string; category: string; amount: number; currency: string; country: string; city: string; region?: string; eventId?: string; description: string; occurredAt: string };
+export function listPlatformRevenues() { return requestJson("/admin/finance/revenues", z.array(platformRevenueSchema), { auth: "admin" }); }
+export function recordPlatformRevenue(input: PlatformRevenueInput) { return requestJson("/admin/finance/revenues", platformRevenueSchema, { auth: "admin", method: "POST", body: JSON.stringify(input) }); }
+export function recordPlatformRevenueRefund(id: string, refundedAmount: number) { return requestJson(`/admin/finance/revenues/${encodeURIComponent(id)}/refund`, platformRevenueSchema, { auth: "admin", method: "POST", body: JSON.stringify({ refundedAmount }) }); }
+
+const planDefinitionSchema = z.object({ name: z.string(), price: z.number(), events: z.number().nullable(), tags: z.number().nullable(), invites: z.number().nullable(), messages: z.number().nullable(), sixHours: z.number().nullable(), profileViews: z.number().nullable(), advanced: z.boolean(), guest: z.boolean() });
+const planCatalogSchema = z.object({ revision: z.number(), plans: z.record(z.record(planDefinitionSchema)) });
+export function getPlanCatalog() { return requestJson("/plans", planCatalogSchema); }
+export function updatePlanCatalog(input: z.infer<typeof planCatalogSchema>) { return requestJson("/admin/plans", planCatalogSchema, { auth: "admin", method: "PUT", body: JSON.stringify(input) }); }
+export function grantPlanGift(userId: string, input: { audience: string; plan: string; duration: number; unit: string; reason: string; revoke?: boolean }) { return requestJson(`/admin/plans/gifts/${userId}`, z.object({ gifts: z.record(z.object({ plan: z.string(), expiresAt: z.string() })) }), { auth: "admin", method: "POST", body: JSON.stringify(input) }); }
+export function getPlanHistory() { return requestJson("/admin/plans/history", z.array(z.object({ id: z.string(), action: z.string(), userId: z.string().nullable(), createdAt: z.string(), data: z.unknown() })), { auth: "admin" }); }
+
+const platformReportSchema=z.object({items:z.array(z.object({id:z.string(),customer_id:z.string().nullable(),username:z.string().nullable(),category:z.string(),description:z.string(),country:z.string().nullable(),city:z.string().nullable(),region:z.string().nullable(),currency:z.string(),occurred_at:z.string(),gross:z.number(),curator:z.number(),net:z.number(),balance:z.number(),held:z.boolean()})),totals:z.array(z.object({currency:z.string(),available:z.number(),held:z.number(),count:z.number()})),total:z.number(),page:z.number(),pageSize:z.number(),snapshot:z.string()});
+export function getPlatformReport(query:URLSearchParams){return requestJson(`/admin/finance/platform-report?${query}`,platformReportSchema,{auth:"admin"});}
+
+const heldEventDetailSchema=z.object({id:z.string(),title:z.string(),slug:z.string(),status:z.string(),coverImageUrl:z.string().nullable(),createdAt:z.string(),startsAt:z.string(),endsAt:z.string().nullable(),timezone:z.string(),locationName:z.string().nullable(),locationAddress:z.string().nullable(),country:z.string().nullable(),region:z.string().nullable(),city:z.string().nullable(),createdBy:z.object({id:z.string(),username:z.string().nullable()}).nullable(),participants:z.array(z.object({user:z.object({id:z.string(),username:z.string().nullable()})})),ticketTypeRecords:z.array(z.object({id:z.string(),name:z.string(),description:z.string().nullable(),price:z.number(),currency:z.string(),capacity:z.number(),soldCount:z.number(),status:z.string(),checkedIn:z.number(),checkInPercent:z.number()})),revisions:z.array(z.object({id:z.string(),createdAt:z.string(),before:z.record(z.string().nullable()),after:z.record(z.string().nullable())})),counts:z.object({comments:z.number(),views:z.number(),uniqueViewers:z.number(),reports:z.number(),invitations:z.number()})});
+export function getHeldEventDetail(id:string){return requestJson(`/admin/finance/held-events/${id}`,heldEventDetailSchema,{auth:"admin"});}
+
+export function getMemberCompatibility(ids: string[]) {
+ return requestJson(`/social/compatibility?${new URLSearchParams({ids:ids.join(",")})}`, z.array(z.object({id:z.string(),overall:z.number(),eventPartner:z.number(),followerCount:z.number(),commonTagCount:z.number()})), {auth:"user"});
+}
+
+export function getTicketSalesEligibility() { return requestJson("/me/ticket-sales-eligibility", z.object({eligible:z.boolean()}), {auth:"user"}); }
+
+export function respondToNotification(id:string,action:"accept"|"decline") { return requestJson(`/notifications/${id}/respond`,z.object({ok:z.literal(true)}),{auth:"user",method:"POST",body:JSON.stringify({action})}); }
+
+export function getInviteAssessment(kind:"event"|"place",targetId:string,ids:string[]) { return requestJson(`/social/invite-assessment?${new URLSearchParams({kind,targetId,ids:ids.join(",")})}`,z.array(z.object({id:z.string(),canInvite:z.boolean(),eventPartner:z.number().optional(),attendeeCompatibility:z.number().optional(),score:z.number(),reasons:z.array(z.string()),sharedInterestCount:z.number()})),{auth:"user"}); }
+
+export function listPlaceInviteRecommendations(id:string){return requestJson(`/places/${id}/invite-recommendations`,z.array(eventInviteRecommendationSchema),{auth:"user"});}
+export function listPlacePastEvents(id:string){return requestJson(`/places/${id}/past-events`,z.array(z.object({id:z.string(),title:z.string(),startsAt:z.string(),endsAt:z.string().nullable()})),{auth:"user"});}
+export function listPlacePastAttendees(id:string,eventId:string){return requestJson(`/places/${id}/past-attendees?${new URLSearchParams({eventId})}`,z.array(z.object({id:z.string(),name:z.string(),username:z.string().nullable(),avatarUrl:z.string().nullable()})),{auth:"user"});}

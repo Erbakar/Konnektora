@@ -1,3 +1,4 @@
+import { CountryCityFields } from "../components/CountryCityFields";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
@@ -19,9 +20,11 @@ import {
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { AdminFinancePanel } from "../components/AdminFinancePanel";
 import { RichText } from "../components/RichText";
 import { AnnouncementPopup } from "../components/AnnouncementPopup";
 import { PasswordInput } from "../components/FormInputs";
+import { DATA_DELETION_CATEGORY, dataRequestResponseDeadline, formatDataRequestDate } from "../lib/dataDeletion";
 import {
   type AdminEventInput,
   type AnnouncementInput,
@@ -147,7 +150,8 @@ type AdminSection =
   | "reports"
   | "messages"
   | "cms"
-  | "email-tokens";
+  | "email-tokens"
+  | "finance";
 
 const NAV_GROUPS: Array<{
   label: string;
@@ -186,6 +190,10 @@ const NAV_GROUPS: Array<{
     ]
   },
   {
+    label: "Muhasebe & Finans",
+    items: [{ id: "finance", label: "Muhasebe & Finans", Icon: FileText }]
+  },
+  {
     label: "CMS",
     items: [
       { id: "cms", label: "CMS / SSS / Duyurular", Icon: FileText },
@@ -210,7 +218,8 @@ const SECTION_TITLES: Record<AdminSection, string> = {
   reports: "Şikayetler",
   messages: "Kullanıcı Mesajları",
   cms: "CMS / SSS / Duyurular / Politikalar",
-  "email-tokens": "Email Tokenları"
+  "email-tokens": "Email Tokenları",
+  finance: "Muhasebe & Finans"
 };
 
 const ADMIN_SECTIONS = new Set<AdminSection>(Object.keys(SECTION_TITLES) as AdminSection[]);
@@ -807,6 +816,7 @@ export function AdminDashboardPage() {
           {isMockApiMode ? <span className="status-pill status-requested">Demo modu</span> : null}
         </div>
 
+        {activeSection === "finance" ? <AdminFinancePanel/> : null}
         {activeSection === "dashboard" && (
           <div className="dashboard-sections">
             {(dashboard?.publishedEvents ?? 0) === 0 && tags.length === 0 && events.length === 0 ? (
@@ -2253,6 +2263,7 @@ function UserMessageRow({
         <span>
           {message.name} · {message.email} · {message.createdAt ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(message.createdAt)) : "Tarih yok"}
         </span>
+        {message.category === DATA_DELETION_CATEGORY ? <DataRequestDeadline createdAt={message.createdAt} /> : null}
       </div>
       <span className={`status-pill status-${message.status === "unread" ? "open" : "resolved"}`}>
         {message.status === "unread" ? "Okunmadı" : "Okundu"}
@@ -2270,6 +2281,11 @@ function UserMessageRow({
       </button>
     </div>
   );
+}
+
+function DataRequestDeadline({ createdAt }: { createdAt?: string | Date }) {
+  const deadline = dataRequestResponseDeadline(createdAt);
+  return <span>{deadline ? `Yanıt son tarihi: ${formatDataRequestDate(deadline)} · Yanıt kaydını kontrol edin.` : "Yanıt süresi: 30 gün. Kayıt tarihini doğrulayın."}</span>;
 }
 
 function UserMessageDetail({
@@ -2317,6 +2333,11 @@ function UserMessageDetail({
         <strong>Kullanıcı mesajı</strong>
         <p className="form-help"><RichText text={message.body} /></p>
       </div>
+      {message.category === DATA_DELETION_CATEGORY ? <div className="admin-list-item">
+        <strong>Veri silme talebi · {message.id}</strong>
+        <DataRequestDeadline createdAt={message.createdAt} />
+        <p className="form-help">Hesap sahipliğini kayıtlı e-posta üzerinden doğrulayın, kapsamı belirleyin ve sonucu kullanıcıya iletin. Okundu durumu silme veya yanıt işleminin tamamlandığını göstermez. Şifre veya kimlik belgesi istemeyin; doğrulanmamış taleple hiçbir veriyi silmeyin.</p>
+      </div> : null}
       <button
         className={message.status === "unread" ? "secondary-action" : "ghost-action"}
         disabled={isPending}
@@ -2593,14 +2614,7 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
             <option value="super_admin">Super admin</option>
           </select>
         </label>
-        <label>
-          Ülke
-          <input name="country" placeholder="Ülke" defaultValue={filters.country} />
-        </label>
-        <label>
-          Şehir
-          <input name="city" placeholder="Şehir" defaultValue={filters.city} />
-        </label>
+        <CountryCityFields cityDropdown defaultCountry={filters.country} defaultCity={filters.city}/>
         <label>
           Cinsiyet
           <select name="gender" defaultValue={filters.gender}>
@@ -2827,6 +2841,7 @@ function UserDetailCard({
       name: String(form.get("name") || user.name),
       email: String(form.get("email") || user.email),
       phone: String(form.get("phone") || "") || null,
+      region: String(form.get("region") || ""), postalCode: String(form.get("postalCode") || ""),
       country: String(form.get("country") || "") || null,
       city: String(form.get("city") || "") || null,
       district: String(form.get("district") || "") || null,
@@ -2944,14 +2959,7 @@ function UserDetailCard({
             GSM No
             <input name="phone" defaultValue={user.phone ?? ""} />
           </label>
-          <label>
-            Ülke
-            <input name="country" defaultValue={user.country ?? ""} />
-          </label>
-          <label>
-            Şehir
-            <input name="city" defaultValue={user.city ?? ""} />
-          </label>
+          <CountryCityFields cityDropdown addressFields defaultCountry={user.country} defaultCity={user.city} defaultRegion={user.region} defaultPostalCode={user.postalCode}/>
           <label>
             İlçe
             <input name="district" defaultValue={user.district ?? ""} />
@@ -3981,6 +3989,7 @@ function EventAdminPanel({
       format: String(form.get("format") || "online"),
       visibility: String(form.get("visibility") || "open"),
       status: String(form.get("status") || "published"),
+      region: String(form.get("region") || ""), postalCode: String(form.get("postalCode") || ""),
       city: String(form.get("city") || ""),
       country: String(form.get("country") || ""),
       organizerName: String(form.get("organizerName") || "Konnektora Admin"),
@@ -4071,14 +4080,7 @@ function EventAdminPanel({
             Organizatör
             <input key={`${editingEvent?.id ?? "new"}-organizer`} name="organizerName" defaultValue={editingEvent?.organizerName ?? "Konnektora Admin"} />
           </label>
-          <label>
-            Şehir
-            <input key={`${editingEvent?.id ?? "new"}-city`} name="city" defaultValue={editingEvent?.city ?? ""} />
-          </label>
-          <label>
-            Ülke
-            <input key={`${editingEvent?.id ?? "new"}-country`} name="country" defaultValue={editingEvent?.country ?? ""} />
-          </label>
+          <CountryCityFields cityDropdown key={editingEvent?.id ?? "new"} addressFields defaultCountry={editingEvent?.country} defaultCity={editingEvent?.city} defaultRegion={editingEvent?.region} defaultPostalCode={editingEvent?.postalCode}/>
         </div>
         <label>
           Kayıt URL'si

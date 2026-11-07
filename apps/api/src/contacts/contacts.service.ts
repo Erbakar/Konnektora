@@ -1,3 +1,6 @@
+import { audienceAllows } from "../common/privacy-context";
+import { notifyMembershipInvite } from "../notifications/activity-events";
+import { publicName } from "../common/public-name";
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { createHash } from "crypto";
 import { MailService } from "../mail/mail.service";
@@ -33,7 +36,7 @@ export class ContactsService {
             : {
                 OR: [
                   { username: { contains: query.replace(/^@/, ""), mode: "insensitive" } },
-                  { name: { contains: query, mode: "insensitive" } },
+                  { name: { contains: query, mode: "insensitive" }, privacySettings: { profileNameAudience: "everybody" } },
                 ],
               }),
       },
@@ -42,8 +45,11 @@ export class ContactsService {
       select: {
         id: true,
         name: true,
+  privacySettings: { select: { profileNameAudience: true, locationAudience: true } },
+  accountType: true,
+  companyName: true,
         username: true,
-        accountType: true,
+
         city: true,
         country: true,
         followerCount: true,
@@ -55,11 +61,11 @@ export class ContactsService {
     const myTags = new Set(me.map((item) => item.tagId));
     return members.map((member) => ({
       id: member.id,
-      name: member.name,
+      name: publicName(member),
       username: member.username,
       accountType: member.accountType as "individual" | "corporate",
-      city: member.city,
-      country: member.country,
+      city: audienceAllows(member.id, member.privacySettings?.locationAudience ?? "everybody") ? member.city : null,
+      country: audienceAllows(member.id, member.privacySettings?.locationAudience ?? "everybody") ? member.country : null,
       followerCount: member.followerCount,
       commonTagCount: member.interestTags.filter((tag) => myTags.has(tag.tagId)).length,
       following: member.followers.length > 0,
@@ -73,7 +79,8 @@ export class ContactsService {
         email: contact.email?.trim().toLowerCase(),
         phone: this.normalizePhone(contact.phone),
       }))
-      .filter((contact) => contact.email || contact.phone);
+      .filter((contact) => contact.email || contact.phone)
+      .filter((contact,index,all)=>all.findIndex(other=>Boolean(contact.email&&other.email===contact.email)||Boolean(contact.phone&&other.phone===contact.phone))===index);
     const emails = [
       ...new Set(
         contacts.flatMap((contact) => (contact.email ? [contact.email] : [])),
@@ -94,8 +101,11 @@ export class ContactsService {
       select: {
         id: true,
         name: true,
+  privacySettings: { select: { profileNameAudience: true, locationAudience: true } },
+  accountType: true,
+  companyName: true,
         username: true,
-        accountType: true,
+
         city: true,
         country: true,
         followerCount: true,
@@ -118,17 +128,17 @@ export class ContactsService {
       const contact = contacts.find(
         (item) => item.email === member.email || item.phone === member.phone,
       )!;
-      if (contact.email) matchedIdentifiers.add(`email:${contact.email}`);
-      if (contact.phone) matchedIdentifiers.add(`phone:${contact.phone}`);
+      if (member.email) matchedIdentifiers.add(`email:${member.email}`);
+      if (member.phone) matchedIdentifiers.add(`phone:${member.phone}`);
       return {
         contactName: contact.name,
         member: {
           id: member.id,
-          name: member.name,
+          name: publicName(member),
           username: member.username,
           accountType: member.accountType as "individual" | "corporate",
-          city: member.city,
-          country: member.country,
+          city: audienceAllows(member.id, member.privacySettings?.locationAudience ?? "everybody") ? member.city : null,
+          country: audienceAllows(member.id, member.privacySettings?.locationAudience ?? "everybody") ? member.country : null,
           followerCount: member.followerCount,
           commonTagCount: member.interestTags.filter((tag) =>
             myTags.has(tag.tagId),
@@ -153,9 +163,10 @@ export class ContactsService {
   async invite(userId: string, input: InviteContactsDto) {
     const sender = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true },
+      select: { id: true, name: true, username: true, accountType: true, companyName: true },
     });
     if (!sender) throw new BadRequestException("Kullanıcı bulunamadı.");
+    const senderLabel = `${publicName(sender)}${sender.username ? ` (@${sender.username})` : ""}`;
     const recipients: Array<{
       channel: "email" | "sms";
       value: string;
@@ -177,13 +188,15 @@ export class ContactsService {
     }
     await Promise.all(
       recipients.map(async (recipient) => {
+        const registered = await this.prisma.user.findFirst({ where: { status: "active", ...(recipient.channel === "email" ? { email: recipient.value } : { phone: recipient.value }) }, include: { privacySettings: true } });
+        if (registered) await notifyMembershipInvite(this.prisma, sender as any, registered, `contacts:${sender.id}`, true);
         if (recipient.channel === "email")
           await this.mail.sendContactInviteEmail({
             to: recipient.value,
             name: recipient.name,
-            invitedByName: sender.name,
+            invitedByName: senderLabel,
           });
-        else await this.sms.sendContactInvite(recipient.value, sender.name);
+        else await this.sms.sendContactInvite(recipient.value, senderLabel);
         await this.prisma.contactInvite.create({
           data: {
             userId,

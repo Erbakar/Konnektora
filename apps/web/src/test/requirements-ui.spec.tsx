@@ -282,7 +282,7 @@ describe("157 maddelik listenin kritik web davranışları", () => {
     expect(screen.queryByText("kadir@example.com")).not.toBeInTheDocument();
     const desktopIdentity = document.querySelector(".corp-user-links");
     expect(desktopIdentity?.querySelector(".corp-user-identity")?.textContent).toContain("@kadir");
-    expect(desktopIdentity?.querySelector(".corp-topbar-notifications")?.textContent).toContain("Bildirimler");
+    expect(desktopIdentity?.querySelector('.corp-profile-menu a[href="/notifications"]')?.textContent).toContain("Bildirimler");
     const desktopNavLinks = [...document.querySelectorAll<HTMLAnchorElement>(".corp-nav > a")].map((link) => link.getAttribute("href"));
     expect(desktopNavLinks).toEqual(["/feed", "/events", "/tags", "/places", "/community", "/messages"]);
     expect(document.querySelector(".corp-topbar-actions > .language-switch")).not.toBeInTheDocument();
@@ -291,6 +291,7 @@ describe("157 maddelik listenin kritik web davranışları", () => {
     expect(screen.getAllByRole("link", { name: "Üye kartı" }).some((link) => link.getAttribute("href") === "/identity")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Biletlerim" }).some((link) => link.getAttribute("href") === "/tickets")).toBe(true);
     const mobileMenu = document.querySelector(".corp-mobile-menu-panel");
+    for (const path of ["/feed", "/events", "/places", "/tags", "/messages"]) expect(mobileMenu?.querySelector(`a[href="${path}"]`)).not.toBeInTheDocument();
     expect(mobileMenu?.querySelector('a[href="/community"]')?.textContent).toContain("Üyeler ve Listeler");
 
     scrollTo.mockClear();

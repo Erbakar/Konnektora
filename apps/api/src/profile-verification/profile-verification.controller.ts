@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   StreamableFile,
   UploadedFile,
   UseGuards,
@@ -15,10 +16,8 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { User } from "@prisma/client";
 import { randomUUID } from "crypto";
-import { createReadStream, mkdirSync } from "fs";
-import { unlink } from "fs/promises";
-import { diskStorage } from "multer";
-import { resolve } from "path";
+import { memoryStorage } from "multer";
+import type { Response } from "express";
 import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -29,8 +28,6 @@ import {
 } from "./profile-verification.dto";
 import { ProfileVerificationService } from "./profile-verification.service";
 
-const evidenceDirectory = resolve(process.cwd(), "verification-uploads");
-mkdirSync(evidenceDirectory, { recursive: true });
 
 @Controller()
 export class ProfileVerificationController {
@@ -46,11 +43,7 @@ export class ProfileVerificationController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor("selfie", {
-      storage: diskStorage({
-        destination: evidenceDirectory,
-        filename: (_request, _file, callback) =>
-          callback(null, `${randomUUID()}.jpg`),
-      }),
+      storage: memoryStorage(),
       limits: { fileSize: 5 * 1024 * 1024 },
       fileFilter: (_request, file, callback) =>
         callback(
@@ -67,16 +60,7 @@ export class ProfileVerificationController {
     @CurrentUser() user: User,
   ) {
     if (!file) throw new BadRequestException("Kamera karesi bulunamadı.");
-    try {
-      return await this.verification.submit(
-        user.id,
-        file.filename,
-        body.challenge,
-      );
-    } catch (error) {
-      await unlink(file.path).catch(() => undefined);
-      throw error;
-    }
+    return this.verification.submit(user.id, `${randomUUID()}.jpg`, body.challenge, new Uint8Array(file.buffer));
   }
 
   @Get("admin/profile-verifications")
@@ -89,9 +73,11 @@ export class ProfileVerificationController {
   @Get("admin/profile-verifications/:id/evidence")
   @UseGuards(AdminGuard)
   @RequirePermissions("media.manage")
-  async evidence(@Param("id") id: string) {
+  async evidence(@Param("id") id: string, @Res({ passthrough: true }) response: Response) {
+    response.setHeader("Cache-Control", "private, no-store");
+    response.setHeader("X-Content-Type-Options", "nosniff");
     return new StreamableFile(
-      createReadStream(await this.verification.evidencePath(id)),
+      await this.verification.evidence(id),
       { type: "image/jpeg" },
     );
   }

@@ -2,8 +2,7 @@ import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post,
 import { FileInterceptor } from "@nestjs/platform-express";
 import { randomUUID } from "crypto";
 import { mkdirSync } from "fs";
-import { unlink } from "fs/promises";
-import { diskStorage } from "multer";
+import { durableStorage, removeDurableUpload } from "../media-storage/durable-storage";
 import { resolve } from "path";
 import { User } from "@prisma/client";
 import { CurrentUser } from "../auth/current-user.decorator";
@@ -30,10 +29,10 @@ export class ChatController {
   }
 
   @Post("private-messages")
-  @UseInterceptors(FileInterceptor("attachment", { storage: diskStorage({ destination: resolve(process.cwd(), "uploads"), filename: (_request, file, callback) => callback(null, `${randomUUID()}${messageFileExtensions[file.mimetype] ?? ""}`) }), limits: { fileSize: 15 * 1024 * 1024 }, fileFilter: (_request, file, callback) => { const allowed = Boolean(messageFileExtensions[file.mimetype]); callback(allowed ? null : new BadRequestException("Yalnız görsel, MP4, PDF veya metin dosyası gönderilebilir."), allowed); } }))
+  @UseInterceptors(FileInterceptor("attachment", { storage: durableStorage({ destination: resolve(process.cwd(), "uploads"), filename: (_request, file, callback) => callback(null, `${randomUUID()}${messageFileExtensions[file.mimetype] ?? ""}`) }), limits: { fileSize: 15 * 1024 * 1024 }, fileFilter: (_request, file, callback) => { const allowed = Boolean(messageFileExtensions[file.mimetype]); callback(allowed ? null : new BadRequestException("Yalnız görsel, MP4, PDF veya metin dosyası gönderilebilir."), allowed); } }))
   async send(@Body() body: SendPrivateMessageDto, @UploadedFile() file: Express.Multer.File | undefined, @CurrentUser() user: User) {
     try { return await this.chatService.send(user, body, file); }
-    catch (error) { if (file) await unlink(file.path).catch(() => undefined); throw error; }
+    catch (error) { if (file) await removeDurableUpload(file.path).catch(() => undefined); throw error; }
   }
 
   @Patch("conversations/:peerId/read")

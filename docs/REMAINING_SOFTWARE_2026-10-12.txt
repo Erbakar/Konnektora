@@ -1,0 +1,37 @@
+Konnektora — Yazılım ve dış erişim ayrımı
+Güncelleme: 13 Ekim 2026
+
+84 maddelik ek kontrol (13 Ekim)
+- TEST_ACCEPTANCE_2026-10-12.txt içinde her satıra ayrı sonuç ve kanıt eklendi; kaynak tablo değiştirilmedi.
+- Yorum yanıtlarının tarih/paylaşım düzeni ve içerik sahibini engelleme menüsü düzeltildi.
+- Etiket/etkinlik/mekân ilgili kullanıcı sırası en yeniye göre düzenlendi; rol menülerine ikon eklendi.
+- Etkinlik düzenlemede saat dilimi, oluşturucu ve mevcut yöneticiler korundu; isteğe bağlı alanların temizlenmesi düzeltildi.
+- Yönetici davetleri Onay bekleyenler sekmesine eklendi; bildirimde bilinen kullanıcı hedefleri bağlandı.
+- Profil medyasında kısmi yükleme hatası, geri bildirim ve sıralama kuralları düzeltildi.
+- Tablet menüsüne eksik ana bağlantılar eklendi; PDF giriş saati uyarıları ve SSS’de %5 komisyon açıklaması tamamlandı.
+- Bu turda ek hesap erişimi istemeden düzeltilebilen tespit edilmiş yazılım hatası bırakılmadı. Gerçek cihaz/sağlayıcı kabulü aşağıdaki sınırlar kapsamında açık.
+
+Bu turda açık listedeki aşağıdaki yazılım işleri tamamlandı:
+
+1. Paket hakları
+Yönetim panelinde fiyat, limit ve gelişmiş analiz/Guest List hakları düzenlenebilir. Mağaza ve sunucu aynı kataloğu kullanır. Eşzamanlı yönetici değişiklikleri sürüm kontrolüyle korunur ve denetim kaydı tutulur.
+Bireysel, kurumsal ve araştırmacı hediye denemeleri gün/hafta/31 günlük ay olarak atanabilir ve geri alınabilir. Süre bitince asıl paket otomatik geçerli olur; asıl üyelik ve kullanım kayıtları silinmez.
+Ücretsiz kendi profil analizi 31 günlük dönemde iki açılışla sınırlıdır. Gelişmiş yaş/cinsiyet filtreleri hem ekranda hem sunucuda paket hakkıyla korunur. Önceki etkinlik, davet, mesaj ve etiket kotaları korunur.
+
+2. Backoffice
+Konnektora gelir raporu; müşteri, gelir türü, ülke/bölge/şehir, tarih ve para birimi filtreleri, iade ve küratör payı düşülmüş gelirler, para birimi başına yekûn ve Excel çıktısıyla eklendi. Bu muhasebe raporu banka bakiyesi değildir.
+Blokeli etkinliklerde arama, onay zamanı gelen kayıt sayısı, bilet/check-in ve görüntüleme/davet/yorum/rapor sayıları eklendi. Etkinlik mekân ve zaman değişiklikleri bu sürümden itibaren kaydedilir; geçmişte tutulmamış kayıtlar üretilmez. Sponsor/kapı gelirleri küratör olmasa da etkinlik blokajına tabidir.
+
+3. Adresler
+Kayıt, profil, kurumsal başvuru, etkinlik, mekân, finans ve yönetici adres formlarına ülke→eyalet/bölge→şehir ile posta kodu bağlandı. GeoNames bölge/şehir önerileri kullanılır; listede olmayan küçük yerleşimler elle girilebilir. Ülke/bölge değişince alt alanlar temizlenir.
+
+4. Daha önce tamamlananlar
+%5 bilet komisyonu ve eski paket geçişi; video ve İngilizce altyazılar; İşletmeler SSS; LinkedIn/footer; gizlilik ve iki yönlü engelleme; cüzdan doğrulama akışı; tahsilata bağlı küratör payı, mükerrer kaynak koruması ve iadeler.
+
+Sınırlar ve erişim bekleyen işler
+- Canlı ödeme/KYC, SMS, Google Contacts/Meta onayı, gerçek küratör atamaları: USER_INPUT_REQUIRED_2026-10-12.txt.
+- Gerçek cihaz push/rehber, gerçek alıcı e-posta/PDF ve davet kabulü ayrı uçtan uca kabul ister. 84 test maddesinin tüm alt koşullarına gerçek cihaz kabulü verilmemiştir.
+- Eski serbest metin bildiriminde kimlik/bağlantı kaydı olmayan belirsiz isimler otomatik eşleştirilmez. Kayıtlı hedefler ve açık @/# atıfları bağlantılanır.
+- Paket fiyat düzenlemesi ödeme sağlayıcısı bağlantısı yerine geçmez; gerçek tahsilat etkinleştirilmedi.
+
+Yayın ve doğrulama: TEST_STATUS_2026-10-12.txt

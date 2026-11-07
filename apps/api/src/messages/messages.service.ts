@@ -1,3 +1,5 @@
+import { JwtService } from "@nestjs/jwt";
+import { MailService } from "../mail/mail.service";
 import { Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { Prisma, User, UserMessageStatus, UserMessageType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
@@ -16,17 +18,18 @@ const MESSAGE_PERMISSION_BY_TYPE = {
 
 @Injectable()
 export class MessagesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly jwt: JwtService, private readonly mail: MailService) {}
 
   async createMessage(input: CreateUserMessageDto, user?: User) {
     const linkedUser = user?.id
       ? await this.prisma.user.findUnique({ where: { id: user.id }, select: { id: true, name: true, email: true } })
       : null;
 
-    return this.prisma.userMessage.create({
+    const deletion = input.category?.trim().startsWith("Veri silme talebi");
+    const message = await this.prisma.userMessage.create({
       data: {
         type: input.type,
-        category: input.category?.trim() || null,
+        category: deletion ? "Veri silme talebi · E-posta onayı bekleniyor" : input.category?.trim() || null,
         userId: linkedUser?.id,
         name: input.name.trim() || linkedUser?.name || "Konnektora User",
         email: input.email.trim().toLowerCase() || linkedUser?.email || "",
@@ -37,6 +40,21 @@ export class MessagesService {
       },
       include: MESSAGE_INCLUDE
     });
+    if (deletion) {
+      const token = await this.jwt.signAsync({ purpose: "confirm-data-deletion-request", requestId: message.id, email: message.email }, { expiresIn: "24h" });
+      await this.mail.sendDataDeletionConfirmation({ to: message.email, token });
+    }
+    return message;
+  }
+
+  async confirmDeletionRequest(token: string) {
+    let payload: { purpose: string; requestId: string; email: string };
+    try { payload = await this.jwt.verifyAsync(token); } catch { throw new UnauthorizedException("Onay bağlantısı geçersiz veya süresi dolmuş."); }
+    if (payload.purpose !== "confirm-data-deletion-request") throw new UnauthorizedException("Geçersiz onay bağlantısı.");
+    const request = await this.prisma.userMessage.findUnique({ where: { id: payload.requestId } });
+    if (!request || request.email !== payload.email || !request.category?.startsWith("Veri silme talebi")) throw new UnauthorizedException("Geçersiz onay bağlantısı.");
+    if (request.category !== "Veri silme talebi · E-posta doğrulandı") await this.prisma.userMessage.update({ where: { id: request.id }, data: { category: "Veri silme talebi · E-posta doğrulandı" } });
+    return { ok: true as const };
   }
 
   async listAdminMessages(type: UserMessageType, query: AdminMessageQueryDto) {

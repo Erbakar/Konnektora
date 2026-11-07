@@ -91,6 +91,20 @@ export class LocationsService {
     return task;
   }
 
+  async reverse(latitude: number, longitude: number) {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) throw new BadRequestException("Geçersiz koordinatlar.");
+    return this.enqueue(async () => {
+      try {
+        const params = new URLSearchParams({ format: "jsonv2", lat: String(latitude), lon: String(longitude), zoom: "10", addressdetails: "1" });
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, { headers: { Accept: "application/json", "Accept-Language": "tr", "User-Agent": "Konnektora/1.0 (https://konnektora.com/contact)" }, signal: AbortSignal.timeout(6000) });
+        if (!response.ok) throw new Error("Location provider unavailable");
+        const data = await response.json() as { address?: { country_code?: string; city?: string; town?: string; village?: string; state?: string } };
+        const address = data.address;
+        return { country: address?.country_code?.toUpperCase() ?? "", city: address?.city ?? address?.town ?? address?.village ?? address?.state ?? "" };
+      } catch { throw new BadGatewayException("Konum bulunamadı. Ülke ve şehri elle seçebilirsiniz."); }
+    });
+  }
+
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const task = this.queue.catch(() => undefined).then(async () => {
       const remaining = Math.max(

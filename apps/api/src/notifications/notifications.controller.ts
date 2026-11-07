@@ -11,6 +11,10 @@ import { NotificationsService } from "./notifications.service";
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 
+  @Post(":id/respond")
+  @UseGuards(JwtAuthGuard)
+  respond(@CurrentUser() user: User, @Param("id") id: string, @Body("action") action: string) { return this.notifications.respondToInvitation(user.id, id, action); }
+
   @Get("push/public-key")
   publicKey() {
     return this.notifications.publicKey();

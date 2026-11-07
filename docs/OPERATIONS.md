@@ -49,13 +49,13 @@ Restore sonrasında migration çalışır. Ardından `SMOKE_BASE_URL=https://api
 - `JWT_SECRET` en az 32 rastgele byte.
 - Resend domaini doğrulandı; test e-postası ulaştı.
 - VAPID anahtarları kalıcı olarak kaydedildi; gerçek cihaz push testi geçti.
-- SMS ve profil doğrulama sağlayıcıları gerçek ortamda test edildi.
+- Bu sürümde gerçek ödeme/SMS kullanıcı talebiyle kapsam dışı. Profil doğrulama sağlayıcısı yoksa manuel admin incelemesi kullanılır; otomatik biyometrik doğrulama başarılı diye sunulmaz.
 - `npm run db:deploy` başarılı.
-- Production seed yalnız `ALLOW_PRODUCTION_SEED=true` ve benzersiz güçlü parolalarla çalıştırıldı.
+- Mevcut production veritabanında seed çalıştırılmaz.
 - İlk backup alındı, checksum doğrulandı ve restore tatbikatı yapıldı.
 - Liveness/readiness monitorları ve 5xx alarmı aktif.
 - `npm run ops:smoke` production URL’i üzerinde başarılı.
-- Admin, KYC, ödeme, mesaj, davet ve QR giriş akışları smoke kontrolünden geçti.
+- Admin/üye salt okunur servis smoke kontrolleri geçti. Gerçek ödeme/KYC/SMS ve fiziksel QR/NFC kabulü bu turun kontrolü olarak gösterilmez.
 - KVKK/GDPR iletişim, saklama ve silme sorumluları belirlendi.
 
 ## Dependency güvenliği

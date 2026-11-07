@@ -1,3 +1,4 @@
+jest.mock("../notifications/activity-events", () => ({ notifyEntityCreated: jest.fn().mockResolvedValue(undefined), notifyEntityChanges: jest.fn().mockResolvedValue(undefined), notifyUserActivity: jest.fn().mockResolvedValue(undefined), notifyEventAvailability: jest.fn().mockResolvedValue(undefined),  }));
 import { UnauthorizedException } from "@nestjs/common";
 import { AutomationsService } from "./automations.service";
 describe("AutomationsService", () => {

@@ -1,0 +1,528 @@
+12/10 test dokümanı — 84 madde ayrı kontrol kaydı
+Kontrol tarihi: 13 Ekim 2026
+Canlı yayın: 6179c69d-1929-44c7-94cb-0a7394ff7289 — SUCCESS
+Doğrulama: 593 otomatik test; typecheck/lint/build; yayın sonrası sağlık, yetki ve medya gizliliği kontrolleri başarılı.
+Kaynak: Google Sheets 12/10 sekmesi, gid=727357112. Kaynak belge değiştirilmedi.
+
+Yöntem: Her satırın alt koşulları kaynak kod, ilgili otomatik testler ve belirtilen canlı tarayıcı kontrolleriyle karşılaştırıldı. KOD KONTROLÜ yazanlar kaynak incelemesidir; TEST bütün alt koşulların gerçek cihaz uçtan uca kabul edildiği anlamına gelmez. Dış sağlayıcı/gerçek cihaz bağımlılıkları kapatılmadı. 46 ve 47 aynı maddedir.
+
+1. Burning Man 2027 - Istanbul Crew isimli bir etkinlik olusturdum ama hem etkinlik detay sayfasi goruntulenemiyor; hem de Etkinlik AnaSayfa'sinda gorunmuyor. Ama profil sayfamda listeleniyor. Dun geceden bu yana hala sistem kendine gelemedi :)
+Durum: CANLI KONTROL
+Kontrol sonucu: Burning Man doğrudan bağlantısı doğru başlık, tarihler, altı medya ve kurumsal oluşturucu ile açılıyor. Genel etkinlik listesi ayrıca kontrol edildi.
+Kanıt: EventDetailPage.tsx; EventsService.listPublicEvents/getPublicEvent; canlı Chrome.
+
+2. Bireysel.profil sayfasindaki "Kullanici Adi Soyadi" ve Kurumsal profil sayfasindaki "Marka adi" bilgisi siyah renkli gorunuyor. Beyaz olmaliydi.
+Durum: CANLI KONTROL
+Kontrol sonucu: Profil başlığı beyaz; kurumsal profilde hesaplanan renk rgb(255,255,255). Bireysel ve kurumsal başlık aynı CSS kuralını kullanıyor.
+Kanıt: PublicProfilePage.tsx; styles.css .public-profile-heading; canlı Chrome.
+
+3. "Mutualizm analizini gör" barindaki "6 ortak noktanız var" temali yazi siyah renkli gorunuuyor. Beyaz olmaliydi.
+Durum: KOD KONTROLÜ
+Kontrol sonucu: Ortak nokta sayısı ve açıklamasına beyaz renk uygulanıyor; iç strong/span/small öğeleri de kapsanıyor.
+Kanıt: styles.css .mutualism-bar.
+
+4. 1- Profil sayfasindaki profil medyalarim tuslaninca acilan lightbox icindeki medya ekrana orantili degil, scroll yapmak gerekiyor.
+2- Medya dosyalari da rapor (sikayet) edilebillmeliydi.
+3- Onceki-Sonraki butonlari. en sagda yanyana ollmali.
+4- Alt sol. tarraftaa acilan basliga. su. metin gelmeli: '%kacinci medya% / %albumde kac medya var%"
+Durum: CANLI + TEST
+Kontrol sonucu: 390×844 görünümünde medya ve alt kontroller ekrana sığıyor; 1/6→2/6 geçişi çalıştı. Sayaç solda, önceki/sonraki sağda. Oturumlu kullanıcı için rapor düğmesi ve seçili medya rapor penceresi otomatik test edildi.
+Kanıt: MediaAlbum.tsx MediaViewer; oct12-notifications-media.spec.tsx.
+Kaynak notu: Medya Llihtbox duzeltilirken. 15. ve 27. ve 39. maddeye yazdigim degisiklliklere de uygulanmali.
+
+5. Ayarlar Merkezi bolumu "Profil fotoğrafları" sayfasinda:
+1- Bir dosya secildiginde secilenlerin yuklenmekte oldugunu anlamam lazim
+2- Sayfaya illk resim yuklendiginde kocaman oluyor, sonra medya sayisi ekllendikce kuculuyor. Bu kullanim yerine tum resimler default kucuk omalidir.
+3- Sayfadaki medya dosyalari suruke-birak ile ozel olarak siralanabilmelli
+4- Toplu medya dosyasi secimi olmali
+Durum: DÜZELTİLDİ
+Kontrol sonucu: Çoklu seçim, yükleme durumu, sabit küçük önizlemeler ve sürükleyerek sıralama var. Kısmi yükleme hatasında başarılı dosyalar artık yenileniyor; hata gösteriliyor. 50 dosya sınırı ve sunucudaki ana fotoğrafın ilk sırada kalması kuralı arayüzle eşleştirildi.
+Kanıt: SettingsCenterPage.tsx ProfilePicturesSection; content.service.ts reorderProfileMedia.
+
+6. Mobil profil sayfasinda soldaki elemanlar kaymis ve sikismis yazilarr asaagi tasiyor, Gorunum bozuk
+Durum: CANLI KONTROL
+Kontrol sonucu: 390×844 mobil görünümde profil adı, fotoğraflar ve bilgiler kart içinde; yatay taşma gözlenmedi. Bu kontrol masaüstü tarayıcı boyutlandırmasıdır, fiziksel telefon testi değildir.
+Kanıt: PublicProfilePage.tsx; styles.css; canlı Chrome.
+
+7. Deskop profil sayfasinda sol sidebar seklinde yapildigi icin sag taraf tamamen scroll olmadan sidebarin asaggisindaki ellemanllara erisilemiyor. Bunu daha oncleleri de yazmistim. Gerekirse ayni tasarimi koruyarak sidebari kaldirialim. Boylelikle scrolll yaptigim tum. sayfa ayni anda scrolll olur.
+Durum: CANLI KONTROL
+Kontrol sonucu: 1440 genişlikte profil başlığı ve kartı position:static, overflow:visible. Kart sayfanın normal akışında; ayrı sabit sidebar kaydırması yok. Sayfa genişliği viewport ile aynı.
+Kanıt: PublicProfilePage.tsx; styles.css; canlı DOM ölçümü.
+
+8. Kurumsal Profil Sayfasinin en alttinda adres bilgisinin hemen altindaki siyah renklli "İşletme adı" bilgisi yazmasin. Zaten yukarida buyuk buyuk yaziyor.
+Durum: CANLI KONTROL
+Kontrol sonucu: Adres altında marka adı tekrar edilmiyor. Ticari unvan, şirket türü ve faaliyet kategorisi ayrı bilgi olarak korunuyor.
+Kanıt: PublicProfilePage.tsx; canlı karaoglan profili.
+
+9. Ayarlar Merkezi bolumu (kurumsal uyeler icin olan) "Profili düzenle sayfaasindaki "Sirket türü" ve "Faaliyet Alani" inputlari "Kurumsal Uye Ol" sayfasindaki gibi dropdown olmali.
+Durum: TEST + KOD
+Kontrol sonucu: Şirket türü ve faaliyet alanı serbest metin yerine aynı kurumsal seçenekleri kullanan açılır listeler.
+Kanıt: SettingsCenterPage.tsx; requirements-ui.spec.tsx.
+
+10. Etkinlik AnaSayfasindaki "Haftalık keşif kartları" linki ve ozelligi olmayacak. Instagram postlarrimiz manuel olarak secilmis iceriklerle hazirlanacaktir.
+Durum: KOD KONTROLÜ
+Kontrol sonucu: Haftalık keşif kartları bağlantısı ve otomatik sosyal paylaşım arayüzü kaldırılmış; kullanılmayan çeviri anahtarı görünür özellik üretmiyor.
+Kanıt: EventsPage.tsx.
+
+11. Avatarlari yukledikten sonra "Illgi Alani Detay" sayfasindaki "Ilgili kullanicillar" widget'inin gorunumu bozuldu.Burada icice gecmis dairre seklinde prrofiline en son ilgi alanini ekleyen avatalardan belli sayida gosterip saginda "4 kullanıcının tümünü göster" gibi bir baglanlanti olmaliydi.
+Durum: DÜZELTİLDİ
+Kontrol sonucu: Etiketi en son ekleyenler önce getiriliyor; önizleme sınırlı sayıda üst üste yuvarlak avatar ve tüm kullanıcılar bağlantısı kullanıyor.
+Kanıt: tags.service.ts listRelatedUsers; TagsPage.tsx; styles.css.
+
+12. "Illgi Alani Detay" sayfasindaki "Liste gorunumu" ozelligi iptal edimeli, icerikler fix "card gorunumunde" listelenmeli.
+Durum: TEST + KOD
+Kontrol sonucu: İlgili kullanıcılar sabit kart görünümünde; liste görünümü seçeneği yok.
+Kanıt: RelatedUsersPage.tsx; community-related-users-ui.spec.tsx.
+
+13. "Illgi Alani Detay" sayfasi kart gorunumunde icerikler listelenirken ust uste 3. noktali aksiyonar menusu en soldaki butonun hemen sagindaa gosteerrilmeli
+Durum: KOD KONTROLÜ
+Kontrol sonucu: Üç nokta menüsü ilk aksiyonun hemen sağına yerleşiyor; diğer butonlar arkasından geliyor.
+Kanıt: RelatedUsersPage.tsx; styles.css ilgili kullanıcı kart aksiyon sıralaması.
+
+14. "Illgi Alani Detay" sayfasi "Bu etiketteki gönderiler" widgetinda yuklenmek uzere medya dosyasi sectigimde "0 resim, 1 video seçildi" vb yazillari ve yukeniyor ikonu en saga hizali degil; "yayinla" butonunun hemen asagisinda gosterilmelydi.
+Durum: KOD KONTROLÜ
+Kontrol sonucu: Seçilen resim/video sayısı ve yükleme bilgisi yayınlama kontrollerinin altında ayrı satırda.
+Kanıt: TagsPage.tsx; styles.css .comment-media-count.
+
+15. "Illgi Alani Detay" sayfasi "Bu etiketteki gönderiler" widgetinda yuklenmek uzere 4 adeet medya dosyasi secerrek yukledigimde resimlein thumbnaillerinin cok buyuk oldugunu gordum. Bu alanin yuklenen resim sayisina gore farkli gorunumleerri olmali. Cok sayida medya varsa listelenen son thumbnailin altindaa gurpladirilmali ve uzerinde +19 gibi bir yazi gosterilmeli. Yani resimler kucuk gorunmeli. Birr medya dosyasi tuslandiginda profil sayfasindaki "Medya Lightbox"i acilmali.
+Durum: TEST + KOD
+Kontrol sonucu: Medya sayısına göre kompakt yerleşim; ilk dört dosyadan sonra +N. Dokuz dosyada +5 ve beşinci dosyaya lightbox geçişi test edildi. Profil ile aynı görüntüleyici kullanılıyor.
+Kanıt: MediaAlbum.tsx; oct12-notifications-media.spec.tsx.
+Kaynak notu: Medya Llihtbox yapilirken. 4. ve 27.  ve 39. maddeye yazdigim degisiklliklere burasi da uygun ollmali.
+
+16. AnaSayfa'daki."Mekanlar" widggetinda
+1- "Yeni eklenenler" sekmesinin adi "Yeniler" olarak degismeli
+2- "Trendy" ve "Yeniller" sekmeleri Dekstop'da ve Mobilde "Tüm mekânlar" baglantisinin solunda konumlanirirlmalli
+3- Selected ollan sekmenin gorunumu stili farkli olur. (Hemen yukarisindaki "Gündemdeki ilgi alanları" widgetindaki sekmeler gibi.
+Durum: TEST + KOD
+Kontrol sonucu: Mekânlar sekmesi Yeniler olarak adlandırılmış; Trendy/Yeniler, Tüm mekânlar bağlantısının solunda; seçili sekme farklı stile sahip.
+Kanıt: HomePage.tsx; home-requirements-ui.spec.tsx; styles.css .home-place-tools.
+
+17. Kadir bey tarafinan Resmi bir Linkedin sayfasimiz olusturuldugunda sayfanin ikonu foooterdaki mevcut ikonlarin yanina yerlestirilelcek.
+Durum: CANLI KONTROL
+Kontrol sonucu: Footer LinkedIn ikonu https://www.linkedin.com/company/konnektora-app/ adresine bağlı.
+Kanıt: SiteFooter.tsx; canlı Chrome.
+
+18. Footer'daki "Magaza" sayfasinin adi "Magaza & Fiyatlar" olarak guncelllnecek.
+Durum: CANLI KONTROL
+Kontrol sonucu: Footer metni Mağaza & Fiyatlar; hedef /store.
+Kanıt: SiteFooter.tsx; canlı Chrome.
+
+19. Ettkinlikler AnaSayfasinda sol taraftaki Sidebar'da:
+1- Ulke inputu, Sehir inout'un yukarrisina tasinacak. Her iki input da drropdown olacak.
+2- "Trend etiketler" de yer alan etiketler tipki "Ilgi Alanlari Anasayfasi"nda listelenen etiketler. gibi kenarlari oval dikdortgenin icinde olmalli
+3- "Trend etiketler" in en altinda "Show more" baglantisi olmali ve sonraki etkinliklerle iliskilendirilmis en trendy 40 etiket daha listelenmeli.
+4- Etkinlikler filtreleniyorken gorulen "Filtreleri temizle" baglantisi en asagida degil; basligin asagidinda, araama inputunun yukarisinda gosterilmeli
+Durum: TEST + KOD
+Kontrol sonucu: Ülke şehirden önce ve ikisi de seçim alanı. Trend etiketler kapsül biçiminde; daha fazla bağlantısı 40 ek kayıt istiyor, gelecek etkinlik ilişkisi filtreleniyor. Temizle bağlantısı başlığın altında, aramadan önce.
+Kanıt: EventsPage.tsx; CountryCityFields.tsx; tags.service.ts; tag-event-discovery-ui.spec.tsx.
+
+20. 1- Mekan olustururken bir de yonetici adi girdim. Olusturrunca hem "Mini Muzikhol mekânına davetlisin" hem de "Mekân yöneticiliği daveti" emaillleri aldim oteki hesabima, Oysa sadece yonetici olarrak eklenen kisi sadece "Mekân yöneticiliği daveti"  konulu emaili almaliydi.
+2-  Bildirimlerr sayfasinda davet eden kisinin "kullanici adi" bilgisi de gosteerilmeliydi.
+Durum: KOD + SUNUCU TESTİ
+Kontrol sonucu: Mekân yöneticiliği davetinde genel davet e-postası atlanıp özel yönetici e-postası gönderiliyor. Bildirim gövdesinde davetçinin @kullanıcıadı var. Gerçek e-posta teslimi için test alıcısı gerekir.
+Kanıt: places.service.ts; mail.service.ts; places.service.spec.ts; mail.service.spec.ts.
+
+21. 1- Mekan olustururken ekledigim mekan gorselleri Mekan Detay Sayfasinda gorunmuyor.
+Durum: TEST + KOD
+Kontrol sonucu: Mekân oluşturma sonrasında yüklenen medya mekân kimliğiyle ilişkilendiriliyor ve detay galerisi bu kayıtları okuyor.
+Kanıt: PlacesPage.tsx; PlaceDetailPage.tsx; ContentMediaGallery.tsx; place-detail-requirements-ui.spec.tsx.
+
+22. 1- Mekan Detay Sayfasindaki "Mekanla ilgili etiketlerin" yukarisindaaki "Etiketler'. basligi olmayacak. Etikeet olduklari cok acik zaten.
+2- 6dan fazla etiket varsa gorunen "Tümünü göster (10)" butonu link olacak ve en sondaki etiketin yaninda gosterilecek..Tumunu goster tuslaninca bir daha "Daha az" gibi birsey gorunmeyecek
+Durum: TEST + KOD
+Kontrol sonucu: Ayrı Etiketler başlığı yok; tümünü göster bağlantısı etiketlerin yanında metin bağlantısı; açıldıktan sonra gereksiz kapatma kontrolü yok.
+Kanıt: PlaceDetailPage.tsx; place-detail-requirements-ui.spec.tsx.
+
+23. Mekan Detay Sayfasinda mekan gorsellerinin altindaki mekani olusturan kullanici adi. bilgisinin basindaa Etkinlik Detaydaki "kalkan" ikonu kullanilmali.
+Durum: KOD KONTROLÜ
+Kontrol sonucu: Mekânı oluşturan kişinin yanında kalkan/onay simgesi var.
+Kanıt: PlaceDetailPage.tsx ShieldCheck.
+
+24. 1- Mekan  Detay Sayfasindaaki C2A butonlarinin sirralamasi yanlis. Dogrusu: Takip et, Davet et, Paylaas, 3 nokta ust uste menusu
+2- 3 nokta ust uste menusunden "ilgili kullanicilar" secenegi kaldirilacak.
+Durum: TEST + KOD
+Kontrol sonucu: Takip, davet, paylaşım ve üç nokta aksiyonları birlikte; ilgili kullanıcılar menüde tekrarlanmıyor.
+Kanıt: PlaceDetailPage.tsx; place-detail-requirements-ui.spec.tsx.
+
+25. Avatarlari yukledikten sonra "Mekan Detay" sayfasindaki "Ilgili kullanicillar" widget'inin gorunumu bozuldu.Burada icice gecmis dairre seklinde en son uye olmus avatalardan belli sayida gosterip saginda ya da asagisinda ilgili linkleri (1 üye ·vb. baglantilar) olmaliydi.
+Durum: DÜZELTİLDİ
+Kontrol sonucu: Mekân ilişkileri en yeni önce sıralanıyor; kabul edilmiş gerçek üyeler avatar önizlemesine giriyor. Geçici davetlilerin telefon/e-postası avatar olarak sızmıyor.
+Kanıt: places.service.ts; PlaceDetailPage.tsx.
+
+26. "Mekanla Ilgili Kullanicilar" listelenirken:
+1- ust uste 3 noktali aksiyonlarr menusu icerisindeki "Organizatorlukten cikar" ve "Mekana engelle" seceneklerrinin ikonlari koyulmamis. Varsa diger seceneklerin. de ikonumu olup olmadigina bakilmalidirr.
+2- Kullanici kartlarinda ters yazilmis. Mekani olusturan kisiye "yonetici"; mekan yoneticisine "sahip" diyor.  Degistirilmeli.
+Durum: DÜZELTİLDİ
+Kontrol sonucu: Yönetici/organizatör ve engelleme aksiyonlarına ikon eklendi. Oluşturucu Sahip, manager Yönetici olarak gösteriliyor; roller ters çevrilmiyor.
+Kanıt: RelatedUsersPage.tsx; community-related-users-ui.spec.tsx.
+
+27. "Mekan Detay" sayfasindaki "Mekân yorumları" widgetinda kartlarda:
+1- Yayinlanma zamani bilgisi kullanici adinin saginda siyah renkli ve alticizisiz verilebilir,
+2- Beğen, yorum, paylas, diger aksiyonlar baglantilari alt alta degil soldaan saga seklinde gosteilmelli.
+3- Ayni anda maksimum 5 medya dosyasi degil limit. Ayni anda 50 adett medya dosyasi. secilip yuklenebilmeli.
+4-  Birr medya dosyasi tuslandiginda profil sayfasindaki "Medya Lightbox"i acilmali.
+5- Ust uste 3 noktali aaksiyonlar menusunun icerisindeki "Rapor et" baglantisinin da ikonu olmali.
+6- Etkinlik yoneticisii bir etkinlik sahibini etkinlige yasaklayamamali
+Durum: DÜZELTİLDİ + TEST
+Kontrol sonucu: Tarih kullanıcı adının yanında, aksiyonlar yatay; 50 medya sınırı, ortak lightbox ve ikonlu raporlama var. İçerik sahibinin kendi içeriğinden engellenmesi menüden kaldırıldı; sunucu da reddediyor. Yanıt tarih/aksiyon düzeni ortak bileşende düzeltildi.
+Kanıt: ContentComments.tsx; MediaAlbum.tsx; support-and-content-requirements-ui.spec.tsx; content/events/places testleri.
+Kaynak notu: Medya Llihtbox yapilirken. 4. ve 15. ve 39. maddeye yazdigim degisiklliklere burasi da uygun ollmali.
+
+28. "Mekan Detay" sayfasi "ilgili kullanicilar" sayfasinda "Liste gorunumu" ozelligi iptal edimeli, icerikler fix "card gorunumunde" listelenmeli.
+Durum: TEST + KOD
+Kontrol sonucu: Mekânla ilgili kullanıcılar kart görünümünde sabit; liste seçimi yok.
+Kanıt: RelatedUsersPage.tsx; community-related-users-ui.spec.tsx.
+
+29. "Mekan Detay" sayfasi  "ilgili kullanicilar" sayfasinda kart gorunumunde icerikler listelenirken ust uste 3. noktali aksiyonar menusu en soldaki butonun hemen sagindaa gosteerrilmeli
+Durum: KOD KONTROLÜ
+Kontrol sonucu: Mekân kullanıcı kartında üç nokta menüsü ilk butondan hemen sonra.
+Kanıt: RelatedUsersPage.tsx; styles.css aksiyon order kuralları.
+
+30. Blldirimler Sayfasindaki kartlarrda gecen mekan, etkinlik, uye, ilgi alani adlari ilgili sayfasina linkli olmalilar
+Durum: DÜZELTİLDİ + TEST
+Kontrol sonucu: Bilinen etkinlik/mekân/etiket hedefleri kendi sayfalarına; kullanıcı hedefleri @kullanıcıadı ile profile bağlanıyor. @ ve # ifadeleri RichText bağlantılarına dönüşüyor. Kimliği olmayan eski düz metindeki belirsiz kişi adları tahmin edilerek bağlanmıyor.
+Kanıt: ProfileService.getNotifications; NotificationsPage.tsx; RichText.tsx; profile.service.spec.ts; oct12-notifications-media.spec.tsx.
+
+31. Postahane bolumunde "Mesaj Detay" ekraninin gorunumu bozuk. Footer. mesaajlar alanina dogru yukari kaymis
+Durum: KOD KONTROLÜ
+Kontrol sonucu: Mesajlar alanı kendi yükseklik/taşma düzenini kullanıyor; footer içerik akışının ardından geliyor.
+Kanıt: MessagesPage.tsx; styles.css .advanced-messages-page; messages-composer-requirements-ui.spec.tsx.
+
+32. 1- Ayarlar bolumu "Profili düzenle" sayfasindaki "Kullanıcı adı" inputuna yeni bir karakter giirldiginde/silindiginde/degistiilldiginde uygunluugu anlik olarak kontrol edilmeli ve duruma uygun bir ifade (uygun / kullanimda / kullabilecek karakterler) yazi ile inputun sag ust kosesinde kullaniciya gosterilmeli
+2- Kullanici adi girmek opsiyonel degil, zorunludur. Dolayisiyla kullanici inputu bos iken ya da gecersiz bir girdi yazarken sayfa kaydedilememeli.
+Durum: TEST + KOD
+Kontrol sonucu: Kullanıcı adı uygunluğu alanın yanında gösteriliyor. Geçersiz veya kullanımda olan ad form gönderimini engelliyor; sunucu da benzersizliği kontrol ediyor.
+Kanıt: UsernameField.tsx; username-field.spec.tsx; profile.service.spec.ts.
+
+33. Ayarlar Merkezi "Profili düzenle" sayffasinin. asagisindaki "İlgi alanları" widgettini kaldirialim.  (bunu. belki en az 3 kere yazmisimdir)
+Durum: KOD KONTROLÜ
+Kontrol sonucu: Profil düzenleme formunda ikinci ilgi alanları widgetı bulunmuyor; ilgi alanları profil akışından yönetiliyor.
+Kanıt: SettingsCenterPage.tsx.
+
+34. Tabletler icin de navigasyon tasarlanmali. Tablet'lerdeki naavigasyon eksik goruluyor. Ekran cozunurlugu dusuk platforrmlarr ve tablette navigasyonun eksiksiz gorunmesi icin de bir seyler yapmaliyiz. Tablet kullanicisi olmadigim icin karari gelistiici ekibe birakiyorum. (Bunu da 3. defa yaziyorum)
+Durum: DÜZELTİLDİ
+Kontrol sonucu: Tablet menüsü görünse de ana bağlantıları eksikti. Menüye etkinlikler, mekânlar, ilgi alanları, ana sayfa/akış ve oturumlu kullanıcı için mesajlar eklendi. Yeni yayın üzerinde 1024×768 canlı menüde ana bağlantılar görünür ve düzgün yerleşmiş olarak doğrulandı.
+Kanıt: AppLayout.tsx; requirements-ui.spec.tsx; styles.css tablet kırılımı.
+
+35. Avatarlari yukledikten sonra "Etkinklik Detay" sayfasindaki "Ilgili kullanicillar" widget'inin gorunumu bozuldu.Burada icice gecmis dairre seklinde en son katilmis kullanicilaarin avatalardan belli sayida gosterip saginda ya da asagisinda ilgili linkleri (2 katılımcı vb. baglantilar) olmaliydi.
+Durum: DÜZELTİLDİ
+Kontrol sonucu: Etkinlik kullanıcıları en yeni ilişki önce sıralanıyor; avatarlar kabul/katıldı durumundaki gerçek üyelerden. Takip edilenleri öne taşıyan ve yeni sırasını bozan arayüz sıralaması kaldırıldı.
+Kanıt: events.service.ts; EventDetailPage.tsx.
+
+36. "Etkinlik Detay" sayfasi "ilgili kullanicilar" sayfasinda "Liste gorunumu" ozelligi iptal edimeli, icerikler fix "card gorunumunde" listelenmeli.
+Durum: TEST + KOD
+Kontrol sonucu: Etkinlikle ilgili kullanıcılar kart görünümünde; liste görünümü kaldırılmış.
+Kanıt: RelatedUsersPage.tsx; community-related-users-ui.spec.tsx.
+
+37. "Etkinlikle Ilgili Kullanicilar" listelenirken:
+1- ust uste 3 noktali aksiyonlarr menusu icerisindeki "Etkinlik sahibi yap", "Oganizator yap" ve "Etkinllige engelle" seceneklerrinin ikonlari koyulmamis. Varsa diger seceneklerin. de ikonumu olup olmadigina bakilmalidirr.
+2- Kullanici kartlarinda ters yazilmis. Etkinllgi olusturan kisiye "yonetici"; yoneticiye "sahip" diyor.  Degistirilmeli.
+Durum: DÜZELTİLDİ
+Kontrol sonucu: Etkinlik rol/engelleme aksiyonları ikonlu; oluşturucu Sahip ve atanmış yönetici Yönetici olarak ayrılıyor.
+Kanıt: RelatedUsersPage.tsx; community-related-users-ui.spec.tsx.
+
+38. "Etkinlik Detay" sayfasindaki "Etkinlik yorumları" widgetinda kartlarda:
+1- Yayinlanma zamani bilgisi kullanici adinin saginda siyah renkli ve alticizisiz verilebilir,
+2- Beğen, yorum, paylas, diger aksiyonlar baglantilari alt alta degil soldaan saga seklinde gosteilmelli.
+3-  Birr medya dosyasi tuslandiginda profil sayfasindaki "Medya Lightbox"i acilmali.
+4- Ust uste 3 noktali aaksiyonlar menusunun icerisindeki "Rapor et" baglantisinin da ikonu olmali.
+Durum: DÜZELTİLDİ + TEST
+Kontrol sonucu: Tarih adın yanında, siyah/altı çizgisiz; beğeni/yorum/paylaşım yatay. Medya ortak lightbox açıyor, rapor aksiyonu ikonlu.
+Kanıt: ContentComments.tsx; styles.css; support-and-content-requirements-ui.spec.tsx.
+
+39. "Etkinlik Detay" sayfasi "Etkinllik yorumllari" widgetinda yuklenmek uzere 9 adeet medya dosyasi secerrek yukledigimde resimlein thumbnaillerinin cok buyuk oldugunu gordum. Bu alanin yuklenen resim sayisina gore farkli gorunumleerri olmali. Cok sayida medya varsa listelenen son thumbnailin altindaa gurpladirilmali ve uzerinde +19 gibi bir yazi gosterilmeli. Yani resimler kucuk gorunmeli. Birr medya dosyasi tuslandiginda profil sayfasindaki "Medya Lightbox"i gibi acilmali.
+Durum: TEST + KOD
+Kontrol sonucu: Dokuz medya ilk dört küçük görsel ve +5 ile gruplanıyor; tümüne ortak görüntüleyiciden erişiliyor.
+Kanıt: MediaAlbum.tsx; oct12-notifications-media.spec.tsx.
+Kaynak notu: Medya Llihtbox yapilirken. 4., 15,  27. maddeye yazdigim degisiklliklere burasi da uygun ollmali.
+
+40. Etkinllik Detay Sayfasindan "Etkinligi duzenle"ye tusladigimda acilan "Etkinlik Duzenle Formunda" etkinligin mevcut tum bilgileri ve tum ayarlari ve. tum dosyalari formda dolu gelmiyor; gelmeli.
+Durum: DÜZELTİLDİ + TEST
+Kontrol sonucu: Etkinlik başlık/açıklama/tarih/yer/görünürlük/etiket/program/bilet/medya bilgileri dolduruluyor. Mevcut saat dilimi, oluşturucu adı ve atanmış yöneticiler korunup gösteriliyor. Bitiş, mekân ve yayın URL'sini boşaltma artık eski değeri tutmuyor.
+Kanıt: AccountPage.tsx; events.service.ts; requirements-55-66-ui.spec.tsx; events.service.spec.ts.
+
+41. "Etkinlik Duzenle" sayfasinda "Etkinligi yayinla" degil "Etkinligi guncelle" butonu olmali.
+Durum: TEST + KOD
+Kontrol sonucu: Düzenleme modunda Etkinliği güncelle düğmesi var.
+Kanıt: AccountPage.tsx; requirements-55-66-ui.spec.tsx.
+
+42. 1- "Etkinlik Olustur" ve "Etkinlik Duzenle" sayfalarinin "Adım 3: Etkinlik medyası" ekraninda yuklenen medya dosyalari ekranda gosteilmeli
+2- Medya dosyalai surukle-birak ile siralamalari degistirilebilmeli.
+3- Etkinllik afisi yap butonu olmali
+Durum: TEST + KOD
+Kontrol sonucu: Üçüncü adımda mevcut ve yeni medya önizleniyor, sürükleyerek sıralanıyor; afiş seçimi var.
+Kanıt: AccountPage.tsx; ContentMediaGallery.tsx; requirements-55-66-ui.spec.tsx.
+
+43. Akis Karttkari ve Ilgi Alani Detay Post Kartlarindaki "Mesaj Gonder" butonu tuslandiginda yonlenirildigim sayfada; 
+a ihtimali) Soz konusu kullanici ile onceki mesajlarim varsa; ileti dizisine yonlendirilmeliydim.
+b ihtimali) Soz konusu kullanici ile onceki mesajlarim yoksa; karttaki kullanici adinin alici olarak hazir yazili oldugu mesaj gonder formuna yonlendirilmeliydim
+Durum: TEST + KOD
+Kontrol sonucu: Mesaj gönder bağlantısındaki kişi çözülüyor; mevcut konuşma varsa açılıyor, yoksa alıcısı doldurulmuş yeni mesaj hazırlanıyor.
+Kanıt: MessagesPage.tsx; messages-composer-requirements-ui.spec.tsx.
+
+44. Etklinlik Detay Sayfasinda etkinllik gorselinin altindaki "Etkinligi olusturraan kisi" bilgisinde "Selatin Karaoglan" yaziyor. Oysa "Mahmut Tuncer" unvanli kurumsal uyeyim, "karaogllan" kullanici adim.
+Durum: CANLI + TEST
+Kontrol sonucu: Burning Man sayfasında oluşturucu Mahmut Tuncer olarak görüntüleniyor; kurumsal isim/username önceliği kullanılıyor.
+Kanıt: EventDetailPage.tsx; public-name.ts; canlı Chrome.
+
+45. Etkinliklerim AnaSayfasi "Etkinliklerim" widgetinda "olusturdugum", "yoneticisi oldugum", "bilet alarak ya da almayarraak katildigim" etkinlikler gosterrilmeliydi. Profilimde etkinlikler gorunsede Etkinlikleim Anasayfasi "Etkinliklerim" widgeti bos geliyor
+Durum: SUNUCU TESTİ
+Kontrol sonucu: Etkinliklerim; oluşturucu/yönetici rolleri, kabul edilmiş katılım ve bilet sahipliğini kapsıyor.
+Kanıt: EventsService.listManagedEvents; events.service.spec.ts.
+
+46. Etkinliklerim AnaSayfasi sol sidebar'daki; "Tarih" inputuna ben tarihi yazana kadar sayfa guncelleniyor ve Tarih inputu siliniyor.
+Durum: KOD KONTROLÜ
+Kontrol sonucu: Tarih yazılırken her tuşta sorgu yenilenmiyor; filtre alanından çıkışta uygulanıyor.
+Kanıt: EventsPage.tsx tarih input onBlur/defaultValue.
+
+47. Etkinliklerim AnaSayfasi sol sidebar'daki; "Tarih" inputuna ben tarihi yazana kadar sayfa guncelleniyor ve Tarih inputu siliniyor.
+Durum: TEKRAR MADDE
+Kontrol sonucu: 46 ile aynı hata ve aynı kontrol; ayrıca farklı bir düzeltme gerektirmiyor.
+Kanıt: EventsPage.tsx.
+
+48. Etkinliklerim AnaSayfasi sol sidebar'daki; "Format" inputundan "Hibrit" secenegi kalddirilsin ama;
+1- Format "cevrim ici" seciilirrse hem "cevrim ici" hem "hibrit" formatinndaki etkinlikler listelensin.
+2- Forrmat "yuz yuze" seciilirrse hem "yuz yuze" hem "hibrit" formatinndaki etkinlikler listelensin.
+Durum: TEST + KOD
+Kontrol sonucu: Filtrede Hibrit seçeneği yok; çevrim içi ve yüz yüze sorguları hibrit etkinlikleri de içeriyor.
+Kanıt: EventsPage.tsx; EventsService.listPublicEvents; events.service.spec.ts.
+
+49. Kurator Sayfasinda formu gonderrdigimde cikan " Başvurun alındı. Ekibimiz seninle iletişime geçecek." yazisi yesil renkli degil. beyaz olsun.
+Durum: KOD KONTROLÜ
+Kontrol sonucu: Küratör başvuru başarı metni beyaz.
+Kanıt: styles.css .curator-recruitment .form-success.
+
+50. Kurator Sayfasinda formu gonderrdigimde mail icerisinde:
+1- Maildeki "Başvuru no" bilgisinde gecerli bir deger yazmiyor
+2- Maildeki "Kullanıcı no" bilgisinde "Misafir başvuru" yaziyor. Oysa ben login olmus bir kullanici olarak formu doldurdum. Bu durumda profi sayfasina giden bir link olmaliydi
+Durum: TEST + KOD
+Kontrol sonucu: Başvuru kimliği oluşturulup e-postaya yazılıyor; oturumlu başvuruda kullanıcı kimliği alınarak profil bağlantısı veriliyor. Gerçek posta teslimi ayrıca test alıcısına bağlı.
+Kanıt: CuratorsController; curators.service.ts; mail.service.ts; curator/mail testleri.
+
+51. Mekan Detay Sayafasindan erisilen "Mekan Duzenle Lightbox"i guzel olmus. Ancak;
+1-  "Mekan yoneticileri, mekan medyalari, mekanla ilgili etiketler, mekan turu" bilgileriinin editleyemiyoum cunku ligthbox'da yoklar.
+2- Mobil gorunumde Lightbox uzerinde "adres" inputu icin cok dar bir alan gosteriliyorr. 
+3- Bence Desktop'daki eksikleri tamamlanarak lightbox kullanilmali ama Mobil'de ayri bir duzenleme sayfasi olmaliydi. Cok ugrastiraacaksa "Mekan Duzenle" icin ayri bir sayfa da olabilirdi.  Ayni sey "Etkinlik Duzenle" icin de gecerli.
+4- "Mekan Olustur" ve "Mekan Duzenle" sayfalarinda "Mekan Medyalari" ayri bir adim/sekme olsun. 
+5- "Mekan Olustur" ve "Mekan Duzenle" sayfalarinda "Mekan Medyalari" adiminda mekan avatarini nasil sececegim? Mekan gorselleini surrukle birak yaparak siralamasi degistirilebilmeli.
+Durum: TEST + KOD
+Kontrol sonucu: Mekân türü, etiketler, yöneticiler ve medya düzenlenebilir. Mobilde ayrı düzenleme sayfası; medya ayrı adım, avatar seçimi ve sürükleyerek sıralama var. Adres alanı form genişliğini kullanıyor.
+Kanıt: PlaceDetailPage.tsx; PlacesPage.tsx; PendingPlaceMedia.tsx; place-detail-requirements-ui.spec.tsx; location-picker-ui.spec.tsx.
+
+52. AnaSayfa'daki "Topluluğun nabzını yakala." widgetinda listlenen "Popüler hesaplar" ve "Yeni uyeler" listelerrindeki;
+1- kullanicilarin profil avatarlari gorunmuyor.
+2- "Gizlillilik ayarrlari" sayfasinda "Ad soyad görünürlüğü" "Hic kimse" olarak ayarrlanmis kullanicialarin "Isim soyisimleri gorunmemelli
+Durum: TEST + KOD
+Kontrol sonucu: Popüler/yeni üye kartları avatar URL'sini kullanıyor; ad görünürlüğü sunucuda uygulanıyor, gizli adlar username ile değiştiriliyor.
+Kanıt: DiscoveryService; HomePage.tsx; home-requirements-ui.spec.tsx; discovery.service.spec.ts.
+
+53. Ayarllar Merkezi "Gizlilik Ayarlari" sayfasinda;
+1- Engellenen etkinlikler widget'inda listelenen etkinlik adi bilgisi etkinlik detay sayfasina linklli olmali. 
+2-  Engellenen etkinlikler widget'inda listelenen etkinlik adi bilgisinin asagisinda Etkillik zamani gosterilmeli
+3- Engellenen mekanlar widget'inda listelenen mekan adi bilgisi mekan detay sayfasina linklli olmali. 
+4-  Engellenen mekanlar widget'inda listelenen mekan adi bilgisinin asagisinda "mekan sehir ismi" gosterilmeli
+5- Engellenen hesaplar widgetinda listelenen kullanici adi bilgisi profil sayfasina linklenmis olmali.
+6- Engellenen hesaplar widgetinda listelenen kullanicinin eposta adresi kesilnlikle gosterilmemeli
+Durum: TEST + KOD
+Kontrol sonucu: Engellenen etkinlikler tarih ve detay bağlantısı; mekânlar şehir ve detay bağlantısı; hesaplar profil bağlantısı içeriyor. Hesap e-postası gösterilmiyor.
+Kanıt: ProfileService.getBlocks; SettingsCenterPage.tsx; requirements-55-66-ui.spec.tsx.
+
+54. Akis sayfasinda "Filtrele" altinnda gosterrilen "Tüm içerikler, Post'lar, Fotoğraflar, Videolar, Etkinlikler, Mekânlar, Etiketler" sekmeleriden "Etiketler" seceneginn Desktopda gorulebilmesi yeterii alan olmasina ragmen saga scroll yapmak gerekiyor
+Durum: KOD KONTROLÜ
+Kontrol sonucu: Akış filtreleri satıra sığmazsa sarılıyor; masaüstünde etiket filtresi yatay kaydırma arkasına saklanmıyor.
+Kanıt: FeedPage.tsx; styles.css filtre flex-wrap kuralları.
+
+55. Ilgi Alani Detay sayfasi "Bu etiketteki gönderiler" widgetinda bir Post kartindaki "Gönderi yorumları" alani acildiginda goruyorum ki;
+1- Yayinlanma zamani bilgisi kullanici adinin saginda siyah renkli ve alticizisiz verilebilir,
+2- Beğen, paylas, diger aksiyonlar baglantilari alt alta degil soldaan saga seklinde gosteilmelli.
+3- Posta yorum olmaya devam etmeklli ama "Yoruma yorum" ozelligi olmamali
+4-  Bir medya dosyasi tuslandiginda profil sayfasindaki "Medya Lightbox"i acilmali.
+5- Ust uste 3 noktali aaksiyonlar menusunun icerisindeki "Rapor et" baglantisinin da ikonu olmali.
+Durum: DÜZELTİLDİ + TEST
+Kontrol sonucu: Etiket gönderi yanıtlarında tarih adın yanına taşındı; beğeni/paylaşım/menü yatay. Yanıt paylaşımı eklendi. İkinci düzey yanıt yok; sunucu da reddediyor. Ortak medya ve ikonlu rapor var.
+Kanıt: ContentComments.tsx; support-and-content-requirements-ui.spec.tsx; content.service.spec.ts.
+
+56. Etkinlik Detay sayfasi "Etkinlik yorumları" widgetinda bir Post kartindaki Gönderi yorumları alani acildiginda goruyorum ki;
+1- Yayinlanma zamani bilgisi kullanici adinin saginda siyah renkli ve alticizisiz verilebilir,
+2- Beğen, paylas, diger aksiyonlar baglantilari alt alta degil soldaan saga seklinde gosteilmelli.
+3- Posta yorum olmaya devam etmeklli ama "Yoruma yorum" ozelligi olmamali
+4- Ust uste 3 noktali aaksiyonlar menusunun icerisindeki "Rapor et" baglantisinin da ikonu olmali.
+Durum: DÜZELTİLDİ + TEST
+Kontrol sonucu: Etkinlik gönderi yanıtları aynı düzeltmeleri kullanıyor: ad yanında tarih, yatay aksiyonlar, paylaşım, ikonlu rapor; yoruma yorum yok.
+Kanıt: ContentComments.tsx; support-and-content-requirements-ui.spec.tsx; content.service.spec.ts.
+
+57. Mekan Detay sayfasi "Mekan yorumları" widgetinda bir Post kartindaki Gönderi yorumları alani acildiginda goruyorum ki;
+1- Yayinlanma zamani bilgisi kullanici adinin saginda siyah renkli ve alticizisiz verilebilir,
+2- Beğen, paylas, diger aksiyonlar baglantilari alt alta degil soldaan saga seklinde gosteilmelli.
+3- Posta yorum olmaya devam etmeklli ama "Yoruma yorum" ozelligi olmamali
+4- Ust uste 3 noktali aaksiyonlar menusunun icerisindeki "Rapor et" baglantisinin da ikonu olmali.
+Durum: DÜZELTİLDİ + TEST
+Kontrol sonucu: Mekân gönderi yanıtları aynı düzeltmeleri kullanıyor: ad yanında tarih, yatay aksiyonlar, paylaşım, ikonlu rapor; yoruma yorum yok.
+Kanıt: ContentComments.tsx; support-and-content-requirements-ui.spec.tsx; content.service.spec.ts.
+
+58. Ilgi Alani Detay Sayfasinda sayfa basligi (etiket adi/ilgi alani basligi) kendi linkine tuslanabilsin boylece sayfayi yenilemek icin etiket basligina tuslamam yeterli olsun
+Durum: TEST + KOD
+Kontrol sonucu: Etiket başlığı kendi detay adresine bağlantı.
+Kanıt: TagsPage.tsx; tag-event-discovery-ui.spec.tsx.
+
+59. Etkinlik Detay Sayfasinda sayfa basligi (etkinklik adi) kendi linkine tuslanabilsin boylece sayfayi yenilemek icin etkinlik basligina tuslamam yeterli olsun
+Durum: CANLI + KOD
+Kontrol sonucu: Etkinlik başlığı kendi detay adresine bağlantı; Burning Man üzerinde görüldü.
+Kanıt: EventDetailPage.tsx; canlı Chrome.
+
+60. Mekan Detay Sayfasinda sayfa basligi (mekan adi) kendi linkine tuslanabilsin boylece sayfayi yenilemek icin mekan basligina tuslamam yeterli olsun
+Durum: TEST + KOD
+Kontrol sonucu: Mekân başlığı kendi detay adresine bağlantı.
+Kanıt: PlaceDetailPage.tsx; place-detail-requirements-ui.spec.tsx.
+
+61. "Biletllerim" sayfasinda;
+1-  Etkinlik adi bilgisi "Etkinlik Detay Sayfasina" linkli olsun ve aksiyonlarda "Etkinlik" butonu olmasin.
+2- "Devir et iightbox"inda "Üye değilse adı" inputu ne ise yariyor anlamadim. 
+3- Bir bileti baskasina epostasini yazarak devir ettigimde devir ettigim kisiye gonderien mailde biletin PDF dosyasi da ek olarak olsun. 
+4- "Devir et iightbox"i ekrana sigmiyor ve scroll da yapilamiyor
+5- Sadece "etkinlik baslangic zamani" degil "etkinik zaman araligi" gosterilmeli  
+5- Etkinik mekani veya zamani degismedigi surece bileti "iade et" secenegi/ozelligi olmamali
+6- PDF indir seceneginde indirilen PDF dosyasinda asagidaki bilgiller de olmali:
+6.1- Etkinlik zamani aralligi
+6.2- Bilet adi var ama bilet aciklamasi yazmiyor
+6.3- Etkinlik yeri ve adresi (mekan adi, mekan acik adresi ile sehir ulke billgisi)
+6.4- Biletin etkinlik kapi acilis bilgisi (ornegin "X zamanindan once giris yapmalisiniz." vb. gibi)
+6.5- Etkinlik adi bilgisi etkinlik detay sayfasina linkli olsun.
+6.6- Bileti alan kisinin adi soyadi
+7- Etkinlik yeri ve adresi (mekan adi, mekan acik adresi ile sehir ulke billgisi)
+8- Bir bileti GSM numarasina devir ettigimde "Akis" ve "Etkinlikle Ilgili Kullanicilar" sayfalarinda devir alan kullanicinin GSM numarasi (veya eposta adresi) kesinlikle gosterilmemeli. Kullanici uye ise "Kullanici adi" yazmali. Alici uye degilse en sona bir kart kutusu yerllestirelim ve bu kutuya "Gosterilemeyen +7 katilimci" yazsin.
+Durum: YAZILIM KONTROLÜ / DIŞ TESLİM TESTİ
+Kontrol sonucu: Etkinlik adı linkli, ayrı Etkinlik aksiyonu yok. Alıcı adı alanı açıklamalı; devir penceresi kaydırılabilir. Tarih aralığı, bilet açıklaması, tam adres, isim ve etkinlik bağlantısı PDF'de. Giriş saati uyarıları indirilen PDF'ye eklendi. İade yer/zaman değişimine bağlı. Geçici alıcı PII'si yerine toplu görünmeyen katılımcı sayısı var. Sunucu devir e-postasına PDF ekliyor. Canlı ödeme/iade ve gerçek PDF e-posta teslimi sağlayıcı/test alıcısı olmadan kabul edilmedi.
+Kanıt: TicketsPage.tsx; ticket-pdf.ts; EventsService; MailService; tickets/events/mail testleri.
+
+62. karaoglanselatin@gmail.com eposta adresime sifremi sifirlama maili gonderdim ve sifremi degistirdim bunda sorun yok ama;
+1-Sifremi degistirrince "Akis"a git butonunu tuslayincca beni uyelik surecinde "GSM aktivasyon" adimina neden yonlendiriyor, uyeligimi tamamlamamis miyim?
+2- Sifresini sifirladigim eposta adresimle Login olmayi denedigimde hata veriyor login olmuyor.
+3- O eposta adresiyle uye olmama da izin verrmiyor, "İşlem tamamlanamadı.  Bu e-posta adresiyle zaten bir hesap var. Giriş yapmayı deneyebilirsin."  hatasi veriliyor.
+Durum: HESAP DURUMU / KULLANICI DOĞRULAMASI
+Kontrol sonucu: İlgili hesap salt okunur kontrol edildi: kurumsal, pending, telefon ve e-posta doğrulanmış, username ve onboarding tamamlanmamış. Şifre sıfırlama kaydı tamamlamaz; aynı e-postayla yeni kayıt reddi beklenen davranış. Pending giriş ve kaldığı adımdan devam yolu kod/test ile kontrol edildi. Kullanıcının yeni şifresiyle gerçek giriş ve eksik firma bilgilerinin tamamlanması gerekiyor; şifre istenmedi veya değiştirilmedi.
+Kanıt: AuthService.login/resetPassword; IdentityService.onboardingStatus; auth/identity/onboarding testleri; üretim salt okunur hesap kontrolü.
+
+63. Facebook entegrasyonu hakkinda geri donuus var mi?
+Durum: DIŞ ERİŞİM
+Kontrol sonucu: Meta/Facebook uygulamasının onay ve üretim durumu yetkili sağlayıcı hesabından kontrol edilmeli. Yazılım testi bu onayın yerine geçmez.
+Kanıt: USER_INPUT_REQUIRED_2026-10-12.txt.
+
+64. "Isletmeler icin" sayfasinin FOLD alanindaki;
+1- "Kurumsal hesap oluştur" butonu "Kurumsal uye ol" sayfasina linklenmeliydi.
+2- "İşletme merkezine git" butonu sadece "Kurumsal uye hesabiyla" login olmus kullanicilara gosterilmeli.
+3- Sayfanin en asaggisindaki "Konnektora ile işletmeni büyütmeye hazır mısın?" kutusundaki "Kurumsal hesabını oluştur ve ilk etkinliğini bugün yayınla." metnini "Size uygun paketler ve hizmetlerimizi listeleyin." yazmali ve "Hemen basla" butonu "Magaza & Fiyatlar" sayfasina linklenmeli.
+Durum: TEST + KOD
+Kontrol sonucu: Kurumsal hesap oluştur CTA'sı kurumsal kayıt akışına bağlı. İşletme merkezi yalnız kurumsal oturumda; alt metin ve CTA Mağaza & Fiyatlar'a yönleniyor.
+Kanıt: BusinessLandingPage.tsx; business-landing-ui.spec.tsx.
+
+65. "Uye karti" sayfasinda;
+1- "Kendi NFC kartını oluştur" alanindaki "Üye kartını boş bir NFC etiketine güvenli bağlantı olarak yaz." metnini "Üye kartını boş bir NFC etiketine ya da aksesuarina güvenli bağlantı olarak yaz."  olarak degistirelim
+2- Sayfa baslligi olan "Üye kartın" metin rengi siyah degil beyaz olmalli.
+Durum: TEST + KOD
+Kontrol sonucu: NFC metni etiket ya da aksesuarı kapsıyor; Üye kartın başlığı beyaz.
+Kanıt: IdentityPage.tsx; identity-member-card-ui.spec.tsx; styles.css.
+
+66. Bir kullanici beni bir etkinlige davet edip, bana gelen "Mangal etkinliğine davetlisin" mailindeki "Daveti görüntüle →" butonu tuslandigimda acilan sayfa (Daveti kabul et) gibi bir ekran olmayacak. Bu butona uye kisi tusladigimda "Bildirimler" sayfasi "Onay bekleyenler" sekmesine yonlenirrilmeliyim. Eposta adresi uyeye ait degilse "Daveti görüntüle →"  tuslandiginda kullanici oncelikle "Uye ol" sayfasinna yonllendirilmeliydi.
+Durum: YAZILIM KONTROLÜ / DIŞ TESLİM TESTİ
+Kontrol sonucu: Mevcut üye etkinlik daveti e-postası Bildirimler/Onay bekleyenler'e gider; üye olmayan alıcı kayıt akışına alınır. Yönetici davetlerinin bu sekmeden eksik kalması düzeltildi. Gerçek e-posta/alıcı ile uçtan uca kabul bekliyor.
+Kanıt: MailService.sendEventInviteEmail; AuthTokenPage.tsx; NotificationsPage.tsx; mail.service.spec.ts; oct12-notifications-media.spec.tsx.
+
+67. Bir kullanici beni bir mekana davet edip, bana gelen "mekana davetlisin" mailindeki "Daveti görüntüle →" butonu tuslandigimda acilan sayfa (Daveti kabul et) gibi bir ekran olmayacak. Bu butona uye kisi tusladigimda "Bildirimler" sayfasi "Onay bekleyenler" sekmesine yonlenirrilmeliyim. Eposta adresi uyeye ait degilse "Daveti görüntüle →"  tuslandiginda kullanici oncelikle "Uye ol" sayfasinna yonllendirilmeliydi.
+Durum: YAZILIM KONTROLÜ / DIŞ TESLİM TESTİ
+Kontrol sonucu: Mekân davetinde de üye Bildirimler/Onay bekleyenler'e, üye olmayan kayıt akışına gider. Mekân yöneticiliği daveti sekmeye eklendi. Gerçek teslim/kabul testi alıcı hesabı gerektirir.
+Kanıt: MailService.sendPlaceInviteEmail; NotificationsPage.tsx; mail.service.spec.ts; oct12-notifications-media.spec.tsx.
+
+68. Etkinlige "Davet et" sayfasini actim ve Gmail'i tara secenegini sectim ve "Google Contacts ile tara" butonunu tuslladim. Acilan Google ekraninda bi hesap sectigimde "Erisim engellendi: konnektora.com. Google dogrulama surecini tamamlamadi" hatasi gosterildi.
+Durum: DIŞ ERİŞİM
+Kontrol sonucu: Etkinlik davetindeki Google Contacts engeli Google OAuth uygulama doğrulamasına bağlı; proje sahibi erişimi gerekir.
+Kanıt: ContactsPage.tsx; USER_INPUT_REQUIRED_2026-10-12.txt.
+
+69. Mekana "Davet et" sayfasini actim ve Gmail'i tara secenegini sectim ve "Google Contacts ile tara" butonunu tuslladim. Acilan Google ekraninda bi hesap sectigimde "Erisim engellendi: konnektora.com. Google dogrulama surecini tamamlamadi" hatasi gosterildi.
+Durum: DIŞ ERİŞİM
+Kontrol sonucu: Mekân davetindeki aynı Google Contacts doğrulama engeli; 68 ile aynı sağlayıcı bağımlılığı.
+Kanıt: ContactsPage.tsx; USER_INPUT_REQUIRED_2026-10-12.txt.
+
+70. Etkinlige "Davet et" sayfasini actim ve "Telefon rehberini tara" secenegini sectim ve telefon rehberimden alici insanlarri sectikten sonra beni "Arkadasllarini bul & davet et" sayfasina yonleendirerek "Etkinlige Davet Sayfasindan" kopardi.  Oysa "Etkinllige Davet Et" sayfasina geri donmeli ve ekranda "Davet ettigim kisi sayisi" gosterilmeliydi.
+Durum: YAZILIM KONTROLÜ / GERÇEK CİHAZ
+Kontrol sonucu: Telefon rehberi akışında etkinlik hedefi korunuyor; gönderim sonrası aynı davet sayfasına gönderilen kişi sayısıyla dönülüyor. Gerçek telefonun kişi seçici izni ve SMS teslimi bu masaüstü kontrolünde doğrulanmadı.
+Kanıt: ContactsPage.tsx; InviteManagementPage.tsx; davet akışı testleri.
+
+71. Mekana "Davet et" sayfasini actim ve "Telefon rehberini tara" secenegini sectim ve telefon rehberimden alici insanlarri sectikten sonra beni "Arkadasllarini bul & davet et" sayfasina yonleendirerek "Mekana Davet Sayfasindan" kopardi. Oysa "Mekana Davet Et" sayfasina geri donmeli ve ekranda "Davet ettigim kisi sayisi" gosterilmeliydi.
+Durum: YAZILIM KONTROLÜ / GERÇEK CİHAZ
+Kontrol sonucu: Mekân hedefi ve geri dönüş adresi korunuyor; gönderim sayısı ile mekân davet ekranına dönülüyor. Gerçek telefon rehberi ve teslim kabulü gerekiyor.
+Kanıt: ContactsPage.tsx; InviteManagementPage.tsx; davet akışı testleri.
+
+72. 1- Mobilde tabbardan "Menu" secenegini tusladigimda menudee "Arkadaslarini bul ve davet et" seceneginin olmadigini gordum. Bu secenek olmali 
+2- Mobilde "Cikis" baglantisina yer kalmadigi icin ise mobilde Kullancii adinin oldugu satirin en saginda ve yine kirmizi renkli ikonlu cikis seccenegi gosterrilmeli. (Dekstopta ayni menunun en altinda gosterilmeye devam etmeli)
+Durum: TEST + KOD
+Kontrol sonucu: Mobil menüde arkadaş bul/davet et bağlantısı var; çıkış kullanıcı adı satırında kırmızı/ikonlu. Masaüstünde profil menüsünün sonunda.
+Kanıt: AppLayout.tsx; requirements-ui.spec.tsx; styles.css.
+
+73. Gizlilik Ayarlari sayfasinda "Ad soyad görünürlüğü" "hic kimse" olarrak ayarlanmis bir kisinin gerrceek adi soyadi Arama sayfasinda ve Mesaj Gonder sayfalarinda gosteiliiyor. Hic bir yerde gosterilmeemeliydi. (Sadece katilimcisi oldugu birr etkinligin veya mekanin yoneticilerine "check-in" sirasinda gorunebilir.
+Durum: SUNUCU + ARAYÜZ TESTİ
+Kontrol sonucu: Ad görünürlüğü arama, mesaj, içerik, topluluk ve ilgili kullanıcı cevaplarında uygulanıyor. Takip/ağ/anonim/engel senaryoları test edildi; medya yükleyicisi ham verileri dışarı çıkmıyor. Yetkili check-in kullanımının ayrı kapsamı korunuyor.
+Kanıt: public-name.ts; privacy-context.ts; search/chat/discovery/content/events/places testleri; canlı gizlilik API kontrolü.
+
+74. Gizlilik Ayarlari sayfasinda listelenen tum dropdownlardaki "Agim" secenegi kendisini yeterli ifade etmiyor. Bu metin tum illgili dropdownlarda "Takip ettiklerimin takip ettikleri" olarak degismeli ve ona uygun caalismalli
+Durum: SUNUCU + ARAYÜZ TESTİ
+Kontrol sonucu: Ağım yerine Takip ettiklerimin takip ettikleri açıklaması var; erişim, doğru takip yönündeki ikinci derece ağ üzerinden hesaplanıyor.
+Kanıt: SettingsCenterPage.tsx; privacy-context.ts; content/privacy testleri.
+
+75. Ilgi Alani Detay Sayfasindaki "Bu etiketteki gönderiler" widgetinda "Post Yaz" kutusunun alltindaki "Medya ekle" ve "Ipuclari"nin konumu "Yayinla butonu"nun sagi olmali. (Etkinliik Detay ve Mekan Detay sayfasindaki konumu gayet guzel.)
+Durum: TEST + KOD
+Kontrol sonucu: Etiket gönderi formunda Yayınla, medya ikonu ve İpuçları aynı aksiyon sırası; yükleme sayacı alt satırda.
+Kanıt: TagsPage.tsx; styles.css; support-and-content-requirements-ui.spec.tsx.
+
+76. Postahane bolumunde "Mesaj Gonder" ekraninin gorunumu bozuk. Alici kullaanicinin avatari butun ekrani kapliyor.
+Durum: TEST + KOD
+Kontrol sonucu: Mesaj alıcısının avatarı sınırlı boyutla gösteriliyor; tüm ekranı kaplamıyor.
+Kanıt: MessagesPage.tsx; styles.css; messages-composer-requirements-ui.spec.tsx.
+
+77. Postahane bolumunde "Mesaj Gonder" ekraninda "Mesaj Yaz" kutusunun alltindaki "Medya ekle" ve "Ipuclari"nin konumu "Gonder butonu"nun sagi olmali. Ve "medya ekle linki" ikon olarak gosterilmeli.  (Etkinliik Detay ve Mekan Detay sayfasindaki "Post Yaz"daki gibi hizalamasi gayet duzgun olmali.)
+Durum: TEST + KOD
+Kontrol sonucu: Mesaj formunda Gönder'in sağında medya ikonu ve İpuçları; yatay düzen.
+Kanıt: MessagesPage.tsx; messages-composer-requirements-ui.spec.tsx.
+
+78. Ozel mesaj aligimdaa "Bildirimler" sayfasinda da gosteriliyor. Burada ayrica gosteilmesine gerek yok. Zaten header navigasyonundaki "Mesajlarrrim" secenegiin isigi yaniyor bu yeterli.
+Durum: SUNUCU TESTİ
+Kontrol sonucu: private_message bildirim listesi sorgusundan çıkarılıyor; mesajların okunmamış sayacı ayrı kalıyor.
+Kanıt: ProfileService.getNotifications; profile.service.spec.ts; AppLayout.tsx.
+
+79. Neden bildirim ayarrlari sayfasindaki ayararlarrim gibi telefonuma "Push notification"lar almiyorum?
+Durum: DIŞ CİHAZ DOĞRULAMASI
+Kontrol sonucu: Push aboneliği, servis anahtarı ve tercih bazlı gönderim yolu mevcut. Kullanıcı telefonunda izin/abonelik ve gerçek push teslimi görülmeden bu madde kapatılmadı.
+Kanıt: PushService; NotificationsService; SettingsCenterPage.tsx; USER_INPUT_REQUIRED_2026-10-12.txt.
+
+80. "Bildiirmlerr" sayfasina bir karti gordugumde sayfanin isigi sonmeli ve o secenek okundu olarak isaretlenmeli.
+Durum: TEST
+Kontrol sonucu: Yalnız ekranda görünen okunmamış kart işaretleniyor; aynı kart ikinci kez istek göndermiyor. Yenilenen sorgu üst menü sayacını güncelliyor.
+Kanıt: NotificationsPage.tsx IntersectionObserver; oct12-notifications-media.spec.tsx.
+
+81. 1- "Bireysel" olarak "Uye olma sureecinde" kullanicinin "dogum tarihi" bilgisini girmesi de zorunlu olmali ve 18 yasinndan kucukler  uye ollamamalilar.
+2- "Bireysel" olarak Ayarlar bolumu "Profili düzenle" sayfasinda "Doğum tarihi" bilgisini girmesi de zorunlu olmali ve 18 yasinndan kucuk bir deger giirlerek guncellenememelli.
+Durum: SUNUCU + ARAYÜZ TESTİ
+Kontrol sonucu: Bireysel kayıt ve profil güncellemede doğum tarihi zorunlu; 18 yaş altı, boş ve geçersiz tarih reddediliyor. Bu tur geçersiz tarih regresyonu eklendi.
+Kanıt: ProfileService; OnboardingPage.tsx; SettingsCenterPage.tsx; profile.service.spec.ts; onboarding testleri.
+
+82. "Kurumsal" olarak "Uye olma sureecinde"  "3 Firma bilgileri" adiminda tum zorrunlu bilgileri girrmeme ragmen kaydedemedim. Bana 2 degisik hata gostedi.
+Bu hatalardan 1.si: Giriş bilgilerini kontrol et. Oturumun sona ermiş olabilir. Yeniden giriş yapıp işlemi tekrar dene
+Bu hatalardan 2.si: .Bazı bilgileri kontrol et. Formdaki eksik veya hatalı alanları düzelttikten sonra yeniden deneyebilirsin.
+Yani hem adimi tamamlayamam hem de gosterilen uyari mesajlarinda hata var
+Durum: SUNUCU + ARAYÜZ TESTİ
+Kontrol sonucu: Firma bilgileri adımı tamamlanmamış oturuma izin veren onboarding koruması kullanıyor. Zorunlu seçimler ve alan bazlı hata mesajları kontrol edildi; kurumsal kaydetme senaryosu geçti.
+Kanıt: OnboardingJwtAuthGuard; IdentityService; OnboardingPage.tsx; onboarding-corporate-ui.spec.tsx.
+
+83. Desktop Header'daki "Ara";
+a) Kullanici login ise: "Ara" profili ile mesajllar arasina ortali olsun 
+b) Kullanici login degil ise: "Ara" ve "Dil secimi" ilgi alanlari ile giris yap arasina ortali olsun
+Durum: CANLI + KOD
+Kontrol sonucu: Masaüstünde arama, üye menüsü ile ana bağlantılar arasında. Anonim görünümde ilgi alanları, dil, arama, giriş/kayıt sırası canlı kontrol edildi.
+Kanıt: AppLayout.tsx; styles.css; requirements-ui.spec.tsx; canlı Chrome.
+
+84. Sisteme giris yapmadan "Veri silme talebi" sayfasinda forrmu doldurduktan sonra eposta adresime bir mail gonderilmeli ve onayim sorulmaliydi
+Durum: SUNUCU + ARAYÜZ TESTİ / DIŞ TESLİM
+Kontrol sonucu: Oturumsuz veri silme talebi e-posta onay tokeni üretir; süreli ve tek kullanımlık onay olmadan silme yapılmaz. Form ve token testleri geçti; gerçek posta teslimi için test alıcısı gerekir. Üretimde hesap silinmedi.
+Kanıt: DataDeletionPage.tsx; messages.service.ts / deletion-confirmation.spec.ts; data-deletion.spec.tsx; sunucu veri silme testleri.
+

@@ -1,0 +1,271 @@
+KONNEKTORA — 23 EKİM 2026 MADDE BAZLI İNCELEME / DEVAM ÇALIŞMASI
+
+KAYNAK: https://docs.google.com/spreadsheets/d/1tZdzPN7diSJJR7omUtJJp_bdMWERAICPFI4S2bngHSk/edit?gid=413980067
+82 maddenin tamamı numarasıyla aşağıdadır. 78 madde yerel uygulama kapsamında doğrulandı; 4 maddede harici kalan işlem var (#6, #19, #20, #37). LİSTENİN TAMAMI CANLIDA BİTMİŞ DEĞİLDİR.
+YEREL DOĞRULANDI: değişiklik ve ilgili test kapsamı geçti. Bütün cihazlarda/canlı hesaplarda kullanıcı kabulü veya sağlayıcı teslimi anlamına gelmez. Üretime dağıtım ve dört geçiş tamamlandı. Canlı madde kapsamı TEST_LIVE_2026-10-23.txt içindedir; Google tablosuna tamamlandı işareti yazılmadı.
+Önceden mevcut yerel değişiklikler korundu. Başlangıç yamaları: tmp/oct23-before.patch ve tmp/oct23-continuation-before.patch.
+
+SON DOĞRULAMA
+Node 22.22.3. API: 499/499, atlanan test yok (20 finans entegrasyon testi de ayrı PostgreSQL üzerinde çalıştı). Web: 180/180.
+Gerçek yerel PostgreSQL kabul senaryoları: 37 temel + 39 davet/devir = 76 başarılı. Gerçek e-posta/SMS/ödeme sağlayıcısı kullanılmadı.
+Lint, tür kontrolü ve üretim derlemesi geçti. Yalnız büyük mevcut paket boyutları için derleme uyarısı var.
+Kanıt: tmp/oct23-verified-all.log, tmp/oct23-verified-acceptance.log, tmp/oct23-cont-invitations3.log, tmp/oct23-verified-lint.log, tmp/oct23-cont-typecheck-final.log, tmp/oct23-verified-build.log, tmp/oct23-verified-web-build.log.
+Yeni medya: yerel dosya kaldırıldı, DB ve API yeniden başlatıldı; HTTP 200 ve Range 206 geçti (tmp/oct23-verified-media-restart.json).
+Chrome gerçek yerel API: giriş, akış, İnsanlar kartları, bildirimler; 390 px mobil menü aç/kapa/sıra ve 1024 px tablet tabbar kontrolü yapıldı; yatay taşma yok. Yerel görsel kanıtlar output/oct23-qa/ altında.
+session_version, phone_change_approval, manager_attendance ve notification_context geçişleri üretime uygulandı. Şifreli yedek doğrulandı; canlı test kayıtları temizlendi. Son yayın: cbe99072-0190-405c-a440-45a0ed71fbc0.
+Kalıcı sunucuda üretim hatırlatıcısı otomatik çalışır; Netlify zamanlayıcısı PUBLIC_APP_URL/URL ve CRON_SECRET kullanır. Zamanlama netlify.toml içinde tanımlı; resmi kaynak: https://docs.netlify.com/build/functions/scheduled-functions/
+
+HARİCİ KALANLAR
+6: Kayıp eski özgün medya için özgün dosya/yedek gerekir. Yeni yükleme kalıcılığı doğrulandı.
+19: SMS yapılandırması/teslimi, Meta gerçek giriş/onayı ve ödeme sağlayıcısında gerçek tahsilat/iade kabulü.
+20: Kampanya gönderileri/tarihleri ve yetkili hesap erişimi; yerel taslak hazır.
+37: Yeni video ve varsa özgün tasarım projesi; mevcut materyal paketi teslim için hazır.
+
+1. [YEREL DOĞRULANDI] Ilgi Alani Detay / Etkinlik Detay / Mekan Detay sayfalarndaki Post ve yorumllarda bulunan kalp seklindeki begeni ikonu begeniyorsam kirmizi yansin, begenilmemisse mevcuttaki giibi gorunsun
+    BULGU / KANIT: Yorum API yanıtına oturumdaki kullanıcının liked bilgisi eklendi; ana/alt yorum kalpleri dolu ve kırmızı. comment-likes.spec.ts yeni kullanıcı/anonim ayrımı testi.
+
+2. [YEREL DOĞRULANDI] Ilgi Alani Detay / Etkinlik Detay / Mekan Detay sayfalarndaki Post ve yorumllarda bulunan Begeni, yorum, paylas vb butonlari mouse hover olunca cursor pointer (el) olsun
+    BULGU / KANIT: Ortak yorum aksiyonlarında etkin düğmeler ve bağlantılar pointer imleci kullanıyor. Kod ve otomatik test doğrulandı; ilgili ekranın tüm cihaz varyantları ayrıca kabul edilmedi.
+
+3. [YEREL DOĞRULANDI] Akis sayfasindaki kartlarda gorulen 1- Detaylar gor linki olmasin 2- Kullaniciyi takip et / takip kaldir olsun basta. Sonrasinda "Mesaj gonder" ve "Paylas" ikonlari olacak. 3- "Rapor et" linki 3 nokta ust uste 
+    BULGU / KANIT: Akış kartlarında takip/mesaj/paylaş sırası ve üç noktalı rapor menüsü var; Detayları gör kaldırıldı. Kendi hesabında takip/mesaj düğmesi gizlenir. Gerçek yerel API ile masaüstü akış kontrol edildi.
+
+4. [YEREL DOĞRULANDI] Desktop Akis satfasindaki Filtrele'nin altindaki "Tum iceriklerin" en saginda "Etiketler' icin yeterli yer var. Bir alt satirdan baslamasina gerek yok.
+    BULGU / KANIT: Masaüstü filtre düğmeleri tek satıra alındı; farklı ekran genişliklerinde görsel kontrol gerekli.
+
+5. [YEREL DOĞRULANDI] Akis satfasindaki iceriklerin gorunumune calisilsin,. cok estetik gorunmuyor su an. 1- Mesela tum etiket olan metinlerin basinda # simgesi olsun. 2- Post iceriklerin basinda guzel orta boy cift tirnak baslangic
+    BULGU / KANIT: Etiketler # ile, post metinleri açılış tırnağıyla, aktivite açıklamaları normal ağırlıkla gösteriliyor. Yerel masaüstü akışta gerçek kayıtlar kontrol edildi; estetik kullanıcı değerlendirmesine açıktır.
+
+6. [KISMİ / HARİCİ] Yuklenen imajllarla ilgili sorun mu var? Bir onceki testte yukledigim medyalar kaybolmus yerlerinde dummy icerikkler gorunuyor
+    BULGU / KANIT: Yeni medya, içerik referansı oluşmadan veritabanına kalıcı yazılıyor. Yerel dosya silinip DB bağlantısı ve API süreci yeniden başlatıldı; aynı dosya HTTP 200, aralık okuması 206 ile doğrulandı (tmp/oct23-verified-media-restart.json). Önceden kaybolan özgün dosyalar eldeki çalışma alanında yok; bunları örnek medyadan geri üretemeyiz, özgün dosya/yedek gerekiyor.
+
+7. [YEREL DOĞRULANDI] Uyelige Davet Et sayfasinda eposta adresine gonderrilen "Konnektora'ya davetlisin" mailindeki davet eden isim soyisiminde (davet eden kurumsaal uye ise isim soyisim yeine "İşletme adi" gosterilir) sonra parante
+    BULGU / KANIT: Kişi davetinde ortak publicName kullanılıyor; kurumsalda işletme adı ve varsa (@kullanıcıadı), e-posta/SMS için aynı etiket. Gerçek SMS teslimi bekliyor.
+
+8. [YEREL DOĞRULANDI] Insanlar bolumu 1- Yeni üyeler, Popüler, Takip ettiklerim, Orrtak Ilgi Alanlari sayfalaindaki kartlarrdaki "takipci sayisi' ve "ortak ilgi alani sayisi" bilgilerinin arasina "Genel uyum yuzdesi" billgisi gelece
+    BULGU / KANIT: Yeni/popüler/takip/ortak ilgi ve Guest List kartlarında gerçek ortak sinyallerden genel/etkinlik partneri yüzdeleri, doğru bilgi sırası ve takip yıldızı var. Şehir/etkinlik gizliliği skor hesabına uygulanır. Mobil ve masaüstü İnsanlar ekranı gerçek API ile kontrol edildi; mobil kart sıkışması düzeltildi.
+
+9. [YEREL DOĞRULANDI] 1- Illgi Alani Detay sayfasi "Ilgili Kullanicilari Listeleme" sayfasindaki Kullanici Karrtlarindaki "Ortak Ilgi Alani" basina "Genel uyum yuzdesi" billgisi gelecek. "Genel uyum yuzdesi"nden sonra varsa Ortak il
+    BULGU / KANIT: Etiketin ilgili kullanıcı kartlarına ortak skor sağlayıcısı üzerinden genel ve etkinlik partneri yüzdeleri eklendi. Ortak ilgi sayısı varsa ikisinin arasında gösterilir. API gizlilik kontrolü ve ortak sinyal hesabı gerçek DB kabul testinde geçti.
+
+10. [YEREL DOĞRULANDI] 1- Etkinlik Detay sayfasi "Ilgili Kullanicilari Listeleme" sayfasindaki Kullanici Karrtlarindaki "Ortak Ilgi Alani" basina "Genel uyum yuzdesi" billgisi gelecek. "Genel uyum yuzdesi"nden sonra varsa Ortak ilgi 
+    BULGU / KANIT: Etkinlikle ilgili kullanıcı kartları aynı ortak skor sağlayıcısını kullanır; avatar, konum, genel uyum, ortak ilgi ve partner uyumu sıralaması uygulandı. Sunucu ve arayüz testleri başarılı.
+
+11. [YEREL DOĞRULANDI] 1- Mekan Detay sayfasi "Ilgili Kullanicilari Listeleme" sayfasindaki Kullanici Karrtlarindaki "Ortak Ilgi Alani" basina "Genel uyum yuzdesi" billgisi gelecek. "Genel uyum yuzdesi"nden sonra varsa Ortak ilgi ala
+    BULGU / KANIT: Mekânla ilgili kullanıcı kartları aynı ortak skor sağlayıcısını kullanır; avatar, konum, genel uyum, ortak ilgi ve partner uyumu sıralaması uygulandı. Sunucu ve arayüz testleri başarılı.
+
+12. [YEREL DOĞRULANDI] Medya Detay Sayfasindaki resim (video degil) tuslandiginda varsa albumdeki bi sonraki imaja gitsin
+    BULGU / KANIT: Albümde fotoğrafa tıklama sonraki medyaya geçiyor; video kontrolleri korunuyor. oct12-notifications-media.spec.tsx yeni etkileşim testi.
+
+13. [YEREL DOĞRULANDI] Etkinlik Detay Sayfasinda "3 nokta ust usteli diger aksiyonlar" menusunde kullanicinin etkinlig cihazindaki takvim uygulamasina ekleyebilmesi icin “Takvimime ekle” baglantisi gorunur. Tuslandiginda kaydedilecek
+    BULGU / KANIT: Etkinlik aksiyonlarına Takvimime ekle seçicisi: Google, Outlook, Apple/iCal. UTC tarih aralığı, yer ve etkinlik bağlantısı aktarılıyor. calendar-links.spec.ts testleri.
+
+14. [YEREL DOĞRULANDI] 1- Etkinlik Detay Sayfasinda "3 nokta ust usteli diger aksiyonlar" menusunde tuslaninca acillan "Bildirimleri Ac" lightboxindaki "Bu etkinliği varsayılan takvimime de eklemek istiyorum." checkbox'i secili ise i
+    BULGU / KANIT: Bildirim modalında takvim sağlayıcısı seçiliyor; iCal DESCRIPTION ve URL alanlarında etkinlik adresi var. Google/Outlook doğrudan uygulama bağlantısı, Apple için dosya/paylaşma yolu. Her mobil cihazın takvim uygulamasıyla gerçek kabul yapılmadı.
+
+15. [YEREL DOĞRULANDI] Ayarlar merkezi "Profil fotoğrafları" sayfasinda listelenen medyalar surukle-birak ile siralamasi degistiirlebilliyor. Harika. Ama; 1- Bir medya hover ollunca 4 yone ok seklndeki drrag&drop ikonu gorunsun. (htt
+    BULGU / KANIT: Sürükleme simgesi ve saydamlığa ek olarak diğer medyalar sürükleme sırasında yeniden sıralanır; bırakmada bir kez kaydedilir, iptal edilirse eski sıra korunur. Ana profil fotoğrafı korunur. Mevcut sürükle-bırak testi geçti.
+
+16. [YEREL DOĞRULANDI] Ayarlar Merkezi "Bildirim Ayarlari" sayfasindaki "Şifre değişikliği", "E-posta değişikliği', "Telefon değişikliği" dropdownlarinda "Kapali" secenegi olmasin. Kullanici tercih edecegi sekilde mutlaka bilgilendir
+    BULGU / KANIT: Hesap güvenliği bildirimlerinde Kapalı kaldırıldı; API kapatma isteğini reddediyor. Önceden kapatılmış güvenlik bildirimlerinde varsayılan e-posta uygulanıyor.
+
+17. [YEREL DOĞRULANDI] Ayarlar Merkezi "'Hesap Ayarlari" sayfasinda "Telefon numarası" degistirilmek istendiginde once kullanicinin mevcut telefon numarasina kod iceren birr SMS gonderilmeli. SMS icceriginde suna benzerr bir ifade ol
+    BULGU / KANIT: Doğrulanmış numara değiştirilirken önce eski numaraya istenen güvenlik metniyle kod gider. Eski kod onaylandıktan sonra yeni numaraya ayrı kod gider. İkinci adım bitmeden numara değişmez; eski kod tekrarı ve eski akışla atlama reddedilir. İki yeni birim testi ve gerçek DB akışı geçti. Gerçek SMS teslimi #19 kapsamında bekliyor.
+
+18. [YEREL DOĞRULANDI] Ayarlar Merkezi "'Hesap Ayarlari" sayfasinda kullanici yeni sifre tanimladiginda eski sifrre ile login oldugu cihazlardan cikis yapilir.
+    BULGU / KANIT: Şifre değiştirme/sıfırlamada sessionVersion artırılıyor. Zorunlu ve isteğe bağlı JWT kontrolleri eski sürümü reddediyor. session-version.spec.ts iki guard testi. 20261023120000_session_version geçişi yayında uygulanmalı.
+
+19. [HARİCİ] SMS, odeme, Facebook entegrasyonlari konusunda ne durumdayiz?
+    BULGU / KANIT: Canlı son okuma (23 Ekim 21:12 TSİ): DB hazır, e-posta/Google/Facebook/push ayarlı; SMS kapalı. Meta uygulama incelemesi ve gerçek Facebook giriş kabulü, ödeme sağlayıcısında gerçek tahsilat/iade kabulü tamamlanmadı. Yerel ödeme muhasebesi 20 gerçek PostgreSQL finans testi dahil geçti; bu sağlayıcı kabulü değildir.
+
+20. [HARİCİ] Ekibimiz ve senin tarattan kimse sosyal medya hesaplariimiza uye olmamislar. Onlari da heyecanimiza ortak edellim, Ne kadar kalabalik gorunursek o kadar iyi. Bunun icin aklima bir fikir geldi. Kampanya yapalim,
+    BULGU / KANIT: Yayınlanmaya hazır metin ve eksik kampanya bilgileri docs/KAMPANYA_TASLAGI_2026-10-23.txt içinde. Gönderi bağlantıları, tarih/sınır ve yetkili sosyal hesap erişimi yok. Kampanya yayınlanmadı; kişisel hesaptan takip, paylaşım veya Platinum hediyesi yapılmadı.
+
+21. [YEREL DOĞRULANDI] Kulanicinin takip ettigi diger kullanicilari kollay ayirt etmek icin bir sey yapalim. A secenegi) Kullanicinin listelendigi yerlerdeki yuvarlak avatarinin cerceveesi olsun B secenegi) kullanici adilarinin basla
+    BULGU / KANIT: Ortak FollowStar eklendi: dolu sarı yıldız takipte, boş yıldız takip dışı; tıklama takip durumunu değiştirir. İnsanlar/ilgili kullanıcılar/Guest List/akış/keşif/davetler/yorumlar/kişi sonuçları ve mesaj başlığında kullanılır. Kendi hesabında gizlenir; profil detay başlığı değiştirilmedi. Ortak sorgu önbelleği güncellenir.
+
+22. [YEREL DOĞRULANDI] Etkinlik Detay Sayfasi "Etkinlikle ilgili kullanicilar" sayfasinda ki etkinligi acan kisi icin kullandigimiz "sahip" jargonunu "Etkinlik kurucusu" olarak degistirelim.
+    BULGU / KANIT: İlgili kullanıcılar ekranında creator/owner: Etkinlik kurucusu.
+
+23. [YEREL DOĞRULANDI] Mekan Detay Sayfasi "Mekanla ilgili kullanicilar" sayfasinda ki mekani acan kisi icin kullandigimiz "sahip" jargonunu "Mekan kurucusu" olarak degistirelim.
+    BULGU / KANIT: İlgili kullanıcılar ekranında creator/owner: Mekân kurucusu.
+
+24. [YEREL DOĞRULANDI] Ayarlar merkezi "Profil fotoğrafları" sayfasinda son kalan profil fotografimi silmeye calistigimda gosterilen hata mesaji metnine "İşlem tamamlanamadı. Yüklenen dosyalar korunmuştur; kalan dosyaları yeniden seç
+    BULGU / KANIT: Son fotoğraf silme hatası API’de istenen açıklamaya çevrildi; arayüz silme hatasının mesajını gösteriyor. Son fotoğraf korumasının mevcut testi sürüyor.
+
+25. [YEREL DOĞRULANDI] "Etiket Detay" Sayfasindaki "Profilime ekle butonlari"ndan selected olana tekrar tuslaninca secim kaldirrilmali (yani profilden kaldirilmali)
+    BULGU / KANIT: Seçili duyguya yeniden tıklama etiketi profilden çıkarıyor; diğer etiketler korunuyor. tag-event-discovery-ui.spec.tsx yeni etkileşim testi.
+
+26. [YEREL DOĞRULANDI] 1- "Etiket Detay" Sayfasindaki "Profilime ekle butonlari"ndan "Kararrsizim" butonunun ikonu tek renk olunca iyi gorunmedi, daha basit bir emoji tek renk onerim var: Notr yuz. 😐 Sanirm bu. daha iyi anlatiyor ve 
+    BULGU / KANIT: Ortak ThinkingIcon nötr yüze dönüştürüldü; etiket detayında Kararsızım etiketi. Profilde aynı ortak simge kullanılıyor.
+
+27. [YEREL DOĞRULANDI] "Billdirim Ayarlari" sayfasindaki "Cihaz bildirimleri. Gerçek zamanlı bildirim almak için bu cihazı etkinleştir. Bu cihazda etkinleştir" bari cok guzel. Bunun aynisinii "Billdiimler AnaSayfasi"nda da gosterreli
+    BULGU / KANIT: Bildirimler sayfasına mevcut PushNotificationControl eklendi. Gerçek cihaz izni/push teslimi bu çalışmada yapılmadı.
+
+28. [YEREL DOĞRULANDI] "Etkinllik Olustur" ve "Etkinlik Duzenle" sayfasi "Biletler Sekmesinde" "Satış platformu" dropdown'inda "Konnektora onlne satis" secildiginde etkinik kurucusu kullanicinin yetkisi yok ise acilan uyari lightboxi
+    BULGU / KANIT: Konnektora online satış seçimi şirket, vergi/adres, banka ve onaylı KYC koşullarıyla kontrol edilir; uygun olmayan kullanıcıya istenen modal ve Ayarlar bağlantısı gösterilir. Sunucu da aynı koşulları zorunlu tutar. Kişisel/eksik kurumsal ret ve tam kurumsal kabul gerçek DB ile doğrulandı.
+
+29. [YEREL DOĞRULANDI] https://konnektora.com/settings/business sayfaasinda "Fatura ve vergi bilgileri" ile "Cüzdan" butonlari yanlisliikla ayni sayfaya linklenmiis. Bunlarin 2 farkli sayfa olmasi gerekiyor.
+    BULGU / KANIT: Fatura/vergi bağlantısı /settings/billing, Cüzdan /wallet. Fatura görünümü ayrı ve bakiye/para çekme/işlem geçmişi içermez; her iki giriş mevcut SMS güvenlik akışını korur.
+
+30. [YEREL DOĞRULANDI] KYB/KYC basvuru surecinde yetkili kisi bilgilerini girrmek ok ama "Nihai faydalanıcılar (UBO)" bilgilerini girmek gerekli mi? Gerekli ise bu basligin altina "Nihai faydalanıcılar (UBO)"in ne demek oldugunu da y
+    BULGU / KANIT: UBO, şirketi nihai olarak sahiplenen/kontrol eden gerçek kişi olarak açıklandı; doğrudan/dolaylı pay ve %50 x %60 = %30 örneği eklendi. Şirket hissedarın arkasındaki gerçek kişi girilir. Pay olmadan kontrol için %0 ve kontrol gerekçesi desteklenir. Açıklama FATF sözlüğüne dayanır; sağlayıcı/ülke için belirli bir yasal pay eşiği vaat edilmez.
+
+31. [YEREL DOĞRULANDI] KYB/KYC basvuru surecinde "Zorunlu belgeler" adiminda ""Zorunlu belgeler" basliginin altina kisa bir aciklama girelim: "Basvuruda asaagidaki belgelerden en az 2 tanesini (mumkun oldugunca cok) ekleyiniz." (Sist
+    BULGU / KANIT: Belge açıklaması eklendi; API en az iki farklı belge türünü kabul ediyor. Aynı türün iki kopyası yeterli sayılmıyor. corporate-kyc.service.spec.ts olumlu/olumsuz testleri.
+
+32. [YEREL DOĞRULANDI] Mekan Detay Sayfasi'ndaki 3 nokta ust usteli diger aksiyonlar menusunda mekan yoneticisi kullanicilaraa da "Mekani duzenle" ve "Mekani sil" butonllari gosterilmelli.
+    BULGU / KANIT: Mekân yöneticileri düzenle/sil düğmelerini görüyor. Sunucuda yalnız kabul edilmiş manager/organizer için arşiv izni; ilgisiz kullanıcı reddedilir. place-manager-archive.spec.ts.
+
+33. [YEREL DOĞRULANDI] "Mekan Duzenle Lightbox'i" acildiginda detay sayfasindaki haritasinin arkasinda kaliyor
+    BULGU / KANIT: Ortak dialog-backdrop katmanı haritanın üstüne çıkarıldı. Kod ve otomatik test doğrulandı; ilgili ekranın tüm cihaz varyantları ayrıca kabul edilmedi.
+
+34. [YEREL DOĞRULANDI] 1- "Mekan Check-in" sayfasinda "Üye listesi" widgetinda listelenen kartlarda kullanici adinin asagisinda "kurumsal uye" olan kullanicinin Ad Soyadi degil, "İşletme adı" billgisi gosterilmeli 2- "Pasaport Kontro
+    BULGU / KANIT: Mekân pasaport kimliğinde companyName sorgulanıyor ve publicName ile işletme adı gösteriliyor. Gerçek kurumsal hesapla ekran kabulü bekliyor.
+
+35. [YEREL DOĞRULANDI] 1- "Etkinlik Check-in" sayfasinda "Üye listesi" widgetinda listelenen kartlarda kullanici adinin asagisinda "kurumsal uye" olan kullanicinin Ad Soyadi degil, "İşletme adı" billgisi gosterilmeli 2- "Pasaport Kon
+    BULGU / KANIT: Etkinlik pasaport kimliğinde companyName sorgulanıyor ve publicName ile işletme adı gösteriliyor. Gerçek kurumsal hesapla ekran kabulü bekliyor.
+
+36. [YEREL DOĞRULANDI] "Isletmeler icin" sayfasi FOLD alanindaki "İşletme merkezine git" butonu https://konnektora.com/business/center sayfasina linklenmis. Boyle bir sayfa olmayacak. Oysa https://konnektora.com/settings/business say
+    BULGU / KANIT: İşletmeler için sayfasındaki giriş yapmış kullanıcı CTA hedefi /settings/business. Eski 16 Ekim beklentisi güncel talebe göre değiştirildi; oct16-acceptance testi.
+
+37. [KISMİ / HARİCİ] 1- "Destek Merkezi" anasayffasindaki videoda kuullandiginiz ekran goruntulerini/tasarrimlari gonderebilir misin? Altyazisiz videoya da raziyim. 2- Yeni video gelince basliik olmadan "Popüler sorular" widget"ini
+    BULGU / KANIT: Mevcut video, kapak, ayrı altyazılar ve videodan çıkarılan 6 kare output/konnektora-destek-video-materyalleri.zip içinde. Video Popüler soruların hemen altına taşındı, ayrı başlık eklenmedi. Yeni video henüz verilmedi; orijinal tasarım proje dosyası bulunmadı, paket bunların yerine geçtiği iddiasında değildir.
+
+38. [YEREL DOĞRULANDI] Profil Detay Sayfasi sidebardaki kullanicinin sehri bilgisinde eyalatlerden olusmayan Turkiye gibi yerlerin "Ilce, Sehir" billgisi gosteriliyor. Oysa "Sehir, Ulke" ya da "Sehir, Eyalet, Ullke" ya da "Eyalet, Ul
+    BULGU / KANIT: Genel profil konumu şehir/eyalet/ülke üzerinden tekilleştirilir; ilçe bu satırdan çıkarıldı. Bölge alanı API seçimine ve ortak şemaya eklendi; konum gizliliği korunur. Tür kontrolü ve genel profil testleri başarılı.
+
+39. [YEREL DOĞRULANDI] Ilgi Alani Detay sayfasi Illgili Kulllanicilar sayfasindaki Filtreleme Alani: 1- En basta "Duygu" ayari gorunsun. 2- Duygu ayarindan sonra "Ulkelere" gore yeni filtreleme ayari olsun 3- Ulkelere goreden sonra "
+    BULGU / KANIT: Etiket ilgili kişiler filtre sırası: duygu, ülke, yaş, cinsiyet, paket uyarısı, sıfırla. Ülke sonuçlardaki ülkelerden seçiliyor; sıfırla ülkeyi de temizliyor.
+
+40. [YEREL DOĞRULANDI] "Etkinlikle Ilgili Kullnicilar" sayfasnda yukarida "Etkinlige davet et" butonuu olsun.
+    BULGU / KANIT: Etkinlikle ilgili kişiler üstüne /events/:slug/invites bağlantısı eklendi.
+
+41. [YEREL DOĞRULANDI] "Mekanla Ilgili Kullnicilar" sayfasnda yukarida "Mekana davet et" butonu olsun.
+    BULGU / KANIT: Mekânla ilgili kişiler üstüne /places/:slug/invites bağlantısı eklendi.
+
+42. [YEREL DOĞRULANDI] "Etkinlikle Ilgili Kullnicilar" sayfasnda "Check in" sekmesini sadece admin, kuratorller, etkinlik yoneticileri (kurucu ve organizatorler) gorebilir.
+    BULGU / KANIT: Check-in sekmesi yönetim yetkisiyle sınırlı. Doğrudan filter=checked-in seçimi de yetkisiz kullanıcıya liste göstermiyor.
+
+43. [YEREL DOĞRULANDI] Etkinlik Detay ve Mekan Detay sayfalarinda kullanici bir post yayinladigi zaman, ekran yayinlanan posta scroll olsun
+    BULGU / KANIT: İleti yükleme bitince kimliğiyle önbellek yenileniyor ve ilgili post DOM öğesine kaydırılıyor. Gerçek tarayıcı kabulü bekliyor.
+
+44. [YEREL DOĞRULANDI] 1- Tablet bilgisayarlar icin de mobildeki tabbar yapisinda ayni navigaasyonu yapalim. 2- Mobil ve Tablette menu icerisinde zaten tabbarda olan secenekler olmasin. kullanimi kolaylastirmamiz gerekiyor.
+    BULGU / KANIT: 761–1100 px tabletlerde alt tabbar; menüde tabbar tekrarları kaldırıldı. Masaüstü navigasyonu korunuyor; tablet ekran kabulü bekliyor.
+
+45. [YEREL DOĞRULANDI] "Ilgi Alani Detay" sayfasinda bir Post editlenmek uzere "Duzenle" tuslandiginda sistem default pop-up aciliyor. Oysa "Etkinlik Detay" Sayfasindaki gibi post duzenlenmek istediginde ayni sayfada postun altinda g
+    BULGU / KANIT: Etiket postu düzenle işlemi sayfa içi textarea, kaydet/iptal ve hata geri bildirimi kullanıyor. window.prompt kaldırıldı.
+
+46. [YEREL DOĞRULANDI] AnaSayfa'daki "Topluluğun nabzını yakala." widgetinda listlenen "Popüler hesaplar" ve "Yeni uyeler" listelerrindeki; "Gizlillilik ayarrlari" sayfasinda "Ad soyad görünürlüğü" "Hic kimse" olarak ayarrlanmis kull
+    BULGU / KANIT: publicName, ad soyad görünürlüğüne göre kullanıcı adı/işletme adı üretir. API kimlik seçimi gizlilik alanlarını içerir; gerçek DB bildirim kontrolünde gizli adın görünmediği ve mesaj izninin uygulanması doğrulandı. Mevcut public-name ve keşif testleri geçti.
+
+47. [YEREL DOĞRULANDI] Etkinlige katil butonnu var da ayril butonu neden yok? Etkinlik katilimcisi ve etkinlik yoneticileri dahil herkes etkinliklere izinleri dahilinde katilabilmeli ve ayrrilabilmeli.
+    BULGU / KANIT: Katıl/ayrıl yöneticiler için de çalışır. Ayrılan yönetici not_attending durumuna geçer, rolü ve yönetim yetkisi korunur; yeniden katılabilir. Bilet/içerik/yönetim izinleri buna uyarlandı. Gerçek DB ayrılma/yeniden katılma ve birim testleri geçti.
+
+48. [YEREL DOĞRULANDI] Mobilde Etkinliklerim AnaSayfasinda "Tum etkinliklerim' widgetinda ayni anda dar ekrana 2 etkinlik sigdirilmaya calisiligindan gorunum bozulmus.
+    BULGU / KANIT: 600 px altındaki etkinlik listeleri tek sütuna alındı. Gerçek mobil ekran kabulü bekliyor.
+
+49. [YEREL DOĞRULANDI] Bir kimse "Arkadaşlarını bul & davet et" sayfasinda sistemde kayitli olmayan bir eposta adresi veya telefon numarrasina uyelige davet epostasi/sms'i gonderilmis ve bu kullanici o eposta adresi veya telefon numa
+    BULGU / KANIT: Üyelik daveti geçmişi e-posta/telefon eşleşmesi ve kayıtlı davet bildirimlerinden toplanır; kayıt sonrasında her davetçi ayrı karttır. Kurumsal kimlik, avatar/yedek avatar, takip, mesaj gizliliği ve zaman alanları var. İki davetçi ve tekrar çalıştırma gerçek DB testinde geçti.
+
+50. [YEREL DOĞRULANDI] Bir kimse "Etkinlige davet et" veya "Mekana davet et" sayfalarinda sistemde kayitli olmayan bir eposta adresi veya telefon numarrasina hem uyelige davet epostasi gonderilmis ve hem de etkinlige/mekana davet epo
+    BULGU / KANIT: Yeni e-posta/telefon davetlerinde üyelik ve hedef daveti birlikte saklanır; iki ayrı teslim çağrısı yapılır. Etkinlik/mekân katılımcı ve yönetici varyantları test edildi. Kayıttan sonra iki davetçinin üyelik kartları ayrı, hedef kartı çoğul kalır. Afiş/yer/zaman ve kabul/ret çalışır. Davet matrisi: 28 temel + 2 çoklu davetçi senaryosu.
+
+51. [YEREL DOĞRULANDI] Bir kimse "Etkinlige bilet devir et" sayfasinda sistemde kayitli olmayan bir eposta adresi veya telefon numarrasina hem uyelige davet epostasi/sms'i gonderilmis ve hem de etkinlik bilet devir epostasi/sms'i dev
+    BULGU / KANIT: Yeni alıcıya bilet devrinde üyelik ve bilet devri kartları oluşturulur. Bilet sayısı, etkinlik ayrıntısı ve Biletlerim bağlantısı saklanır; üyelik ve devir teslim çağrıları ayrı. Yeni e-posta/telefon matrisi gerçek DB ile geçti.
+
+52. [YEREL DOĞRULANDI] Bir kimse "Etkinlige bilet devir et" sayfasinda sistemde kayitli olan bir kullanici adina etkinlik bilet devri epostasi gonderilmis bu devir edilen kullanici Bildirimler sayfasinda asagidaki bildirim kartini go
+    BULGU / KANIT: Kullanıcı adıyla mevcut üyeye iki bilet devri gerçek DB üzerinde doğrulandı: sahiplik değişti, kurumsal gönderen kimliği, adet ve /tickets bağlantısı doğru.
+
+53. [YEREL DOĞRULANDI] Bir kimse "Etkinlige bilet devir et" sayfasinda sistemde kayitli olan bir eposta adresi veya telefon numarrasina etkinlik bilet devri epostasi gonderilmis ama kullanicinin gizlilik ayarlarinda "Arkadaşlarım ben
+    BULGU / KANIT: Rehberde bulunabilirliği kapalı mevcut e-posta/telefon alıcısının bilet kartında gizlilik açıklaması görünür. Her iki yöntem gerçek DB matrisinde geçti; kayıtlı telefonlara SMS teslim çağrısı da düzeltildi ve doğrulandı.
+
+54. [YEREL DOĞRULANDI] Bir kimse "Etkinlige bilet devir et" sayfasinda sistemde kayitli olan bir eposta adresi veya telefon numarrasina etkinlik bilet devri epostasi gonderilmis ama kullanicinin gizlilik ayarlarinda "Arkadaşlarım ben
+    BULGU / KANIT: Bulunabilirliği açık e-posta/telefon alıcısında aynı devir kartı gizlilik uyarısı olmadan gösterilir. İki biletin sahipliği ve detay bağlantısı gerçek DB matrisinde doğrulandı.
+
+55. [YEREL DOĞRULANDI] Bir uye uye olmayan bir kimseye "Arkadaşlarını bul & davet et", "Etkinlige davet et", "Etkinlik bileti devir et" veya "Mekana davet et" ssayfalari araciligiyla eposta adresi veya telefon numarrasina uyelige dav
+    BULGU / KANIT: Kayıt sonrası bütün davetçiler tekil eventKey ile bilgilendirilir; normal ve sosyal kayıt yollarına bağlandı. Kişi, etkinlik ve mekân davet geçmişi gerçek DB ile; tekrar çağrıların çoğaltmamasıyla doğrulandı.
+
+56. [YEREL DOĞRULANDI] Bir kimse "Arkadaşlarını bul & davet et" sayfasinda sistemde kayitli olan bir eposta adresi veya telefon numarrasina uyelige davet epostasi/sms'i gondermek istemis ama o kullanici o eposta adresi veya telefon n
+    BULGU / KANIT: Gizli rehber kaydı olan mevcut üyeye, zaten üye olduğunu bilmeden arandığı/davet edildiği ve gizlilik nedeni açıklanır. Okuma anında güncel kimlik ve mesaj izni kullanılır. Gerçek DB gizli alıcı testi geçti.
+
+57. [YEREL DOĞRULANDI] Bir uye zaten uye olan bir kimseye "Etkinlige davet et" veya "Mekana davet et" sayfalari araciligiyla eposta adresi veya telefon numarrasina uyelige davet gondermek istemis ama o kukllanici o eposta adresi veya
+    BULGU / KANIT: Gizli mevcut üyede izin verilen e-posta/telefon daveti üyelik açıklama kartı + etkinlik/mekân daveti üretir. Katılımcı/yönetici varyantları gerçek DB matrisinde doğrulandı; davet izni kapalıysa işlem ve bildirim reddedilir.
+
+58. [YEREL DOĞRULANDI] Bir uye zaten uye olan bir kimseye "Etkinlige davet et" veya "Mekana davet et" sayfalari araciligiyla eposta adresi veya telefon numarrasina uyelige davet gondermek istemis ama o kukllanici o eposta adresi veya
+    BULGU / KANIT: Açık rehber kaydı olan mevcut üyede yalnız hedef daveti üretilir. İki hedef, iki rol, e-posta/telefon varyantları gerçek DB matrisinde doğrulandı.
+
+59. [YEREL DOĞRULANDI] Bir uye "Etkinlige davet et" veya "Mekana davet et" sayfalari araciligiyla davet edilecek kisinin kullanici adini girmis ve "Kimler etkinliğe/mekana davet edebilir?" ayarinda kullaniciya yetki verrmis ise arani
+    BULGU / KANIT: Kullanıcı adıyla davet, yalnız hedef kartını üretir; etkinlik/mekân ve yönetici/katılımcı varyantlarında kabul/ret ve rolün korunması gerçek DB matrisinde geçti. İzin kapalı alıcılara kart oluşmaz.
+
+60. [YEREL DOĞRULANDI] Bir kullaniciyi mentionladigim zaman kendisi "Bildirimler" sayfasinda bilgilendirilmeliydi. 1. Etiket postunda kullanici adinin gecmesi: 1.1. %mentionlayan kullanici adi% %etiket adi% etiketindeki iletisinde si
+    BULGU / KANIT: Etiket/etkinlik/mekân postu ve yanıtlardaki @kullanıcı adları bildirim üretir; üst post sahibinin kullanıcı adı ve hedef/post bağlantısı kullanılır. Kendine ve engellenmiş kullanıcıya bildirim üretilmez. Üç kök hedef, yanıt ve engelleme gerçek DB testlerinde geçti.
+
+61. [YEREL DOĞRULANDI] Yazdigin bir posta bir baskasi tarafindan yorum yazildiginda post sahibi kullanici bilgilendirilmeliydi. 1. Yazdigin Etiket postuna yorum yazilmasi: 1.1. Metin: 1.1.A. Tekil: "%yazan kullanici adi% isimli kulla
+    BULGU / KANIT: Post sahibi yanıtlarla bilgilendirilir; aynı gün/üst post yorumcuları en yeni aktör başta tek çoğul kartta gruplanır. Okuma durumu grup için güncellenir. İki yorumcu, gizli kimlik ve doğru hedef bağlantısı gerçek DB ve tarayıcıda kontrol edildi.
+
+62. [YEREL DOĞRULANDI] Bildirimi acik bir etkinlikle ilgili bildirimler: 1. Bildirimi acik bir etkinlikte yeni bilet tanimlandi: 1.1. Bildirimlerini actiginiz bir etkinlige yeni bilet(ler) tanimlandi. (Cumle icerisindeki “yeni bilet(
+    BULGU / KANIT: Yeni bilet/kontenjan, satış başlangıcı, yeni post/yönetici postu ve 12 saat hatırlatması saklanır. Kalıcı sunucuda 15 dakikalık görev; Netlify için zamanlanmış fonksiyon eklendi. Tekrarlı çalışmada çoğalmaz. Bilet/kontenjan/satış ve 12 saat testleri gerçek DB ile geçti. Netlify görevinde mevcut CRON_SECRET gerekir.
+
+63. [YEREL DOĞRULANDI] Bildirimi acik bir kullanici ilgili bildirimler: 1. Bildirimi acik bir kullanici bir etiket olusturdu: 1,1, Bildiimlerini actiginiz %Kullanici adi% isimli kullanici %etiket duygusu% diyerek %etiket adi% yeni et
+    BULGU / KANIT: Kullanıcı abonelikleri etiket oluşturma/ekleme, etkinlik/mekân oluşturma/katılma ve postlara bağlandı. Gerçek etiket duygusu ekleme bildirimine alınır. Etkinlik/mekân gizliliği hem üretim hem okuma anında kontrol edilir. Gerçek DB duygu/katılım/gizlilik testleri geçti.
+
+64. [YEREL DOĞRULANDI] Bildirimi acik bir etiket ilgili bildirimler: 1. Bildirimi acik bir etikete post yazildi: 1.1. Metin: 1.1.A. Tekil: "%Kullanici adi% isimli kullanici bildirimlerini actiginiz %etiket adi% etiketine ileti yazdi.
+    BULGU / KANIT: Etiket postları gruplanır; etiketle ilgili etkinlik/mekân oluşturma ve program ilişkileri abonelere bildirilir. Yerel bildirimler kayıtlı şehirle süzülür. İlgili yerel etkinlik ve farklı şehir ret testleri gerçek DB ile geçti; kayıtlı konum yoksa GPS konumu varmış gibi varsayılmaz.
+
+65. [YEREL DOĞRULANDI] Bildirimi acik bir mekanla ilgili bildirimler: 1. Bildirimi acik bir mekana bir kullanici post yazdi: 1.1. Metin: 1.1.A. Tekil: "Bildirimlerini actiginiz bir mekana %Kullanici adi% isimli kullanici tarafindan i
+    BULGU / KANIT: Mekân post/yönetici postları, mekânda oluşturulan etkinlik ve kullanıcı aktiviteleri aboneliklere bağlandı. Mekân kapalı/engelli hedefse bildirim gösterilmez. Ortak üretici, kart modeli ve gerçek DB mekân yanıt testleri geçti.
+
+66. [YEREL DOĞRULANDI] Katilimcisi oldugun / Yoneticisi oldugun / Biletin olan / Bildirimlerini Actigin: Diger etkinlik bildirimleri 1. Etkinlik adi degistirildi: 1.1. Eski adi “%Eski etkinlik adi%” olan etkinligin ismi "%Etkinlik ye
+    BULGU / KANIT: Etkinlik adı, mekân, konum/adres/şehir/eyalet/ülke ve başlangıç/bitiş değişiklikleri ilgili üye/abonelere/bilet sahiplerine kaydedilir; eski/yeni değer ve gerektiğinde Biletlerim bağlantısı var. Mekân ID yerine adı gösterilir. Değişiklik/tekrar çalıştırma gerçek DB testi geçti.
+
+67. [YEREL DOĞRULANDI] Uyeesi oldugun / Yoneticisi oldugun / Bildirimlerini Actigin: Diger Mekan Bildirrimleri: 1.1. Mekan adi degistirildi: 1.1. Eski adi “%Eski mekan adi%” olan mekan adi "%Yeni mekan adi%” olarak degistirildi. 1.2.
+    BULGU / KANIT: Mekân adı/adres/şehir/eyalet/ülke değişikliği üye/yönetici/abonelere bildirilir. Aynı değişiklik tekrar işlenirse çoğalmaz. İsim ve adres için iki ayrı, tekil kayıt gerçek DB ile doğrulandı.
+
+68. [YEREL DOĞRULANDI] Konnektora Admin Panel Mudahale Edilen Icerik Bildirimleri: 1- Post yazilan ya da profiline yapisik etiketin tasinmasi / isminin degismesi: 1.1- Konnektora Admin Panel logosu 1.2- Konnektora: İlişkili olduğunuz
+    BULGU / KANIT: Etiket ad/taşıma işlemi profil kullanıcıları ve post yazarlarına ulaşır; merge postları hedefe taşır. Kaldırılan medya/post/yanıt bilgisi ve medya önizlemesi korunur. Etkinlik/mekân ek yöneticileri ve bilet sahipleri de bilgilendirilir. Admin işareti/kurallar bağlantısı var. Gerçek DB ad değişikliği, merge, üç kökte yorum kaldırma ve medya kaldırma testleri geçti.
+
+69. [YEREL DOĞRULANDI] Konnektora Admin Panele Bildirilen Sikayetlerin Sonucunun Sikayetci Kullaniciya Bildirilmesi: 1- Etiket sikayet edildi ise: 1.1- Konnektora Admin Panel logosu 1.2.A- Sikayet haksiz bulundu ise: Konnektora: "%Ta
+    BULGU / KANIT: Şikayetçiye haklı/haksız karar ayrı metinle ve içerik/üst post yazarı bağlamıyla bildirilir. Admin işareti ve Konnektora Kuralları bağlantısı var. Etiket/etkinlik/mekân için iki karar durumu gerçek DB testinde; ek metin varyantları birim testlerinde geçti.
+
+70. [YEREL DOĞRULANDI] Konnektora Admin Panel Mudahale Edilen Kullanici E-postalari: 1- Hesabın 7 Gün Askıya Alınması Epostasi: Konu: Konnektora hesabiniz 7 gunlugune askiya alinmistir. Icerik: Hesabiniz Konnektora Kurallarrini ihmal
+    BULGU / KANIT: 7 gün/30 gün askı ve kalıcı kapatma e-postaları istenen anlamda konu/içerik ve kurallar bağlantısıyla düzenlendi. Üç yeni e-posta testi geçti; testler sahte sağlayıcı kullanır, gerçek kişilere e-posta gitmedi.
+
+71. [YEREL DOĞRULANDI] Mobilde tabbar'daki menu acikken, menu tekrar tuslandiginda menu kapansin.
+    BULGU / KANIT: Tabbar menü düğmesi açık/kapalı durumunu tersine çeviriyor; aria-expanded ve kontrol hedefi var.
+
+72. [YEREL DOĞRULANDI] Dekstop navigasyonu aynii kalacak ama Mobiilde.tabbar'daki menu icerisinde: 1- zaten tabbar'da olan secenekler olmasiin 2- kullanici adi ve cikisin altinda sirasiyla allt alta su secenekler olacak: Profilim, Bi
+    BULGU / KANIT: Kullanıcı/çıkış altındaki mobil menü istenen sıraya geçirildi; dil en sonda, tabbar öğeleri menüden çıkarıldı. Önceki tekrar beklentisi güncellendi.
+
+73. [YEREL DOĞRULANDI] Tum iiceriklerdeki "Rapor et" lightboxindan. sikayet. gonderilince lightboxin kapanmasi ardindan yeni bir.islem basarrili lightboxi gosterelim ve. bu lightbox uzeriinde su mesaji gosterelim: "Sikayetiniz bize u
+    BULGU / KANIT: Rapor formundan sonra teşekkür/onay modalı, kurallar bağlantısı ve Kapat düğmesi var. oct23-report-press.spec.tsx etkileşim testi.
+
+74. [YEREL DOĞRULANDI] Etkinlige Davet Et Sayfasi testleri AI ile önerilen Top 25 1- Top 50 olsun 2- Oneri degerlendirmesinde "ziyaretci kullanici ile listelenen kullaanici ile etkinlik partner uyumu" ve "Katilimci kullanicilar ile z
+    BULGU / KANIT: Top 50; partner/katılımcı uyumu, geçmiş katılım ve son etkinlik sinyalleri; gizlilik nedeniyle davet edilemeyenlerin ayrı kapalı bölümü; Guest List aksiyonu; içe aktarımdan sonra sade ekran, tekilleştirme, solda checkbox ve üstte toplu davet uygulandı. Gerçek DB değerlendirme/izin ve 39 davet senaryosu geçti. Native kişi seçicisinin Tümünü seç seçeneği cihaz/tarayıcıya bağlıdır; içe aktarılan listede toplu seçim/davet vardır.
+
+75. [YEREL DOĞRULANDI] Mekana Davet Et Sayfasi kalan testleri 1- "Etkinlik Davet Et" icin yazilanlar burasi icin de gecerlidir. 2- Ayrica:burada da "AI ile önerilen Top 50" olsun. 3- Ayrica burada da "Mekanda duzenlenen etkinlik kati
+    BULGU / KANIT: Mekân için aynı değerlendirme ve Top 50 eklendi; mekândaki eski etkinlikler ve katılımcılar kaynak olarak seçilir. İlgisiz/geçersiz geçmiş etkinlik erişimi reddedilir. Gerçek DB geçmiş kaynak ve izin testi, mekân davet matrisi geçti.
+
+76. [YEREL DOĞRULANDI] Bildirimler sayfasindaki kartlar yukaridan-asagi yeniden-eskiye siralamasinda listelensin. En yeniler yukarida olmali.
+    BULGU / KANIT: API sırası createdAt desc + id desc; readAt önceliği kaldırıldı. Web sıralaması yanıtı değiştirmeden en yeni üste getiriyor; yeni sıralama testi.
+
+77. [YEREL DOĞRULANDI] Etkinlik Detay Sayfasi'ndan "Fotoğraf/video yükle" tuslayarak Etkinlik afis ve Medyalarini toplu secmek istedim ama toplu secime izin vermedi
+    BULGU / KANIT: Ortak etkinlik/mekân medya seçicisinde multiple ve sıralı toplu yükleme; ara hatada başarılı dosyalar listede korunuyor. Gerçek dosyalarla tarayıcı kabulü bekliyor.
+
+78. [YEREL DOĞRULANDI] Tum medya ekleme alanlarinda daha cok dosya turu secimini desteklemeli ve desteklemedigimiz bir dosya turu seciliginde hangi dosya tiplerini destekledigimiz konusunda kullanici bilgiendirilmeli
+    BULGU / KANIT: Ortak medya politikası JPG/PNG/WebP/GIF/AVIF/BMP/MP4/WebM destekler. Boş MIME için uzantı tanınır; desteklenmeyen dosyada kabul edilen türler gösterilir. API ile arayüz uyumlu; 5 yeni dosya seçimi testi geçti.
+
+79. [YEREL DOĞRULANDI] Akis sayfasinda listelenen bir kart iceriginde Youtube ya da Soundcloud icerigi kullanilmis ise player olarak gorulmeli
+    BULGU / KANIT: Feed sosyal post ve aktivite metinleri ortak EmbeddedMedia oynatıcısını kullanıyor. YouTube/SoundCloud gerçek ağ ve CSP kabulü bekliyor.
+
+80. [YEREL DOĞRULANDI] Ilgi Alani AnaSayfasinda bir etiket olustup, etiket detay sayfasina yonlendirilldiktten sonra Ilgi Alani AnaSayfasinaa geri donunce search boxin icinde olusturdugum etiket kalmis olluyor. Bu yuzden sayfayi tam 
+    BULGU / KANIT: Etiket oluşturma başarılı olduğunda arama metni detay yönlendirmesinden önce temizleniyor.
+
+81. [YEREL DOĞRULANDI] https://konnektora.com/events/nott-presents-baris-k-ilhan-ersahin-semih-akay-berk-ivelik-643714 etkinligini olusturdum. Etkinlik Detay sayfasinda "Etkinlik ve mekân hakkında daha fazla bilgi" tuslayarak actigim
+    BULGU / KANIT: Daha fazla bilgi modalında place.address ve locationAddress birlikte eklenmiyor; mekân adresine öncelik veriliyor.
+
+82. [YEREL DOĞRULANDI] "Basin Kiti" sayfasi yapmamiz lazim. Sayfayi yapinca erisimi Footer'da "Yardim" basliginin altindan saglanacak. Bu sayfada sunlar olmali: 1- Farkli arka planlarda ve sekillerde logolarimiz (ornegin: siyah arka 
+    BULGU / KANIT: /press sayfası ve footer Yardım bağlantısı; yatay açık/koyu, dikey, amblem, logoart SVG dosyaları; font/renk/kullanım rehberi. İndirme bağlantıları bileşen testinden geçti; görsel kabul bekliyor.
+
+TEKRAR ÇALIŞTIRMA
+Test veritabanlarıyla: npm run test:oct23:acceptance ve npm run test:oct23:invitations. TEST_DATABASE_URL zorunlu; scriptler yerel test DB dışında çalışmayı reddeder. Finans paketi FINANCE_TEST_DATABASE_URL ile yalnız 127.0.0.1/konnektora_qa kabul eder.

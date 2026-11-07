@@ -21,6 +21,7 @@
     "@nestjs/platform-express",
     "@prisma/client",
     "bcryptjs",
+    "google-auth-library",
     "class-transformer",
     "class-validator",
     "express",
@@ -39,6 +40,9 @@
     "apps/api/prisma/**",
     "node_modules/.prisma/**"
   ]
+
+[functions."event-reminders"]
+  schedule = "*/15 * * * *"
 
 [[redirects]]
   from = "/api/*"

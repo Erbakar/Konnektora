@@ -254,7 +254,7 @@ export function MemberDeviceScanner({
         <div>
           <strong>{t("Kendi NFC kartını oluştur", "Create your NFC card")}</strong>
           <span>
-            {t("Üye kartını boş bir NFC etiketine güvenli bağlantı olarak yaz.", "Write your member card to a blank NFC tag as a secure link.")}
+            {t("Üye kartını boş bir NFC etiketine ya da aksesuarına güvenli bağlantı olarak yaz.", "Write your member card to a blank NFC tag as a secure link.")}
           </span>
         </div>
         <button

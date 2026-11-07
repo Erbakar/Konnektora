@@ -50,6 +50,16 @@ describe("PublicProfileService", () => {
     await expect(service.getByUsername("ada", viewerId)).resolves.toMatchObject({ username: "ada", commonInterestCount: 1, interests: [{ common: true }] });
   });
 
+  it("never queries or exposes shared following in mutualism", async () => {
+    const result = await service.getByUsername("ada", viewerId);
+    expect(result.mutualism?.people).toEqual([]);
+    expect(result.mutualism?.explanation).not.toMatch(/takip/);
+    expect(result.mutualism?.actions.join(" ")).not.toMatch(/ortak bağlant/);
+    for (const [query] of userFollow.findMany.mock.calls) {
+      expect(query.where.followerId).not.toEqual({ in: [viewerId, ownerId] });
+    }
+  });
+
   it("opens a profile by user id when no username is available", async () => {
     user.findFirst.mockResolvedValue({ ...profile, username: null });
     await expect(service.getById(ownerId, viewerId)).resolves.toMatchObject({ id: ownerId, username: ownerId });

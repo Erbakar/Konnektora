@@ -1,3 +1,6 @@
+import { audienceAllows } from "../common/privacy-context";
+import { additionalActivities, activityRelations, eventActivityRelations } from "./activity-cards";
+import { publicName } from "../common/public-name";
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { DiscoveryFeedQueryDto } from "./discovery.dto";
@@ -5,11 +8,16 @@ import { DiscoveryFeedQueryDto } from "./discovery.dto";
 const userSelect = {
   id: true,
   name: true,
+  status: true,
+  privacySettings: { select: { profileNameAudience: true, eventAudience: true, placeAudience: true } },
+  accountType: true,
+  companyName: true,
   username: true,
   city: true,
   country: true,
   followerCount: true,
   createdAt: true,
+  uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
 } as const;
 
 @Injectable()
@@ -31,7 +39,7 @@ export class DiscoveryService {
     const userWhere = {
       status: "active" as const,
       role: "user" as const,
-      ...(blockedIds.length ? { id: { notIn: blockedIds } } : {}),
+      ...(blockedIds.filter(id => id !== userId).length ? { id: { notIn: blockedIds.filter(id => id !== userId) } } : {}),
     };
     const localWhere =
       query.scope === "global"
@@ -112,6 +120,8 @@ export class DiscoveryService {
             ],
           };
     const activeSince = new Date(Date.now() - 15 * 60_000);
+    // Ana sayfa "Popüler hesaplar" ve "Yeni üyeler" yalnız profil fotoğrafı olan üyeleri listeler (07/11 #12).
+    const memberWithAvatarWhere = { ...userWhere, uploadedMedia: { some: { contentType: "user" as const, status: "active" as const, isProfilePicture: true } } };
     const [
       initialPopularMembers,
       initialNewMembers,
@@ -121,18 +131,19 @@ export class DiscoveryService {
       activeUserCount,
     ] = await Promise.all([
       this.prisma.user.findMany({
-        where: { ...userWhere, ...localWhere },
+        where: memberWithAvatarWhere,
         select: userSelect,
         orderBy: { followerCount: "desc" },
         take: 8,
       }),
       this.prisma.user.findMany({
-        where: { ...userWhere, ...localWhere },
+        where: memberWithAvatarWhere,
         select: userSelect,
         orderBy: { createdAt: "desc" },
         take: 8,
       }),
       this.prisma.event.findMany({
+        include: eventActivityRelations,
         where: {
           status: "published",
           startsAt: { gte: new Date() },
@@ -147,6 +158,7 @@ export class DiscoveryService {
         take: 10,
       }),
       this.prisma.place.findMany({
+        include: activityRelations,
         where: { status: "active", ...localWhere },
         orderBy: { followerCount: "desc" },
         take: 8,
@@ -168,7 +180,7 @@ export class DiscoveryService {
         popularMembers.length
           ? Promise.resolve([])
           : this.prisma.user.findMany({
-              where: userWhere,
+              where: memberWithAvatarWhere,
               select: userSelect,
               orderBy: { followerCount: "desc" },
               take: 8,
@@ -176,7 +188,7 @@ export class DiscoveryService {
         newMembers.length
           ? Promise.resolve([])
           : this.prisma.user.findMany({
-              where: userWhere,
+              where: memberWithAvatarWhere,
               select: userSelect,
               orderBy: { createdAt: "desc" },
               take: 8,
@@ -184,6 +196,7 @@ export class DiscoveryService {
         localEvents.length
           ? Promise.resolve([])
           : this.prisma.event.findMany({
+        include: eventActivityRelations,
               where: { status: "published", startsAt: { gte: new Date() } },
               orderBy: { startsAt: "asc" },
               take: 8,
@@ -191,6 +204,7 @@ export class DiscoveryService {
         popularPlaces.length
           ? Promise.resolve([])
           : this.prisma.place.findMany({
+        include: activityRelations,
               where: { status: "active" },
               orderBy: { followerCount: "desc" },
               take: 8,
@@ -214,11 +228,13 @@ export class DiscoveryService {
       placeJoins,
     ] = await Promise.all([
       this.prisma.event.findMany({
+        include: eventActivityRelations,
         where: { status: "published", ...localWhere, ...dateWhere },
         orderBy: { createdAt: "desc" },
         take: 15,
       }),
       this.prisma.place.findMany({
+        include: activityRelations,
         where: { status: "active", ...localWhere, ...dateWhere },
         orderBy: { createdAt: "desc" },
         take: 15,
@@ -241,7 +257,7 @@ export class DiscoveryService {
           event: { status: "published", ...localWhere },
           ...(blockedIds.length ? { userId: { notIn: blockedIds } } : {}),
         },
-        include: { event: true, user: { select: { name: true } } },
+        include: { event: { include: eventActivityRelations }, user: { select: userSelect } },
         orderBy: { createdAt: "desc" },
         take: 15,
       }),
@@ -252,7 +268,7 @@ export class DiscoveryService {
           place: { status: "active", ...localWhere },
           ...(blockedIds.length ? { userId: { notIn: blockedIds } } : {}),
         },
-        include: { place: true, user: { select: { name: true } } },
+        include: { place: { include: activityRelations }, user: { select: userSelect } },
         orderBy: { createdAt: "desc" },
         take: 15,
       }),
@@ -262,12 +278,14 @@ export class DiscoveryService {
     let activityUsers = initialActivityUsers;
     if (!activityEvents.length && Object.keys(localWhere).length)
       activityEvents = await this.prisma.event.findMany({
+        include: eventActivityRelations,
         where: { status: "published", ...dateWhere },
         orderBy: { createdAt: "desc" },
         take: 15,
       });
     if (!activityPlaces.length && Object.keys(localWhere).length)
       activityPlaces = await this.prisma.place.findMany({
+        include: activityRelations,
         where: { status: "active", ...dateWhere },
         orderBy: { createdAt: "desc" },
         take: 15,
@@ -279,7 +297,7 @@ export class DiscoveryService {
         orderBy: { createdAt: "desc" },
         take: 15,
       });
-    const activities = [
+    const rawActivities = [
       ...activityEvents.map((item) => ({
         ...this.eventItem(item),
         action: "Etkinlik oluşturuldu",
@@ -294,7 +312,7 @@ export class DiscoveryService {
       })),
       ...activityTags.map((item) => ({
         ...this.tagItem(item),
-        action: "Tag oluşturuldu",
+        action: "Etiket oluşturuldu",
         occurredAt: item.createdAt,
         ownerId: item.createdById,
       })),
@@ -304,21 +322,27 @@ export class DiscoveryService {
         occurredAt: item.createdAt,
         ownerId: item.id,
       })),
-      ...eventJoins.map((item) => ({
+      ...eventJoins.filter(item => item.user.status !== "invited" && audienceAllows(item.userId, item.user.privacySettings?.eventAudience ?? "everybody")).map((item) => ({
         ...this.eventItem(item.event),
-        action: `${item.user.name} etkinliğe katıldı`,
+        action: "Etkinliğe katıldı",
         occurredAt: item.createdAt,
         ownerId: item.userId,
       })),
-      ...placeJoins.map((item) => ({
+      ...placeJoins.filter(item => item.user.status !== "invited" && audienceAllows(item.userId, item.user.privacySettings?.placeAudience ?? "everybody")).map((item) => ({
         ...this.placeItem(item.place),
-        action: `${item.user.name} mekâna katıldı`,
+        action: "Mekâna katıldı",
         occurredAt: item.createdAt,
         ownerId: item.userId,
       })),
     ]
       .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
       .slice(0, 30);
+    const actorIds = [...new Set(rawActivities.map((item) => item.ownerId).filter((id): id is string => Boolean(id)))];
+    const actors = actorIds.length ? await this.prisma.user.findMany({ where: { id: { in: actorIds }, status: "active" }, select: userSelect }) : [];
+    const identities = new Map((actors ?? []).map((actor) => [actor.id, { id: actor.id, name: publicName(actor), username: actor.username, avatarUrl: actor.uploadedMedia?.[0]?.url ?? null }]));
+    const baseActivities = rawActivities.map((activity) => ({ ...activity, activityId: `${activity.action}-${activity.id}-${activity.ownerId}`, canManageContent: activity.action.endsWith("oluşturuldu"), actor: activity.ownerId ? identities.get(activity.ownerId) ?? null : null }));
+    const extra = await additionalActivities(this.prisma, userId, blockedIds, createdAt);
+    const activities = [...new Map([...baseActivities, ...extra].map(item => [item.activityId, item])).values()].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()).slice(0, 60);
     return {
       popularMembers: popularMembers.map((item) => this.userItem(item)),
       newMembers: newMembers.map((item) => this.userItem(item)),
@@ -331,6 +355,7 @@ export class DiscoveryService {
       city: city ?? null,
       country: country ?? null,
       activities,
+      hiddenParticipantCount: new Set([...eventJoins, ...placeJoins].filter(item => item.user.status === "invited").map(item => item.userId)).size,
     };
   }
 
@@ -344,7 +369,7 @@ export class DiscoveryService {
           status: "active",
           role: "user",
           ...(blockedIds.length ? { id: { notIn: blockedIds } } : {}),
-          OR: [{ name: contains }, { username: contains }],
+          OR: [{ name: contains, OR: [{ privacySettings: null }, { privacySettings: { profileNameAudience: "everybody" } }] }, { username: contains }],
         },
         select: userSelect,
         orderBy: { followerCount: "desc" },
@@ -359,6 +384,7 @@ export class DiscoveryService {
         take: 10,
       }),
       this.prisma.event.findMany({
+        include: eventActivityRelations,
         where: {
           status: "published",
           OR: [{ title: contains }, { summary: contains }, { city: contains }],
@@ -367,6 +393,7 @@ export class DiscoveryService {
         take: 10,
       }),
       this.prisma.place.findMany({
+        include: activityRelations,
         where: {
           status: "active",
           OR: [
@@ -403,6 +430,9 @@ export class DiscoveryService {
   }
 
   private userItem(user: {
+    privacySettings?: { profileNameAudience: string } | null;
+    accountType?: string; companyName?: string | null;
+    uploadedMedia?: Array<{ url: string }>;
     id: string;
     name: string;
     username: string | null;
@@ -413,10 +443,10 @@ export class DiscoveryService {
     return {
       kind: "user" as const,
       id: user.id,
-      title: user.name,
-      subtitle: user.username ? `@${user.username}` : null,
+      title: user.username ? `@${user.username}` : publicName(user),
+      subtitle: publicName(user) !== user.username ? publicName(user) : null,
       href: `/users/id/${user.id}`,
-      imageUrl: null,
+      imageUrl: user.uploadedMedia?.[0]?.url ?? null,
       meta: `${user.followerCount} takipçi`,
     };
   }
@@ -438,6 +468,8 @@ export class DiscoveryService {
     };
   }
   private eventItem(event: {
+    tags?: { tag: { id: string; name: string; slug: string } }[];
+    place?: { name: string; slug: string } | null;
     id: string;
     title: string;
     slug: string;
@@ -445,8 +477,16 @@ export class DiscoveryService {
     coverImageUrl: string | null;
     city: string | null;
     startsAt: Date;
+    endsAt?: Date | null;
+    locationName?: string | null;
   }) {
     return {
+      tags: event.tags?.map(t => t.tag) ?? [],
+      place: event.place ?? null,
+      startsAt: event.startsAt,
+      endsAt: event.endsAt ?? null,
+      city: event.city ?? null,
+      locationName: event.locationName ?? null,
       kind: "event" as const,
       id: event.id,
       title: event.title,
@@ -457,6 +497,7 @@ export class DiscoveryService {
     };
   }
   private placeItem(place: {
+    tags?: { tag: { id: string; name: string; slug: string } }[];
     id: string;
     name: string;
     slug: string;
@@ -466,6 +507,7 @@ export class DiscoveryService {
     followerCount: number;
   }) {
     return {
+      tags: place.tags?.map(t => t.tag) ?? [],
       kind: "place" as const,
       id: place.id,
       title: place.name,

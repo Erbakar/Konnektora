@@ -1,6 +1,7 @@
+import { CountryCityFields } from "../components/CountryCityFields";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import type { Event, EventList } from "@konnektora/shared";
-import { CalendarX, Instagram, ListFilter, LoaderCircle, MapPinned, Plus, RefreshCw } from "lucide-react";
+import { CalendarX, ListFilter, LoaderCircle, MapPinned, Plus, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { EventCard } from "../components/EventCard";
@@ -8,7 +9,6 @@ import { LocationMap } from "../components/LocationMap";
 import { getDiscoveryFeed, getMyProfile, getUserSession, listEvents, listTags } from "../lib/api";
 import { mockTags } from "../lib/mockData";
 import { useLanguage } from "../lib/i18n";
-import { createWeeklyEventFiles, getCurrentWeekWindow, shareOrDownloadSocialFiles } from "../lib/socialTemplates";
 
 const pageCopy = {
   tr: {
@@ -66,8 +66,7 @@ export function EventsPage() {
   const c = pageCopy[language];
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
-  const [weeklyPending, setWeeklyPending] = useState(false);
-  const [weeklyMessage, setWeeklyMessage] = useState("");
+  const [tagLimit, setTagLimit] = useState(10);
   const [activePeriod, setActivePeriod] = useState("future");
   const [searchParams, setSearchParams] = useSearchParams();
   const user = getUserSession();
@@ -98,12 +97,6 @@ export function EventsPage() {
   const { data: eventList, isLoading, isError, refetch } = useQuery({
     queryKey: ["events", eventRequestParams.toString()],
     queryFn: () => listEvents(eventRequestParams)
-  });
-  const weeklyWindow = getCurrentWeekWindow();
-  const weeklyCardsQuery = useQuery({
-    queryKey: ["events", "weekly-social-cards", weeklyWindow.dateFrom, weeklyWindow.dateTo],
-    queryFn: () => listAllDiscoveryEvents({ dateFrom: weeklyWindow.dateFrom, dateTo: weeklyWindow.dateTo }),
-    enabled: false,
   });
   const events = eventList?.items ?? [];
   const totalPages = eventList ? Math.max(1, Math.ceil(eventList.total / eventList.pageSize)) : 1;
@@ -168,28 +161,13 @@ export function EventsPage() {
     setSearchParams(next);
   }
 
-  async function createWeeklyCards() {
-    setWeeklyPending(true);
-    setWeeklyMessage("");
-    try {
-      const weeklyResult = await weeklyCardsQuery.refetch();
-      if (weeklyResult.isError) throw weeklyResult.error;
-      const files = await createWeeklyEventFiles(weeklyResult.data?.items ?? [], language, weeklyWindow);
-      if (!files.length) throw new Error("No upcoming events");
-      const shareResult = await shareOrDownloadSocialFiles(files, c.weeklyCard);
-      setWeeklyMessage(shareResult === "shared" ? c.weeklyShared : c.weeklyDownloaded);
-    } catch {
-      setWeeklyMessage(c.weeklyFailed);
-    } finally {
-      setWeeklyPending(false);
-    }
-  }
 
   return (
     <section className="page two-column events-page">
       <button className="mobile-filter-toggle secondary-action" aria-expanded={filtersOpen} aria-controls="event-filters" onClick={() => setFiltersOpen((open) => !open)} type="button"><ListFilter size={18} /> {c.filterSearch}</button>
       <aside className={`filters ${filtersOpen ? "mobile-filters-open" : ""}`} id="event-filters">
         <h2>{c.filters}</h2>
+        {hasFilters ? <button className="clear-filters-link" onClick={() => setSearchParams({})} type="button">{c.clearFilters}</button> : null}
         <label>
           {c.search}
           <input
@@ -204,32 +182,25 @@ export function EventsPage() {
             <option value="">{c.all}</option>
             <option value="online">{c.online}</option>
             <option value="offline">{c.offline}</option>
-            <option value="hybrid">{c.hybrid}</option>
           </select>
         </label>
         <label>
           {c.date}
-          <input type="date" value={selectedDateFrom} onChange={(event) => updateFilter("dateFrom", event.target.value)} />
+          <input type="date" key={selectedDateFrom} defaultValue={selectedDateFrom} onBlur={(event) => { if (event.currentTarget.validity.valid) updateFilter("dateFrom", event.target.value); }} />
         </label>
-        <label>
-          {c.city}
-          <input placeholder={c.cityPlaceholder} value={selectedCity} onChange={(event) => updateFilter("city", event.target.value)} />
-        </label>
-        <div className="event-trendy-tags"><strong>{c.trendTags}</strong><div className="event-tag-filter-cloud">{tags.filter((tag) => (tag.eventCount ?? 0) > 0).sort((a, b) => (b.eventCount ?? 0) - (a.eventCount ?? 0)).slice(0, 10).map((tag) => (
+        <CountryCityFields cityDropdown key={selectedCountry} defaultCountry={selectedCountry} defaultCity={selectedCity} onChange={(country, city) => { const next = new URLSearchParams(searchParams); if (country) next.set("country", country); else next.delete("country"); if (city) next.set("city", city); else next.delete("city"); next.delete("page"); setSearchParams(next); }}/>
+
+        <div className="event-trendy-tags"><strong>{c.trendTags}</strong><div className="event-tag-filter-cloud">{tags.filter((tag) => (tag.eventCount ?? 0) > 0).sort((a, b) => (b.eventCount ?? 0) - (a.eventCount ?? 0)).slice(0, tagLimit).map((tag) => (
           <button key={tag.id} className={selectedTag === tag.slug ? "active-filter" : ""} onClick={() => setSearchParams({ tag: tag.slug })} type="button"><span>#{tag.name}</span><small>{tag.eventCount ?? 0}</small></button>
-        ))}</div></div>
-        <label>
-          {c.country}
-          <input placeholder={c.countryPlaceholder} value={selectedCountry} onChange={(event) => updateFilter("country", event.target.value)} />
-        </label>
-        {hasFilters ? <button className="clear-filters-link" onClick={() => setSearchParams({})} type="button">{c.clearFilters}</button> : null}
+        ))}</div>{tags.filter(tag => (tag.eventCount ?? 0) > 0).length > tagLimit ? <button type="button" className="text-button" onClick={() => setTagLimit(count => count + 40)}>{language === "tr" ? "Daha fazla göster" : "Show more"}</button> : null}</div>
+
+
       </aside>
       <div className="events-content">
         <div className="section-header events-page-header">
           <h1>{c.title}</h1>
-          <div className="row-actions"><span>{isLoading ? c.loading : isError ? c.unavailable : c.result(eventList?.total ?? 0)}</span><button className="create-inline-link" disabled={weeklyPending} onClick={() => void createWeeklyCards()} type="button"><Instagram size={16}/>{weeklyPending ? c.weeklyPreparing : c.weeklyCard}</button><button className="create-inline-link" onClick={() => setMapOpen((open) => !open)}><MapPinned size={16}/>{mapOpen ? c.showList : c.showMap}</button><Link className="create-inline-link events-create-button" to="/events/create"><Plus size={16}/> {c.create}</Link></div>
+          <div className="row-actions"><span>{isLoading ? c.loading : isError ? c.unavailable : c.result(eventList?.total ?? 0)}</span><button className="create-inline-link" onClick={() => setMapOpen((open) => !open)}><MapPinned size={16}/>{mapOpen ? c.showList : c.showMap}</button><Link className="create-inline-link events-create-button" to="/events/create"><Plus size={16}/> {c.create}</Link></div>
         </div>
-        {weeklyMessage ? <p className={weeklyMessage === c.weeklyFailed ? "form-error" : "form-success"} role="status">{weeklyMessage}</p> : null}
         <nav className="discovery-tabs" aria-label={c.groups}>
           {([["future", c.future], ["24h", c.next24], ["tomorrow", c.tomorrow], ["week", c.week], ["weekend", c.weekend], ["next_week", c.nextWeek], ["month", c.month], ["past", c.past]] as const).map(([scope, label]) => (
             <button key={scope} className={currentDiscovery === scope ? "active" : ""} onClick={() => selectDiscovery(scope)} type="button">{label}</button>

@@ -13,6 +13,8 @@ import { MutualismPage } from "../pages/MutualismPage";
 const apiMocks = vi.hoisted(() => ({
   getContentNotification: vi.fn(),
   getEvent: vi.fn(),
+  requestEventAttendance: vi.fn(),
+  leaveEvent: vi.fn(),
   getInteractionStats: vi.fn(),
   getPublicProfile: vi.fn(),
   getPublicProfileById: vi.fn(),
@@ -115,7 +117,7 @@ describe("FRD referanslı ekran davranışları", () => {
     ));
 
     expect(await screen.findByRole("heading", { name: event.title })).toBeVisible();
-    expect(screen.queryByLabelText("Medya galerisi")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Medya galerisi")).toBeVisible();
     await userEvent.click(await screen.findByRole("button", { name: "Etkinlik ve mekân hakkında daha fazla bilgi" }));
     const dialog = screen.getByRole("dialog", { name: event.title });
     expect(dialog).toBeVisible();
@@ -182,6 +184,17 @@ describe("FRD referanslı ekran davranışları", () => {
     expect(screen.getAllByRole("link", { name: "#Ada Quartet" }).at(-1)).toHaveAttribute("href", "/tags/ada-quartet");
   });
 
+  it("bilet kutusunu açıklama ile program arasına yerleştirir", async () => {
+    const event = { ...mockEvents[0]!, description: "Özel etkinlik açıklaması", lineup: [{type:"session",title:"Test programı"}] };
+    apiMocks.getEvent.mockResolvedValue(event);
+    apiMocks.listEventTicketTypes.mockResolvedValue([{id:"ticket-order",name:"Bilet",price:100,currency:"TRY",remaining:2,status:"active",salesPlatform:"door"}]);
+    const {container} = render(providers(<Routes><Route path="/events/:slug" element={<EventDetailPage />} /></Routes>, `/events/${event.slug}`));
+    await screen.findByRole("heading",{name:"Biletler"});
+    const sections = [...container.querySelectorAll(".detail-page > section")];
+    expect(sections.indexOf(container.querySelector(".event-ticket-summary")!)).toBeLessThan(sections.indexOf(container.querySelector(".event-program")!));
+    expect(screen.getByText("Özel etkinlik açıklaması").compareDocumentPosition(container.querySelector(".event-ticket-summary")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("sıfır fiyatlı bileti ödeme adımı olmadan satın alır", async () => {
     const event = { ...mockEvents[0]!, price: 0 };
     const freeTicket = {
@@ -194,8 +207,10 @@ describe("FRD referanslı ekran davranışları", () => {
       status: "active",
       salesPlatform: "konnektora",
       perUserLimit: 2,
-      saleStartsAt: null,
-      saleEndsAt: null,
+      saleStartsAt: "2027-01-01T10:00:00Z",
+      saleEndsAt: "2027-01-02T10:00:00Z",
+      gateOpensAt: "2027-01-03T10:00:00Z",
+      gateClosesAt: null,
     };
     apiMocks.getUserSession.mockReturnValue({ id: "viewer-2", username: "ada", role: "user" });
     apiMocks.getEvent.mockResolvedValue(event);
@@ -210,6 +225,8 @@ describe("FRD referanslı ekran davranışları", () => {
     await userEvent.click(viewTickets.at(-1)!);
     const dialog = screen.getByRole("dialog", { name: "Biletler" });
     expect(within(dialog).getByText("Ücretsiz", { exact: false, selector: "span" })).toBeVisible();
+    expect(within(dialog).getByText(/arasında bu bilet alınabilir/)).toBeVisible();
+    expect(within(dialog).getByText(/zamanından sonra giriş yapmalısınız/)).toBeVisible();
     await userEvent.click(within(dialog).getByRole("button", { name: "+" }));
     await userEvent.click(within(dialog).getByRole("button", { name: "Satın al" }));
 
@@ -218,11 +235,31 @@ describe("FRD referanslı ekran davranışları", () => {
     expect(apiMocks.purchaseEventTickets.mock.calls[0]?.[1]).toBe(1);
   });
 
+  it("kapıda ödemede stok, adet ve rezervasyon işlemlerini göstermez", async () => {
+    const event = { ...mockEvents[0]!, price: 250 };
+    apiMocks.getEvent.mockResolvedValue(event);
+    apiMocks.listEventTicketTypes.mockResolvedValue([{
+      id: "door-ticket", name: "Kapıda ödeme", description: "Girişte ödeme", price: 250,
+      currency: "TRY", remaining: 10, status: "active", salesPlatform: "door",
+      externalSalesUrl: null, perUserLimit: null, saleStartsAt: null, saleEndsAt: null,
+    }]);
+    render(providers(<Routes><Route path="/events/:slug" element={<EventDetailPage />} /></Routes>, `/events/${event.slug}`));
+    await userEvent.click((await screen.findAllByRole("button", { name: "Biletleri gör" })).at(-1)!);
+    const dialog = screen.getByRole("dialog", { name: "Biletler" });
+    expect(within(dialog).getByText("Kapıda ödeme")).toBeVisible();
+    expect(within(dialog).getByText(/250/)).toBeVisible();
+    expect(within(dialog).queryByText(/kaldı/)).not.toBeInTheDocument();
+    for (const name of ["+", "−", "Bileti ayır", "Satın al"]) {
+      expect(within(dialog).queryByRole("button", { name })).not.toBeInTheDocument();
+    }
+    expect(apiMocks.purchaseEventTickets).not.toHaveBeenCalled();
+  });
+
   it("dış satış platformu bağlantısını adet seçmeden açılabilir tutar", async () => {
     const event = { ...mockEvents[0]!, price: 0 };
     const externalTicket = {
       id: "external-ticket", name: "Partner Bileti", description: null, price: 250, currency: "TRY",
-      remaining: 20, status: "active", salesPlatform: "external", externalSalesUrl: "https://tickets.example.com/event",
+      remaining: 0, status: "active", salesPlatform: "external", externalSalesUrl: "https://tickets.example.com/event",
       perUserLimit: null, saleStartsAt: null, saleEndsAt: null,
     };
     apiMocks.getUserSession.mockReturnValue({ id: "viewer-2", username: "ada", role: "user" });
@@ -233,6 +270,10 @@ describe("FRD referanslı ekran davranışları", () => {
     render(providers(<Routes><Route path="/events/:slug" element={<EventDetailPage />} /></Routes>, `/events/${event.slug}`));
     await userEvent.click((await screen.findAllByRole("button", { name: "Biletleri gör" })).at(-1)!);
     const externalButton = within(screen.getByRole("dialog", { name: "Biletler" })).getByRole("button", { name: "Satış sayfasına git" });
+    const dialog = screen.getByRole("dialog", { name: "Biletler" });
+    expect(within(dialog).queryByText(/kaldı/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "+" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "−" })).not.toBeInTheDocument();
     expect(externalButton).toBeEnabled();
     await userEvent.click(externalButton);
     expect(open).toHaveBeenCalledWith(externalTicket.externalSalesUrl, "_blank", "noopener,noreferrer");
@@ -316,7 +357,7 @@ describe("FRD referanslı ekran davranışları", () => {
     renderStats("tag", "tag-1");
 
     expect(await screen.findByRole("heading", { name: "İlgi alanı istatistikleri" })).toBeVisible();
-    expect(await screen.findByRole("heading", { name: "Zaman içindeki eğilim" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Dönem toplamları" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Olumlu · yaş" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Olumlu · ilişkili ilgi alanları" })).toBeVisible();
     expect(screen.getByText("Fırsat puanı")).toBeVisible();
@@ -347,11 +388,29 @@ describe("FRD referanslı ekran davranışları", () => {
     renderStats("user", "user-1");
 
     expect(await screen.findByRole("heading", { name: "Profil istatistikleri" })).toBeVisible();
-    await screen.findByRole("heading", { name: "Zaman içindeki eğilim" });
+    await screen.findByRole("heading", { name: "Dönem toplamları" });
     for (const heading of ["Ziyaretçi ülkeleri", "Takipçi yaş dağılımı", "Takipçi dilleri", "Bağlantı şehirleri", "Bilet ve gelir"]) {
       expect(screen.getByRole("heading", { name: heading })).toBeVisible();
     }
     expect(screen.getByText("Aramadan profile tıklama oranı")).toBeVisible();
+  });
+
+  it("updates participation and counts immediately and can rejoin after leaving", async () => {
+    const event = { ...mockEvents[0]!, createdById: "organizer", visibility: "open", attendeeCount: 3, viewerParticipation: null };
+    apiMocks.getUserSession.mockReturnValue({ id: "viewer", role: "user" });
+    apiMocks.getEvent.mockResolvedValueOnce(event).mockImplementation(() => new Promise(() => {}));
+    apiMocks.requestEventAttendance.mockResolvedValue({ role: "attendee", status: "accepted" });
+    apiMocks.leaveEvent.mockResolvedValue({ left: true });
+    render(providers(<Routes><Route path="/events/:slug" element={<EventDetailPage />} /></Routes>, `/events/${event.slug}`));
+    await userEvent.click(await screen.findByRole("button", { name: "Katıl" }));
+    expect(await screen.findByRole("button", { name: "Etkinlikten ayrıl" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "4 katılımcı" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Etkinlikten ayrıl" }));
+    expect(await screen.findByRole("button", { name: "Katıl" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "3 katılımcı" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Katıl" }));
+    expect(await screen.findByRole("button", { name: "Etkinlikten ayrıl" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "4 katılımcı" })).toBeVisible();
   });
 
   it("Mutualizm analizini yalnız başka profilde ve tüm doğrulanmış sinyal gruplarıyla gösterir", async () => {
@@ -370,7 +429,7 @@ describe("FRD referanslı ekran davranışları", () => {
         }],
         events: [],
         places: [],
-        people: [],
+        people: [{ id: "private-follow", name: "Private Follow", username: "private-follow" }],
         sharedReactionCount: 5,
         sharedCommentTargetCount: 3,
         scores: { overall: 86, friendship: 82, networking: 91, eventPartner: 88, travel: 74, business: 93 },
@@ -386,6 +445,7 @@ describe("FRD referanslı ekran davranışları", () => {
 
     expect(await screen.findByRole("heading", { name: "Ada Yılmaz ile uyumunuz" })).toBeVisible();
     expect(screen.getByText("%86")).toBeVisible();
+    expect(screen.queryByText(/Private Follow|ortak takip/)).not.toBeInTheDocument();
     for (const label of ["Arkadaşlık uyumu: 82%", "Networking uyumu: 91%", "Etkinlik partneri uyumu: 88%", "Seyahat uyumu: 74%", "İş uyumu: 93%"]) {
       expect(screen.getByLabelText(label)).toBeVisible();
     }
@@ -393,7 +453,7 @@ describe("FRD referanslı ekran davranışları", () => {
     expect(screen.getByText("5")).toBeVisible();
     expect(screen.getByText("3")).toBeVisible();
     expect(screen.getByText("2")).toBeVisible();
-    expect(screen.getByText("Birlikte yakın bir girişimcilik etkinliğine katılabilirsiniz.")).toBeVisible();
+    expect(screen.getByText((_, element) => element?.tagName === "LI" && element.textContent === "Birlikte yakın bir girişimcilik etkinliğine katılabilirsiniz.")).toBeVisible();
     expect(screen.getByRole("link", { name: "Sohbet başlat" })).toHaveAttribute("href", "/messages?peer=person-1");
   });
 

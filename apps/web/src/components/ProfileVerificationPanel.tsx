@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BadgeCheck, Camera, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -69,7 +70,7 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
       });
     } catch {
       setError(
-        t("Kamera açılamadı. Tarayıcı kamera iznini kontrol et veya aşağıdan fotoğraf seç.", "The camera could not be opened. Check your browser permission or choose a photo below."),
+        t("Kamera açılamadı. Tarayıcı kamera iznini kontrol et.", "The camera could not be opened. Check your browser permission."),
       );
     }
   }
@@ -112,7 +113,7 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
         <div>
           <h2>{t("Kurumsal hesap doğrulaması", "Business account verification")}</h2>
           <p>
-            {t("Kurumsal profiller mavi tiki KYC sürecini tamamladıktan sonra alır.", "Business profiles receive the blue tick after completing the KYC process.")}
+            {t("Kurumsal profiller mavi tiki ", "Business profiles receive the blue tick after completing the ")}<Link to="/finance/kyc">{t("KYB / KYC süreci", "KYB / KYC process")}</Link>{t("ni tamamladıktan sonra alır.", ".")}
           </p>
         </div>
       </section>
@@ -190,18 +191,7 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
           <Camera size={18} /> {t("Kamerayı aç", "Open camera")}
         </button>
       )}
-      <label className="verification-fallback">
-        {t("Kamera kullanamıyor musun?", "Cannot use the camera?")}
-        <input
-          accept="image/jpeg"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) submit.mutate(file);
-          }}
-          type="file"
-        />
-        <span>{t("JPEG doğrulama karesi seç", "Choose a JPEG verification image")}</span>
-      </label>
+
       {status?.request?.status === "rejected" ? (
         <p className="form-error">
           {t("Önceki kontrol başarısız: ", "Previous check failed: ")}

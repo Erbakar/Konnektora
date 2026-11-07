@@ -79,6 +79,21 @@ afterEach(() => {
 });
 
 describe("destek ve içerik gereksinimleri 125–141", () => {
+  it("retries only the failed attachment without duplicating the published comment", async () => {
+    apiMocks.getUserSession.mockReturnValue({ id: "me", role: "user", name: "Ada", memberPlan: "free" });
+    const first = new File(["one"], "one.webp", { type: "image/webp" });
+    const second = new File(["two"], "two.webp", { type: "image/webp" });
+    apiMocks.uploadContentMedia.mockResolvedValueOnce({ id: "first" }).mockRejectedValueOnce(new Error("Network failure")).mockResolvedValue({ id: "second" });
+    const { container } = render(providers(<ContentComments targetId="place-1" targetType="place" title="Mekân postları"/>, "/places/demo"));
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [first, second] } });
+    await userEvent.click(screen.getByRole("button", { name: "Gönder" }));
+    await screen.findByRole("alert");
+    await userEvent.click(screen.getByRole("button", { name: "Gönder" }));
+    await waitFor(() => expect(apiMocks.uploadContentMedia).toHaveBeenCalledTimes(3));
+    expect(apiMocks.createContentComment).toHaveBeenCalledTimes(1);
+    expect(apiMocks.uploadContentMedia.mock.calls.map(call => call[2])).toEqual([first, second, second]);
+  });
+
   it("SSS destek mesajını ayrı inbox türü ve alfabetik konu seçimiyle gönderir", async () => {
     apiMocks.listPublicSupportCategories.mockResolvedValue([
       { id: "category-a", name: "Hesap", slug: "hesap", type: "faq", status: "active" },
@@ -154,8 +169,8 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
       "/places/demo",
     ));
 
-    const picker = await screen.findByText("Fotoğraf/video ekle");
-    expect(picker.closest("label")?.querySelector("svg")).not.toBeInTheDocument();
+    const picker = await screen.findByLabelText("Fotoğraf/video ekle");
+    expect(picker.closest("label")?.querySelector("svg")).toBeInTheDocument();
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     const image = new File(["image"], "mekan.webp", { type: "image/webp" });
     fireEvent.change(input, { target: { files: [image] } });
@@ -172,6 +187,15 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
     expect(screen.getByText(/YouTube ve SoundCloud/)).toBeVisible();
   });
 
+  it("hides the ban action on the event owner's post while preserving other moderation actions", async () => {
+    apiMocks.getUserSession.mockReturnValue({id:"manager",role:"user"});
+    apiMocks.listContentComments.mockResolvedValue([{id:"owner-post",targetId:"event",targetType:"event",authorId:"owner",author:{id:"owner",name:"Owner",username:"owner"},body:"Owner post",likeCount:0,createdAt:"2026-10-12T12:00:00Z",replies:[],media:[]}]);
+    render(providers(<ContentComments canManage organizerId="owner" targetId="event" targetType="event" title="Posts"/>,"/events/demo"));
+    await userEvent.click(await screen.findByRole("button",{name:"Yorum aksiyonları"}));
+    expect(screen.queryByRole("button",{name:"Etkinliğe yasakla"})).not.toBeInTheDocument();
+    expect(screen.getByRole("button",{name:"Rapor et"})).toBeVisible();
+  });
+
   it("üst seviye postun Paylaş düğmesinden paylaşım lightbox'ını açar", async () => {
     apiMocks.getUserSession.mockReturnValue({ id: "member-1", name: "Ada", username: "ada", role: "user", status: "active" });
     apiMocks.listContentComments.mockResolvedValue([{
@@ -185,17 +209,17 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
     }]);
     render(providers(<ContentComments targetId="place-1" targetType="place" title="Mekân postları" />, "/places/demo"));
 
-    await userEvent.click(await screen.findByRole("button", { name: "Paylaş" }));
+    await userEvent.click((await screen.findAllByRole("button", { name: "Paylaş" }))[0]!);
     expect(screen.getByRole("dialog", { name: "Paylaş" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Bağlantıyı kopyala" })).toBeVisible();
     expect(screen.getByRole("button", { name: "QR kodu" })).toBeVisible();
     expect(screen.getByRole("link", { name: "Ece profilini aç" })).toHaveAttribute("href", "/users/ece");
     expect(screen.getByRole("link", { name: "@ece" })).toHaveAttribute("href", "/users/ece");
     expect(screen.getByText("Ben de katılacağım.")).toBeVisible();
-    expect(within(screen.getByText("Ben de katılacağım.").closest("article")!).queryByRole("button", { name: "Paylaş" })).not.toBeInTheDocument();
+    expect(within(screen.getByText("Ben de katılacağım.").closest("article")!).getByRole("button", { name: "Paylaş" })).toBeVisible();
   });
 
-  it("yönetici post aksiyonlarında mesaj, yasaklama, Guest List, rapor ve silmeyi; yanıtta paylaşım olmadan sunar", async () => {
+  it("yönetici post aksiyonlarında mesaj, yasaklama, Guest List, rapor ve silmeyi; yanıtta paylaşımı iç içe yanıt oluşturmadan sunar", async () => {
     guestEntitlement.canUseGuestLists = true;
     apiMocks.getUserSession.mockReturnValue({ id: "manager-1", name: "Ada", username: "ada", role: "user", status: "active" });
     apiMocks.listGuestLists.mockResolvedValue([{ id: "list-1", name: "VIP", members: [] }]);
@@ -234,7 +258,9 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
     await waitFor(() => expect(apiMocks.deleteContentComment).toHaveBeenCalledWith("post-actions"));
 
     const reply = post.querySelector<HTMLElement>(".comment-reply")!;
-    expect(within(reply).queryByRole("button", { name: "Paylaş" })).not.toBeInTheDocument();
+    expect(within(reply).getByRole("button", { name: "Paylaş" })).toBeVisible();
+    expect(within(reply).queryByRole("button", { name: /yorum$/ })).not.toBeInTheDocument();
+    expect(reply.querySelector(".comment-author-line .comment-timestamp")).toBeInTheDocument();
   });
 });
 

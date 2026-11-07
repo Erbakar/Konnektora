@@ -232,7 +232,7 @@ export function GuestListDialog({ context, target, onClose }: { context?: GuestL
         </header>
         <header className="guest-list-person">
           {target.avatarUrl ? <img alt="" src={resolveMediaUrl(target.avatarUrl)}/> : <div className="post-avatar">{target.name.slice(0, 1).toUpperCase()}</div>}
-          <div><strong>{target.username ? `@${target.username}` : target.name}</strong><span>{target.name}</span></div>
+          <div><strong>{target.username && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(target.username) ? `@${target.username}` : target.name}</strong><span>{target.name}</span></div>
           <button className="secondary-action" disabled={follow.isPending || following.isLoading} onClick={() => follow.mutate()} type="button">{isFollowing ? (tr ? "Takibi bırak" : "Unfollow") : (tr ? "Takip et" : "Follow")}</button>
         </header>
         <dl className="guest-list-context">
@@ -300,6 +300,11 @@ function translateGuestListValue(value: string, language: "tr" | "en") {
     pending: ["Beklemede", "Pending"],
     plus: ["Plus", "Plus"],
     premium: ["Premium", "Premium"],
+    platinum: ["Platinum", "Platinum"],
+    free: ["Free", "Free"],
+    pro: ["Pro", "Pro"],
+    venue: ["Venue", "Venue"],
+    festival: ["Festival", "Festival"],
     requested: ["Talep etti", "Requested"],
     scale: ["Kurumsal Scale", "Corporate Scale"],
     starter: ["Kurumsal Başlangıç", "Corporate Starter"],

@@ -1,3 +1,5 @@
+import { notifyUserActivity } from "../notifications/activity-events";
+import { notificationCards } from "../notifications/notification-cards";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { BlockedTargetType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
@@ -19,6 +21,7 @@ const profileSelect = {
   email: true,
   phone: true,
   phoneVerified: true,
+  region: true, postalCode: true,
   country: true,
   city: true,
   district: true,
@@ -63,7 +66,8 @@ export class ProfileService {
 
   async updateProfile(userId: string, input: UpdateProfileDto) {
     const current = await this.getProfile(userId);
-    const username = input.username?.trim() || null;
+    const username = input.username === undefined ? current.username : input.username.trim();
+    if (input.username !== undefined && !username) throw new BadRequestException("Kullanıcı adı zorunludur.");
 
     if (input.phone !== undefined && (input.phone.trim() || null) !== current.phone) {
       throw new BadRequestException("Telefon numarası doğrulama akışıyla değiştirilmelidir.");
@@ -75,7 +79,7 @@ export class ProfileService {
     }
 
     if (username) {
-      const owner = await this.prisma.user.findFirst({ where: { username, id: { not: userId } }, select: { id: true } });
+      const owner = await this.prisma.user.findFirst({ where: { username: { equals: username, mode: "insensitive" }, id: { not: userId } }, select: { id: true } });
       if (owner) {
         throw new ConflictException("Bu kullanıcı adı zaten kullanılıyor.");
       }
@@ -87,7 +91,12 @@ export class ProfileService {
       throw new BadRequestException("Kurumsal hesaplarda işletme adı ve ticari unvan zorunludur.");
     }
 
-    const birthDate = input.birthDate ? new Date(input.birthDate) : null;
+    const birthDate = input.birthDate === undefined ? current.birthDate : input.birthDate ? new Date(input.birthDate) : null;
+    if (current.accountType === "individual") {
+      const latestBirthDate = new Date();
+      latestBirthDate.setUTCFullYear(latestBirthDate.getUTCFullYear() - 18);
+      if (!birthDate || !Number.isFinite(birthDate.getTime()) || birthDate > latestBirthDate) throw new BadRequestException("Üyelik için geçerli bir doğum tarihi ve en az 18 yaş gereklidir.");
+    }
     const shouldActivate = current.status === "pending"
       && current.phoneVerified
       && Boolean(username && input.country?.trim())
@@ -100,6 +109,7 @@ export class ProfileService {
         ...(email && email !== current.email ? { emailVerified: false } : {}),
         username,
         phone: current.phone,
+        region: this.optionalText(input.region, current.region), postalCode: this.optionalText(input.postalCode, current.postalCode),
         country: this.optionalText(input.country, current.country),
         city: this.optionalText(input.city, current.city),
         district: this.optionalText(input.district, current.district),
@@ -136,6 +146,7 @@ export class ProfileService {
         tradeName: input.tradeName.trim(),
         companyType: input.companyType,
         businessCategory: input.businessCategory,
+        region: input.region?.trim() || null, postalCode: input.postalCode?.trim() || null,
         country: input.country.trim(),
         city: input.city?.trim() || null,
         district: input.district?.trim() || null,
@@ -178,7 +189,7 @@ export class ProfileService {
     const channels = new Map(stored.map((item) => [item.topic, item.channel]));
     return notificationTopics.map((topic) => ({
       topic,
-      channel: channels.get(topic) ?? (emailOnlyTopics.has(topic) ? "email" : "both")
+      channel: emailOnlyTopics.has(topic) && channels.get(topic) === "none" ? "email" : channels.get(topic) ?? (emailOnlyTopics.has(topic) ? "email" : "both")
     }));
   }
 
@@ -186,6 +197,9 @@ export class ProfileService {
     const unique = new Map(input.preferences.map((preference) => [preference.topic, preference]));
     if (unique.size !== input.preferences.length) {
       throw new BadRequestException("Aynı bildirim konusu birden fazla kez gönderilemez.");
+    }
+    if ([...unique.values()].some((preference) => emailOnlyTopics.has(preference.topic) && preference.channel === "none")) {
+      throw new BadRequestException("Hesap güvenliği bildirimleri kapatılamaz.");
     }
     await this.prisma.$transaction(
       [...unique.values()].map((preference) =>
@@ -203,17 +217,18 @@ export class ProfileService {
     const blocks = await this.prisma.userBlock.findMany({ where: { userId }, orderBy: { createdAt: "desc" } });
     const ids = (type: BlockedTargetType) => blocks.filter((block) => block.targetType === type).map((block) => block.targetId);
     const [users, tags, events, places] = await Promise.all([
-      this.prisma.user.findMany({ where: { id: { in: ids("user") } }, select: { id: true, name: true, username: true, email: true } }),
+      this.prisma.user.findMany({ where: { id: { in: ids("user") } }, select: { id: true, name: true, username: true } }),
       this.prisma.tag.findMany({ where: { id: { in: ids("tag") } }, select: { id: true, name: true, slug: true } }),
-      this.prisma.event.findMany({ where: { id: { in: ids("event") } }, select: { id: true, title: true, slug: true } }),
-      this.prisma.place.findMany({ where: { id: { in: ids("place") } }, select: { id: true, name: true, slug: true } })
+      this.prisma.event.findMany({ where: { id: { in: ids("event") } }, select: { id: true, title: true, slug: true, startsAt: true, endsAt: true, city: true, country: true } }),
+      this.prisma.place.findMany({ where: { id: { in: ids("place") } }, select: { id: true, name: true, slug: true, city: true, country: true } })
     ]);
-    const details = new Map<string, { label: string; subtitle?: string | null }>();
-    users.forEach((item) => details.set(`user:${item.id}`, { label: item.username ? `@${item.username}` : item.name, subtitle: item.email }));
-    tags.forEach((item) => details.set(`tag:${item.id}`, { label: item.name, subtitle: item.slug }));
-    events.forEach((item) => details.set(`event:${item.id}`, { label: item.title, subtitle: item.slug }));
-    places.forEach((item) => details.set(`place:${item.id}`, { label: item.name, subtitle: item.slug }));
+    const details = new Map<string, { label: string; subtitle?: string | null; href: string }>();
+    users.forEach((item) => details.set(`user:${item.id}`, { label: item.username ? `@${item.username}` : item.name, subtitle: null, href: item.username ? `/users/${item.username}` : `/users/id/${item.id}` }));
+    tags.forEach((item) => details.set(`tag:${item.id}`, { label: item.name, subtitle: null, href: `/tags/${item.slug}` }));
+    events.forEach((item) => details.set(`event:${item.id}`, { label: item.title, href: `/events/${item.slug}`, subtitle: [item.startsAt?.toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" }), item.endsAt?.toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" }), item.city, item.country].filter(Boolean).join(" · ") }));
+    places.forEach((item) => details.set(`place:${item.id}`, { label: item.name, href: `/places/${item.slug}`, subtitle: [item.city, item.country].filter(Boolean).join(", ") }));
     return blocks.map((block) => ({
+      href: details.get(`${block.targetType}:${block.targetId}`)?.href ?? null,
       targetType: block.targetType,
       targetId: block.targetId,
       label: details.get(`${block.targetType}:${block.targetId}`)?.label ?? "Silinmiş içerik",
@@ -346,6 +361,7 @@ export class ProfileService {
       this.prisma.tag.updateMany({ where: { id: { in: added } }, data: { usageCount: { increment: 1 } } }),
       this.prisma.tag.updateMany({ where: { id: { in: removed }, usageCount: { gt: 0 } }, data: { usageCount: { decrement: 1 } } })
     ]);
+    for (const tagId of added) await notifyUserActivity(this.prisma, userId, "tag", tagId, "tagged", `tagged:${userId}:${tagId}`);
     return this.getAffinities(userId);
   }
 
@@ -376,12 +392,14 @@ export class ProfileService {
       data: { targetUserId, suggestedById, tagId: input.tagId, sentiment: input.sentiment },
       include: { tag: true, targetUser: { select: { id: true, name: true, username: true, role: true, status: true } }, suggestedBy: { select: { id: true, name: true, username: true, role: true, status: true } } },
     });
-    await this.notifications.dispatch({ userId: targetUserId, topic: "tag_request", type: "profile_tag_suggestion", title: "Profilinize yeni etiket önerildi", body: `${suggestion.suggestedBy.username ? `@${suggestion.suggestedBy.username}` : suggestion.suggestedBy.name}, ${tag.name} etiketini profilinize eklemek istiyor.`, targetType: "user", targetId: targetUserId });
+    const sentimentLabel = input.sentiment === "like" ? "Beğeniyorum" : input.sentiment === "dislike" ? "Beğenmiyorum" : "Nötr";
+    // Uygulama içinde yalnız onay kartı gösterilir; bu kayıt e-posta/anlık bildirim teslimi içindir.
+    await this.notifications.dispatch({ userId: targetUserId, topic: "tag_request", type: "profile_tag_suggestion", title: "Profil etiketi onayınızı bekliyor", body: `${suggestion.suggestedBy.username ? `@${suggestion.suggestedBy.username}` : suggestion.suggestedBy.name}, “${tag.name}” etiketini “${sentimentLabel}” duygusuyla profilinize eklemek istiyor.`, targetType: "tag", targetId: tag.id, context: { targetLabel: tag.name, targetUrl: "/notifications?tab=waiting" } });
     return suggestion;
   }
 
   async decideTagSuggestion(userId: string, id: string, action: "accept" | "decline" | "cancel") {
-    const suggestion = await this.prisma.profileTagSuggestion.findUnique({ where: { id }, include: { tag: true } });
+    const suggestion = await this.prisma.profileTagSuggestion.findUnique({ where: { id }, include: { tag: true, targetUser: { select: { username: true } } } });
     if (!suggestion || suggestion.status !== "pending") throw new NotFoundException("Bekleyen etiket önerisi bulunamadı.");
     if (action === "cancel" ? suggestion.suggestedById !== userId : suggestion.targetUserId !== userId) throw new BadRequestException("Bu öneri üzerinde işlem yapamazsınız.");
     if (action === "accept") {
@@ -394,16 +412,35 @@ export class ProfileService {
     } else {
       await this.prisma.profileTagSuggestion.update({ where: { id }, data: { status: action === "cancel" ? "cancelled" : "declined" } });
     }
-    if (action !== "cancel") await this.notifications.dispatch({ userId: suggestion.suggestedById, topic: "tag_request", type: "profile_tag_suggestion_result", title: action === "accept" ? "Etiket öneriniz kabul edildi" : "Etiket öneriniz reddedildi", body: `${suggestion.tag.name} etiketi için gönderdiğiniz öneri ${action === "accept" ? "kabul edildi" : "reddedildi"}.`, targetType: "user", targetId: suggestion.targetUserId });
+    if (action !== "cancel") await this.notifications.dispatch({ userId: suggestion.suggestedById, topic: "tag_request", type: "profile_tag_suggestion_result", title: action === "accept" ? "Etiket öneriniz kabul edildi" : "Etiket öneriniz reddedildi", body: `${suggestion.targetUser?.username ? `@${suggestion.targetUser.username} profiline ` : "Profile "}“”${suggestion.tag.name}|${suggestion.tag.slug ?? suggestion.tag.name}“” etiketi için gönderdiğiniz öneri ${action === "accept" ? "kabul edildi" : "reddedildi"}.`, targetType: "user", targetId: suggestion.targetUserId });
     return { ok: true as const, status: action === "accept" ? "accepted" : action === "cancel" ? "cancelled" : "declined" };
   }
 
-  getNotifications(userId: string) {
-    return (this.prisma as any).notification.findMany({
-      where: { userId },
-      orderBy: [{ readAt: "asc" }, { createdAt: "desc" }],
+  async getNotifications(userId: string) {
+    const items = await (this.prisma as any).notification.findMany({
+      where: { userId, type: { notIn: ["private_message", "profile_tag_suggestion"] } },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 100
     });
+    const ids = (type: string) => items.filter((item: any) => item.targetType === type && item.targetId).map((item: any) => item.targetId);
+    const [events, places, tags, users] = await Promise.all([
+      ids("event").length ? this.prisma.event.findMany({ where: { id: { in: ids("event") } }, select: { id: true, slug: true, title: true } }) : [],
+      ids("place").length ? this.prisma.place.findMany({ where: { id: { in: ids("place") } }, select: { id: true, slug: true, name: true } }) : [],
+      ids("tag").length ? this.prisma.tag.findMany({ where: { id: { in: ids("tag") } }, select: { id: true, slug: true, name: true } }) : [],
+      ids("user").length ? this.prisma.user.findMany({ where: { id: { in: ids("user") } }, select: { id: true, username: true } }) : [],
+    ]);
+    const paths = new Map([...events.map(item => [item.id, `/events/${item.slug}`] as const), ...places.map(item => [item.id, `/places/${item.slug}`] as const), ...tags.map(item => [item.id, `/tags/${item.slug}`] as const)]);
+    const labels = new Map([...events.map(item => [item.id, item.title] as const), ...places.map(item => [item.id, item.name] as const), ...tags.map(item => [item.id, item.name] as const), ...users.map(item => [item.id, item.username ? `@${item.username}` : "Kullanıcı profili"] as const)]);
+    const legacyTagNames = items.filter((item: any) => item.type === "profile_tag_suggestion_result" && !item.body.includes("“”")).map((item: any) => item.body.match(/^(.*?) etiketi için gönderdiğiniz öneri/)?.[1]).filter(Boolean);
+    const legacyTags = legacyTagNames.length ? await this.prisma.tag.findMany({ where: { name: { in: legacyTagNames }, status: "active" }, select: { name: true, slug: true } }) : [];
+    const resolvedItems = items.map((item: any) => {
+      if (item.type !== "profile_tag_suggestion_result" || item.body.includes("“”")) return item;
+      const tagName = item.body.match(/^(.*?) etiketi için gönderdiğiniz öneri/)?.[1];
+      const tag = legacyTags.find(tag => tag.name === tagName);
+      const target = users.find(user => user.id === item.targetId);
+      return tag && target?.username ? { ...item, body: `@${target.username} profiline “”${tag.name}|${tag.slug}“”${item.body.slice(tagName.length)}` } : item;
+    });
+    return notificationCards(this.prisma, userId, resolvedItems.map((item: any) => ({ ...item, targetLabel: labels.get(item.targetId) ?? null, targetUrl: item.targetType === "user" && item.targetId ? `/users/id/${item.targetId}` : paths.get(item.targetId) ?? null })));
   }
 
   async markNotificationRead(userId: string, id: string) {
@@ -413,10 +450,9 @@ export class ProfileService {
       throw new NotFoundException("Bildirim bulunamadı.");
     }
 
-    return (this.prisma as any).notification.update({
-      where: { id },
-      data: { readAt: new Date() }
-    });
+    const groupKey = notification.context?.groupKey;
+    if (groupKey) await this.prisma.notification.updateMany({ where: { userId, context: { path: ["groupKey"], equals: groupKey } }, data: { readAt: new Date() } });
+    return this.prisma.notification.update({ where: { id }, data: { readAt: new Date() } });
   }
 
   private optionalText(value: string | undefined, current: string | null) {

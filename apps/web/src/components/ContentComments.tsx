@@ -1,8 +1,13 @@
+import { FollowStar } from "./MemberSignals";
+import { MediaAlbum } from "./MediaAlbum";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Ban,
+  BarChart3,
+  Flag,
   Edit3,
   Heart,
+  ImagePlus,
   LoaderCircle,
   Mail,
   MessageCircle,
@@ -12,11 +17,13 @@ import {
   Share2,
   Trash2,
   UserPlus,
+  UserMinus,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   createContentComment,
+  createContentPoll,
   deleteContentComment,
   followUser,
   getUserSession,
@@ -32,6 +39,7 @@ import {
   resolveMediaUrl,
 } from "../lib/api";
 import { RichText } from "./RichText";
+import { PollCard, PollComposer, emptyPollDraft, pollDraftError, pollDraftInput, type PollDraft } from "./ContentPoll";
 import { EmbeddedMedia } from "./EmbeddedMedia";
 import { userProfilePath } from "./UserIdentityLink";
 import { ReportDialog } from "./ReportDialog";
@@ -48,18 +56,23 @@ export function ContentComments({
   title,
   organizerId,
   canManage = false,
+  shareContext,
 }: {
   targetType: "event" | "place" | "tag_comment";
   targetId: string;
   title: string;
   organizerId?: string | null;
   canManage?: boolean;
+  shareContext?: { title: string; location?: string; date?: string; tags?: string[]; icon?: string };
 }) {
   const { language } = useLanguage();
   const user = getUserSession();
   const client = useQueryClient();
   const [body, setBody] = useState("");
   const [media, setMedia] = useState<File[]>([]);
+  const [pollDraft, setPollDraft] = useState<PollDraft | null>(null);
+  const [pollError, setPollError] = useState("");
+  const pollKind = targetType === "event" || targetType === "place" ? targetType : null;
   const [filter, setFilter] = useState<
     "all" | "organizer" | "following" | "popular" | "photos" | "videos"
   >("all");
@@ -69,7 +82,7 @@ export function ContentComments({
     enabled: Boolean(user),
   });
   const comments = useQuery({
-    queryKey: ["content-comments", targetType, targetId],
+    queryKey: ["content-comments", targetType, targetId, user?.id],
     queryFn: () => listContentComments(targetType, targetId),
   });
   const { canUseGuestLists: canAddGuest } = useGuestListEntitlement(canManage);
@@ -81,30 +94,40 @@ export function ContentComments({
         ?.scrollIntoView({ block: "center" }),
     );
   }, [comments.data]);
+  const pendingUpload = useRef<{ key: string; id: string; body: string; files: File[]; pollPending: boolean } | null>(null);
   const create = useMutation({
     mutationFn: async () => {
-      const comment = await createContentComment(
-        targetType,
-        targetId,
-        body.trim(),
-      );
-      const mediaType =
-        targetType === "event"
-          ? "event_comment"
-          : targetType === "place"
-            ? "place_comment"
-            : "tag_comment";
-      await Promise.all(
-        media.map((file) => uploadContentMedia(mediaType, comment.id, file)),
-      );
-      return comment;
+      const key = `${targetType}:${targetId}`;
+      const text = body.trim() || pollDraft?.question.trim() || "";
+      let draft = pendingUpload.current?.key === key ? pendingUpload.current : null;
+      if (!draft) {
+        const comment = await createContentComment(targetType, targetId, text);
+        draft = { key, id: comment.id, body: text, files: [...media], pollPending: Boolean(pollDraft && pollKind) };
+        pendingUpload.current = draft;
+      } else if (draft.body !== text) {
+        await updateContentComment(draft.id, text);
+        draft.body = text;
+      }
+      if (draft.pollPending && pollDraft) {
+        await createContentPoll(draft.id, pollDraftInput(pollDraft));
+        draft.pollPending = false;
+      }
+      const mediaType = targetType === "event" ? "event_comment" : targetType === "place" ? "place_comment" : "tag_comment";
+      while (draft.files.length) {
+        await uploadContentMedia(mediaType, draft.id, draft.files[0]!);
+        draft.files.shift();
+      }
+      pendingUpload.current = null;
+      return draft.id;
     },
-    onSuccess: () => {
+    onSuccess: async (id) => {
       setBody("");
       setMedia([]);
-      void client.invalidateQueries({
+      setPollDraft(null);
+      await client.invalidateQueries({
         queryKey: ["content-comments", targetType, targetId],
       });
+      window.requestAnimationFrame(() => document.getElementById(`post-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
     },
   });
   const followingIds = new Set(
@@ -141,7 +164,7 @@ export function ContentComments({
         </h2>
         <span>{comments.data?.length ?? 0} {language === "tr" ? "yorum" : "comments"}</span>
       </div>
-      <div
+      {targetType !== "tag_comment" ? <div
         className="comment-filter-tabs"
         role="tablist"
         aria-label={`${title} ${language === "tr" ? "filtreleri" : "filters"}`}
@@ -171,7 +194,8 @@ export function ContentComments({
             {label}
           </button>
         ))}
-      </div>
+      </div> : null}
+      {create.isError ? <p role="alert" className="form-error">{create.error instanceof Error ? create.error.message : language === "tr" ? "Yayın tamamlanamadı. Yeniden yayınlayarak kalan dosyaları yükleyebilirsiniz; gönderiniz çoğaltılmaz." : "Publishing could not finish. Publish again to retry remaining files without duplicating your post."}</p> : null}
       <div className="admin-list">
         {filteredComments.map((comment) => (
           <article
@@ -203,7 +227,7 @@ export function ContentComments({
               </span>
             )}
             <div>
-              <strong>
+              <header className="comment-author-line">{comment.author?<FollowStar id={comment.author.id}/>:null}<strong>
                 {comment.author ? (
                   <Link to={userProfilePath(comment.author)}>
                     {comment.author.username
@@ -214,34 +238,17 @@ export function ContentComments({
                   language === "tr" ? "Silinmiş kullanıcı" : "Deleted user"
                 )}
               </strong>
-              <span>
+              <small className="comment-timestamp"><a href={`#post-${comment.id}`}>{formatPostDateTime(comment.createdAt, language)}</a></small></header>
+              {comment.poll && comment.body.trim() === comment.poll.question ? null : <span className="post-copy">
                 <RichText hideEmbeddableUrls text={comment.body} />
-              </span>
+              </span>}
               <EmbeddedMedia text={comment.body} />
-              {comment.media?.length ? (
-                <div className={`comment-media-grid media-count-${Math.min(comment.media.length, 5)}`}>
-                  {comment.media.map((item) =>
-                    item.type === "video" ? (
-                      <video
-                        controls
-                        key={item.id}
-                        src={resolveMediaUrl(item.url)}
-                      />
-                    ) : (
-                      <img
-                        alt=""
-                        key={item.id}
-                        src={resolveMediaUrl(item.url)}
-                      />
-                    ),
-                  )}
-                </div>
-              ) : null}
-              <small>
-                {formatPostDateTime(comment.createdAt, language)}
-              </small>
+              {comment.poll && pollKind ? <PollCard poll={comment.poll} kind={pollKind} queryKey={["content-comments", targetType, targetId]} tr={language === "tr"}/> : null}
+              {comment.media?.length ? <MediaAlbum items={comment.media} owner={{ contentType: targetType === "event" ? "event_comment" : targetType === "place" ? "place_comment" : "tag_comment", contentId: comment.id, ownerId: comment.authorId, queryKeys: [["content-comments", targetType, targetId]] }}/> : null}
               <CommentActions
+                shareContext={shareContext}
                 canManage={canManage}
+                organizerId={organizerId}
                 canAddGuest={canAddGuest}
                 comment={comment}
                 currentUserId={user?.id}
@@ -258,7 +265,7 @@ export function ContentComments({
               {comment.replies?.length ? (
                 <div className="comment-replies">
                   {comment.replies.map((reply) => (
-                    <article className="comment-reply" key={reply.id}>
+                    <article className="comment-reply" id={`post-${reply.id}`} key={reply.id}>
                       {reply.author ? (
                         <Link
                           aria-label={language === "tr" ? `${reply.author.name} profilini aç` : `Open ${reply.author.name}'s profile`}
@@ -275,27 +282,18 @@ export function ContentComments({
                         <span className="comment-author-avatar comment-author-fallback">?</span>
                       )}
                       <div>
-                        <strong>
+                        <header className="comment-author-line">{reply.author?<FollowStar id={reply.author.id}/>:null}<strong>
                           {reply.author ? (
                             <Link to={userProfilePath(reply.author)}>{reply.author.username ? `@${reply.author.username}` : reply.author.name}</Link>
                           ) : language === "tr" ? "Silinmiş kullanıcı" : "Deleted user"}
-                        </strong>
-                        <RichText hideEmbeddableUrls text={reply.body} />
+                        </strong><small className="comment-timestamp"><a href={`#post-${reply.id}`}>{formatPostDateTime(reply.createdAt, language)}</a></small></header>
+                        <span className="post-copy"><RichText hideEmbeddableUrls text={reply.body} /></span>
                         <EmbeddedMedia text={reply.body} />
-                        {reply.media?.length ? (
-                          <div className={`comment-media-grid media-count-${Math.min(reply.media.length, 5)}`}>
-                            {reply.media.map((item) =>
-                              item.type === "video" ? (
-                                <video controls key={item.id} src={resolveMediaUrl(item.url)} />
-                              ) : (
-                                <img alt="" key={item.id} src={resolveMediaUrl(item.url)} />
-                              ),
-                            )}
-                          </div>
-                        ) : null}
-                        <small>{formatPostDateTime(reply.createdAt, language)}</small>
+                        {reply.media?.length ? <MediaAlbum items={reply.media} owner={{ contentType: "comment_reply", contentId: reply.id, ownerId: reply.authorId, queryKeys: [["content-comments", targetType, targetId]] }}/> : null}
                         <CommentActions
+                          shareContext={shareContext}
                           canManage={canManage}
+                organizerId={organizerId}
                           canAddGuest={canAddGuest}
                           comment={reply}
                           currentUserId={user?.id}
@@ -316,7 +314,12 @@ export function ContentComments({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            if (body.trim() || media.length) create.mutate();
+            if (pollDraft) {
+              const problem = pollDraftError(pollDraft, language === "tr");
+              setPollError(problem);
+              if (problem) return;
+            }
+            if (body.trim() || media.length || pollDraft) create.mutate();
           }}
         >
           <textarea
@@ -327,24 +330,28 @@ export function ContentComments({
           />
           <button
             className="primary-action"
-            disabled={(!body.trim() && !media.length) || create.isPending}
+            disabled={(!body.trim() && !media.length && !pollDraft) || create.isPending}
           >
             <Send size={17} />
             {targetType === "tag_comment" ? language === "tr" ? "Yayınla" : "Publish" : language === "tr" ? "Gönder" : "Send"}
           </button>
           <label className="comment-media-picker">
-            <span>{language === "tr" ? "Fotoğraf/video ekle" : "Add photo/video"}</span>
+            <ImagePlus aria-label={language === "tr" ? "Fotoğraf/video ekle" : "Add photo/video"} size={20}/>
             <input
               accept="image/*,video/mp4,video/webm"
               hidden
               multiple
               onChange={(event) =>
-                setMedia([...(event.target.files ?? [])].slice(0, 9))
+                setMedia([...(event.target.files ?? [])].slice(0, 50))
               }
               type="file"
             />
           </label>
+          {pollKind ? <button type="button" className={`comment-poll-toggle${pollDraft ? " active" : ""}`} aria-pressed={Boolean(pollDraft)} onMouseDown={(event) => event.preventDefault()} onClick={() => { setPollDraft((current) => current ? null : emptyPollDraft()); setPollError(""); }}><BarChart3 size={18}/>{language === "tr" ? "Anket ekle" : "Add poll"}</button> : null}
           <ComposerTips />
+          {pollKind && pollDraft ? <PollComposer draft={pollDraft} kind={pollKind} onChange={(next) => { setPollDraft(next); setPollError(""); }} onRemove={() => { setPollDraft(null); setPollError(""); }} tr={language === "tr"}/> : null}
+          {pollError ? <p className="form-error" role="alert">{pollError}</p> : null}
+
           {media.length ? (
             <span className="comment-media-count">
               {media.filter((file) => file.type.startsWith("image/")).length}{" "}
@@ -377,7 +384,10 @@ function CommentActions({
   canManage,
   canAddGuest,
   onChanged,
+  shareContext,
+  organizerId,
 }: {
+  organizerId?: string | null;
   comment: ContentThreadComment;
   currentUserId?: string;
   following: boolean;
@@ -385,6 +395,7 @@ function CommentActions({
   canManage: boolean;
   canAddGuest: boolean;
   onChanged: () => void;
+  shareContext?: { title: string; location?: string; date?: string; tags?: string[]; icon?: string };
 }) {
   const { language } = useLanguage();
   const [banned, setBanned] = useState(false);
@@ -459,26 +470,26 @@ function CommentActions({
     <>
       <div className="comment-actions">
         <button
+          aria-pressed={Boolean(comment.liked)}
+          className={comment.liked ? "liked" : ""}
           disabled={like.isPending}
           onClick={() => like.mutate()}
           type="button"
         >
-          <Heart size={14} />
+          <Heart size={14} fill={comment.liked ? "currentColor" : "none"} />
           {comment.likeCount || (language === "tr" ? "Beğen" : "Like")}
         </button>
-        <button
+        {!comment.parentId && targetType !== "tag_comment" ? <button
           onClick={() => setReplying((current) => !current)}
           type="button"
         >
           <Reply size={14} />
           {comment.replies?.length ?? 0} {language === "tr" ? "yorum" : "replies"}
-        </button>
-        {!comment.parentId ? (
-          <button onClick={() => setShareOpen(true)} type="button">
+        </button> : null}
+        <button onClick={() => setShareOpen(true)} type="button">
             <Share2 size={14} />
             {language === "tr" ? "Paylaş" : "Share"}
           </button>
-        ) : null}
         <details className="action-menu comment-action-menu">
           <summary aria-label={language === "tr" ? "Yorum aksiyonları" : "Comment actions"} role="button">
             <MoreVertical size={16} />
@@ -496,14 +507,14 @@ function CommentActions({
                 onClick={() => follow.mutate()}
                 type="button"
               >
-                <UserPlus size={14} />
+                {following ? <UserMinus size={14} /> : <UserPlus size={14} />}
                 {following ? language === "tr" ? "Takibi bırak" : "Unfollow" : language === "tr" ? "Takip et" : "Follow"}
               </button>
             ) : null}
             {canManage &&
             ["event", "place"].includes(targetType) &&
             comment.authorId &&
-            comment.authorId !== currentUserId ? (
+            comment.authorId !== currentUserId && comment.authorId !== organizerId ? (
               <>
                 <button
                   disabled={ban.isPending}
@@ -538,7 +549,7 @@ function CommentActions({
                 {language === "tr" ? "Düzenle" : "Edit"}
               </button>
             ) : (
-              <button onClick={() => setReportOpen(true)} type="button">
+              <button onClick={() => setReportOpen(true)} type="button"><Flag size={14}/>
                 {language === "tr" ? "Rapor et" : "Report"}
               </button>
             )}
@@ -581,7 +592,7 @@ function CommentActions({
         targetId={comment.id}
         targetType="post"
         title={comment.body.trim().slice(0, 120) || (language === "tr" ? "Konnektora postu" : "Konnektora post")}
-        text={comment.body.trim().slice(0, 500)}
+        text={[`${comment.author?.username ? `@${comment.author.username}` : comment.author?.name ?? ""}${shareContext ? ` · ${shareContext.title}${shareContext.icon ? ` ${shareContext.icon}` : ""}` : ""}`, `“${comment.body.trim()}”`, shareContext?.location ? `📍 ${shareContext.location}` : "", shareContext?.date ? `📅 ${shareContext.date}` : "", shareContext?.tags?.slice(0, 4).map((tag) => `#${tag}`).join(" "), language === "tr" ? "🌎 Konnektora’da gönderiyi gör →" : "🌎 See the post on Konnektora →"].filter(Boolean).join("\n")}
         url={`${window.location.href.split("#")[0]}#post-${comment.id}`}
       />
     </>

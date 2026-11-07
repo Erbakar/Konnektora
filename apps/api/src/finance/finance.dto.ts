@@ -8,6 +8,7 @@ export class FinanceSettingsDto {
   @IsOptional() @IsString() @MaxLength(120) taxOffice?: string;
   @IsOptional() @IsEmail() billingEmail?: string;
   @IsOptional() @IsString() @MaxLength(80) country?: string;
+  @IsOptional() @IsString() @MaxLength(120) region?: string;
   @IsOptional() @IsString() @MaxLength(80) city?: string;
   @IsOptional() @IsString() @MaxLength(20) postalCode?: string;
   @IsOptional() @IsString() @MaxLength(300) addressLine?: string;
@@ -20,11 +21,11 @@ export class ConfirmPaymentDto { @IsString() @MinLength(8) @MaxLength(200) payme
 export class RefundPaymentDto { @IsOptional() @Type(() => Number) @IsNumber() @Min(0.01) amount?: number; @IsOptional() @IsString() @MaxLength(300) reason?: string; }
 export class PayoutDto { @Type(() => Number) @IsNumber() @Min(1) amount!: number; }
 export class BusinessPlanDto {
-  @IsIn(["starter", "growth", "scale"]) plan!: "starter" | "growth" | "scale";
+  @IsIn(["free", "pro", "venue", "festival"]) plan!: "free" | "pro" | "venue" | "festival";
   @IsOptional() @IsString() @MinLength(8) @MaxLength(200) paymentMethodToken?: string;
 }
 
 export class MemberPlanDto {
-  @IsIn(["free", "plus", "premium"]) plan!: "free" | "plus" | "premium";
+  @IsIn(["free", "premium", "platinum"]) plan!: "free" | "premium" | "platinum";
   @IsOptional() @IsString() paymentMethodToken?: string;
 }

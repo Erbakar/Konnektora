@@ -24,5 +24,5 @@ const turkishEventTitles: Record<string, string> = {
 export function HomeEventTile({ event }: { event: Event }) {
   const { language } = useLanguage();
   const title = language === "tr" ? turkishEventTitles[event.slug] ?? event.title : event.title;
-  return <EventCard displayTitle={title} event={event} />;
+  return <EventCard nearby displayTitle={title} event={event} />;
 }

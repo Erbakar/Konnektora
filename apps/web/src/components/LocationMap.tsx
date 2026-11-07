@@ -34,7 +34,7 @@ export function LocationMap({ items, showLinks = true }: { items: MapItem[]; sho
   return <section className="location-map"><div aria-label={language === "tr" ? "Mekân ve kullanıcı konumu haritası" : "Place and user location map"} className="location-map-canvas" ref={mapElement}/>{showLinks ? <div className="location-map-links">{located.map((item) => {
     const distance = userLocation ? distanceBetween(userLocation.latitude, userLocation.longitude, item.latitude!, item.longitude!) : null;
     const distanceLabel = distance == null ? null : distance < 1 ? `${Math.round(distance * 1_000)} m` : `${distance.toLocaleString(language === "tr" ? "tr-TR" : "en-GB", { maximumFractionDigits: distance < 10 ? 1 : 0 })} km`;
-    return <a href={defaultMapHref(item.latitude!, item.longitude!)} key={item.id} rel="noreferrer" target="_blank"><MapPin size={15}/><span><strong>{item.title}</strong><small>{item.location}{distanceLabel ? ` · ${distanceLabel}` : ""}</small></span><ExternalLink size={14}/></a>;
+    return <a href={defaultMapHref(item.latitude!, item.longitude!)} key={item.id} rel="noreferrer" target="_blank"><MapPin size={15}/><span><strong>{item.title}</strong><small>{item.location}{distanceLabel ? ` · ${distanceLabel}` : ""}</small></span><span className="map-open-action"><ExternalLink size={24}/>{language === "tr" ? "Google Haritalar’da aç" : "Open in Google Maps"}</span></a>;
   })}{userLocation ? <span className="location-map-user-legend"><MapPin size={15}/>{language === "tr" ? "Konumunuz da haritada gösteriliyor" : "Your location is also shown on the map"}</span> : null}</div> : null}</section>;
 }
 

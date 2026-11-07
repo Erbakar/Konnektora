@@ -1,3 +1,4 @@
+jest.mock("../notifications/activity-events", () => ({ actorLabel: jest.requireActual("../notifications/activity-events").actorLabel, notifyEntityCreated: jest.fn().mockResolvedValue(undefined), notifyEntityChanges: jest.fn().mockResolvedValue(undefined), notifyUserActivity: jest.fn().mockResolvedValue(undefined), notifyEventAvailability: jest.fn().mockResolvedValue(undefined), isUndiscoverable: jest.fn().mockResolvedValue(false), notifyRegistration: jest.fn().mockResolvedValue(undefined), notifyMembershipInvite: jest.fn().mockResolvedValue(undefined), notifyComment: jest.fn().mockResolvedValue(undefined), recordActivity: jest.fn().mockResolvedValue(undefined) }));
 import { BadRequestException, ConflictException, ForbiddenException } from "@nestjs/common";
 import { PlaceMemberRole, PlaceMemberStatus } from "@prisma/client";
 import { PlacesService } from "./places.service";
@@ -37,7 +38,9 @@ describe("PlacesService", () => {
   const notification = { create: jest.fn() };
   const notifications = { dispatch: jest.fn() };
   const tx = { place, placeMember, placeFollow, notification };
+  const contentView = { groupBy: jest.fn() };
   const prisma = {
+    contentView,
     place,
     placeMember,
     placeInvitation,
@@ -57,8 +60,8 @@ describe("PlacesService", () => {
   };
   const identity = { resolveMemberPass: jest.fn() };
   const auth = { createInviteAcceptToken: jest.fn() };
-  const mail = { sendPlaceInviteEmail: jest.fn() };
-  const sms = { sendPlaceInvite: jest.fn() };
+  const mail = { sendContactInviteEmail: jest.fn().mockResolvedValue({}), sendPlaceInviteEmail: jest.fn() };
+  const sms = { sendContactInvite: jest.fn().mockResolvedValue({}), sendPlaceInvite: jest.fn() };
   const service = new PlacesService(
     prisma as never,
     notifications as never,
@@ -88,6 +91,20 @@ describe("PlacesService", () => {
     guestList.findMany.mockResolvedValue([]);
     userFollow.count.mockResolvedValue(0);
     userInterestTag.findMany.mockResolvedValue([]);
+  });
+
+  it("ranks trendy places by the last seven days of detail views before pagination", async () => {
+    const base = { status: "active", visibility: "open", followerCount: 0, followers: [], members: [], tags: [], _count: { members: 0, followers: 0, events: 0 } };
+    place.findMany.mockResolvedValueOnce([{ id: "new", createdAt: new Date("2026-10-02") }, { id: "trendy", createdAt: new Date("2026-09-01") }]).mockResolvedValueOnce([{ ...base, id: "trendy", name: "Trendy", slug: "trendy-100001" }]);
+    contentView.groupBy.mockResolvedValue([{ targetId: "trendy", _count: { _all: 12 } }]);
+    const before = Date.now();
+    const result = await service.list({ scope: "trendy", pageSize: 1 });
+    expect(result.items.map((item) => item.id)).toEqual(["trendy"]);
+    expect(result.hasNextPage).toBe(true);
+    const query = contentView.groupBy.mock.calls[0][0];
+    expect(query.where.kind).toBe("detail");
+    expect(query.where.createdAt.gte.getTime()).toBeGreaterThanOrEqual(before - 7 * 86400000);
+    expect(place.findMany.mock.calls[1][0].where.AND[1]).toEqual({ id: { in: ["trendy"] } });
   });
 
   it("ranks nearby places using distance and shared interests before paginating", async () => {
@@ -446,6 +463,20 @@ describe("PlacesService", () => {
     expect(mail.sendPlaceInviteEmail).toHaveBeenCalledWith(expect.objectContaining({ to: external.email, placeSlug: "hub", acceptToken: "accept-token" }));
   });
 
+  it("#14 uses an existing active phone owner for a place invitation", async () => {
+    const existing = { id: "phone-existing", email: "member@example.com", phone: "+905551112233", name: "Existing", role: "user", status: "active" };
+    place.findUnique.mockResolvedValue({ id: "place-1", name: "Hub", slug: "hub", createdById: actor.id, members: [] });
+    user.findFirst.mockResolvedValue(existing);
+    placeMember.findUnique.mockResolvedValue(null);
+    placeMember.upsert.mockResolvedValue({ placeId: "place-1", userId: existing.id, status: "invited", role: "member" });
+    place.update.mockResolvedValue({});
+    auth.createInviteAcceptToken.mockResolvedValue("accept-token");
+    await service.invite("place-1", { phone: "0090 555 111 22 33" }, actor);
+    expect(user.create).not.toHaveBeenCalled();
+    expect(user.findFirst).toHaveBeenCalledWith({where:{phone:{in:["+905551112233","905551112233","00905551112233"]},status:"active"}});
+    expect(placeMember.upsert).toHaveBeenCalledWith(expect.objectContaining({where:{placeId_userId:{placeId:"place-1",userId:existing.id}}}));
+  });
+
   it("creates an invited account and sends SMS for a non-member phone invite", async () => {
     const external = { id: "phone-user-1", email: "phone-hash@invite.konnektora.local", phone: "+905551112233", name: "+905551112233", role: "user", status: "invited" };
     place.findUnique.mockResolvedValue({ id: "place-1", name: "Hub", slug: "hub", createdById: actor.id, members: [] });
@@ -459,7 +490,7 @@ describe("PlacesService", () => {
     await service.invite("place-1", { phone: "+90 555 111 22 33" }, actor);
 
     expect(user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ phone: "+905551112233", status: "invited" }) }));
-    expect(sms.sendPlaceInvite).toHaveBeenCalledWith("+905551112233", actor.name, "Hub", "hub", "accept-token");
+    expect(sms.sendPlaceInvite).toHaveBeenCalledWith("+905551112233", "Bir üye", "Hub", "hub", "accept-token");
   });
 
   it("lets an accepted member invite another member without assigning a manager role", async () => {

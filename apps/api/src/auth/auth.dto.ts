@@ -157,11 +157,15 @@ export class AvailabilityQueryDto {
   @IsString()
   @MinLength(2)
   @MaxLength(80)
-  @Matches(/^[\p{L}\p{N} .-]+$/u)
+  @Matches(/^[\p{L}\p{N}.-]+$/u)
   username?: string;
 }
 
 export class SocialAuthDto {
+  @IsOptional()
+  @IsIn(["individual", "corporate"])
+  accountType?: "individual" | "corporate";
+
   @IsIn(["google", "facebook"])
   provider!: "google" | "facebook";
 
