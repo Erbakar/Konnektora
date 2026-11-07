@@ -46,6 +46,9 @@
     "web-push": "^3.6.7"
   },
   "overrides": {
-    "deepmerge-ts": "8.0.0"
+    "deepmerge-ts": "8.0.0",
+    "proxy-addr": "^2.0.8",
+    "body-parser": "^2.4.0",
+    "qs": "^6.17.1"
   }
 }
