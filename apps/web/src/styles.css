@@ -14425,8 +14425,11 @@ button.follow-star { width: 25px; height: 25px; min-width: 25px; min-height: 25p
 .about-content ul { margin: 8px 0 12px 20px; display: grid; gap: 4px; font-weight: 600; }
 
 /* İleti anketleri (07/11 #21) */
-.comment-poll-toggle { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #c8d8ce; background: #fff; color: #1d6545; border-radius: 10px; padding: 7px 11px; font-weight: 700; cursor: pointer; }
-.comment-poll-toggle.active, .comment-poll-toggle:hover { background: #eef6f1; border-color: #1d6545; }
+/* İleti kutusu bağlantıları (07/11 #36): Resim / video ekle, Anket ekle ve İpuçları aynı yeşil bağlantı stilinde */
+.content-comments .composer-link, .content-comments .comment-poll-toggle { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; padding: 0; color: #2b664d; font: inherit; font-size: 14px; font-weight: 750; cursor: pointer; box-shadow: none; min-height: 0; width: auto; }
+.content-comments .composer-link svg { color: #2b664d; flex: 0 0 auto; }
+.content-comments .composer-link:hover span, .content-comments .comment-poll-toggle:hover { text-decoration: underline; text-underline-offset: 3px; }
+.content-comments .comment-poll-toggle.active { text-decoration: underline; text-underline-offset: 3px; }
 .poll-composer { grid-column: 1 / -1; width: 100%; display: grid; gap: 12px; margin: 4px 0 0; padding: 16px; border: 1px solid #d6e3da; border-radius: 14px; background: #f8fbf9; min-width: 0; }
 .poll-composer legend { display: flex; align-items: center; gap: 7px; font-weight: 800; color: #10231f; padding: 0 6px; }
 .poll-composer legend .poll-composer-remove { margin-left: 6px; display: inline-flex; border: 0; background: transparent; color: #66756d; cursor: pointer; padding: 2px; }
@@ -14467,7 +14470,7 @@ button.follow-star { width: 25px; height: 25px; min-width: 25px; min-height: 25p
 .content-poll-anon { color: #66756d; }
 .content-poll-change { justify-self: start; }
 .content-poll-locked ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
-.content-comments > form:has(.comment-poll-toggle) { grid-template-columns: max-content max-content max-content minmax(0, 1fr); }
+.content-comments > form:has(.comment-poll-toggle) { grid-template-columns: max-content max-content max-content minmax(0, 1fr); column-gap: 18px; }
 @media (max-width: 700px) { .content-comments > form:has(.comment-poll-toggle) { grid-template-columns: 1fr 1fr; } }
 .content-poll .text-button, .poll-composer .text-button { border: 0; background: transparent; color: #1d6545; font-weight: 700; cursor: pointer; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; }
 /* 07/11 #22: mobil profil başlığında takip edilen sayısı takipçi sayısıyla aynı hizada */
@@ -14476,3 +14479,18 @@ button.follow-star { width: 25px; height: 25px; min-width: 25px; min-height: 25p
 .content-poll .content-poll-result-line > span, .content-poll .content-poll-result-line > strong { display: inline; margin: 0; }
 .poll-composer .poll-switch input[type="checkbox"] { width: 40px; min-width: 40px; height: 22px; min-height: 0; padding: 0; border: 0; border-radius: 999px; box-shadow: none; }
 .poll-composer .poll-switch input[type="checkbox"]:focus-visible { outline: 3px solid rgba(29, 101, 69, .3); outline-offset: 2px; }
+
+/* Check-in arama kutusu (07/11 #29, #31): büyüteç girişle aynı satırda */
+.admin-form .checkin-search { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.admin-form .checkin-search > svg { flex: 0 0 auto; color: #66756d; }
+.admin-form .checkin-search input { min-height: 40px; border: 0; padding: 0; box-shadow: none; background: transparent; }
+/* Anket oy formu (07/11 #37): seçim kutuları küçük ve metnin solunda */
+.content-comments .content-poll .content-poll-choice { display: flex; flex-direction: row; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; color: #172a20; min-height: 0; }
+.content-comments .content-poll .content-poll-choice input[type="checkbox"],
+.content-comments .content-poll .content-poll-choice input[type="radio"] { appearance: auto; -webkit-appearance: auto; flex: 0 0 auto; width: 18px; height: 18px; min-width: 18px; min-height: 0; margin: 0; padding: 0; border: 0; box-shadow: none; accent-color: #1d6545; }
+.content-comments .content-poll .content-poll-choice > span { flex: 1; min-width: 0; text-align: left; }
+.content-comments .content-poll .content-poll-open { display: grid; gap: 6px; }
+.content-comments .content-poll .content-poll-actions { display: flex; flex-direction: row; align-items: center; gap: 12px; }
+.content-comments .content-poll .content-poll-actions .primary-action { width: auto; }
+.admin-form .checkin-search input:focus, .admin-form .checkin-search input:focus-visible { border: 0; box-shadow: none; outline: 0; background: transparent; }
+.admin-form .checkin-search:focus-within { border-color: #1d6545; box-shadow: 0 0 0 3px rgba(29, 101, 69, .14); }

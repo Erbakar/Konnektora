@@ -46,3 +46,12 @@ describe("07/11 test maddeleri",()=>{
   expect(document.body.classList.contains("media-viewer-open")).toBe(true);
  });
 });
+
+describe("07/11 test maddeleri 28-38",()=>{
+ it("#37 anket oy formunda seçim kutuları seçenek metniyle aynı satırda",()=>{
+  mount(<PollCard poll={{...poll,viewerVoted:false,resultsVisible:false,viewerOptionIds:[],options:poll.options.map(o=>({...o,votes:null,percent:null}))}} kind="event" queryKey={["x"]} tr/>);
+  const choice=screen.getByRole("radio",{name:"Cuma"});
+  expect(choice.closest("label")).toHaveClass("content-poll-choice");
+  expect(screen.getByRole("button",{name:"Oy ver"})).toBeDisabled();
+ });
+});

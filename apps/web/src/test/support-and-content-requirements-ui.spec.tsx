@@ -169,7 +169,7 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
       "/places/demo",
     ));
 
-    const picker = await screen.findByLabelText("Fotoğraf/video ekle");
+    const picker = await screen.findByLabelText("Resim / video ekle");
     expect(picker.closest("label")?.querySelector("svg")).toBeInTheDocument();
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     const image = new File(["image"], "mekan.webp", { type: "image/webp" });

@@ -335,8 +335,9 @@ export function ContentComments({
             <Send size={17} />
             {targetType === "tag_comment" ? language === "tr" ? "Yayınla" : "Publish" : language === "tr" ? "Gönder" : "Send"}
           </button>
-          <label className="comment-media-picker">
-            <ImagePlus aria-label={language === "tr" ? "Fotoğraf/video ekle" : "Add photo/video"} size={20}/>
+          <label className="comment-media-picker composer-link">
+            <ImagePlus aria-hidden="true" size={20}/>
+            <span>{language === "tr" ? "Resim / video ekle" : "Add photo / video"}</span>
             <input
               accept="image/*,video/mp4,video/webm"
               hidden
@@ -347,7 +348,7 @@ export function ContentComments({
               type="file"
             />
           </label>
-          {pollKind ? <button type="button" className={`comment-poll-toggle${pollDraft ? " active" : ""}`} aria-pressed={Boolean(pollDraft)} onMouseDown={(event) => event.preventDefault()} onClick={() => { setPollDraft((current) => current ? null : emptyPollDraft()); setPollError(""); }}><BarChart3 size={18}/>{language === "tr" ? "Anket ekle" : "Add poll"}</button> : null}
+          {pollKind ? <button type="button" className={`comment-poll-toggle composer-link${pollDraft ? " active" : ""}`} aria-pressed={Boolean(pollDraft)} onMouseDown={(event) => event.preventDefault()} onClick={() => { setPollDraft((current) => current ? null : emptyPollDraft()); setPollError(""); }}><BarChart3 size={18}/>{language === "tr" ? "Anket ekle" : "Add poll"}</button> : null}
           <ComposerTips />
           {pollKind && pollDraft ? <PollComposer draft={pollDraft} kind={pollKind} onChange={(next) => { setPollDraft(next); setPollError(""); }} onRemove={() => { setPollDraft(null); setPollError(""); }} tr={language === "tr"}/> : null}
           {pollError ? <p className="form-error" role="alert">{pollError}</p> : null}

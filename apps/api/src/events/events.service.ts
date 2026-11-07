@@ -611,6 +611,27 @@ export class EventsService {
     }));
   }
 
+  async searchParticipantContacts(eventId: string, query: string, user: User) {
+    await this.ensureCanManageParticipants(eventId, user);
+    const text = query.trim().toLocaleLowerCase("tr-TR");
+    const digits = text.replace(/\D/g, "");
+    if (text.length < 3 && digits.length < 4) return { userIds: [] as string[] };
+    const rows = await this.prisma.eventParticipant.findMany({
+      where: {
+        eventId,
+        user: {
+          OR: [
+            ...(text.length >= 3 ? [{ email: { contains: text, mode: "insensitive" as const } }] : []),
+            ...(digits.length >= 4 ? [{ phone: { contains: digits } }] : []),
+          ],
+        },
+      },
+      select: { userId: true },
+      take: 200,
+    });
+    return { userIds: rows.map((row) => row.userId) };
+  }
+
   async listParticipants(eventId: string, user: User) {
     await this.ensureCanManageParticipants(eventId, user);
 

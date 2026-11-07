@@ -244,6 +244,7 @@ export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
         targetId={place.id}
         targetType="place"
         title={language === "tr" ? "Mekân yorumları" : "Place posts and comments"}
+        organizerId={place.createdById ?? null}
       />
       {(relatedPlacesQuery.data?.items ?? []).filter((item) => item.id !== place.id).length ? (
         <section className="detail-section">

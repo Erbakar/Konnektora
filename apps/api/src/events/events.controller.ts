@@ -136,6 +136,13 @@ export class EventsController {
     return this.eventsService.listParticipants(id, user);
   }
 
+  /** Check-in misafir listesinde e-posta/telefon araması; telefon numaraları istemciye gönderilmez (07/11 #31.2). */
+  @Get("events/:id/participants/search")
+  @UseGuards(JwtAuthGuard)
+  searchParticipants(@Param("id") id: string, @Query("q") q: string | undefined, @CurrentUser() user: User) {
+    return this.eventsService.searchParticipantContacts(id, q ?? "", user);
+  }
+
   @Get("events/:id/invitations/sent")
   @UseGuards(JwtAuthGuard)
   listSentInvitations(@Param("id") id: string, @CurrentUser() user: User) {

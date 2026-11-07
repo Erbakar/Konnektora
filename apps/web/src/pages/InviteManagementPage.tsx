@@ -50,6 +50,7 @@ import {
   listMyEvents,
   listPlaceMembers,
   listMyPlaces,
+  searchEventParticipantContacts,
   listSentPlaceInvitations,
   removeGuestListMember,
   renameGuestList,
@@ -228,6 +229,12 @@ export function EventInviteManagementPage() {
   const status = useMutation({
     mutationFn: ({ userId, value }: { userId: string; value: string }) =>
       updateEventParticipantStatus(event.data!.id, userId, value, "user"),
+    onSuccess: refresh,
+  });
+  // Check-in ekranında misafir listesindeki Onayla/Reddet bir giriş kararıdır ve Check-in geçmişine düşer (07/11 #31.5).
+  const guestDecision = useMutation({
+    mutationFn: ({ userId, decision }: { userId: string; decision: "admit" | "decline" }) =>
+      decideEventCheckInPassport(event.data!.id, userId, decision, "manual"),
     onSuccess: refresh,
   });
   const passportLoad = useMutation({
@@ -516,12 +523,13 @@ export function EventInviteManagementPage() {
             <PermissionState />
           ) : (
             <EventGuestList
+              eventId={event.data.id}
               items={(participants.data ?? []).filter((item) =>
                 ["accepted", "attended", "invited"].includes(item.status) || Boolean(item.tickets?.length),
               )}
-              pending={status.isPending || passportLoad.isPending}
+              pending={status.isPending || guestDecision.isPending || passportLoad.isPending}
               guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
-              onStatus={(userId, value) => status.mutate({ userId, value })}
+              onStatus={(userId, value) => guestDecision.mutate({ userId, decision: value === "accepted" ? "admit" : "decline" })}
               onPassport={(userId) => passportLoad.mutate(userId)}
               onAddToGuestList={(listId, userId) =>
                 addToGuestList.mutate({ listId, userId })
@@ -1585,6 +1593,7 @@ function InviteForm({
 }
 
 function EventGuestList({
+  eventId,
   items,
   pending,
   onStatus,
@@ -1592,6 +1601,7 @@ function EventGuestList({
   guestLists,
   onAddToGuestList,
 }: {
+  eventId: string;
   items: EventParticipant[];
   pending: boolean;
   onStatus: (id: string, status: string) => void;
@@ -1605,11 +1615,25 @@ function EventGuestList({
   const [visibleCount, setVisibleCount] = useState(10);
   const [query, setQuery] = useState("");
   const normalized = query.trim().toLocaleLowerCase("tr-TR");
+  const [contactQuery, setContactQuery] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setContactQuery(normalized), 300);
+    return () => window.clearTimeout(timer);
+  }, [normalized]);
+  // E-posta ve telefon eşleşmesi sunucuda yapılır; telefon numaraları listede açığa çıkmaz.
+  const contactMatches = useQuery({
+    queryKey: ["event-participant-search", eventId, contactQuery],
+    queryFn: () => searchEventParticipantContacts(eventId, contactQuery),
+    enabled: contactQuery.length >= 3 || contactQuery.replace(/\D/g, "").length >= 4,
+    staleTime: 30_000,
+  });
+  const contactIds = new Set(contactQuery === normalized ? (contactMatches.data?.userIds ?? []) : []);
   const ordered = [...items]
     .filter(
       (item) =>
         !normalized ||
-        `${item.user?.username ?? ""} ${item.user?.name ?? ""}`
+        contactIds.has(item.userId) ||
+        `${item.user?.username ?? ""} ${item.user?.name ?? ""} ${item.user?.email ?? ""} ${item.user?.phone ?? ""}`
           .toLocaleLowerCase("tr-TR")
           .includes(normalized),
     )
@@ -1654,7 +1678,7 @@ function EventGuestList({
               setQuery(event.target.value);
               setVisibleCount(10);
             }}
-            placeholder={tr ? "Kullanıcı adı veya ad soyad" : "Username or full name"}
+            placeholder={tr ? "Kullanıcı adı, ad soyad, e-posta veya telefon" : "Username, full name, email or phone"}
             value={query}
           />
         </label>
@@ -1689,7 +1713,8 @@ function EventGuestList({
                 )}
               </Link>
               <div>
-                <strong>
+                <strong className="member-name-line">
+                  <FollowStar id={item.userId} />
                   <Link to={`/users/id/${item.userId}`}>
                     {item.user?.username
                       ? `@${item.user.username}`
@@ -1881,7 +1906,8 @@ function PlaceMemberList({
                 )}
               </Link>
               <div>
-                <strong>
+                <strong className="member-name-line">
+                  <FollowStar id={item.userId} />
                   <Link to={`/users/id/${item.userId}`}>
                     {item.user?.username
                       ? `@${item.user.username}`
@@ -2216,7 +2242,8 @@ function CheckInPassportDialog({
         )}
         <div className="passport-identity">
           <div>
-            <h3>
+            <h3 className="member-name-line">
+              <FollowStar id={passport.user.id} />
               {passport.user.username
                 ? `@${passport.user.username}`
                 : passport.user.name}
@@ -2273,7 +2300,7 @@ function CheckInPassportDialog({
             <dd>{passport.user.followerCount}</dd>
           </div>
           <div>
-            <dt>{tr ? "İlgili takipçi" : "Relevant followers"}</dt>
+            <dt>{passport.targetType === "event" ? (tr ? "Etkinlikteki takipçisi" : "Followers at this event") : (tr ? "Mekândaki takipçisi" : "Followers at this place")}</dt>
             <dd>{passport.relatedFollowerCount}</dd>
           </div>
           <div>
