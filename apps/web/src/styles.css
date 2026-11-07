@@ -14415,7 +14415,15 @@ button.follow-star { width: 25px; height: 25px; min-width: 25px; min-height: 25p
 .feed-event-line { display: flex; align-items: center; gap: 7px; margin: 3px 0 0; color: #526159; font-size: 14px; }
 .feed-event-line svg { flex: 0 0 auto; color: #1d6545; }
 .feed-event-description { margin: 0; }
-.feed-event-description .text-button { margin-left: 6px; }
+.feed-event-description .text-button { margin-left: 6px; border: 0; background: transparent; color: #1d6545; font: inherit; font-weight: 700; cursor: pointer; padding: 0; }
+.feed-place-summary { display: grid; gap: 6px; margin-top: 4px; justify-items: start; }
+.feed-place-avatar { width: 72px; height: 72px; border-radius: 16px; overflow: hidden; display: grid; place-items: center; background: #eef4f0; color: #1d6545; margin-bottom: 4px; }
+.feed-place-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.feed-place-summary h2 { margin: 0; font-size: 18px; line-height: 1.3; }
+.feed-place-category { margin: 0; color: #526159; font-size: 14px; font-weight: 650; }
+.feed-place-summary .activity-tags { margin: 0; }
+.feed-place-meta { gap: 6px; flex-wrap: wrap; }
+.feed-place-meta span + svg { margin-left: 8px; }
 
 /* Hakkımızda (07/11 #8) */
 .about-content section + section { margin-top: 28px; }

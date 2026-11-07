@@ -504,10 +504,16 @@ export class DiscoveryService {
     description: string | null;
     coverImageUrl: string | null;
     city: string | null;
+    country?: string | null;
+    placeType?: string | null;
     followerCount: number;
   }) {
     return {
       tags: place.tags?.map(t => t.tag) ?? [],
+      city: place.city ?? null,
+      country: place.country ?? null,
+      placeType: place.placeType ?? null,
+      followerCount: place.followerCount,
       kind: "place" as const,
       id: place.id,
       title: place.name,

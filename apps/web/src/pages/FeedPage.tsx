@@ -2,7 +2,7 @@ import { FollowStar } from "../components/MemberSignals";
 import { EmbeddedMedia } from "../components/EmbeddedMedia";
 import { MediaAlbum } from "../components/MediaAlbum";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, CalendarDays, MapPin, Heart, ListFilter, Mail, MessageCircle, MoreVertical, Flag, Edit3, Share2, UserPlus, UserMinus, Send, Trash2, Users } from "lucide-react";
+import { BadgeCheck, Building2, CalendarDays, MapPin, Heart, ListFilter, Mail, MessageCircle, MoreVertical, Flag, Edit3, Share2, UserPlus, UserMinus, Send, Trash2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ShareDialog } from "../components/ContentDialogs";
@@ -13,7 +13,8 @@ import { AnnouncementPopup } from "../components/AnnouncementPopup";
 import type { DiscoveryFeed, ReportTargetType, SocialPost } from "@konnektora/shared";
 import { archiveMyEvent, archiveMyPlace, createSocialPostComment, deleteSocialPost, followUser, getDiscoveryFeed, getUserSession, listAnnouncements, listFollowing, listSocialPostComments, listSocialPosts, resolveMediaUrl, toggleSocialPostLike, unfollowUser, updateMyEvent, updateMyPlace, updateSocialPost } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
-import { formatEventDateRange, formatPostDateTime, localizeCityName } from "../lib/formats";
+import { formatEventDateRange, formatPostDateTime, localizeCityName, localizeCountryName } from "../lib/formats";
+import { placeTypeLabels, placeTypeLabelsTr } from "../components/PlaceCard";
 
 const visibilityLabels = {
   tr: { everybody: "Herkes", following: "Takip ettiklerim", network: "Ağım" },
@@ -76,15 +77,16 @@ export function FeedPage() {
 function ActivityCard({ activity, language, userId, onChanged }: { activity: DiscoveryFeed["activities"][number]; language: "tr" | "en"; userId?: string; onChanged: () => void }) {
   const mine = Boolean(userId && activity.ownerId === userId && activity.canManageContent !== false);
   const eventVariant = activity.kind === "event" ? eventActivityVariant(activity.action) : null;
+  const placeCreated = activity.kind === "place" && activity.action === "Mekân oluşturuldu";
   const [expanded, setExpanded] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const archive = useMutation({ mutationFn: () => activity.kind === "event" ? archiveMyEvent(activity.id) : archiveMyPlace(activity.id), onSuccess: onChanged });
   const edit = useMutation({ mutationFn: async (title: string) => { if (activity.kind === "event") await updateMyEvent(activity.id, { title }); else await updateMyPlace(activity.id, { name: title }); }, onSuccess: onChanged });
-  return <article className="post-card feed-activity-card"><header>{activity.actor ? <UserIdentityLink user={activity.actor} avatarClassName="post-avatar" showName={false}/> : <span className="post-avatar">K</span>}<div className="post-author">{activity.actor ? <FollowStar id={activity.actor.id}/> : null}{activity.actor ? <Link to={userProfilePath(activity.actor)}>{activity.actor.username ? `@${activity.actor.username}` : activity.actor.name}</Link> : null}<span className="activity-action">{localizeActivityAction(activity.action, language)}</span><span>{relativeTime(activity.occurredAt, language)}</span></div></header>{eventVariant ? <EventActivitySummary activity={activity} language={language} variant={eventVariant}/> : <>{activity.imageUrl ? <Link to={activity.href}><img className="activity-cover" alt={activity.title} src={resolveMediaUrl(activity.imageUrl)}/></Link> : null}{activity.title ? <h2><Link to={activity.href}>{activity.kind === "tag" ? `#${activity.title.replace(/^#/, "")}` : activity.title}</Link>{activity.place ? <> @<Link to={`/places/${activity.place.slug}`}>{activity.place.name}</Link></> : null}</h2> : null}
+  return <article className="post-card feed-activity-card"><header>{activity.actor ? <UserIdentityLink user={activity.actor} avatarClassName="post-avatar" showName={false}/> : <span className="post-avatar">K</span>}<div className="post-author">{activity.actor ? <FollowStar id={activity.actor.id}/> : null}{activity.actor ? <Link to={userProfilePath(activity.actor)}>{activity.actor.username ? `@${activity.actor.username}` : activity.actor.name}</Link> : null}<span className="activity-action">{localizeActivityAction(activity.action, language)}</span><span>{relativeTime(activity.occurredAt, language)}</span></div></header>{eventVariant ? <EventActivitySummary activity={activity} language={language} variant={eventVariant}/> : placeCreated ? <PlaceCreatedSummary activity={activity} language={language}/> : <>{activity.imageUrl ? <Link to={activity.href}><img className="activity-cover" alt={activity.title} src={resolveMediaUrl(activity.imageUrl)}/></Link> : null}{activity.title ? <h2><Link to={activity.href}>{activity.kind === "tag" ? `#${activity.title.replace(/^#/, "")}` : activity.title}</Link>{activity.place ? <> @<Link to={`/places/${activity.place.slug}`}>{activity.place.name}</Link></> : null}</h2> : null}
     {activity.body ? <div className="post-body"><span className="post-copy"><RichText text={expanded ? activity.body : activity.body.slice(0, 300)}/></span><EmbeddedMedia text={activity.body}/>{activity.body.length > 300 ? <button className="text-button" onClick={() => setExpanded(value => !value)}>{expanded ? language === "tr" ? "Daha az" : "Show less" : language === "tr" ? "Daha fazla" : "Show more"}</button> : null}</div> : null}
     {activity.media?.length ? <MediaAlbum items={activity.media} owner={activity.activityId?.startsWith("comment-") ? { contentType: activity.kind === "event" ? "event_comment" : activity.kind === "place" ? "place_comment" : "tag_comment", contentId: activity.activityId.slice("comment-".length), ownerId: activity.ownerId, queryKeys: [["discovery-feed"]] } : undefined}/> : null}
-    {activity.tags?.length ? <div className="activity-tags">{activity.tags.slice(0, expanded ? undefined : 5).map((tag, index) => <span key={tag.id}>{index > 0 ? "; " : ""}<Link to={`/tags/${tag.slug}`}>#{tag.name}</Link></span>)}{activity.tags.length > 5 ? <button className="text-button" onClick={() => setExpanded(value => !value)}>{expanded ? language === "tr" ? "Daha az" : "Show less" : language === "tr" ? "Daha fazla" : "Show more"}</button> : null}</div> : null}{activity.subtitle ? <p><RichText text={activity.subtitle}/></p> : null}</>}{eventVariant ? null : <small>{formatActivityMeta(activity.meta, language)}</small>}<div className="post-actions">
+    {activity.tags?.length ? <div className="activity-tags">{activity.tags.slice(0, expanded ? undefined : 5).map((tag, index) => <span key={tag.id}>{index > 0 ? "; " : ""}<Link to={`/tags/${tag.slug}`}>#{tag.name}</Link></span>)}{activity.tags.length > 5 ? <button className="text-button" onClick={() => setExpanded(value => !value)}>{expanded ? language === "tr" ? "Daha az" : "Show less" : language === "tr" ? "Daha fazla" : "Show more"}</button> : null}</div> : null}{activity.subtitle ? <p><RichText text={activity.subtitle}/></p> : null}</>}{eventVariant || placeCreated ? null : <small>{formatActivityMeta(activity.meta, language)}</small>}<div className="post-actions">
       {!mine && activity.ownerId && activity.ownerId !== userId && userId ? <FeedFollowButton id={activity.ownerId} userId={userId} language={language}/> : null}
       {!mine && activity.ownerId && activity.ownerId !== userId && userId ? <Link to={`/messages?peer=${activity.ownerId}`}><Mail size={17}/>{language === "tr" ? "Mesaj gönder" : "Send message"}</Link> : null}
       <button className="feed-share" onClick={() => setShareOpen(true)}><Share2 size={17}/>{language === "tr" ? "Paylaş" : "Share"}</button>
@@ -124,6 +126,24 @@ function EventActivitySummary({ activity, language, variant }: { activity: Disco
     </div>
     {variant === "created" && activity.tags?.length ? <div className="activity-tags">{activity.tags.slice(0, expanded ? undefined : 5).map((tag, index) => <span key={tag.id}>{index > 0 ? "; " : ""}<Link to={`/tags/${tag.slug}`}>#{tag.name}</Link></span>)}</div> : null}
     {variant === "created" && description ? <p className="post-copy feed-event-description"><RichText text={expanded ? description : description.slice(0, 300)}/>{description.length > 300 || (activity.tags?.length ?? 0) > 5 ? <button className="text-button" onClick={() => setExpanded(value => !value)} type="button">{expanded ? language === "tr" ? "Daha az" : "Show less" : language === "tr" ? "Daha fazla" : "Show more"}</button> : null}</p> : variant === "created" && (activity.tags?.length ?? 0) > 5 ? <button className="text-button" onClick={() => setExpanded(value => !value)} type="button">{expanded ? language === "tr" ? "Daha az" : "Show less" : language === "tr" ? "Daha fazla" : "Show more"}</button> : null}
+  </div>;
+}
+
+/** "Mekân oluşturuldu" kartı: avatar, ad, kategori, etiketler, kısaltılmış açıklama, takipçi sayısı ve şehir/ülke (07/11 #39). */
+function PlaceCreatedSummary({ activity, language }: { activity: DiscoveryFeed["activities"][number]; language: "tr" | "en" }) {
+  const [expanded, setExpanded] = useState(false);
+  const description = activity.subtitle ?? "";
+  const limit = 220;
+  const category = activity.placeType ? (language === "tr" ? placeTypeLabelsTr : placeTypeLabels)[activity.placeType] ?? null : null;
+  const location = [localizeCityName(activity.city, language), localizeCountryName(activity.country, language)].filter(Boolean).join(", ");
+  const followers = activity.followerCount ?? 0;
+  return <div className="feed-place-summary">
+    <Link aria-hidden="true" className="feed-place-avatar" tabIndex={-1} to={activity.href}>{activity.imageUrl ? <img alt="" src={resolveMediaUrl(activity.imageUrl)}/> : <Building2 size={26}/>}</Link>
+    <h2><Link to={activity.href}>{activity.title}</Link></h2>
+    {category ? <p className="feed-place-category">{category}</p> : null}
+    {activity.tags?.length ? <div className="activity-tags">{activity.tags.map((tag, index) => <span key={tag.id}>{index > 0 ? "; " : ""}<Link to={`/tags/${tag.slug}`}>#{tag.name}</Link></span>)}</div> : null}
+    {description ? <p className="post-copy feed-event-description"><RichText text={expanded || description.length <= limit ? description : `${description.slice(0, limit).trimEnd()}…`}/>{description.length > limit ? <button className="text-button" onClick={() => setExpanded(value => !value)} type="button">{expanded ? language === "tr" ? "Daha az" : "Show less" : language === "tr" ? "Daha fazla" : "Show more"}</button> : null}</p> : null}
+    <p className="feed-event-line feed-place-meta"><Users size={15}/><span>{language === "tr" ? `${followers} takipçi` : `${followers} followers`}</span>{location ? <><MapPin size={15}/><span>{location}</span></> : null}</p>
   </div>;
 }
 
