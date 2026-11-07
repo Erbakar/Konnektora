@@ -283,6 +283,9 @@ export const discoveryItemSchema = z.object({
 export const discoveryActivitySchema = discoveryItemSchema.extend({
   activityId: z.string().optional(),
   city: z.string().nullable().optional(),
+  country: z.string().nullable().optional(),
+  placeType: z.string().nullable().optional(),
+  followerCount: z.number().int().nonnegative().optional(),
   locationName: z.string().nullable().optional(),
   body: z.string().optional(),
   media: z.array(z.object({ id: z.string(), url: z.string(), type: z.string() })).optional(),

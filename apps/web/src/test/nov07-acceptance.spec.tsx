@@ -6,10 +6,11 @@ import {LanguageProvider} from "../lib/i18n";
 import {NotificationsPage} from "../pages/NotificationsPage";
 import {MediaViewer} from "../components/MediaAlbum";
 import {PollCard} from "../components/ContentPoll";
-const api=vi.hoisted(()=>({getUserSession:vi.fn(),listMyNotifications:vi.fn(),listProfileTagSuggestions:vi.fn(),markMyNotificationRead:vi.fn(),listReportRules:vi.fn(),voteContentPoll:vi.fn()}));
+import {FeedPage} from "../pages/FeedPage";
+const api=vi.hoisted(()=>({getUserSession:vi.fn(),listMyNotifications:vi.fn(),listProfileTagSuggestions:vi.fn(),markMyNotificationRead:vi.fn(),listReportRules:vi.fn(),voteContentPoll:vi.fn(),getDiscoveryFeed:vi.fn(),listSocialPosts:vi.fn(),listAnnouncements:vi.fn(),listFollowing:vi.fn()}));
 vi.mock("../lib/api",async()=>({...await vi.importActual<typeof import("../lib/api")>("../lib/api"),...api}));
 function mount(child:React.ReactNode){return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}})}><LanguageProvider><MemoryRouter>{child}</MemoryRouter></LanguageProvider></QueryClientProvider>);}
-beforeEach(()=>{window.localStorage.clear();api.getUserSession.mockReturnValue({id:"me",name:"Me",role:"user"});api.listProfileTagSuggestions.mockResolvedValue([]);api.listReportRules.mockResolvedValue([]);api.markMyNotificationRead.mockResolvedValue({});});
+beforeEach(()=>{window.localStorage.clear();api.getUserSession.mockReturnValue({id:"me",name:"Me",role:"user"});api.listProfileTagSuggestions.mockResolvedValue([]);api.listReportRules.mockResolvedValue([]);api.markMyNotificationRead.mockResolvedValue({});api.listSocialPosts.mockResolvedValue({items:[]});api.listAnnouncements.mockResolvedValue([]);api.listFollowing.mockResolvedValue([]);});
 afterEach(()=>{cleanup();vi.clearAllMocks();});
 const poll={id:"p",question:"Hangi gün?",allowMultiple:false,maxChoices:1,allowOpenAnswer:false,audience:"everyone",closesAt:null,closed:false,canVote:true,viewerVoted:true,viewerOptionIds:["o1"],resultsVisible:true,totalVoters:4,eligibleCount:8,participationRate:50,options:[{id:"o1",label:"Cuma",isOpenAnswer:false,votes:1,percent:25},{id:"o2",label:"Cumartesi",isOpenAnswer:false,votes:3,percent:75}]};
 describe("07/11 test maddeleri",()=>{
@@ -53,5 +54,25 @@ describe("07/11 test maddeleri 28-38",()=>{
   const choice=screen.getByRole("radio",{name:"Cuma"});
   expect(choice.closest("label")).toHaveClass("content-poll-choice");
   expect(screen.getByRole("button",{name:"Oy ver"})).toBeDisabled();
+ });
+});
+
+describe("07/11 test maddeleri 39-40",()=>{
+ it("#39 Mekân oluşturuldu kartı avatar, kategori, etiket, kısaltılmış açıklama, takipçi ve şehir/ülke gösterir",async()=>{
+  api.getDiscoveryFeed.mockResolvedValue({activities:[{activityId:"a1",kind:"place",id:"11111111-1111-4111-8111-111111111111",title:"Datli Maya",subtitle:"A".repeat(240)+"SON",href:"/places/datli-maya",imageUrl:"/uploads/maya.webp",meta:"3 takipçi · Istanbul",action:"Mekân oluşturuldu",occurredAt:new Date().toISOString(),ownerId:null,actor:null,placeType:"cafe",city:"Istanbul",country:"Turkey",followerCount:3,tags:[{id:"t1",name:"kahve",slug:"kahve"}]}]});
+  const {container}=mount(<FeedPage/>);
+  await screen.findByRole("link",{name:"Datli Maya"});
+  const card=container.querySelector(".feed-place-summary")!;
+  const order=[...card.children].map(el=>el.className);
+  expect(order.slice(0,2)).toEqual(["feed-place-avatar",""]);
+  expect(card.querySelector(".feed-place-avatar img")).toHaveAttribute("src",expect.stringContaining("/uploads/maya.webp"));
+  expect(within(card as HTMLElement).getByText(/Kafe/)).toHaveClass("feed-place-category");
+  expect(within(card as HTMLElement).getByRole("link",{name:"#kahve"})).toBeInTheDocument();
+  expect(within(card as HTMLElement).queryByText(/SON/)).not.toBeInTheDocument();
+  fireEvent.click(within(card as HTMLElement).getByText("Daha fazla"));
+  expect(within(card as HTMLElement).getByText(/SON/)).toBeInTheDocument();
+  expect(within(card as HTMLElement).getByText("3 takipçi")).toBeInTheDocument();
+  expect(card.querySelector(".feed-place-meta")?.textContent).toMatch(/İstanbul|Istanbul/);
+  expect(card.querySelector(".feed-place-meta")?.textContent).toMatch(/Türkiye|Turkey/);
  });
 });

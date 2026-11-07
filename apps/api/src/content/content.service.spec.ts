@@ -15,9 +15,9 @@ describe("ContentService profile media", () => {
   };
   const prisma = {
     mediaFile,
-    event: { findUnique: jest.fn(), update: jest.fn() },
+    event: { findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     eventParticipant: { findFirst: jest.fn() },
-    place: { findUnique: jest.fn(), update: jest.fn() },
+    place: { findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     placeMember: { findFirst: jest.fn() },
     contentView: { create: jest.fn() },
     contentShare: { create: jest.fn() },
@@ -102,6 +102,26 @@ describe("ContentService profile media", () => {
     await service.createContentMedia(ReportTargetType.event, "event-1", { id: "organiser-1", role: "user" } as never, "/uploads/photo.webp", "image");
 
     expect(mediaFile.create).toHaveBeenCalledWith({ data: expect.objectContaining({ contentType: ReportTargetType.event, contentId: "event-1", sortOrder: 1 }) });
+  });
+
+  it("uses the first uploaded place photo as the place avatar when the cover is empty (07/11 #40)", async () => {
+    prisma.place.findUnique.mockResolvedValue({ createdById: "owner-1" });
+    mediaFile.count.mockResolvedValue(0);
+    mediaFile.create.mockResolvedValue({ id: "media-1" });
+
+    await service.createContentMedia(ReportTargetType.place, "place-1", { id: "owner-1", role: "user" } as never, "/uploads/place.webp", "image");
+
+    expect(prisma.place.updateMany).toHaveBeenCalledWith({ where: { id: "place-1", coverImageUrl: null }, data: { coverImageUrl: "/uploads/place.webp" } });
+  });
+
+  it("does not touch the place cover for video uploads", async () => {
+    prisma.place.findUnique.mockResolvedValue({ createdById: "owner-1" });
+    mediaFile.count.mockResolvedValue(0);
+    mediaFile.create.mockResolvedValue({ id: "media-1" });
+
+    await service.createContentMedia(ReportTargetType.place, "place-1", { id: "owner-1", role: "user" } as never, "/uploads/clip.mp4", "video");
+
+    expect(prisma.place.updateMany).not.toHaveBeenCalled();
   });
 
   it("uploads event media to a user-bound pending batch and claims it after event creation", async () => {

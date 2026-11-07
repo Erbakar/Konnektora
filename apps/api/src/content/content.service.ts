@@ -48,7 +48,11 @@ export class ContentService {
     const count = await this.prisma.mediaFile.count({ where: { contentType: targetType, contentId: targetId, status: "active" } });
     const limit = commentTypes.has(targetType) ? 50 : 20;
     if (count >= limit) throw new BadRequestException(`Bir içerikte en fazla ${limit} medya bulunabilir.`);
-    return this.prisma.mediaFile.create({ data: { url, type, contentType: targetType, contentId: targetId, uploadedById: user.id, sortOrder: count } });
+    const created = await this.prisma.mediaFile.create({ data: { url, type, contentType: targetType, contentId: targetId, uploadedById: user.id, sortOrder: count } });
+    // Kapak/avatar boşsa ilk yüklenen fotoğraf mekân/etkinlik kartlarında avatar olur (07/11 #40).
+    if (type === "image" && targetType === ReportTargetType.place) await this.prisma.place.updateMany({ where: { id: targetId, coverImageUrl: null }, data: { coverImageUrl: url } });
+    if (type === "image" && targetType === ReportTargetType.event) await this.prisma.event.updateMany({ where: { id: targetId, coverImageUrl: null }, data: { coverImageUrl: url } });
+    return created;
   }
 
   async createPendingEventMedia(batchId: string, user: User, url: string, type: "image" | "video") {
