@@ -335,8 +335,11 @@ export function PublicProfilePage() {
               />
             ) : null}
           </h1>
-          {publicUsername(profile.username) ? (
-            <small>{profile.name !== profile.username ? (profile.accountType === "corporate" ? profile.companyName || profile.name : profile.name) : null}</small>
+          {profile.accountType === "corporate" && profile.companyName ? (
+            // Kurumsal üyede işletme adı, kişisel ad gizli olsa da kullanıcı adının altında gösterilir (07/11 #28).
+            <small className="profile-business-name">{profile.companyName}</small>
+          ) : publicUsername(profile.username) ? (
+            <small>{profile.name !== profile.username ? profile.name : null}</small>
           ) : (
             <strong>{profile.name}</strong>
           )}

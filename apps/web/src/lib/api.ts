@@ -10669,6 +10669,10 @@ export function resolveAdminReportAction(
   });
 }
 
+export function searchEventParticipantContacts(eventId: string, query: string): Promise<{ userIds: string[] }> {
+  return requestJson(`/events/${eventId}/participants/search?q=${encodeURIComponent(query)}`, z.object({ userIds: z.array(z.string()) }), { auth: "user" });
+}
+
 export function listEventParticipants(
   eventId: string,
   auth: AuthMode = true,

@@ -75,7 +75,7 @@ export function FeedPage() {
 
 function ActivityCard({ activity, language, userId, onChanged }: { activity: DiscoveryFeed["activities"][number]; language: "tr" | "en"; userId?: string; onChanged: () => void }) {
   const mine = Boolean(userId && activity.ownerId === userId && activity.canManageContent !== false);
-  const eventVariant = activity.kind === "event" && activity.action === "Etkinliğe katıldı" ? "joined" as const : activity.kind === "event" && activity.action === "Etkinlik oluşturuldu" ? "created" as const : null;
+  const eventVariant = activity.kind === "event" ? eventActivityVariant(activity.action) : null;
   const [expanded, setExpanded] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -93,6 +93,15 @@ function ActivityCard({ activity, language, userId, onChanged }: { activity: Dis
       {!mine ? <button onClick={() => setReportOpen(true)}><Flag size={17}/>{language === "tr" ? "Rapor et" : "Report"}</button> : null}
       </div></details> : null}
     </div><ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} targetType={activity.kind === "user" ? "user" : activity.kind} targetId={activity.id} title={activity.title} text={activity.subtitle ?? activity.action} url={new URL(activity.href, window.location.origin).toString()}/><ReportDialog onClose={() => setReportOpen(false)} open={reportOpen} targetId={activity.id} targetType={activity.kind as ReportTargetType}/></article>;
+}
+
+/** Kısa (ad/zaman/yer) ve geniş (avatar, etiket, açıklama) etkinlik kartı düzenleri (07/11 #6, #7, #33–#35). */
+const joinedEventActions = new Set(["Etkinliğe katıldı", "Katıldığınız etkinliğe yeni bilet tanımlandı", "Katıldığınız etkinlik bilet satışına başladı", "Katıldığınız etkinlikte yeni bilet kontenjanı açıldı"]);
+const createdEventActions = new Set(["Etkinlik oluşturuldu", "Takip ettiğiniz etiket etkinliğe eklendi"]);
+function eventActivityVariant(action?: string | null) {
+  if (action && joinedEventActions.has(action)) return "joined" as const;
+  if (action && createdEventActions.has(action)) return "created" as const;
+  return null;
 }
 
 /** Akıştaki etkinlik kartları: katılım kartı yalnız ad/zaman/yer; oluşturma kartı avatar, ad, zaman, yer, etiket ve açıklama. */
