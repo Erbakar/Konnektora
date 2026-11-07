@@ -1,6 +1,7 @@
 import type { LoginResponse, SocialProvider } from "@konnektora/shared";
 import { useMutation } from "@tanstack/react-query";
-import { getSocialCredential } from "../lib/socialProviders";
+import { useEffect } from "react";
+import { prepareSocialProviders, getSocialCredential } from "../lib/socialProviders";
 import { ServiceFeedback } from "./ServiceFeedback";
 import { useLanguage } from "../lib/i18n";
 
@@ -14,6 +15,7 @@ export function SocialAuthButtons({
   ) => Promise<LoginResponse>;
   onSuccess: (response: LoginResponse) => void;
 }) {
+  useEffect(() => { prepareSocialProviders(); }, []);
   const { language } = useLanguage();
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const mutation = useMutation({

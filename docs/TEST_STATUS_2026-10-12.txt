@@ -1,0 +1,119 @@
+13 Ekim 2026 — 84 maddenin ayrı kontrolü
+- Kaynak 12/10 sekmesindeki 84 numaralı satır güncel CSV ile karşılaştırıldı; her madde için ayrı kontrol sonucu/kanıt TEST_ACCEPTANCE_2026-10-12.txt dosyasına yazıldı.
+- 56 API grubu / 450 test ve 40 web grubu / 143 test: toplam 593 test geçti. Atlanan test yok; finans entegrasyonları ayrı yerel PostgreSQL üzerinde.
+- Typecheck, lint, build ve git diff --check başarılı. İlk yüksek paralellikte iki arayüz testi başarısız oldu; aynı tam paket 2 worker ile 143/143 geçti.
+- Bu tur: yorum yanıtları/paylaşım, sahibi engelleme menüsü, en yeni ilgili kullanıcı sırası, rol ikonları, etkinlik düzenleme alanları, yönetici davetleri, bildirim hedef bağlantıları, medya yükleme hataları, tablet ana menü, PDF giriş saatleri ve SSS komisyon açıklaması.
+- Yayın sonrası: sağlık, etkinlik/mekân liste ve ayrıntıları, duyuru/SSS, medya CSP/gizliliği başarılı. Yönetici gelir/paket/etkinlik uçları 200; anonim ve normal üye yetkisiz erişimleri reddedildi. 1024×768 canlı tablette yeni menü bağlantıları doğrulandı; viewport geri alındı.
+- Yeni yayın: 6179c69d-1929-44c7-94cb-0a7394ff7289 — SUCCESS. Yeni veritabanı geçişi yok.
+- Canlı tarayıcı ön kontrolü: Burning Man doğrudan detay ve genel listede mevcut; profil başlığı beyaz; 390×844 medya 1/6→2/6 ve mobil profil; 1440 masaüstünde normal sayfa akışı. Tablet menü eksikliği tespit edilip bu sürümde düzeltildi.
+- Üretimde veri değiştiren test, davet gönderimi, ödeme veya hesap silme yapılmadı. Hesap 62 yalnız salt okunur durum bilgisiyle incelendi.
+- Dış erişim ve gerçek cihaz/teslim kabulü USER_INPUT_REQUIRED_2026-10-12.txt içinde açık tutuldu. Bu kayıt 84 maddenin tüm alt koşullarının gerçek cihazlarda uçtan uca geçtiği anlamına gelmez.
+
+Önceki yayın
+---------------
+13 Ekim 2026 — yeni yazılım turu
+- 56 API test grubu / 447 test; 39 web test grubu / 139 test: toplam 586 test geçti, atlanan test yok. Finans entegrasyonu ayrı yerel PostgreSQL üzerinde çalıştırıldı.
+- Paket deneme süresi/iptali, katalog sürüm çakışması, profil analizi kotası, adres zinciri, etkinlik değişiklik kaydı, gelir raporu/iade/küratör payı ve blokaj testleri eklendi.
+- Typecheck, lint, build ve değişiklik biçim kontrolü başarılı.
+- Canlı yayın: f1561502-4fbd-4710-8446-6cc364935e75 — SUCCESS.
+- Üç yeni veritabanı geçişi üretimde başarıyla uygulandı.
+- Canlı sağlık, etkinlik/mekân, duyuru/SSS ve medya güvenlik kontrolleri geçti.
+- /plans, yönetici paket geçmişi, platform gelir raporu, blokeli etkinlikler ve etkinlik denetim ayrıntısı 200 yanıt verdi. Yönetici uçlarına anonim/normal üye erişimi reddedildi.
+- Chrome üzerinde bireysel/kurumsal mağaza sekmeleri ve fiyat kartlarının yerleşimi doğrulandı.
+- Üretim verisi değiştiren test yapılmadı. Üretimde gerçek küratör anlaşması ve tahsilat kaynağı sayısı hâlâ 0; gerçek atamalar/sağlayıcı erişimi bekleniyor.
+- Gerçek SMS, ödeme/KYC, Google/Meta ve gerçek cihaz teslim kabulü bu otomatik testlerle tamamlanmış sayılmaz.
+
+Önceki yayın kayıtları
+--------------------
+Konnektora — 12/10 test düzeltmeleri, 12 Ekim 2026
+Kaynak: https://docs.google.com/spreadsheets/d/1tZdzPN7diSJJR7omUtJJp_bdMWERAICPFI4S2bngHSk/edit
+
+84 maddenin tamamı kapanmış değildir. Aşağıdaki kod düzeltmeleri ile canlıda doğrulanan sonuçlar ayrı tutulmuştur. Kaynak test tablosu değiştirilmemiştir.
+
+Canlıda doğrulanan
+- Burning Man 2027 - Istanbul Crew doğrudan bağlantısı açılıyor. Sorun, yüklenen görselin /uploads adresinin yanıt doğrulamasında reddedilmesiydi.
+- @karaoglan profilinde Mahmut Tuncer ve Kurumsal Üye yazıları koyu zemin üzerinde beyaz görünüyor. Mobil görünüm kontrol edildi.
+- Sağlık kontrolleri, etkinlik/mekân listeleri ve ayrıntıları, duyurular ve SSS yanıt veriyor.
+
+Uygulanan diğer düzeltmeler
+- Profil medya yükleme, ilerleme/sıralama ve mobil yerleşim; kullanıcı adı doğrulaması; 18 yaş kontrolü; kurumsal kayıt seçimi.
+- Ortak medya görüntüleyici; etkinlik/mekân galerileri; yorum görselleri; yönetici/oluşturan etiketleri; kart menülerinin düzeni.
+- Etkinlik tarih filtreleri, düzenleme alanları ve kaydetme metni; başarısız medya yüklemesinde tekrar etkinlik oluşmasını engelleyen akış.
+- Etkinlikte yükleme öncesi medya önizleme, sıralama ve afiş seçimi; mevcut galeride afiş/avatar seçimi.
+- Mesaj avatarları, yeni görüşmede alıcı bilgisi ve mesaj alanının sayfa sonuyla çakışması.
+- Bildirim hedef bağlantıları ve ekranda görünen bildirimlerin okundu sayılması; özel mesajların bildirim listesinden ayrılması.
+- Üye davetlerinin bekleyen bildirimlere yönlendirilmesi; rehber aktarımında etkinlik/mekân bağlamının korunması.
+- Gizli adların ana gösterim alanlarında maskelenmesi; davetli geçici hesaplarda iletişim bilgisi yerine Davetli gösterimi.
+- Biletlerde etkinlik bağlantısı, tarih/yer ayrıntıları; değişmeyen etkinlikte iadenin sunucuda reddedilmesi; devir penceresinin kaydırılması.
+- Ayarlardan cihaz bildirim aboneliğinin etkinleştirilmesi.
+- Veri silme taleplerinde süreli e-posta doğrulama bağlantısı. Bu işlem hesabı otomatik silmez; talebi doğrular.
+
+Kontroller
+- API tam test çalışması: 44 test grubu, 347 test geçti; 12 test atlandı.
+- Son bilet, görünür ad ve yorum değişiklikleri: 3 grupta 28 hedefli test geçti.
+- Web: 37 grupta 131 test geçti. Son rol simgeleri için 4 ek hedefli test geçti.
+- Derleme, tür ve lint kontrolleri başarılı. Canlı temel servis kontrolü başarılı.
+- Yayından önce şifreli veritabanı yedeği alındı. Yeni veritabanı göçü eklenmedi.
+
+Takip edilen test başlıkları — tamamlanan ve açık bölümler
+- 17: LinkedIn sayfası için gerçek şirket ve yetkili hesap bilgileri yok.
+- 19: Türkiye dışı şehirler için de açılır seçim tamamlandı; ülke değişince eski şehir temizleniyor. Yerel tarayıcıda Almanya seçenekleri doğrulandı.
+- 20, 66–71: Mekân yöneticisi için tek yönetici e-postası ve üye olmayan yöneticiye kayıt bağlantısı eklendi. Rehberde seçilen davetlerin gönderilmesinden sonra hedef davet sayfasına adet bilgisiyle dönüş eklendi. Kısmi hatada yalnız başarısız kişiler seçili kalıyor. Telefon seçicisinden sonra eşleştirme/gönderme adımı hâlâ var. Gerçek e-posta/telefonla uçtan uca kabul kontrolü ve Google Contacts sağlayıcı onayı gerekiyor.
+- 30: Bildirim gövdesinde bilinen etkinlik/mekân/etiket adı hedef sayfasına bağlanıyor; @kullanıcı bağlantıları korunuyor. Eski serbest metinlerde geçen her ismi güvenilir biçimde çözümleme tamamlanmış değildir.
+- 51: Oluşturma ve düzenlemede ayrı medya adımı; yükleme öncesi önizleme, sürükleme/oklarla sıralama ve avatar seçimi eklendi. Mobil düzenleme ayrı sayfada; masaüstü pencere korundu. İptal sonrası pencerenin açık kalmaması test edildi.
+- 61: Bilet devrinde PDF e-posta eki ve QR yenilemesi eklendi. PDF Türkçe karakterlerle oluşturuldu ve görsel olarak kontrol edildi. E-posta başarısızsa devir sonucundan ayrı uyarı veriliyor. Üye olmayanlar ilgili kullanıcılar sayfasında ve akışın tüm içerikler görünümünde toplu kart olarak gösteriliyor; akış sayısı dönen güncel katılım satırlarındaki benzersiz kişileri kapsar. Gerçek alıcıyla teslim testi yapılmadı.
+- 63: Facebook yapılandırması mevcut; herkese açık sağlayıcı onayı doğrulanmadı.
+- 73–74: Akış metni, bildirim/SMS göndereni, öneri/katılımcı listeleri ve devir yanıtındaki ek isim sızıntıları giderildi. Mesaj, profil ve etkinlik/mekân davetlerinde ağ seçeneği ikinci derece ilişkiyi kontrol ediyor. Takipçi/ağ iznine göre adları bütün kartlarda seçici olarak açan kapsamlı görünürlük denetimi ve gönderi görünürlüğü kapsamı hâlâ tamamlanmadı.
+- 79: Cihaz aboneliği düzeltildi; gerçek telefona bildirim teslimi henüz doğrulanmadı.
+- Birden çok koşul içeren yorum/medya maddelerinde otomatik kontroller geçti; tüm roller ve cihazlarla kullanıcı kabul testi yapılmadı.
+
+Gün içinde e-postayla gelen ayrı kapsam
+Yeni videolar, gelir modeli hakları, küratör/backoffice kuralları, şirket/domain, LinkedIn, marka/SMS/ödeme, ekip iletişimi ve açılış hazırlıkları için LAUNCH_STATUS_2026-10-12.txt dosyasındaki bağımlılıklar geçerlidir. Yeni video dosyaları Drive üzerinden indirildi ve web için hazırlandı; güncel yayın durumu LAUNCH_STATUS_2026-10-12.txt dosyasındadır. Mağaza görünümü güncellense de yeni ücretli paket hakları ve canlı tahsilat tamamlanmış sayılmaz.
+
+Yayın kaydı
+İlk yayın: 2d3dfc00-67f6-47a9-a5bc-c10bafef69ea — SUCCESS
+Son ekler: fc4bac62-e454-499a-ab60-4bc5825c60ee — SUCCESS
+
+12 Ekim ikinci yazılım paketi — doğrulama
+- API: 45 test grubu, 359 test başarılı; ayrı veritabanı gerektiren 12 entegrasyon testi atlandı.
+- Web: 37 grupta 133 test başarılı.
+- Derleme ve lint başarılı. Üretim için derlenmiş PDF oluşturucu ayrıca çalıştırıldı.
+- Yeni veritabanı göçü yok. Kullanıcı kaynak test tablosu değiştirilmedi.
+- Yeni küratör anlaşmalarında güncel oran önerileri; üç reklam kategorisi; bölgesiz küratör kaydı destekleniyor. Mevcut anlaşmalar ve geçmiş hareketler değiştirilmedi.
+- Kullanıcıdan bilgi/erişim gerekenler USER_INPUT_REQUIRED_2026-10-12.txt dosyasında ayrı tutuluyor.
+
+İkinci yazılım paketi yayınlandı: 7c984e57-96c1-488e-867e-8163232e5da4 — SUCCESS. Canlı tarayıcıda Almanya/Berlin şehir filtresi SELECT olarak doğrulandı.
+
+
+Onaylanan komisyon ve paket geçişi — 12 Ekim 2026
+- Yeni ödemeler için %5 komisyon tek hesaplama fonksiyonunda; kuruş yuvarlama ve negatif/geçersiz tutar testleri eklendi. Geçmiş tahsilatlar değiştirilmez.
+- Eski paket geçiş migration'ı: Free→Free, Plus→Premium, Premium→Platinum; Starter→Free, Growth→Pro, Scale→Venue. Eski planlar/tarihler denetim tablosunda saklanır. Yeni tahsilat yok.
+- API sözleşmeleri, finans ekranı, analiz erişimi, Platinum Guest List ve yeni paket adları güncellendi.
+- Yeni sohbet: rolling 24 saat kotası, Free için ayrıca rolling 6 saatte 15; mevcut/karşıdan başlatılmış/silinmiş sohbetler tekrar kota tüketmez. Kullanıcı ve konuşma kilitleri eşzamanlı aşımı önler.
+- Kontrol: 373 API + 133 web testi başarılı, 12 entegrasyon testi atlandı. Typecheck, lint, build başarılı.
+- Yayın 5129ff1c-f7bf-43b5-a654-99231bc66ba5 SUCCESS. Canlı migration kontrolü: checked=20, mismatches=0, changed_dates=0. Mağazada %5 metni ve yeni paket durumu doğrulandı; tüm smoke kontrolleri geçti.
+
+Etkinlik / davet / etiket kotaları ve cüzdan — 12 Ekim 2026
+- 31 günlük dönem hesabın oluşturulma tarihine sabitlenir; paket değişimi kullanımı sıfırlamaz. Event/tag kullanımı kalıcı defterde, aynı kullanıcı işlemleri veritabanı kilidi altında tutulur. Etkinlik silme/arşivleme geçmiş kullanımı geri vermez.
+- Etkinlik başına yönetici davetleri etkinlik sahibinin paketinden ortak kullanılır; aynı kayıtlı hedef üye bir kez sayılır. Normal katılımcı davetleri ve henüz üye olmayan hedefler hariç. Ücretli kurumsal etkinliklerde kota istisnası; karma ücretsiz bilet içeren etkinliklerde standart kota.
+- Geçmiş etkinlikler ve kesin olarak kurucu tarafından gönderilmiş davetler başlangıç defterine alınır. Eski diğer davetlerde gönderim anındaki yönetici rolü kayıtlı olmadığından geriye dönük varsayımsal ücret/kota kesilmez; yeni davetlerin rolü işlem anında değerlendirilir.
+- Aynı etikete aynı dönemde tekrar bakmak hak tüketmez. Ücretli kurumsal yönetilen etkinliğin etiketleri istisna. Mağaza sayfasında etkinlik/etiket kullanımı ve yenilenme tarihi gösterilir.
+- Cüzdan /wallet altında; /finance işletme merkezi. Kurumsal finans bilgileri, banka ayarları, işlem geçmişi, çekim ve küratör defteri sunucu tarafında WalletGuard ile korunur. Guest List paket sorgusu hassas finans bilgisi döndürmeyen /me/membership kullanır.
+- OTP: 8 rakam, bcrypt özeti, 180 saniye, tek kullanım, 60 saniye yeniden gönderim aralığı. Üç yanlış deneme 8 saat kilitler; yeniden gönderim hata sayısını sıfırlamaz. Erişim 15 dakika ve aynı JWT/telefon ile sınırlı; sayfadan çıkış/manuel kilit sunucuda iptal eder. SMS yapılandırması/bildirim e-postası hatasında erişim verilmez.
+- Kullanıcı silindiğinde doğrulama/kişisel kullanım kayıtları da silinir. OTP ve erişim anahtarı günlüklerde veya tarayıcı kalıcı depolamasında tutulmaz.
+- Doğrulama: toplam 398 API + 136 web testi başarılı (534). 12 mevcut DB entegrasyon testi çalıştırılmadı. Typecheck, lint, uygulama derlemesi ve diff kontrolü başarılı. Üretim DB üzerinde migration prova transaction'ı: 23 event, 2 invite kaydı; tamamı rollback edildi, kalıcı değişiklik yok.
+- Yayın 5bea5007-48e9-4984-a723-5d9a7835c34d başlatıldı; canlı sonuç aşağıya eklenecek.
+- Yayın 5bea5007-48e9-4984-a723-5d9a7835c34d SUCCESS. Migration uygulandı: 23 etkinlik + 2 kesin kurucu daveti korunarak kullanım defterine alındı.
+- Canlı read-only kontroller: kurumsal ve bireysel hesaplarda /me/membership 200; doğrulama olmadan /me/finance ve /me/finance/transactions 403. Cüzdan sayfası tarayıcıda oturum açmamış kullanıcıdan giriş istiyor. Sağlık, CSP, etkinlik/mekân listesi ve detayları, duyuru ve SSS smoke kontrolleri başarılı.
+- Canlı yapılandırma kontrolü: SMS sağlayıcısı eksik; e-posta yapılandırması mevcut. Gerçek OTP/SMS ve cüzdan erişim e-postası teslimi yapılmadı; kullanıcı erişimi gereken listede açık tutuldu.
+
+Gizlilik ve otomatik küratör gelirleri — 12 Ekim 2026
+- Ortak istek bazlı ad gizliliği, doğru takip/ağ yönü, engellenmiş gönderi erişimi ve bildirim sızıntısı düzeltildi. Medya listesi kişisel yükleyici bilgisi döndürmez. Yorum yanıtları aynı içerikte tek düzeyle sınırlı.
+- Gerçekleşmiş gelir kaynağı, anlaşma tarih/sürümü ve ülke/bölge kapsamına göre otomatik pay; mükerrer kaynak kontrolü; iadelerde orijinal oranlar; olay gelirinde blokaj; yönetim ekranı. Sağlayıcı tahsilatı yapılmaz.
+- 432 API testi + 136 web testi başarılı (568). Atlanan test yok. 14 finans entegrasyon testi yalnız yerel, ayrı PostgreSQL veritabanında çalıştırıldı. Eşzamanlı tahsilat/iade, geçmiş oran koruması ve fazla dağıtımda transaction rollback doğrulandı.
+- Typecheck, lint, build başarılı. Yeni migration ayrı test veritabanında uygulandı.
+- Gerçek telefon, SMS, OAuth/push sağlayıcısı ve e-posta teslimi testleri bu otomatik sonuçlara dahil değil. 84 maddenin her alt koşuluna tüm cihazlarda kabul verilmiş değildir.
+- Yayın c68c5030-1edf-4399-b96a-6be015ca6490 SUCCESS. Yeni migration canlıda uygulandı. Sağlık, web/CSP, etkinlik ve mekân liste/detay, duyuru ve SSS kontrolleri başarılı.
+- Canlı salt-okunur doğrulama: gelir kaynakları anonim/normal üyeye kapalı (401), yetkili yöneticiye açık (200); medya yanıtında ham yükleyici kimliği ve bekleyen yüklemeler yok. Üretimde 0 anlaşma/0 yeni gelir kaynağı; deneme tahsilatı/iade oluşturulmadı.
+- Burning Man bağlantısı yeni yayın sonrasında Chrome'da doğrudan açıldı; içerik ve LinkedIn footer bağlantısı doğrulandı.
+- Satır bazında kabul sınırları TEST_ACCEPTANCE_2026-10-12.txt dosyasında. Kullanıcı kaynak Google tablosu değiştirilmedi.

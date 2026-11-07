@@ -25,6 +25,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173
+    port: 5173,
+    proxy: process.env.DEV_API_PROXY ? { "/api": { target: process.env.DEV_API_PROXY, changeOrigin: true }, "/uploads": { target: process.env.DEV_API_PROXY, changeOrigin: true } } : undefined
   }
 });

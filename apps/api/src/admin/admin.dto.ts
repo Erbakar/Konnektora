@@ -113,6 +113,8 @@ export class AdminActivityLogQueryDto {
 }
 
 export class UpdateAdminUserDto {
+  @IsOptional() @IsString() @MaxLength(120) region?: string;
+  @IsOptional() @IsString() @MaxLength(24) postalCode?: string;
   @IsOptional()
   @IsEnum(UserStatus)
   status?: UserStatus;

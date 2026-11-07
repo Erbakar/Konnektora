@@ -1,6 +1,12 @@
+import { FollowStar } from "../components/MemberSignals";
+import { MediaViewer } from "../components/MediaAlbum";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Play,
   BadgeCheck,
+  Building2,
+  Briefcase,
+  FileText,
   Ban,
   CalendarDays,
   BarChart3,
@@ -11,7 +17,6 @@ import {
   Mail,
   MapPin,
   MessageCircle,
-  Minus,
   MoreVertical,
   Settings,
   Share2,
@@ -45,7 +50,12 @@ import {
   getProfileAffinities,
   listTags,
   updateProfileAffinities,
+  uploadProfileMedia,
+  makeProfilePicture,
+  deleteProfileMedia,
 } from "../lib/api";
+import { businessLabel, companyTypes } from "../lib/businessLabels";
+import { ThinkingIcon } from "../components/ThinkingIcon";
 import { useLanguage } from "../lib/i18n";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
@@ -71,8 +81,8 @@ function publicUsername(username: string | null | undefined) {
 }
 
 function SentimentIcon({ sentiment }: { sentiment: "like" | "ok" | "dislike" }) {
-  const Icon = sentiment === "like" ? Heart : sentiment === "dislike" ? ThumbsDown : Minus;
-  return <Icon aria-hidden="true" data-sentiment-icon={sentiment} size={17} />;
+  const Icon = sentiment === "like" ? Heart : sentiment === "dislike" ? ThumbsDown : ThinkingIcon;
+  return <Icon aria-hidden={true} data-sentiment-icon={sentiment} size={17} />;
 }
 
 export function PublicProfilePage() {
@@ -82,6 +92,7 @@ export function PublicProfilePage() {
   const user = getUserSession();
   const queryClient = useQueryClient();
   const [reportOpen, setReportOpen] = useState(false);
+  const [reportMediaId, setReportMediaId] = useState<string | null>(null);
   const [privacyNotice, setPrivacyNotice] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -207,10 +218,9 @@ export function PublicProfilePage() {
       profile?.relationship.following
         ? unfollowUser(profile.id)
         : followUser(profile!.id),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: ["public-profile", username],
-      }),
+    onSuccess: async () => {
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["public-profile"] }), queryClient.invalidateQueries({ queryKey: ["following"] }), queryClient.invalidateQueries({ queryKey: ["member-compatibility"] })]);
+    },
   });
   const blockMutation = useMutation({
     mutationFn: () => profile!.relationship.blockedByViewer
@@ -296,7 +306,7 @@ export function PublicProfilePage() {
                   type="button"
                 >
                   {media.type === "video" ? (
-                    <video muted src={resolveMediaUrl(media.url)} />
+                    <><video muted preload="metadata" src={resolveMediaUrl(media.url)} /><Play className="profile-video-indicator" size={20} aria-label={t("Video", "Video")} /></>
                   ) : (
                     <img alt="" src={resolveMediaUrl(media.url)} />
                   )}{" "}
@@ -314,8 +324,9 @@ export function PublicProfilePage() {
               ? t("Kurumsal üye", "Business member")
               : t("Konnektora üyesi", "Konnektora member")}
           </span>
-          <h1>
-            {profile.name}
+          <h1 className="member-name-line">
+            <FollowStar id={profile.id} ariaLabel={t("Profil takip yıldızı", "Profile follow star")}/>
+            <span className="profile-heading-name">{publicUsername(profile.username) ? `@${publicUsername(profile.username)}` : profile.name}</span>
             {profile.verified ? (
               <BadgeCheck
                 aria-label={t("Doğrulanmış profil", "Verified profile")}
@@ -325,7 +336,7 @@ export function PublicProfilePage() {
             ) : null}
           </h1>
           {publicUsername(profile.username) ? (
-            <strong>@{publicUsername(profile.username)}</strong>
+            <small>{profile.name !== profile.username ? (profile.accountType === "corporate" ? profile.companyName || profile.name : profile.name) : null}</small>
           ) : (
             <strong>{profile.name}</strong>
           )}
@@ -430,7 +441,7 @@ export function PublicProfilePage() {
               </summary>
               <div>
                 <Link to={`/stats/user/${profile.id}`}>
-                  {t("Etkileşim istatistikleri", "Interaction statistics")}
+                  <BarChart3 size={18}/> {t("Etkileşim istatistikleri", "Interaction statistics")}
                 </Link>
                 <Link to="/settings">
                   <Settings size={18} /> {t("Ayarlar", "Settings")}
@@ -449,29 +460,24 @@ export function PublicProfilePage() {
           {(profile.accountType === "individual" || (!profile.address && !profile.district)) && (profile.city || profile.country) ? (
             <span>
               <MapPin size={15} />{" "}
-              {[profile.city, profile.country].filter(Boolean).join(", ")}
+              {[profile.city, profile.region, profile.country].filter(Boolean).filter((value,index,all)=>all.indexOf(value)===index).join(", ")}
             </span>
           ) : null}
           {profile.accountType === "corporate" ? (
             <>
-              {profile.companyName ? (
-                <span>
-                  <strong>{t("İşletme:", "Business:")}</strong> {profile.companyName}
-                </span>
-              ) : null}
               {profile.tradeName ? (
                 <span>
-                  <strong>{t("Ticari unvan:", "Registered name:")}</strong> {profile.tradeName}
+                  <FileText aria-label={t("Ticari unvan", "Registered name")} size={16}/> {profile.tradeName}
                 </span>
               ) : null}
               {profile.companyType ? (
                 <span>
-                  <strong>{t("Şirket türü:", "Company type:")}</strong> {profile.companyType}
+                  <Building2 aria-label={t("Şirket türü", "Company type")} size={16}/> {businessLabel(profile.companyType, language, companyTypes)}
                 </span>
               ) : null}
               {profile.businessCategory ? (
                 <span>
-                  <strong>{t("Kategori:", "Category:")}</strong> {profile.businessCategory}
+                  <Briefcase aria-label={t("Kategori", "Category")} size={16}/> {businessLabel(profile.businessCategory, language)}
                 </span>
               ) : null}
               {profile.address || profile.district ? (
@@ -496,6 +502,7 @@ export function PublicProfilePage() {
           ) : null}
         </div>
       </header>
+      <ReportDialog open={Boolean(reportMediaId)} onClose={() => setReportMediaId(null)} targetType="media" targetId={reportMediaId ?? ""}/>
       <NotificationDialog
         open={notificationOpen}
         onClose={() => setNotificationOpen(false)}
@@ -510,66 +517,17 @@ export function PublicProfilePage() {
         targetId={profile.id}
         targetType="user"
         title={profile.name}
-        text={[profile.name, profile.username ? `@${profile.username}` : "", [profile.city, profile.country].filter(Boolean).join(", ")].filter(Boolean).join("\n")}
-        url={window.location.href}
+        text={[`🤡 ${publicUsername(profile.username) ? `@${profile.username}` : profile.name}`, [profile.city, profile.country].filter(Boolean).join(" · "), profile.interests.filter((interest) => interest.sentiment === "like").slice(0, 10).map((interest) => `#${interest.tag.name}`).join(" "), `✨ ${profile.followerCount} ${t("üye takip ediyor", "members follow")}`, t("Seni bağlayan ortak noktaları bul.", "Find what connects you."), t("🌎 Konnektora’da profili gör →", "🌎 View page on Konnektora →")].filter(Boolean).join("\n")}
+        url={new URL(publicUsername(profile.username) ? `/users/${encodeURIComponent(profile.username!)}` : `/users/id/${profile.id}`, window.location.origin).toString()}
       />
-      {galleryIndex != null && profile.media[galleryIndex] ? (
-        <div
-          className="dialog-backdrop profile-gallery-dialog"
-          role="presentation"
-          onMouseDown={() => setGalleryIndex(null)}
-        >
-          <section
-            aria-modal="true"
-            className="content-dialog"
-            onMouseDown={(event) => event.stopPropagation()}
-            role="dialog"
-          >
-            <div className="section-header">
-              <strong>
-                {galleryIndex + 1} / {profile.media.length}
-              </strong>
-              <button onClick={() => setGalleryIndex(null)} type="button">
-                {t("Kapat", "Close")}
-              </button>
-            </div>
-            {profile.media[galleryIndex].type === "video" ? (
-              <video
-                autoPlay
-                controls
-                src={resolveMediaUrl(profile.media[galleryIndex].url)}
-              />
-            ) : (
-              <img
-                alt={t(`${profile.name} profil medyası`, `${profile.name} profile media`)}
-                src={resolveMediaUrl(profile.media[galleryIndex].url)}
-              />
-            )}
-            <div className="gallery-navigation">
-              <button
-                disabled={galleryIndex === 0}
-                onClick={() =>
-                  setGalleryIndex((value) => Math.max(0, (value ?? 0) - 1))
-                }
-                type="button"
-              >
-                {t("Önceki", "Previous")}
-              </button>
-              <button
-                disabled={galleryIndex === profile.media.length - 1}
-                onClick={() =>
-                  setGalleryIndex((value) =>
-                    Math.min(profile.media.length - 1, (value ?? 0) + 1),
-                  )
-                }
-                type="button"
-              >
-                {t("Sonraki", "Next")}
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
+      {galleryIndex != null ? <MediaViewer alt={`${profile.name} profil medyası`} items={profile.media} index={galleryIndex} onChange={setGalleryIndex} onClose={() => setGalleryIndex(null)} actions={{
+        kind: "profile",
+        canManage: profile.relationship.isSelf,
+        avatarMediaId: profilePhoto?.id ?? null,
+        onUpload: async (files) => { for (const file of files) await uploadProfileMedia(file); await queryClient.invalidateQueries({ queryKey: ["public-profile"] }); },
+        onMakeAvatar: async (mediaId) => { await makeProfilePicture(mediaId); await queryClient.invalidateQueries({ queryKey: ["public-profile"] }); setGalleryIndex(0); },
+        onDelete: async (mediaId) => { await deleteProfileMedia(mediaId); setGalleryIndex((current) => current == null || profile.media.length <= 1 ? null : Math.max(0, Math.min(current, profile.media.length - 2))); await queryClient.invalidateQueries({ queryKey: ["public-profile"] }); },
+      }}/> : null}
       <div className="public-profile-content">
       {!profile.relationship.isSelf && profile.mutualism ? (
         <Link
@@ -579,7 +537,7 @@ export function PublicProfilePage() {
           <strong>{profile.mutualism.total > 0
             ? t(`${profile.mutualism.total} ortak noktanız var`, `You have ${profile.mutualism.total} things in common`)
             : t("Eşleşen sonuç bulunamadı.", "No matching shared signal was found.")}</strong>
-          <span>{t("Mutualizm analizini gör →", "View mutualism analysis →")}</span>
+          <span className="mutualism-link-label"><svg className="mutualism-attention" aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="12" r="6"/><circle cx="16" cy="12" r="6"/></svg>{t("Mutualizm analizini gör →", "View mutualism analysis →")}</span>
         </Link>
       ) : null}
       <ReportDialog onClose={() => setReportOpen(false)} open={reportOpen} targetId={profile.id} targetType="user"/>
@@ -630,7 +588,7 @@ export function PublicProfilePage() {
                   <Link to={`/tags/${item.tag.slug}`}>{item.tag.name}</Link>
                 </span>
                 <small>
-                  <Link to={`/users/id/${item.suggestedBy.id}`}>
+                  <FollowStar id={item.suggestedBy.id}/><Link to={`/users/id/${item.suggestedBy.id}`}>
                     @{item.suggestedBy.username ?? item.suggestedBy.name}
                   </Link>{" "}
                   {t("ekledi · Onay bekliyor", "added · Pending approval")}
@@ -680,7 +638,7 @@ export function PublicProfilePage() {
             <Link
               className="profile-interest"
               key={interest.tag.id}
-              to={`/tags/${interest.tag.slug}?authorId=${profile.id}`}
+              to={`/tags/${interest.tag.slug}${interest.commentCount ? `?authorId=${profile.id}&author=${encodeURIComponent(profile.username ?? profile.name)}` : ""}`}
             >
               <span>
                 <b
@@ -871,12 +829,13 @@ export function PublicProfilePage() {
           {profile.events
             .filter((item) => {
               if (profileEventTab === "organizer") return item.organizer;
-              const date = item.meta?.split(" · ").at(-1);
+              const date = item.endsAt ?? (item.startsAt ? new Date(new Date(item.startsAt).getTime() + 24 * 60 * 60_000).toISOString() : item.meta?.split(" · ").at(-1));
               if (!date) return true;
               return profileEventTab === "future"
                 ? new Date(date) >= new Date()
                 : new Date(date) < new Date();
             })
+            .sort((a, b) => (profileEventTab === "past" ? -1 : 1) * (new Date(a.startsAt ?? a.meta?.split(" · ").at(-1) ?? 0).getTime() - new Date(b.startsAt ?? b.meta?.split(" · ").at(-1) ?? 0).getTime()))
             .map((item) => (
               <DiscoveryCard hideSubtitle item={item} key={item.id} standard />
             ))}
@@ -914,6 +873,7 @@ export function PublicProfilePage() {
         <div className="discovery-results">
           {profile.places
             .filter((item) => profilePlaceTab === "all" || item.organizer)
+            .sort((a, b) => (profileEventTab === "past" ? -1 : 1) * (new Date(a.startsAt ?? a.meta?.split(" · ").at(-1) ?? 0).getTime() - new Date(b.startsAt ?? b.meta?.split(" · ").at(-1) ?? 0).getTime()))
             .map((item) => (
               <DiscoveryCard hideSubtitle item={item} key={item.id} standard />
             ))}

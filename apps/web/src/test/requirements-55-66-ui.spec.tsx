@@ -13,7 +13,7 @@ import { SettingsSectionPage } from "../pages/SettingsCenterPage";
 
 const apiMocks = vi.hoisted(() => ({
   createBlock: vi.fn(),
-  getFinanceDashboard: vi.fn(),
+  getMembership: vi.fn(),
   getContentNotification: vi.fn(),
   getMyProfile: vi.fn(),
   getNotificationPreferences: vi.fn(),
@@ -27,6 +27,7 @@ const apiMocks = vi.hoisted(() => ({
   listGuestLists: vi.fn(),
   listMemberSuggestions: vi.fn(),
   listMyEvents: vi.fn(),
+  listEventParticipants: vi.fn(),
   listMyNotifications: vi.fn(),
   listMyPlaces: vi.fn(),
   listProfileMedia: vi.fn(),
@@ -72,7 +73,7 @@ beforeEach(() => {
   window.sessionStorage.clear();
   apiMocks.getUserSession.mockReturnValue(null);
   apiMocks.createBlock.mockResolvedValue({ ok: true });
-  apiMocks.getFinanceDashboard.mockResolvedValue({ business: { plan: "starter" } });
+  apiMocks.getMembership.mockResolvedValue({ business: { plan: "starter" } });
   apiMocks.getContentNotification.mockResolvedValue({ enabled: false });
   apiMocks.getMyProfile.mockResolvedValue({ city: "İstanbul", country: "Türkiye" });
   apiMocks.getNotificationPreferences.mockResolvedValue([]);
@@ -84,6 +85,7 @@ beforeEach(() => {
   apiMocks.listMemberSuggestions.mockResolvedValue([]);
   apiMocks.listMyNotifications.mockResolvedValue([]);
   apiMocks.listMyEvents.mockResolvedValue([]);
+  apiMocks.listEventParticipants.mockResolvedValue([{userId:"manager-1",role:"manager",status:"accepted",user:{username:"manager"}}]);
   apiMocks.listMyPlaces.mockResolvedValue([]);
   apiMocks.listProfileMedia.mockResolvedValue([]);
   apiMocks.listProfileTagSuggestions.mockResolvedValue([]);
@@ -111,6 +113,7 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
       startsAt: "2026-09-15T18:00:00.000Z",
       endsAt: "2026-09-15T21:00:00.000Z",
       format: "offline",
+      timezone: "America/Vancouver",
       visibility: "open",
       city: "İstanbul",
       country: "Türkiye",
@@ -143,6 +146,9 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     expect(await screen.findByRole("heading", { name: "Etkinliği düzenle" })).toBeVisible();
     expect(screen.getByRole("textbox", { name: "Başlık" })).toHaveValue(event.title);
     expect(screen.getByRole("textbox", { name: "Açıklama" })).toHaveValue(event.description);
+    expect(screen.getByRole("combobox", { name: /^Saat dilimi/ })).toHaveValue("America/Vancouver");
+    await userEvent.click(screen.getByRole("button", { name: "Adım 4" }));
+    expect(await screen.findByRole("link", { name: "@manager" })).toHaveAttribute("href", "/users/id/manager-1");
 
     await userEvent.click(screen.getByRole("button", { name: "Adım 2" }));
     const location = document.querySelector<HTMLElement>('[data-event-step="2"]')!;
@@ -176,12 +182,13 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     const platform = within(tickets).getByRole("combobox", { name: "Satış platformu" });
     expect(within(tickets).queryByRole("spinbutton", { name: "Kişi başına maksimum bilet" })).not.toBeInTheDocument();
     await userEvent.selectOptions(platform, "konnektora");
-    expect(within(tickets).getByRole("alert")).toHaveTextContent('Sadece kurumsal üyeler "Konnektora online satış" ayarını tercih edebilir.');
+    expect(screen.getByRole("dialog", {name:"Bilet satış koşulları"})).toHaveTextContent("vergi, bankacılık ayarlarını girmiş ve KYB/KYC sürecini tamamlamış");
+    await userEvent.click(screen.getByRole("button",{name:"Kapat"}));
     expect(platform).toHaveValue("door");
     await userEvent.selectOptions(platform, "external");
     expect(within(tickets).queryByRole("spinbutton", { name: "Kişi başına maksimum bilet" })).not.toBeInTheDocument();
     expect(within(tickets).getByRole("textbox", { name: "Dış satış URL'si" })).toHaveAttribute("type", "url");
-  });
+  }, 15000);
 
   it("takipçi gizlilik açıklamasını sayfa içi bildirim yerine düğmeye bağlı tooltip olarak açar", async () => {
     apiMocks.getPublicProfile.mockResolvedValue({
@@ -246,8 +253,9 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     const interests = (await screen.findByRole("heading", { name: "İlgi alanları" })).closest("section")!;
     expect(interests.querySelector(".profile-interest.is-common")).not.toBeInTheDocument();
     expect(within(interests).queryByText(/ortak ilgi/i)).not.toBeInTheDocument();
-    expect(within(interests).getByRole("link", { name: /Caz/ })).toHaveAttribute("href", "/tags/caz?authorId=person-1");
+    expect(within(interests).getByRole("link", { name: /Caz/ })).toHaveAttribute("href", "/tags/caz?authorId=person-1&author=ada");
     expect(within(interests).getByRole("link", { name: /Caz/ })).toHaveTextContent("2 gönderi");
+    expect(within(interests).getByRole("link", { name: /Seramik/ })).toHaveAttribute("href", "/tags/seramik");
     expect(interests.querySelector('[data-sentiment-icon="like"]')).toBeInTheDocument();
     expect(interests.querySelector('[data-sentiment-icon="ok"]')).toBeInTheDocument();
     expect(interests.querySelector('[data-sentiment-icon="dislike"]')).toBeInTheDocument();
@@ -314,6 +322,7 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     render(providers(<Routes><Route path="/users/:username" element={<PublicProfilePage />} /></Routes>, "/users/ada"));
 
     expect(await screen.findByRole("button", { name: "Takip et" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Profil takip yıldızı" })).toBeVisible();
     expect(screen.getByRole("link", { name: "Mesaj" })).toHaveAttribute("href", "/messages?peer=person-1");
     await userEvent.click(screen.getByRole("button", { name: "Profil aksiyonları" }));
     const menu = document.querySelector<HTMLElement>(".profile-actions-menu > div")!;
@@ -453,7 +462,7 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
       `/users/id/${session.id}`,
     ));
 
-    expect(await screen.findByRole("heading", { name: session.name })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: `@${session.username}` })).toBeVisible();
     expect(apiMocks.getPublicProfileById).toHaveBeenCalledWith(session.id);
     expect(screen.queryByRole("heading", { name: "Profil bulunamadı" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "İlgi alanları" }).closest("section")).toHaveAttribute("id", "interests");

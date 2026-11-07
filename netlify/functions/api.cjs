@@ -63,7 +63,7 @@ async function createHandler() {
 
   await app.init();
 
-  return serverless(expressApp);
+  return serverless(expressApp, { binary: ["image/*", "video/*", "audio/*", "application/pdf", "application/octet-stream"] });
 }
 
 exports.handler = async (event, context) => {

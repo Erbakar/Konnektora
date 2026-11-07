@@ -1,9 +1,12 @@
+// Bound every request so launch checks cannot hang indefinitely.
+const timedFetch = (url, options = {}) => fetch(url, { ...options, signal: AbortSignal.timeout(20000) });
+
 const baseUrl = (process.env.SMOKE_BASE_URL ?? "").replace(/\/$/, "");
 if (!baseUrl) throw new Error("SMOKE_BASE_URL zorunludur.");
 const webUrl = (process.env.SMOKE_WEB_URL ?? new URL(baseUrl).origin).replace(/\/$/, "");
 
 async function get(path) {
-  const response = await fetch(`${baseUrl}${path}`, { headers: { "user-agent": "konnektora-smoke/2.0" } });
+  const response = await timedFetch(`${baseUrl}${path}`, { headers: { "user-agent": "konnektora-smoke/2.0" } });
   if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
   return response.json();
 }
@@ -18,7 +21,7 @@ async function check(path, validate) {
 await check("/health/live", (data) => data.ok === true);
 await check("/health/ready", (data) => data.ok === true && data.database === "ready");
 
-const webResponse = await fetch(webUrl, { headers: { "user-agent": "konnektora-smoke/2.0" } });
+const webResponse = await timedFetch(webUrl, { headers: { "user-agent": "konnektora-smoke/2.0" } });
 if (!webResponse.ok) throw new Error(`web: HTTP ${webResponse.status}`);
 const csp = webResponse.headers.get("content-security-policy") ?? "";
 for (const origin of ["https://www.youtube-nocookie.com", "https://w.soundcloud.com", "https://www.youtube.com", "https://soundcloud.com"]) {

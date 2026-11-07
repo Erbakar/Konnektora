@@ -1,3 +1,6 @@
+import { PrivacyContextInterceptor } from "./common/privacy-context.interceptor";
+import { SocialPreviewModule } from "./social-preview/social-preview.module";
+import { MediaStorageModule } from "./media-storage/media-storage.module";
 import { Module } from "@nestjs/common";
 import { APP_INTERCEPTOR } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
@@ -36,6 +39,8 @@ import { LocationsModule } from "./locations/locations.module";
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
     PrismaModule,
+    MediaStorageModule,
+    SocialPreviewModule,
     AuthModule,
     AutomationsModule,
     CmsModule,
@@ -64,6 +69,6 @@ import { LocationsModule } from "./locations/locations.module";
     TicketsModule
   ],
   controllers: [HealthController],
-  providers: [{ provide: APP_INTERCEPTOR, useClass: ActivityLogInterceptor }]
+  providers: [{ provide: APP_INTERCEPTOR, useClass: PrivacyContextInterceptor }, { provide: APP_INTERCEPTOR, useClass: ActivityLogInterceptor }]
 })
 export class AppModule {}

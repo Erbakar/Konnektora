@@ -1,0 +1,33 @@
+KONNEKTORA — 24 EKİM 2026 AÇIK MADDE DEVAMI
+
+84: Önceki yayında tamamlanan bilet penceresi satırı 23/10!A88:C88 yeşil yapıldı.
+85: Yeni ve eski etiket önerisi sonuç bildirimlerinde etiket adı / kullanıcı adı bağlantılı. Eski bildirim metni yalnız gösterimde zenginleştirilir; geçmiş kayıtlar değiştirilmez. Canlı iki QA hesap arasında öneri kabulü ve eski metin varyantı API ve Chrome ile doğrulandı.
+86: Bilet kutusu açıklamanın altında ve Program bölümünün üstünde. Koyu zemin / beyaz yazı. Canlı ölçüm: bilet kutusu üst sınırı 1284px, program 1547px; arka plan rgb(16,28,21), yazı beyaz.
+89: Satış ve gate zamanları için Biletlerim ve etkinlik bilet penceresi ortak metin yardımcısını kullanır. Yalnız başlangıç / yalnız bitiş / ikisi / hiçbiri toplam sekiz durum test edildi. Canlı satış ve giriş metinleri doğrulandı. Kapıda ödeme ve dış satışta önceki stok/adet gizleme düzeltmesi korunuyor.
+90: Profil başlığı, etkinlik kurucusu, mekân kurucusu, akış yorumları ve öneri sahipleri gibi eksik kimlik alanlarına yıldız eklendi. Diğer mevcut kart yıldızları korundu. Yıldız boyutu ortaklaştırıldı, kullanıcı adlarıyla hizalandı. Profil düğmesi ve yıldız aynı takip durumuna güncellenir. Kendi hesabında veya anonim oturumda yıldız gösterilmez. Avatar yığınları gibi toplu minyatür alanlara etkileşimli yıldız sıkıştırılmadı.
+
+DOĞRULAMA
+API: 500/500; 20 finans entegrasyon testi dahil, atlanan yok.
+Web: 191/191; son mobil değişiklikten sonra tekrar başarılı.
+Lint, üretim derlemesi ve son web derlemesi başarılı.
+İlk canlı kontrolde uzun kullanıcı adına bağlı mobil taşma saptandı; isim ayrı esnek alan içine alındı ve dar ekran yıldız ölçüsü düzeltildi. Yerel Chrome 390px: scrollWidth=390, yıldız=25x25. Akış yıldızı ile kullanıcı adı aynı satırda; mobil akışta taşma yok.
+Gerçek kullanıcılar takip edilmedi; gerçek ödeme, e-posta veya SMS gönderilmedi. Denemeler iki geçici QA hesap arasında yapıldı.
+Bu değişiklikler yeni DB geçişi gerektirmiyor.
+
+HARİCİ KALANLAR
+6: Eski kaybolmuş medyanın özgün dosyaları/yedeği çalışma alanında yok. Yeni yükleme kalıcılığı önceki testlerde doğrulanmıştı; yeni testlerde mevcut üç dosyanın byte bütünlüğü kontrol edilir.
+19: Canlı sağlık yanıtında SMS=false; sağlayıcı kurulumu ve doğrulanmış test numarası gerekiyor. Facebook yapılandırması açık ancak gerçek hesap/sağlayıcı kabulü bu testte yapılmadı. Gerçek tahsilat/iade kabulü de açık.
+20: Kampanya taslağı docs/KAMPANYA_TASLAGI_2026-10-23.txt. Yetkili sosyal hesap erişimi, gönderi bağlantıları, başlangıç/bitiş tarihleri ve hediye sınırı gerekiyor; gerçek kişilere otomatik plan hediyesi verilmedi.
+37: Mevcut video yerleşimi tamam; yeni video ve özgün tasarım kaynağı bekleniyor. Materyal paketi output/konnektora-destek-video-materyalleri.zip.
+
+Canlı yayın, temizlik ve son kontrol sonuçları aşağıya eklenir.
+
+SON CANLI SONUÇ
+Son yayın: e614b430-620d-4152-a588-5e5bbdda123c — SUCCESS.
+Önceki ana işlev yayını: eef36fda-f266-4f41-84a0-bfbb936a07bb; mobil başlık düzeltmesi ve akış hizası son yayına dahil.
+Canlı 390px profil: scrollWidth=390, yıldız=25x25, aria-pressed=true ve ana düğme Takipte; durumlar eşit. Akış yıldızı top=325.74 ve isim top=326.99; aynı satırda.
+Canlıda yeni ve eski etiket önerisi bildirimleri hem profil hem etikete bağlantı verir. Online/dış/kapıda ödeme bilet kontrolleri korunur; satış ve gate metinleri doğru şablonla görünür.
+QA hesapları ve ilişkili test kayıtları temizlendi; kendi geçici etiket ilişkisinin kullanım sayısı artışı geri alındı. Üye sayısı önce/sonra 24. Etkinlik=26, mekân=9, medya=109, kalıcı yükleme=81, bilet=4; başlangıçla aynı.
+35 salt-okuma kontrolü ve genel canlı sağlık/içerik kontrolleri geçti. Yayınlanan arayüz test edilen son derlemeyle eşleşti; mevcut üç medya dosyasının byte bütünlüğü korundu.
+23/10!A88:C92 aralığında 84,85,86,89,90 yeşil; dış bağımlı 6,19,20,37 açık kaldı. Sadece arka plan değiştirildi, metin ve diğer alanlar korundu. Yerel test sunucusu ve yerel DB kapatıldı.
+Kanıtlar: output/oct23-live/open-final-deployment.json, open-notification-verification.json, open-cleanup.json, open-readonly-final.log, open-smoke-final.log, open-follow-mobile-final.png, open-ticket-widget.png, open-ticket-times.png, open-notification-links.png, open-sheet-green-final.png.

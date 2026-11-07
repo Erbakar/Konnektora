@@ -1,3 +1,5 @@
+import { checkConversationQuota } from "./conversation-quota";
+import { publicName } from "../common/public-name";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrivateMessage, User, UserStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
@@ -7,6 +9,9 @@ import { ConversationMessagesQueryDto, ConversationPreferenceDto, EditPrivateMes
 const peerSelect = {
   id: true,
   name: true,
+  privacySettings: { select: { profileNameAudience: true } },
+  accountType: true,
+  companyName: true,
   username: true,
   status: true,
   uploadedMedia: {
@@ -25,10 +30,10 @@ type ConversationPeer = {
   avatarUrl: string | null;
 };
 
-function toConversationPeer(peer: { id: string; name: string; username: string | null; status: UserStatus; uploadedMedia?: Array<{ url: string }> }): ConversationPeer {
+function toConversationPeer(peer: { id: string; name: string; username: string | null; status: UserStatus; privacySettings?: { profileNameAudience: string } | null; accountType?: string; companyName?: string | null; uploadedMedia?: Array<{ url: string }> }): ConversationPeer {
   return {
     id: peer.id,
-    name: peer.name,
+    name: publicName(peer),
     username: peer.username,
     status: peer.status,
     avatarUrl: peer.uploadedMedia?.[0]?.url ?? null,
@@ -87,7 +92,7 @@ export class ChatService {
       ...(preference?.hiddenBefore ? { createdAt: { gt: preference.hiddenBefore } } : {})
     };
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.privateMessage.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize, include: { replyTo: { select: { id: true, body: true, senderId: true, status: true } }, reactions: { select: { emoji: true, userId: true } } } }),
+      this.prisma.privateMessage.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { replyTo: { select: { id: true, body: true, senderId: true, status: true } }, reactions: { select: { emoji: true, userId: true } } } }),
       this.prisma.privateMessage.count({ where })
     ]);
     return { items: items.reverse(), total, page, pageSize, hasNextPage: page * pageSize < total };
@@ -104,6 +109,7 @@ export class ChatService {
       if (!reply) throw new BadRequestException("Yanıtlanan mesaj bu konuşmada bulunamadı.");
     }
     const message = await this.prisma.$transaction(async (tx) => {
+      await checkConversationQuota(tx, sender, recipient.id);
       const message = await tx.privateMessage.create({
         data: { senderId: sender.id, recipientId: recipient.id, body: input.body.trim(), replyToId: input.replyToId, attachmentUrl: file ? `/uploads/${file.filename}` : undefined, attachmentType: file?.mimetype, attachmentName: file?.originalname, attachmentSize: file?.size }
       });
@@ -113,7 +119,7 @@ export class ChatService {
       userId: recipient.id,
       topic: "private_message",
       type: "private_message",
-      title: `${sender.name} sana mesaj gönderdi`,
+      title: `${sender.username ? `@${sender.username}` : "Bir üye"} sana mesaj gönderdi`,
       body: input.body.trim().slice(0, 160) || "Medya gönderdi",
       targetType: "user",
       targetId: sender.id
@@ -138,7 +144,7 @@ export class ChatService {
     const message = await this.prisma.privateMessage.findUnique({ where: { id } });
     if (!message || message.status !== "active") throw new NotFoundException("Mesaj bulunamadı.");
     if (message.senderId !== userId) throw new ForbiddenException("Yalnız kendi mesajınızı düzenleyebilirsiniz.");
-    if (Date.now() - message.createdAt.getTime() > 15 * 60_000) throw new BadRequestException("Mesajlar yalnız ilk 15 dakika düzenlenebilir.");
+    if (Date.now() - message.createdAt.getTime() >= 30 * 60_000) throw new BadRequestException("Mesajlar yalnız ilk 30 dakika düzenlenebilir.");
     return this.prisma.privateMessage.update({ where: { id }, data: { body: input.body.trim(), editedAt: new Date() }, include: { replyTo: { select: { id: true, body: true, senderId: true, status: true } }, reactions: { select: { emoji: true, userId: true } } } });
   }
 
@@ -203,7 +209,7 @@ export class ChatService {
     const audience = privacy?.messageAudience ?? "everybody";
     if (audience === "everybody") return;
     const direct = await this.prisma.userFollow.findMany({ where: { followerId: recipientId }, select: { followingId: true } });
-    if (direct.some((follow) => follow.followingId === senderId)) return;
+    if (audience === "following" && direct.some((follow) => follow.followingId === senderId)) return;
     if (audience === "network" && direct.length) {
       const secondDegree = await this.prisma.userFollow.findFirst({
         where: { followerId: { in: direct.map((follow) => follow.followingId) }, followingId: senderId }, select: { followerId: true }

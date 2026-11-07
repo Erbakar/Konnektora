@@ -5,9 +5,11 @@ import { NestExpressApplication } from "@nestjs/platform-express";
 import { randomUUID } from "crypto";
 import { NextFunction, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import helmet from "helmet";
 import { resolve } from "path";
+import { injectSocialPreview } from "./social-preview/social-preview-html";
+import { SocialPreviewService } from "./social-preview/social-preview.service";
 import { AppModule } from "./app.module";
 import { contentSecurityPolicyDirectives } from "./config/content-security-policy";
 
@@ -62,6 +64,20 @@ async function bootstrap() {
 
     if (!existsSync(webIndex)) throw new Error(`Web build output is missing: ${webIndex}`);
 
+    const previewService = app.get(SocialPreviewService);
+    const indexHtml = readFileSync(webIndex, "utf8");
+    app.use(async (request: Request, response: Response, next: NextFunction) => {
+      if (request.method !== "GET" || !/WhatsApp|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|Slackbot|TelegramBot/i.test(request.get("user-agent") ?? "")) return next();
+      const match = /^\/(events|places|tags|users)\/(?:id\/)?([^/]+)\/?$/.exec(request.path);
+      if (!match) return next();
+      const type = match[1] === "users" && request.path.startsWith("/users/id/") ? "user-id" : ({ events: "event", places: "place", tags: "tag", users: "user" } as Record<string, string>)[match[1]!]!;
+      try {
+        const origin = `${request.protocol}://${request.get("host")}`;
+        const preview = await previewService.get(type, decodeURIComponent(match[2]!), `${origin}/api`);
+        response.setHeader("Cache-Control", "no-store");
+        response.type("html").send(injectSocialPreview(indexHtml, preview, origin));
+      } catch { next(); }
+    });
     app.useStaticAssets(webDist);
     app.use((request: Request, response: Response, next: NextFunction) => {
       if (

@@ -1,0 +1,148 @@
+{
+  "intro": {
+    "title": "Konnektora'yı keşfet",
+    "seconds": 30,
+    "scenes": [
+      {
+        "shot": "home",
+        "title": "İlgi alanlarından gerçek bağlantılara",
+        "summary": "Keşfet. Tanış. Birlikte deneyimle.",
+        "tr": "Konnektora'ya hoş geldiniz. Burada keşif, ortak ilgi alanlarıyla başlar. Etkinlikleri, mekânları ve konu başlıklarını inceleyerek size hitap eden toplulukları bulabilirsiniz. Bir buluşmanın ayrıntılarını öğrenin, katılım koşullarını değerlendirin ve ilginizi çeken insanlarla bağlantı kurun. Bu rehberde keşif, profil, topluluk, etkinlik ve gizlilik araçlarına birlikte bakacağız. Başlamak için ana sayfadaki etkinlik, mekân ve ilgi alanı bağlantılarını kullanabilirsiniz.",
+        "en": "Welcome to Konnektora. Discovery begins with shared interests. Explore events, places and topics to find communities that matter to you. Review a gathering's details and attendance conditions and connect with people who share your interests. This guide introduces discovery, profiles, community, events and privacy. Start with the Events, Places and Tags links on the home page.",
+        "titleEn": "From interests to real connections"
+      },
+      {
+        "shot": "tags",
+        "title": "İlgi alanlarını keşfet",
+        "summary": "Etiketler konuları ve toplulukları bir araya getirir.",
+        "tr": "Etiketler, ilgi alanlarının ortak buluşma noktasıdır. Bir konu arayın, ilgili etiket sayfasını açın ve o başlık etrafındaki paylaşımları inceleyin. İlgi alanlarınızı profilinize eklemek, sizi anlatan bir profil oluşturmanıza yardımcı olur. İlgilendiğiniz konulardaki etkinliklere ve diğer üyelere buradan ulaşabilirsiniz. Konnektora'yı kullanırken yalnızca popüler başlıklara bağlı kalmanız gerekmez; gerçekten merak ettiğiniz konuları seçerek başlayın.",
+        "en": "Tags are shared meeting points for interests. Search for a topic, open its page and explore related posts. Adding interests to your profile helps it reflect who you are. Discover events and members around the topics you care about. You do not need to follow only popular topics; start with the interests that matter to you.",
+        "titleEn": "Explore your interests"
+      },
+      {
+        "shot": "login",
+        "title": "Kendi profilini oluştur",
+        "summary": "Profilini tamamla; görünürlük tercihlerini belirle.",
+        "tr": "Bir hesap oluşturduğunuzda profiliniz, topluluk içindeki kişisel alanınız olur. Kullanıcı adınızı, fotoğrafınızı ve paylaşmak istediğiniz bilgileri düzenleyin. Profilinizdeki ilgi alanları sizi tanımak isteyen kişilere bir başlangıç noktası sunar. Başkasının kimliğiyle hesap oluşturmayın ve giriş bilgilerinizi koruyun. Hesap veya profil ayarlarını değiştirdiğinizde, değişiklikleri kaydetmeyi unutmayın. Google ve Facebook giriş seçeneklerinin kullanılabilirliği sağlayıcının izinlerine bağlıdır.",
+        "en": "Your profile is your personal space in the community. Edit your username, photo and the information you choose to share. Interests help other members understand what matters to you. Do not create an account as someone else and protect your login details. Save changes to account and profile settings. Google and Facebook sign-in availability depends on provider permissions.",
+        "titleEn": "Create your own profile"
+      },
+      {
+        "shot": "places",
+        "title": "Etkinlikleri ve mekânları incele",
+        "summary": "Zaman, konum ve katılım koşullarını birlikte değerlendir.",
+        "tr": "Bir etkinliğe karar vermeden önce ayrıntı sayfasını inceleyin. Tarih, saat dilimi, konum ve katılım koşulları plan yapmanız için önemlidir. Herkese açık etkinliklerin yanında, organizatör onayı veya davet gerektiren buluşmalar da bulunabilir. Mekân sayfaları ise o mekâna bağlı topluluğu ve etkinlikleri keşfetmenizi sağlar. Konum bilgisi paylaşmak isteğe bağlıdır. Yakınınızdaki seçenekleri görmek için konum bağlantılarını kullanabilirsiniz.",
+        "en": "Review an event's detail page before making plans. Date, time zone, location and attendance conditions matter. Some events are public; others require organiser approval or an invitation. Place pages help you discover the community and events around a venue. Sharing your location is optional. Use location controls to explore nearby options.",
+        "titleEn": "Discover events and places"
+      },
+      {
+        "shot": "help",
+        "title": "Sohbete ve topluluğa katıl",
+        "summary": "Deneyimlerini paylaş; ihtiyaç duyduğunda destek al.",
+        "tr": "Konnektora'da bir başlık, bir sohbetin başlangıcı olabilir. Etiket, etkinlik ve mekân paylaşımlarını okuyun; uygun alanlarda yorumlarınızla ve deneyimlerinizle katılın. Üyelerle mesajlaşırken karşı tarafın mahremiyetine ve topluluk kurallarına saygı gösterin. Bir içerikle ilgili sorun gördüğünüzde şikâyet araçlarını kullanabilirsiniz. Nasıl ilerleyeceğinizden emin değilseniz yardım merkezindeki sorulara göz atın veya destek ekibine iletişim sayfasından ulaşın.",
+        "en": "A topic can be the start of a conversation. Read tag, event and place posts and contribute your experiences where appropriate. Respect other members' privacy and community rules when messaging. Use reporting tools if you find a problem with content. If you need help, browse the Help Centre or contact support.",
+        "titleEn": "Join the conversation"
+      },
+      {
+        "shot": "privacy",
+        "title": "Tercihlerin senin kontrolünde",
+        "summary": "Gizlilik, bildirim ve hesap ayarlarını düzenli kontrol et.",
+        "tr": "Görünürlük ve bildirim tercihlerinizi ayarlarınızdan yönetebilirsiniz. Hangi bilgileri paylaşmak istediğinizi düşünün; hassas bilgileri herkese açık alanlara yazmayın. Gizlilik ve kullanım koşulları sayfalarında hizmet hakkında daha fazla bilgi bulunur. Hesabı dondurmak, verilerin tamamının silindiği anlamına gelmez; silme talepleri için ayrı yönergeyi kullanın. Konnektora kontrollü beta sürecindedir. İlk adımınız, bir ilgi alanı seçip size hitap eden bir deneyimi keşfetmek olabilir.",
+        "en": "Manage visibility and notification preferences in Settings. Choose what to share and avoid posting sensitive details publicly. Privacy and Terms explain the service further. Freezing an account does not delete all its data; use the separate deletion instructions for requests. Konnektora is in a controlled beta. Start by choosing an interest and discovering an experience that matters to you.",
+        "titleEn": "Your choices, your control"
+      }
+    ]
+  },
+  "help": {
+    "title": "Konnektora kullanım rehberi",
+    "seconds": 20,
+    "scenes": [
+      {
+        "shot": "login",
+        "title": "Hesabımı ve profilimi nasıl düzenlerim?",
+        "summary": "Ayarlar üzerinden bilgilerini düzenle ve kaydet.",
+        "tr": "Hesap ve profil bilgilerinizi ayarlarınızdan düzenleyebilirsiniz. Kullanıcı adınızı ve fotoğrafınızı kontrol edin; yalnızca paylaşmak istediğiniz bilgileri ekleyin. İşlemi tamamlamak için kaydet düğmesini kullanın. Girişle ilgili bir sorun yaşarsanız yardım merkezi veya iletişim sayfasından destek isteyin.",
+        "en": "Edit account and profile details in Settings. Review your username and photo and add only information you want to share. Save your changes. If you have trouble signing in, use the Help Centre or Contact to request support.",
+        "titleEn": "How do I edit my account and profile?"
+      },
+      {
+        "shot": "tags",
+        "title": "Etiket nedir?",
+        "summary": "Bir konu etrafındaki paylaşımları ve topluluğu keşfet.",
+        "tr": "Etiketler, üyeleri ortak konular etrafında buluşturan başlıklardır. İlgi alanları sayfasından bir konu arayıp ilgili sayfayı açabilirsiniz. Paylaşımları inceleyin ve ilginizi çeken başlıkları profilinize ekleyin. Profilinizdeki ilgi alanlarını zaman içinde düzenleyebilirsiniz.",
+        "en": "Tags bring members together around shared topics. Search for an interest and open its page. Explore related posts and add relevant topics to your profile. You can update your interests over time.",
+        "titleEn": "What is a tag?"
+      },
+      {
+        "shot": "places",
+        "title": "Bir etkinliğe nasıl katılırım?",
+        "summary": "Ayrıntı sayfasındaki katılım koşullarını takip et.",
+        "tr": "Etkinliğin ayrıntı sayfasından tarih, konum ve katılım koşullarını okuyun. Katıl seçeneğini kullanın. Onay gerektiren etkinliklerde organizatörün yanıtını beklemeniz gerekir. Davetle katılım sağlanan bir etkinlikte ise ilgili davetinizi ve erişim koşullarını kontrol edin.",
+        "en": "Read the event's date, location and attendance conditions, then use Join. Approval-based events require the organiser's response. For invitation-only events, check your invitation and access conditions.",
+        "titleEn": "How do I join an event?"
+      },
+      {
+        "shot": "privacy",
+        "title": "Gizliliğimi nasıl yönetirim?",
+        "summary": "Görünürlük ve bildirim tercihlerini ayarlardan seç.",
+        "tr": "Gizlilik ve bildirim tercihleri ayarlarınızda bulunur. Profilinizde hangi bilgilerin görüneceğini ve hangi bildirimleri almak istediğinizi kontrol edin. Hesabı dondurma ile tam veri silme farklı işlemlerdir. Silme başvurusu için veri silme talebi sayfasındaki yönergeyi kullanın.",
+        "en": "Privacy and notification preferences are in Settings. Review what appears on your profile and which notifications you want. Freezing an account and deleting its data are different actions. Use Data deletion for deletion requests.",
+        "titleEn": "How do I manage privacy?"
+      },
+      {
+        "shot": "business",
+        "title": "Etkinlik ve mekân oluşturabilir miyim?",
+        "summary": "Kurumsal araçları ve gerekli hesap yetkilerini incele.",
+        "tr": "Konnektora, organizatörlere ve işletmelere etkinlik ve mekân yönetim araçları sunar. İşletmeler sayfasından bu araçları inceleyebilirsiniz. Bir işlem için gerekli hesap türü ve yönetim yetkileri önemlidir. Bazı özelliklerin kullanılabilirliği paket ve cihaz desteğine bağlı olabilir.",
+        "en": "Konnektora offers event and place management tools for organisers and businesses. Explore them on For business. Account type and permissions matter. Some features depend on plan and device support.",
+        "titleEn": "Can I create events and places?"
+      },
+      {
+        "shot": "help",
+        "title": "Yardım ve şikâyet araçları nerede?",
+        "summary": "Yardım merkezini kullan veya destek ekibine yaz.",
+        "tr": "Yardım merkezinde soruları arayabilir ve topluluk kurallarını inceleyebilirsiniz. Bir içerikte sorun gördüğünüzde ilgili şikâyet seçeneğini kullanın. Ek yardım için iletişim formunu doldurun. Talebinizi açıklarken şifrenizi, ödeme anahtarınızı veya kimlik belgenizi mesajınıza eklemeyin.",
+        "en": "Search questions and read community rules in the Help Centre. Report problematic content through its reporting option. Use Contact for additional support. Do not include passwords, payment keys or identity documents in your message.",
+        "titleEn": "Where can I find help and report content?"
+      }
+    ]
+  },
+  "business": {
+    "title": "Konnektora işletme rehberi",
+    "seconds": 22.5,
+    "scenes": [
+      {
+        "shot": "business",
+        "title": "Topluluğunu Konnektora'ya taşı",
+        "summary": "Etkinliklerini, mekânını ve iletişimini birlikte yönet.",
+        "tr": "Konnektora, işletmelerin ve organizatörlerin topluluklarıyla bağlantı kurmasına yardımcı olur. Etkinliklerinizi ve mekânınızı tanıtın, katılımcıların ihtiyaç duyduğu bilgileri düzenleyin ve ortak ilgi alanları üzerinden görünür olun. Kurumsal araçları kullanmadan önce hesap bilgilerinizin ve yönetici yetkilerinizin doğru olduğundan emin olun.",
+        "en": "Konnektora helps businesses and organisers connect with their communities. Present your events and places, maintain information participants need and become discoverable through shared interests. Review business account details and manager permissions before using management tools.",
+        "titleEn": "Bring your community to Konnektora"
+      },
+      {
+        "shot": "places",
+        "title": "Etkinlik ve mekân bilgilerini hazırla",
+        "summary": "Konum, tarih, açıklama ve katılım koşullarını netleştir.",
+        "tr": "İyi bir etkinlik sayfası, katılımcının karar vermesini kolaylaştırır. Açıklamayı, tarihi, saat dilimini, konumu ve katılım koşullarını açıkça yazın. Etkinliğin herkese açık, onay gerektiren veya davetle katılım sağlanan yapısını ihtiyacınıza göre seçin. Değişiklikler olduğunda bilgileri güncel tutun.",
+        "en": "Clear event information helps participants decide. State the description, date, time zone, location and attendance conditions. Choose public, approval-based or invitation-only attendance according to your needs. Keep details up to date when plans change.",
+        "titleEn": "Prepare your event and place details"
+      },
+      {
+        "shot": "tags",
+        "title": "Doğru ilgi alanlarıyla görünür ol",
+        "summary": "Etiketleri ve topluluk paylaşımlarını anlamlı kullan.",
+        "tr": "Etkinliğiniz ve mekânınızla ilişkili ilgi alanlarını seçmek, ilgili toplulukların sizi keşfetmesine yardımcı olur. İçeriğinizle gerçekten bağlantılı başlıkları kullanın. Topluluk paylaşımlarında yararlı bilgiler verin ve katılımcılara saygılı bir iletişim kurun. Davet ve katılım kayıtlarını yönetirken yalnızca yetkiniz kapsamındaki bilgilere erişin.",
+        "en": "Relevant interests help communities discover your event or place. Choose topics that match the experience you offer. Share useful information and communicate respectfully. Access invitation and participation information only within your authorised scope.",
+        "titleEn": "Be discoverable through relevant interests"
+      },
+      {
+        "shot": "help",
+        "title": "Ekibinle birlikte takip et",
+        "summary": "Davet, katılım, giriş ve istatistik araçlarını incele.",
+        "tr": "Yetkili ekipler davet ve katılım kayıtlarını, uygun hesaplarda misafir listelerini ve giriş araçlarını kullanabilir. QR veya NFC seçeneklerinin kullanılabilirliği cihaz ve tarayıcı desteğine bağlıdır. İstatistikleri değerlendirirken ilgili etkinliği veya mekânı esas alın. Nasıl ilerleyeceğinizden emin değilseniz yardım merkezini ve destek kanalını kullanın.",
+        "en": "Authorised teams can use invitations, participation records and, on eligible accounts, guest lists and entry tools. QR or NFC availability depends on device and browser support. Review analytics in the context of the relevant event or place. Use the Help Centre and support if you need guidance.",
+        "titleEn": "Work together with your team"
+      }
+    ]
+  }
+}

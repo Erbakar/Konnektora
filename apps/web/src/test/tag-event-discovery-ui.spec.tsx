@@ -1,12 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { LanguageProvider } from "../lib/i18n";
 import { TagsPage } from "../pages/TagsPage";
 
 const apiMocks = vi.hoisted(() => ({
   getUserSession: vi.fn(),
+  updateProfileAffinities: vi.fn().mockResolvedValue([]),
+  listFollowing: vi.fn().mockResolvedValue([]),
+  getContentNotification: vi.fn().mockResolvedValue({enabled:false}),
+  getProfileAffinities: vi.fn().mockResolvedValue([]),
   listEvents: vi.fn(),
   listTagComments: vi.fn(),
   listTagRelatedUsers: vi.fn(),
@@ -19,6 +23,8 @@ vi.mock("../lib/api", async () => {
   return { ...actual, ...apiMocks };
 });
 
+vi.mock("../lib/useGuestListEntitlement", () => ({useGuestListEntitlement: () => ({canUseGuestLists:false})}));
+afterEach(cleanup);
 beforeEach(() => {
   apiMocks.getUserSession.mockReturnValue(null);
   apiMocks.listTags.mockResolvedValue([{
@@ -55,4 +61,20 @@ describe("ilgi alanı etkinlik bağlantısı", () => {
     expect(notice.compareDocumentPosition(comments) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(container.querySelector(".tag-related-events-notice")).toBe(notice);
   });
+});
+
+it("13/10 #6 shows an icon on the tag-post unfollow action", async () => {
+ apiMocks.getUserSession.mockReturnValue({id:"viewer",name:"Viewer"}); apiMocks.listFollowing.mockResolvedValue([{id:"author"}]); apiMocks.listTagComments.mockResolvedValue([{id:"post",body:"Test post",createdAt:new Date().toISOString(),likeCount:0,author:{id:"author",name:"Ada",username:"ada"}}]);
+ render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><LanguageProvider><MemoryRouter initialEntries={["/tags/teknoloji"]}><Routes><Route path="/tags/:slug" element={<TagsPage/>}/></Routes></MemoryRouter></LanguageProvider></QueryClientProvider>);
+ const menu=await screen.findByLabelText("Gönderi işlemleri"); fireEvent.click(menu);
+ expect((await screen.findAllByRole("button",{name:"Takibi bırak"})).find(button => !button.classList.contains("follow-star"))!.querySelector("svg")).not.toBeNull();
+});
+
+it("23/10 #25 removes an already selected sentiment while retaining other interests", async () => {
+ apiMocks.getUserSession.mockReturnValue({id:"viewer",name:"Viewer"});
+ apiMocks.getProfileAffinities.mockResolvedValue([{tag:{id:"technology-tag"},sentiment:"ok"},{tag:{id:"other"},sentiment:"like"}]);
+ render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><LanguageProvider><MemoryRouter initialEntries={["/tags/teknoloji"]}><Routes><Route path="/tags/:slug" element={<TagsPage/>}/></Routes></MemoryRouter></LanguageProvider></QueryClientProvider>);
+ const button=await screen.findByRole("button",{name:"Kararsızım"});
+ fireEvent.click(button);
+ await vi.waitFor(()=>expect(apiMocks.updateProfileAffinities).toHaveBeenCalledWith([{tagId:"other",sentiment:"like"}]));
 });

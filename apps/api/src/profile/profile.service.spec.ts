@@ -1,3 +1,4 @@
+jest.mock("../notifications/activity-events", () => ({ notifyEntityCreated: jest.fn().mockResolvedValue(undefined), notifyEntityChanges: jest.fn().mockResolvedValue(undefined), notifyUserActivity: jest.fn().mockResolvedValue(undefined), notifyEventAvailability: jest.fn().mockResolvedValue(undefined),  }));
 import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
 import { ProfileService } from "./profile.service";
 
@@ -15,7 +16,7 @@ describe("ProfileService", () => {
     district: null,
     address: null,
     gender: "female",
-    birthDate: null,
+    birthDate: new Date("1990-01-01T00:00:00Z"),
     website: null,
     companyName: null,
     tradeName: null,
@@ -59,6 +60,7 @@ describe("ProfileService", () => {
         findUnique: jest.fn(),
         upsert: jest.fn()
       },
+      notification: { findMany: jest.fn().mockResolvedValue([]) },
       notificationPreference: {
         findMany: jest.fn(),
         upsert: jest.fn().mockResolvedValue({})
@@ -83,6 +85,19 @@ describe("ProfileService", () => {
     const authService = { sendAccountActivatedEmailOnce: jest.fn().mockResolvedValue(true) };
     return { service: new ProfileService(prisma as never, notifications as never, authService as never), prisma, notifications, authService };
   };
+
+  it("links known notification targets without revealing personal names", async () => {
+    const { service, prisma } = createService();
+    prisma.notification.findMany.mockResolvedValue([{ id: "n1", targetType: "user", targetId: "u2" }, { id: "n2", targetType: "event", targetId: "e2" }]);
+    prisma.user.findMany.mockResolvedValue([{ id: "u2", username: "ada" }]);
+    prisma.event.findMany.mockResolvedValue([{ id: "e2", title: "Festival", slug: "festival" }]);
+    expect(await service.getNotifications("user-1")).toEqual([
+      expect.objectContaining({ targetLabel: "@ada", targetUrl: "/users/id/u2" }),
+      expect.objectContaining({ targetLabel: "Festival", targetUrl: "/events/festival" }),
+    ]);
+    expect(prisma.notification.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: "user-1", type: { notIn: ["private_message", "profile_tag_suggestion"] } } }));
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ select: { id: true, username: true } }));
+  });
 
   it("creates a pending profile tag suggestion and notifies the profile owner", async () => {
     const { service, prisma, notifications } = createService();
@@ -114,12 +129,24 @@ describe("ProfileService", () => {
   });
 
   it("accepts a suggestion and adds it to the target profile", async () => {
-    const { service, prisma } = createService();
-    prisma.profileTagSuggestion.findUnique.mockResolvedValue({ id: "suggestion-1", targetUserId: "user-2", suggestedById: "user-1", tagId: "tag-1", sentiment: "ok", status: "pending", tag: { id: "tag-1", name: "Caz" } });
+    const { service, prisma, notifications } = createService();
+    prisma.profileTagSuggestion.findUnique.mockResolvedValue({ id: "suggestion-1", targetUserId: "user-2", suggestedById: "user-1", tagId: "tag-1", sentiment: "ok", status: "pending", tag: { id: "tag-1", name: "Caz", slug: "caz" }, targetUser: { username: "ada" } });
     prisma.userInterestTag.findUnique.mockResolvedValue(null);
 
     await expect(service.decideTagSuggestion("user-2", "suggestion-1", "accept")).resolves.toEqual({ ok: true, status: "accepted" });
     expect(prisma.userInterestTag.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ userId: "user-2", tagId: "tag-1", sentiment: "ok" }) }));
+    const notice = notifications.dispatch.mock.calls[0][0];
+    expect(notice.body).toContain("@ada");
+    expect(notice.body).toContain("“”Caz|caz“”");
+  });
+
+  it("enriches existing suggestion result notices with tag and profile links", async () => {
+    const { service, prisma } = createService();
+    prisma.notification.findMany.mockResolvedValue([{id:"old-result",type:"profile_tag_suggestion_result",body:"Caz etiketi için gönderdiğiniz öneri kabul edildi.",targetType:"user",targetId:"user-2",createdAt:new Date(),context:null}]);
+    prisma.user.findMany.mockResolvedValue([{id:"user-2",username:"ada"}]);
+    prisma.tag.findMany.mockResolvedValue([{name:"Caz",slug:"caz"}]);
+    const result = await service.getNotifications("user-1");
+    expect(result[0].body).toBe("@ada profiline “”Caz|caz“” etiketi için gönderdiğiniz öneri kabul edildi.");
   });
 
   it("returns the authenticated user's profile", async () => {
@@ -127,6 +154,20 @@ describe("ProfileService", () => {
     prisma.user.findUnique.mockResolvedValue(currentProfile);
 
     await expect(service.getProfile("user-1")).resolves.toEqual(currentProfile);
+  });
+
+  it("preserves the username when an unrelated profile edit omits it", async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue(currentProfile);
+    prisma.user.findFirst.mockResolvedValue(null);
+    await service.updateProfile("user-1", { name: "Ada Byron" });
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ username: "ada" }) }));
+  });
+  it("rejects an explicitly empty username", async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue(currentProfile);
+    await expect(service.updateProfile("user-1", { name: "Ada", username: "  " })).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   it("rejects a username owned by another user", async () => {
@@ -159,6 +200,14 @@ describe("ProfileService", () => {
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
+  it.each(["", "2015-01-01T00:00:00Z", "invalid"])("rejects missing or underage date %s", async birthDate => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue(currentProfile);
+    prisma.user.findFirst.mockResolvedValue(null);
+    await expect(service.updateProfile("user-1", { name: "Ada", birthDate })).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
   it("normalizes optional profile fields before updating", async () => {
     const { service, prisma } = createService();
     prisma.user.findUnique.mockResolvedValue(currentProfile);
@@ -186,7 +235,7 @@ describe("ProfileService", () => {
 
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: "user-1" },
-      data: { accountType: "corporate", companyName: "Konnektora Events", tradeName: "Konnektora Teknoloji Ltd.", companyType: "limited_or_corporation", businessCategory: "event_organizer", country: "Türkiye", city: "İstanbul", district: "Beyoğlu", address: "İstiklal Caddesi 10" },
+      data: { region: null, postalCode: null, accountType: "corporate", companyName: "Konnektora Events", tradeName: "Konnektora Teknoloji Ltd.", companyType: "limited_or_corporation", businessCategory: "event_organizer", country: "Türkiye", city: "İstanbul", district: "Beyoğlu", address: "İstiklal Caddesi 10" },
     });
   });
 

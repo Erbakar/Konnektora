@@ -1,12 +1,17 @@
+import { FollowStar, MemberCompatibility, MemberSignalsProvider } from "../components/MemberSignals";
+import { getMembership } from "../lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BadgeCheck,
+  Ban,
+  UserMinus,
+  UserPlus,
   CheckCircle2,
-  Grid2X2,
-  List,
   Mail,
   MapPin,
   MoreVertical,
+  ShieldCheck,
+  BriefcaseBusiness,
   Search,
   Users,
 } from "lucide-react";
@@ -58,7 +63,10 @@ export function RelatedUsersPage({
     const allowed = new Set(["all", "attendees", "pending", "invited", "following", "organizers", "checked-in", "declined", "banned"]);
     return allowed.has(requestedFilter ?? "") ? requestedFilter as "all" | "attendees" | "pending" | "invited" | "following" | "organizers" | "checked-in" | "declined" | "banned" : kind === "place" ? "attendees" : "all";
   });
-  const [view, setView] = useState<"cards" | "list">("cards");
+  const view = "cards";
+  const membership = useQuery({ queryKey: ["membership", session?.id], queryFn: getMembership, enabled: Boolean(session) });
+  const advancedFilters = membership.data?.capabilities?.advanced ?? false;
+  const [country, setCountry] = useState("");
   const [gender, setGender] = useState("");
   const [sentiment, setSentiment] = useState("");
   const [ageRange, setAgeRange] = useState("");
@@ -74,9 +82,9 @@ export function RelatedUsersPage({
           canManage: Boolean(
             session &&
             (event.createdById === session.id ||
-              (event.viewerParticipation?.status === "accepted" &&
+              (["accepted", "attended", "not_attending"].includes(event.viewerParticipation?.status ?? "") &&
                 ["manager", "organizer"].includes(
-                  event.viewerParticipation.role,
+                  event.viewerParticipation!.role,
                 )) ||
               ["admin", "super_admin", "curator"].includes(session.role)),
           ),
@@ -149,17 +157,19 @@ export function RelatedUsersPage({
             /creator|owner|organizer|manager|sahip|yönetici/.test(relation)) ||
           (filter === "declined" && user.status === "declined") ||
           (filter === "banned" && user.status === "banned");
-        const matchesGender = !gender || user.gender === gender;
+        const matchesGender = !advancedFilters || !gender || user.gender === gender;
         const matchesSentiment = !sentiment || user.sentiment === sentiment;
         const [minimumAge, maximumAge] = ageRange
           ? ageRange.split("-").map(Number)
           : [];
         const matchesAge =
-          !ageRange ||
+          !advancedFilters || !ageRange ||
           (age != null &&
             age >= minimumAge! &&
             (Number.isNaN(maximumAge) || age <= maximumAge!));
         return (
+          (!country || user.country === country) &&
+          (filter !== "checked-in" || target.data?.canManage) &&
           matchesQuery &&
           matchesFilter &&
           matchesGender &&
@@ -167,7 +177,7 @@ export function RelatedUsersPage({
           matchesAge
         );
       }),
-    [ageRange, filter, followingIds, gender, query, sentiment, users.data],
+    [advancedFilters, ageRange, country, filter, followingIds, gender, query, sentiment, users.data, target.data?.canManage],
   );
   const toggleFollow = useMutation({
     mutationFn: (id: string) =>
@@ -225,6 +235,7 @@ export function RelatedUsersPage({
                 : t("Katılımcıları, davetlileri ve etkinlik ekibini keşfet.", "Discover attendees, guests and the event team.")}
           </p>
         </div>
+        {session && kind !== "tag" ? <Link className="primary-action related-invite-link" to={`${back}/invites`}><UserPlus size={18}/>{kind === "event" ? t("Etkinliğe davet et", "Invite to event") : t("Mekâna davet et", "Invite to place")}</Link> : null}
         <span>
           <Users size={18} />
           {users.data?.length ?? 0} {t("kişi", "people")}
@@ -245,33 +256,6 @@ export function RelatedUsersPage({
         <details className="related-user-filter-disclosure">
           <summary>{t("Filtrele", "Filter")}</summary>
           <div className="related-user-advanced-filters">
-            <label>
-              {t("Cinsiyet", "Gender")}
-              <select
-                value={gender}
-                onChange={(event) => setGender(event.target.value)}
-              >
-                <option value="">{t("Tümü", "All")}</option>
-                <option value="female">{t("Kadın", "Woman")}</option>
-                <option value="male">{t("Erkek", "Man")}</option>
-                <option value="unknown">{t("Belirtilmemiş", "Not specified")}</option>
-              </select>
-            </label>
-            <label>
-              {t("Yaş aralığı", "Age range")}
-              <select
-                value={ageRange}
-                onChange={(event) => setAgeRange(event.target.value)}
-              >
-                <option value="">{t("Tüm yaşlar", "All ages")}</option>
-                <option value="18-24">18–24</option>
-                <option value="25-34">25–34</option>
-                <option value="35-44">35–44</option>
-                <option value="45-54">45–54</option>
-                <option value="55-64">55–64</option>
-                <option value="65-Infinity">65+</option>
-              </select>
-            </label>
             {kind === "tag" ? (
               <label>
                 {t("Duygu", "Sentiment")}
@@ -286,9 +270,42 @@ export function RelatedUsersPage({
                 </select>
               </label>
             ) : null}
+            <label>{t("Ülke", "Country")}<select value={country} onChange={event => setCountry(event.target.value)}><option value="">{t("Tüm ülkeler", "All countries")}</option>{[...new Set((users.data ?? []).map(user => user.country).filter((value): value is string => Boolean(value)))].sort().map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+            <label>
+              {t("Yaş aralığı", "Age range")}
+              <select
+                disabled={!advancedFilters}
+                value={ageRange}
+                onChange={(event) => setAgeRange(event.target.value)}
+              >
+                <option value="">{t("Tüm yaşlar", "All ages")}</option>
+                <option value="18-24">18–24</option>
+                <option value="25-34">25–34</option>
+                <option value="35-44">35–44</option>
+                <option value="45-54">45–54</option>
+                <option value="55-64">55–64</option>
+                <option value="65-Infinity">65+</option>
+              </select>
+            </label>
+
+            <label>
+              {t("Cinsiyet", "Gender")}
+              <select
+                disabled={!advancedFilters}
+                value={gender}
+                onChange={(event) => setGender(event.target.value)}
+              >
+                <option value="">{t("Tümü", "All")}</option>
+                <option value="female">{t("Kadın", "Woman")}</option>
+                <option value="male">{t("Erkek", "Man")}</option>
+                <option value="unknown">{t("Belirtilmemiş", "Not specified")}</option>
+              </select>
+            </label>
+            {!advancedFilters && <p><Link to="/store">{t("Yaş ve cinsiyet filtreleri için paketinizi yükseltin.", "Upgrade your plan for age and gender filters.")}</Link></p>}
             <button
               onClick={() => {
                 setQuery("");
+                setCountry("");
                 setGender("");
                 setSentiment("");
                 setAgeRange("");
@@ -393,7 +410,7 @@ export function RelatedUsersPage({
               {t("Yöneticiler", "Organisers")}
             </button>
           ) : null}
-          {kind === "event" ? (
+          {kind === "event" && target.data?.canManage ? (
             <button
               className={filter === "checked-in" ? "active" : ""}
               onClick={() => setFilter("checked-in")}
@@ -418,16 +435,9 @@ export function RelatedUsersPage({
             </button>
           ) : null}
         </div>
-        <button
-          className="secondary-action"
-          aria-label={view === "cards" ? t("Liste görünümü", "List view") : t("Kart görünümü", "Card view")}
-          onClick={() =>
-            setView((value) => (value === "cards" ? "list" : "cards"))
-          }
-        >
-          {view === "cards" ? <List size={17} /> : <Grid2X2 size={17} />}
-        </button>
+
       </section>
+      <MemberSignalsProvider ids={visibleUsers.map(user=>user.id)}>
       <section
         className={
           view === "cards"
@@ -435,7 +445,7 @@ export function RelatedUsersPage({
             : "management-list related-user-list"
         }
       >
-        {visibleUsers.map((user) => (
+        {visibleUsers.filter((user) => !user.isProvisional).map((user) => (
           <article className="related-user-card" key={user.id}>
             <UserIdentityLink
               avatarClassName="post-avatar"
@@ -443,7 +453,7 @@ export function RelatedUsersPage({
               user={user}
             />
             <div>
-              <strong>
+              <strong className="member-name-line"><FollowStar id={user.id}/>
                 <Link to={user.username ? `/users/${encodeURIComponent(user.username)}` : `/users/id/${encodeURIComponent(user.id)}`}>
                   {user.username ? `@${user.username}` : user.name}
                 </Link>
@@ -456,14 +466,12 @@ export function RelatedUsersPage({
                   ? user.sentiment
                     ? `${user.sentiment === "like" ? t("Beğeniyorum", "Likes it") : user.sentiment === "dislike" ? t("Beğenmiyorum", "Dislikes it") : t("Nötrüm", "Feels neutral")} ${t("dedi", "")}${/paylaşım|post|yorum/i.test(user.relation) ? t(" · paylaşım yaptı", " · posted") : ""}`
                     : t("Paylaşım yaptı", "Posted")
-                  : localizeRelation(user.relation, language)}
+                  : <>{user.relation === "creator" ? <ShieldCheck size={15}/> : user.relation === "manager" ? <BriefcaseBusiness size={15}/> : null}{localizeRelation(user.relation, language, kind)}</>}
               </span>
               {user.birthDate ? (
                 <small>{ageFrom(user.birthDate)} {t("yaşında", "years old")}</small>
               ) : null}
-              {session?.id !== user.id && user.commonTagCount != null ? (
-                <small>{user.commonTagCount} {t("ortak ilgi alanı", "shared interests")}</small>
-              ) : null}
+              <MemberCompatibility id={user.id} commonTagCount={user.commonTagCount}/>
               {user.city || user.country ? (
                 <small>
                   <MapPin size={13} />
@@ -496,7 +504,7 @@ export function RelatedUsersPage({
                     <Link to={`/messages?peer=${user.id}`}>
                       <Mail size={15} /> {t("Mesaj gönder", "Send message")}
                     </Link>
-                    {kind === "event" && target.data?.canManage ? (
+                    {kind === "event" && target.data?.canManage && user.relation !== "creator" ? (
                       <>
                         {target.data.isCreator ? (
                           <button
@@ -514,9 +522,9 @@ export function RelatedUsersPage({
                             }
                             type="button"
                           >
-                            {user.relation === "manager"
-                              ? t("Etkinlik sahipliğinden çıkar", "Remove event ownership")
-                              : t("Etkinlik sahibi yap", "Make event owner")}
+                            <ShieldCheck size={15}/>{user.relation === "manager"
+                              ? t("Etkinlik yöneticiliğinden çıkar", "Remove event manager role")
+                              : t("Etkinlik yöneticisi yap", "Make event manager")}
                           </button>
                         ) : null}
                         <button
@@ -534,7 +542,7 @@ export function RelatedUsersPage({
                           }
                           type="button"
                         >
-                          {user.relation === "organizer"
+                          <BriefcaseBusiness size={15}/>{user.relation === "organizer"
                             ? t("Organizatörlükten çıkar", "Remove organiser role")
                             : t("Organizatör yap", "Make organiser")}
                         </button>
@@ -553,13 +561,13 @@ export function RelatedUsersPage({
                           }
                           type="button"
                         >
-                          {user.status === "banned"
+                          {user.status === "banned" ? <UserMinus size={15}/> : <Ban size={15}/>} {user.status === "banned"
                             ? t("Etkinliğe affet", "Unban from event")
                             : t("Etkinliğe yasakla", "Ban from event")}
                         </button>
                       </>
                     ) : null}
-                    {kind === "place" && target.data?.canManage ? (
+                    {kind === "place" && target.data?.canManage && user.relation !== "creator" ? (
                       <>
                         {target.data.isCreator ? (
                           <button
@@ -577,9 +585,9 @@ export function RelatedUsersPage({
                             }
                             type="button"
                           >
-                            {user.relation === "manager"
-                              ? t("Mekân sahipliğinden çıkar", "Remove place ownership")
-                              : t("Mekân sahibi yap", "Make place owner")}
+                            <ShieldCheck size={15}/>{user.relation === "manager"
+                              ? t("Mekân yöneticiliğinden çıkar", "Remove place manager role")
+                              : t("Mekân yöneticisi yap", "Make place manager")}
                           </button>
                         ) : null}
                         <button
@@ -596,7 +604,7 @@ export function RelatedUsersPage({
                           }
                           type="button"
                         >
-                          {/organizer/.test(user.relation)
+                          <BriefcaseBusiness size={15}/>{/organizer/.test(user.relation)
                             ? t("Organizatörlükten çıkar", "Remove organiser role")
                             : t("Organizatör yap", "Make organiser")}
                         </button>
@@ -615,7 +623,7 @@ export function RelatedUsersPage({
                           }
                           type="button"
                         >
-                          {user.status === "banned"
+                          {user.status === "banned" ? <UserMinus size={15}/> : <Ban size={15}/>} {user.status === "banned"
                             ? t("Mekâna affet", "Unban from place")
                             : t("Mekâna yasakla", "Ban from place")}
                         </button>
@@ -627,12 +635,13 @@ export function RelatedUsersPage({
             </div>
           </article>
         ))}
-      </section>
+        {visibleUsers.some((user) => user.isProvisional) ? <article className="related-user-card"><Users aria-hidden="true"/><strong>{t("Gösterilemeyen", "Hidden")} +{visibleUsers.filter((user) => user.isProvisional).length} {t("katılımcı", "participants")}</strong><p>{t("Bu kişiler henüz üyeliklerini tamamlamadı.", "These people have not completed registration yet.")}</p></article> : null}
+      </section></MemberSignalsProvider>
       {!users.isLoading && !visibleUsers.length ? (
         <section className="empty-state">
           <Users size={38} />
           <h2>{t("Henüz ilgili kullanıcı yok", "No related people yet")}</h2>
-          <p>{t("Onaylanan katılımcılar ve üyeler burada görünecek.", "Approved attendees and members will appear here.")}</p>
+          <p>{relatedUsersEmptyText(kind, filter, t)}</p>
         </section>
       ) : null}
       {users.isError ? (
@@ -654,20 +663,39 @@ function ageFrom(value: string) {
   return Math.max(0, age);
 }
 
-function localizeRelation(relation: string, language: "tr" | "en") {
+function localizeRelation(relation: string, language: "tr" | "en", kind?: "event" | "place" | "tag") {
   const labelsTr: Record<string, string> = {
     member: "Üye",
     organizer: "Organizatör",
-    manager: "Sahip",
-    owner: "Sahip",
-    creator: "Kurucu",
+    manager: "Yönetici",
+    owner: kind === "event" ? "Etkinlik kurucusu" : "Mekân kurucusu",
+    creator: kind === "event" ? "Etkinlik kurucusu" : "Mekân kurucusu",
     attendee: "Katılımcı",
     invited: "Davetli",
     follower: "Takipçi",
   };
   const labelsEn: Record<string, string> = {
-    member: "Member", organizer: "Organiser", manager: "Owner", owner: "Owner", creator: "Creator", attendee: "Attendee", invited: "Invited", follower: "Follower",
+    member: "Member", organizer: "Organiser", manager: "Manager", owner: "Owner", creator: "Owner", attendee: "Attendee", invited: "Invited", follower: "Follower",
   };
   const labels = language === "tr" ? labelsTr : labelsEn;
   return labels[relation.trim().toLocaleLowerCase("en-US")] ?? relation;
+}
+
+/** Sekmeye özel boş durum metinleri (07/11 #10, #11, #26). */
+function relatedUsersEmptyText(kind: "event" | "place" | "tag", filter: string, t: (tr: string, en: string) => string) {
+  if (kind === "event") {
+    if (filter === "pending") return t("Katılım tipi “onay gerekli” olan etkinliklerde kullanıcıların katılım başvuruları burada yöneticilerin onayına sunulur.", "For events with “approval required” access, participation requests are presented here for managers to approve.");
+    if (filter === "checked-in") return t("Etkinliğe check-in olanlar burada yöneticilere gösterilir.", "People who checked in to the event are shown to managers here.");
+    if (filter === "declined") return t("Etkinliğe katılım başvurusu reddedilenler burada yöneticilere gösterilir.", "People whose participation request was declined are shown to managers here.");
+    if (filter === "banned") return t("Etkinliğe katılımı yasaklananlar burada yöneticilere gösterilir.", "People banned from the event are shown to managers here.");
+    if (filter === "following") return t("Takip ettiğiniz kullanıcılardan etkinliğe katılanlar burada gösterilecek.", "People you follow who join the event will appear here.");
+  }
+  if (kind === "place") {
+    if (filter === "pending") return t("Katılım tipi “onay gerekli” olan mekânlarda kullanıcıların katılım başvuruları burada yöneticilerin onayına sunulur.", "For places with “approval required” access, membership requests are presented here for managers to approve.");
+    if (filter === "declined") return t("Mekâna üyelik başvurusu reddedilenler burada yöneticilere gösterilir.", "People whose membership request was declined are shown to managers here.");
+    if (filter === "banned") return t("Mekâna katılımı yasaklananlar burada yöneticilere gösterilir.", "People banned from the place are shown to managers here.");
+    if (filter === "following") return t("Takip ettiğiniz kullanıcılardan mekâna üye olanlar burada gösterilecek.", "People you follow who become members of the place will appear here.");
+  }
+  if (kind === "tag" && filter === "following") return t("Takip ettiğiniz kullanıcılardan ilgi alanını profiline ekleyenler burada gösterilecek.", "People you follow who add this interest to their profile will appear here.");
+  return t("Onaylanan katılımcılar ve üyeler burada görünecek.", "Approved attendees and members will appear here.");
 }

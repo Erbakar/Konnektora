@@ -1,3 +1,7 @@
+import { notifyTagModeration } from "../notifications/moderation-activity";
+import { notifyUserActivity, notifyComment } from "../notifications/activity-events";
+import { privacyContext } from "../common/privacy-context";
+import { publicName } from "../common/public-name";
 import {
   ConflictException,
   ForbiddenException,
@@ -7,13 +11,14 @@ import {
 import { Prisma, TagStatus, User } from "@prisma/client";
 import { toSlug } from "../common/slug";
 import { PrismaService } from "../prisma/prisma.service";
-import { canUseAdvancedAnalytics } from "../common/analytics-access";
+import { consumeQuota, paidCorporateEvent } from "../common/usage-quota";
 import { CreateTagDto } from "./tags.dto";
 
 const tagAuthorSelect = {
   id: true,
   name: true,
   username: true,
+  accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true } },
   uploadedMedia: {
     where: { contentType: "user", status: "active", isProfilePicture: true },
     take: 1,
@@ -26,13 +31,14 @@ function tagAuthor(
     id: string;
     name: string;
     username: string | null;
+    accountType?: string; companyName?: string | null; privacySettings?: { profileNameAudience?: string } | null;
     uploadedMedia?: Array<{ url: string }>;
   } | null,
 ) {
   if (!author) return null;
   return {
     id: author.id,
-    name: author.name,
+    name: publicName(author),
     username: author.username,
     avatarUrl: author.uploadedMedia?.[0]?.url ?? null,
   };
@@ -170,12 +176,13 @@ export class TagsService {
       birthDate: true,
       profileVerifiedAt: true,
       uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
-      privacySettings: { select: { demographicsAudience: true, locationAudience: true } },
+      accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true, demographicsAudience: true, locationAudience: true } },
       interestTags: { select: { tagId: true } },
     } as const;
     const [interests, posts, viewerInterests] = await Promise.all([
       this.prisma.userInterestTag.findMany({
         where: { tagId, user: { status: "active" } },
+        orderBy: { createdAt: "desc" },
         take: 100,
         include: { user: { select: userSelect } },
       }),
@@ -195,12 +202,12 @@ export class TagsService {
     const viewerTagIds = new Set(viewerInterests.map((item) => item.tagId));
     const present = (member: (typeof interests)[number]["user"]) => ({
       id: member.id,
-      name: member.name,
+      name: publicName(member),
       username: member.username,
       city: viewerId === member.id ? member.city : null,
       country: viewerId === member.id ? member.country : null,
-      gender: viewerId === member.id || member.privacySettings?.demographicsAudience === "everybody" ? member.gender : null,
-      birthDate: viewerId === member.id || member.privacySettings?.demographicsAudience === "everybody" ? member.birthDate : null,
+      gender: privacyContext.getStore()?.advancedFilters ? (viewerId === member.id || member.privacySettings?.demographicsAudience === "everybody" ? member.gender : null) : null,
+      birthDate: privacyContext.getStore()?.advancedFilters ? (viewerId === member.id || member.privacySettings?.demographicsAudience === "everybody" ? member.birthDate : null) : null,
       profileVerifiedAt: member.profileVerifiedAt,
       avatarUrl: member.uploadedMedia?.[0]?.url ?? null,
       commonTagCount: (member.interestTags ?? []).filter((item) => viewerTagIds.has(item.tagId)).length,
@@ -246,8 +253,12 @@ export class TagsService {
   }
 
   async getPublicStats(tagId: string, user: User) {
-    if (!canUseAdvancedAnalytics(user)) throw new ForbiddenException("Gelişmiş istatistikler admin, küratör ve uygun paket sahipleri tarafından kullanılabilir.");
     await this.ensureTagVisible(tagId, user.id);
+    await this.prisma.$transaction(async (tx) => {
+      const currentUser = await tx.user.findUniqueOrThrow({ where: { id: user.id } });
+      const managed = currentUser.accountType === "corporate" ? await tx.event.findMany({ where: { tags: { some: { tagId } }, OR: [{ createdById: user.id }, { participants: { some: { userId: user.id, role: { in: ["manager", "organizer"] }, status: { in: ["accepted", "attended"] } } } }] }, select: { price: true, ticketTypes: true } }) : [];
+      if (!managed.some(event => paidCorporateEvent(currentUser, event))) await consumeQuota(tx, currentUser, "tag", tagId);
+    });
     const currentTag = await this.prisma.tag.findUnique({ where: { id: tagId }, select: { usageCount: true } });
     const now = new Date();
     const day = 86_400_000;
@@ -411,6 +422,7 @@ export class TagsService {
       dislikeLast7d: sentimentTrend("dislike", 7),
       dislikeLast30d: sentimentTrend("dislike", 30),
       dislikeLast12m: sentimentTrend("dislike", 365),
+      ...tagPrefix("viewsDay", tagDistribution(viewDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 31 * day).map((item) => item.createdAt.toISOString().slice(0, 10)), 31)),
       viewsLast24h,
       viewsLast7d,
       viewsLast30d,
@@ -543,6 +555,7 @@ export class TagsService {
       },
       include: { author: { select: tagAuthorSelect } },
     });
+    await notifyComment(this.prisma, comment);
     return {
       id: comment.id,
       tagId,
@@ -732,7 +745,7 @@ export class TagsService {
 
     return this.prisma.tag.create({
       data: {
-        name: input.name,
+        name: input.name.trim().toLocaleLowerCase("tr-TR"),
         slug,
         description: input.description ?? null,
         category: input.categoryId
@@ -752,9 +765,9 @@ export class TagsService {
       return existing;
     }
 
-    return this.prisma.tag.create({
+    const tag = await this.prisma.tag.create({
       data: {
-        name: input.name.trim(),
+        name: input.name.trim().toLocaleLowerCase("tr-TR"),
         slug,
         description: input.description?.trim() || null,
         category: input.categoryId
@@ -765,6 +778,8 @@ export class TagsService {
         updatedBy: { connect: { id: userId } },
       },
     });
+    await notifyUserActivity(this.prisma, userId, "tag", tag.id, "created", `created:tag:${tag.id}`);
+    return tag;
   }
 
   private async ensureTagVisible(tagId: string, userId?: string) {
@@ -803,7 +818,7 @@ export class TagsService {
     if (input.name && input.name !== existing.name) {
       const slug = toSlug(input.name);
       await this.ensureSlugAvailable(slug, id);
-      data.name = input.name;
+      data.name = input.name.trim().toLocaleLowerCase("tr-TR");
       data.slug = slug;
     }
 
@@ -813,26 +828,26 @@ export class TagsService {
         : { disconnect: true };
     }
 
-    return this.prisma.tag.update({ where: { id }, data });
+    const updated = await this.prisma.tag.update({ where: { id }, data });
+    if (updated.name !== existing.name) await notifyTagModeration(this.prisma, existing, updated);
+    return updated;
   }
 
-  archiveTag(id: string, userId?: string) {
-    return this.prisma.tag.update({
-      where: { id },
-      data: {
-        status: TagStatus.archived,
-        updatedBy: userId ? { connect: { id: userId } } : undefined,
-      },
-    });
+  async archiveTag(id: string, userId?: string) {
+    return this.removeTag(id, TagStatus.archived, userId);
   }
 
-  banTag(id: string, userId?: string) {
-    return this.prisma.tag.update({
-      where: { id },
-      data: {
-        status: TagStatus.hidden,
-        updatedBy: userId ? { connect: { id: userId } } : undefined,
-      },
+  async banTag(id: string, userId?: string) {
+    return this.removeTag(id, TagStatus.hidden, userId);
+  }
+
+  private async removeTag(id: string, status: TagStatus, userId?: string) {
+    return this.prisma.$transaction(async tx => {
+      const before=await tx.tag.findUnique({where:{id}});
+      if(!before) throw new NotFoundException("Tag bulunamadı.");
+      const after=await tx.tag.update({where:{id},data:{status,updatedBy:userId?{connect:{id:userId}}:undefined}});
+      if(before.status!==status)await notifyTagModeration(tx as any,before,after);
+      return after;
     });
   }
 
@@ -878,6 +893,8 @@ export class TagsService {
         });
       }
 
+      await notifyTagModeration(tx as any,sourceTag,targetTag);
+      await tx.contentComment.updateMany({where:{targetType:"tag",targetId:sourceTagId},data:{targetId:targetTagId}});
       await tx.eventTag.deleteMany({ where: { tagId: sourceTagId } });
       await tx.userInterestTag.deleteMany({ where: { tagId: sourceTagId } });
       await tx.contentReport.updateMany({
@@ -885,25 +902,11 @@ export class TagsService {
         data: { targetId: targetTagId },
       });
 
-      if ((tx as any).notification) {
-        await (tx as any).notification.createMany({
-          data: sourceInterestTags.map((interestTag) => ({
-            userId: interestTag.userId,
-            type: "tag_merge",
-            title: "İlgi alanı taşındı",
-            body: `${sourceTag.name} ilgi alanı ${targetTag.name} altında birleştirildi.`,
-            targetType: "tag",
-            targetId: targetTagId,
-          })),
-          skipDuplicates: true,
-        });
-      }
-
       if ((tx as any).adminActivityLog) {
         await (tx as any).adminActivityLog.create({
           data: {
             actorId: userId ?? null,
-            action: "tag_merged_with_simulated_notifications",
+            action: "tag_merged",
             targetType: "tag",
             targetId: sourceTagId,
             note: `${sourceTag.name} -> ${targetTag.name}`,
@@ -912,7 +915,7 @@ export class TagsService {
               targetTagId,
               movedEvents: sourceEventTags.length,
               movedInterests: sourceInterestTags.length,
-              notificationMode: "simulated",
+              notificationMode: "persisted",
             },
           },
         });

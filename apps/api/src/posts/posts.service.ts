@@ -1,12 +1,14 @@
+import { audienceForViewer, audienceAllows } from "../common/privacy-context";
+import { publicName } from "../common/public-name";
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PostVisibility, Prisma, ReportTargetType, User } from "@prisma/client";
-import { unlink } from "fs/promises";
+import { removeDurableUpload } from "../media-storage/durable-storage";
 import { resolve } from "path";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreatePostCommentDto, CreatePostDto, FeedQueryDto, UpdatePostDto } from "./posts.dto";
 import { NotificationsService } from "../notifications/notifications.service";
 
-const authorSelect = { id: true, name: true, username: true, profileVerifiedAt: true } as const;
+const authorSelect = { id: true, name: true, username: true, accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true } }, profileVerifiedAt: true } as const;
 
 @Injectable()
 export class PostsService {
@@ -15,14 +17,14 @@ export class PostsService {
   async feed(query: FeedQueryDto, viewer?: User) {
     const blockedIds = viewer ? await this.blockedUserIds(viewer.id) : [];
     const direct = viewer ? await this.followingIds(viewer.id) : [];
-    const network = viewer ? await this.networkIds(viewer.id, direct) : [];
+    const audience = await audienceForViewer(this.prisma, viewer?.id);
     const personalizedAuthorIds = viewer ? await this.affinityAuthorIds(viewer.id) : [];
     const visible: Prisma.PostWhereInput[] = [{ visibility: PostVisibility.everybody }];
     if (viewer) {
       visible.push(
         { authorId: viewer.id },
-        { visibility: PostVisibility.following, authorId: { in: direct } },
-        { visibility: PostVisibility.network, authorId: { in: network } }
+        { visibility: PostVisibility.following, authorId: { in: [...audience.following] } },
+        { visibility: PostVisibility.network, authorId: { in: [...audience.network] } }
       );
     }
     const where: Prisma.PostWhereInput = {
@@ -74,7 +76,7 @@ export class PostsService {
     if (!post || post.status !== "active") throw new NotFoundException("Gönderi bulunamadı.");
     if (post.authorId !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu gönderiyi silemezsiniz.");
     await this.prisma.post.update({ where: { id }, data: { status: "deleted" } });
-    await Promise.all(post.media.map((media) => unlink(resolve(process.cwd(), media.url.replace(/^\//, ""))).catch(() => undefined)));
+    await Promise.all(post.media.map((media) => removeDurableUpload(resolve(process.cwd(), media.url.replace(/^\//, ""))).catch(() => undefined)));
     return { success: true };
   }
 
@@ -96,7 +98,7 @@ export class PostsService {
     await this.ensureVisible(postId, viewer);
     const comments = await this.prisma.postComment.findMany({ where: { postId, status: "active" }, orderBy: { createdAt: "asc" }, include: { author: { select: authorSelect } } });
     const avatars = await this.avatars(comments.map((comment) => comment.authorId));
-    return comments.map((comment) => ({ ...comment, author: { ...comment.author, avatarUrl: avatars.get(comment.authorId) ?? null } }));
+    return comments.map((comment) => ({ ...comment, author: { ...comment.author, name: publicName(comment.author), privacySettings: undefined, avatarUrl: avatars.get(comment.authorId) ?? null } }));
   }
 
   async createComment(postId: string, input: CreatePostCommentDto, user: User) {
@@ -110,10 +112,10 @@ export class PostsService {
       await tx.post.update({ where: { id: postId }, data: { commentCount: { increment: 1 } } });
       return created;
     });
-    if (post.authorId !== user.id) await this.notifications.dispatch({ userId: post.authorId, topic: "comment", type: "comment", title: "Gönderine yorum geldi", body: `${user.name}: ${input.body.trim().slice(0, 120)}`, targetType: "post", targetId: postId });
+    if (post.authorId !== user.id) await this.notifications.dispatch({ userId: post.authorId, topic: "comment", type: "comment", title: "Gönderine yorum geldi", body: `${user.username ? `@${user.username}` : "Bir üye"}: ${input.body.trim().slice(0, 120)}`, targetType: "post", targetId: postId });
     await this.notifyMentions(postId, input.body, user.id);
     const avatar = await this.avatars([user.id]);
-    return { ...comment, author: { ...comment.author, avatarUrl: avatar.get(user.id) ?? null } };
+    return { ...comment, author: { ...comment.author, name: publicName(comment.author), privacySettings: undefined, avatarUrl: avatar.get(user.id) ?? null } };
   }
 
   async removeComment(postId: string, commentId: string, user: User) {
@@ -127,13 +129,8 @@ export class PostsService {
   private async ensureVisible(id: string, viewer?: User) {
     const post = await this.prisma.post.findUnique({ where: { id } });
     if (!post || post.status !== "active") throw new NotFoundException("Gönderi bulunamadı.");
-    if (post.visibility === PostVisibility.everybody || viewer?.id === post.authorId) return post;
-    if (!viewer) throw new ForbiddenException("Bu gönderiyi görüntüleyemezsiniz.");
-    const blocked = await this.blockedUserIds(viewer.id);
-    if (blocked.includes(post.authorId)) throw new ForbiddenException("Bu gönderiyi görüntüleyemezsiniz.");
-    const direct = await this.followingIds(viewer.id);
-    if (post.visibility === PostVisibility.following && direct.includes(post.authorId)) return post;
-    if (post.visibility === PostVisibility.network && (await this.networkIds(viewer.id, direct)).includes(post.authorId)) return post;
+    const audience = await audienceForViewer(this.prisma, viewer?.id);
+    if (audienceAllows(post.authorId, post.visibility, audience)) return post;
     throw new ForbiddenException("Bu gönderiyi görüntüleyemezsiniz.");
   }
 
@@ -144,9 +141,8 @@ export class PostsService {
     const matches = await this.prisma.userInterestTag.findMany({ where: { userId: { not: userId }, tagId: { in: interests.map((item) => item.tagId) }, sentiment: { in: ["like", "ok"] } }, select: { userId: true }, take: 200 });
     return [...new Set(matches.map((item) => item.userId))];
   }
-  private async networkIds(userId: string, direct: string[]) { const second = direct.length ? await this.prisma.userFollow.findMany({ where: { followerId: { in: direct } }, select: { followingId: true } }) : []; return [...new Set([...direct, ...second.map((row) => row.followingId)])].filter((id) => id !== userId); }
   private async blockedUserIds(userId: string) { const rows = await this.prisma.userBlock.findMany({ where: { OR: [{ userId, targetType: "user" }, { targetType: "user", targetId: userId }] }, select: { userId: true, targetId: true } }); return [...new Set(rows.map((row) => row.userId === userId ? row.targetId : row.userId))]; }
   private async avatars(ids: string[]) { const media = await this.prisma.mediaFile.findMany({ where: { contentType: ReportTargetType.user, contentId: { in: [...new Set(ids)] }, status: "active", isProfilePicture: true }, select: { contentId: true, url: true } }); return new Map(media.map((item) => [item.contentId, item.url])); }
-  private presentPost(post: any, avatars: Map<string, string>) { return { ...post, liked: Boolean(post.likes?.length), likes: undefined, author: { ...post.author, avatarUrl: avatars.get(post.authorId) ?? null } }; }
-  private async notifyMentions(postId: string, body: string, actorId: string) { const usernames = [...new Set([...body.matchAll(/@([a-zA-Z0-9_.]{2,30})/g)].map((match) => match[1]!.toLowerCase()))]; if (!usernames.length) return; const users = await this.prisma.user.findMany({ where: { username: { in: usernames }, status: "active", id: { not: actorId } }, select: { id: true } }); await Promise.all(users.map((user) => this.notifications.dispatch({ userId: user.id, topic: "mention", type: "mention", title: "Bir gönderide senden bahsedildi", body: body.slice(0, 160), targetType: "post", targetId: postId }))); }
+  private presentPost(post: any, avatars: Map<string, string>) { return { ...post, liked: Boolean(post.likes?.length), likes: undefined, author: { ...post.author, name: publicName(post.author), privacySettings: undefined, avatarUrl: avatars.get(post.authorId) ?? null } }; }
+  private async notifyMentions(postId: string, body: string, actorId: string) { const usernames = [...new Set([...body.matchAll(/@([a-zA-Z0-9_.]{2,30})/g)].map((match) => match[1]!.toLowerCase()))]; if (!usernames.length) return; const users = await this.prisma.user.findMany({ where: { username: { in: usernames }, status: "active", id: { not: actorId } }, select: { id: true } }); await Promise.all(users.map(async (user) => { try { await this.ensureVisible(postId, { id: user.id } as User); } catch (error) { if (error instanceof ForbiddenException || error instanceof NotFoundException) return; throw error; } return this.notifications.dispatch({ userId: user.id, topic: "mention", type: "mention", title: "Bir gönderide senden bahsedildi", body: "Gönderiyi görüntülemek için aç.", targetType: "post", targetId: postId }); })); }
 }

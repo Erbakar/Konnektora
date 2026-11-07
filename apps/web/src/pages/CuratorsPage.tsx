@@ -1,3 +1,5 @@
+import { ServiceFeedback } from "../components/ServiceFeedback";
+
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -46,6 +48,7 @@ export function CuratorsPage() {
       { onSuccess: () => formElement.reset() },
     );
   }
+  if (user?.role === "curator" && !dashboard.data) return <div className="page curator-page"><h1>{t("Küratör çalışma alanı", "Curator workspace")}</h1><a className="secondary-action" href="/wallet">Cüzdan / Wallet</a>{dashboard.isLoading ? <p role="status">{t("Şehir bilgileri yükleniyor…", "Loading city information…")}</p> : <ServiceFeedback error={dashboard.error} title={t("Çalışma alanı yüklenemedi", "Workspace unavailable")} onRetry={() => void dashboard.refetch()}/>}</div>;
   if (user?.role === "curator" && dashboard.data)
     return (
       <div className="page curator-page">
@@ -56,6 +59,7 @@ export function CuratorsPage() {
             {t("Şehrindeki etkinlikleri, mekânları, organizatörleri ve gelir görünümünü tek yerden takip et.", "Track events, places, organisers and revenue in your city from one workspace.")}
           </p>
         </header>
+        <a className="secondary-action" href="/wallet">Cüzdan / Wallet</a>
         <section className="curator-metrics">
           <article>
             <CalendarDays />
@@ -74,13 +78,8 @@ export function CuratorsPage() {
           </article>
           <article>
             <BarChart3 />
-            <strong>
-              {new Intl.NumberFormat(locale, {
-                style: "currency",
-                currency: "TRY",
-              }).format(dashboard.data.revenue.platformRevenue)}
-            </strong>
-            <span>{t("platform geliri", "platform revenue")}</span>
+            <strong>{dashboard.data.revenue.transactionCount}</strong>
+            <span>{t("ödeme işlemi", "payment transactions")}</span>
           </article>
         </section>
         <div className="curator-columns">

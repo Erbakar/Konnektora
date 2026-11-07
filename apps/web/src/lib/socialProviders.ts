@@ -17,61 +17,90 @@ declare global {
   }
 }
 
+const scripts = new Map<string, Promise<void>>();
 function script(src: string) {
-  return new Promise<void>((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+  const existing = scripts.get(src);
+  if (existing) return existing;
+  const promise = new Promise<void>((resolve, reject) => {
     const element = document.createElement("script");
+    const timeout = window.setTimeout(() => fail(), 15000);
+    const fail = () => {
+      window.clearTimeout(timeout);
+      element.remove();
+      scripts.delete(src);
+      reject(new Error("Giriş sağlayıcısı yüklenemedi. Yeniden deneyin."));
+    };
     element.src = src;
     element.async = true;
-    element.defer = true;
-    element.onload = () => resolve();
-    element.onerror = () => reject(new Error("Sağlayıcı yüklenemedi."));
+    element.onload = () => { window.clearTimeout(timeout); resolve(); };
+    element.onerror = fail;
     document.head.appendChild(element);
   });
+  scripts.set(src, promise);
+  return promise;
 }
 
-export async function getSocialCredential(
-  provider: SocialProvider,
-): Promise<string> {
-  const providerConfigured =
-    provider === "google"
-      ? Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID)
-      : Boolean(import.meta.env.VITE_FACEBOOK_APP_ID);
-  if (isMockApiMode || (import.meta.env.DEV && !providerConfigured))
-    return `demo-${provider}`;
+export function prepareSocialProviders() {
+  if (import.meta.env.VITE_GOOGLE_CLIENT_ID) void script("https://accounts.google.com/gsi/client").catch(() => undefined);
+  if (import.meta.env.VITE_FACEBOOK_APP_ID) void prepareFacebook().catch(() => undefined);
+}
+async function prepareFacebook() {
+  await script("https://connect.facebook.net/tr_TR/sdk.js");
+  window.FB.init({ appId: import.meta.env.VITE_FACEBOOK_APP_ID, cookie: true, xfbml: false, version: "v23.0" });
+}
+
+export async function getSocialCredential(provider: SocialProvider): Promise<string> {
+  if (isMockApiMode) return `demo-${provider}`;
   if (provider === "google") {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!clientId) throw new Error("Google istemci kimliği yapılandırılmamış.");
+    if (!clientId) throw new Error("Google ile giriş henüz etkinleştirilmedi. E-posta ile devam edebilirsiniz.");
     await script("https://accounts.google.com/gsi/client");
-    return new Promise(
-      (resolve, reject) =>
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (response: { credential?: string }) =>
-            response.credential
-              ? resolve(response.credential)
-              : reject(new Error("Google girişi iptal edildi.")),
-        }) ||
-        window.google.accounts.id.prompt(
-          (notice: any) =>
-            notice.isNotDisplayed?.() &&
-            reject(new Error("Google giriş penceresi açılamadı.")),
-        ),
-    );
+    return new Promise((resolve, reject) => {
+      const dialog = document.createElement("dialog");
+      dialog.className = "social-login-dialog";
+      dialog.setAttribute("aria-label", "Google ile devam et");
+      const title = document.createElement("h2");
+      title.textContent = "Google ile devam et";
+      const target = document.createElement("div");
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.textContent = "Vazgeç";
+      dialog.append(title, target, cancel);
+      document.body.append(dialog);
+      const previousFocus = document.activeElement;
+      const finish = (credential?: string) => {
+        clearTimeout(timeout);
+        dialog.close();
+        dialog.remove();
+        if (previousFocus instanceof HTMLElement) previousFocus.focus();
+        if (credential) resolve(credential);
+        else reject(new Error("Google girişi tamamlanmadı. Yeniden deneyebilirsiniz."));
+      };
+      const timeout = window.setTimeout(() => finish(), 180000);
+      cancel.onclick = () => finish();
+      dialog.oncancel = (event) => { event.preventDefault(); finish(); };
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: (response: { credential?: string }) => finish(response.credential),
+      });
+      window.google.accounts.id.renderButton(target, { type: "standard", theme: "outline", size: "large", text: "continue_with" });
+      dialog.showModal();
+    });
   }
-  const appId = import.meta.env.VITE_FACEBOOK_APP_ID;
-  if (!appId) throw new Error("Facebook uygulama kimliği yapılandırılmamış.");
-  await script("https://connect.facebook.net/tr_TR/sdk.js");
-  window.FB.init({ appId, cookie: true, xfbml: false, version: "v23.0" });
-  return new Promise((resolve, reject) =>
-    window.FB.login(
-      (response: any) =>
-        response.authResponse?.accessToken
-          ? resolve(response.authResponse.accessToken)
-          : reject(new Error("Facebook girişi iptal edildi.")),
-      { scope: "public_profile,email" },
-    ),
-  );
+  if (!import.meta.env.VITE_FACEBOOK_APP_ID) throw new Error("Facebook ile giriş henüz etkinleştirilmedi. E-posta ile devam edebilirsiniz.");
+  // Preloading preserves the user gesture required by popup blockers.
+  if (!window.FB) {
+    await prepareFacebook();
+    throw new Error("Facebook hazır. Devam etmek için düğmeye yeniden basın.");
+  }
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error("Facebook girişi tamamlanmadı. Yeniden deneyin.")), 180000);
+    window.FB.login((response: any) => {
+      clearTimeout(timeout);
+      if (response.authResponse?.accessToken) resolve(response.authResponse.accessToken);
+      else reject(new Error("Facebook girişi iptal edildi veya izin verilmedi."));
+    }, { scope: "public_profile,email", auth_type: "rerequest" });
+  });
 }
 
 export async function pickPhoneContacts(): Promise<Contact[]> {
@@ -90,14 +119,6 @@ export async function pickPhoneContacts(): Promise<Contact[]> {
 }
 
 export async function pickGoogleContacts(): Promise<Contact[]> {
-  if (
-    isMockApiMode ||
-    (import.meta.env.DEV && !import.meta.env.VITE_GOOGLE_CLIENT_ID)
-  )
-    return [
-      { name: "Elif Kaya", email: "elif@konnektora.local" },
-      { name: "Deniz Arslan", phone: "+905551234567" },
-    ];
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   if (!clientId) throw new Error("Google istemci kimliği yapılandırılmamış.");
   await script("https://accounts.google.com/gsi/client");
@@ -105,6 +126,7 @@ export async function pickGoogleContacts(): Promise<Contact[]> {
     const client = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: "https://www.googleapis.com/auth/contacts.readonly",
+      error_callback: () => reject(new Error("Google kişi erişimi tamamlanmadı. İzin penceresi kapatıldı veya erişim engellendi; davet gönderilmedi.")),
       callback: (response: any) =>
         response.access_token
           ? resolve(response.access_token)

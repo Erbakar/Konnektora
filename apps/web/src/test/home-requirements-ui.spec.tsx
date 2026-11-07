@@ -73,6 +73,14 @@ afterEach(() => {
 });
 
 describe("ana sayfa 108–123 gereksinimleri", () => {
+  it("keeps the introduction video and transcript without carousel controls", async () => {
+    render(providers(<HomePage />));
+    expect(screen.getByText("Rehber metnini oku")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Sonraki slayt" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "İlgi alanını seç, birlikte katıl" })).not.toBeInTheDocument();
+    expect(apiMocks.listPlaces.mock.calls[0]?.[0].get("scope")).toBe("trendy");
+  });
+
   it("oturumsuz ziyaretçiye popüler etkinlikleri, trend ilgi alanlarını ve iki üyelik yolunu gösterir", async () => {
     render(providers(<HomePage />));
 

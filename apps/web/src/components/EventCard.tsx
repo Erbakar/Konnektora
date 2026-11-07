@@ -7,7 +7,7 @@ import { getUserSession, recordContentImpression, rememberContentSource, resolve
 import { formatEventDateRange, localizeCityName, localizeCountryName } from "../lib/formats";
 import { useLanguage } from "../lib/i18n";
 
-export function EventCard({ event, displayTitle }: { event: Event; displayTitle?: string }) {
+export function EventCard({ event, displayTitle, nearby = false }: { event: Event; displayTitle?: string; nearby?: boolean }) {
   const cardRef = useRef<HTMLElement>(null);
   const { language } = useLanguage();
   const locale = language === "tr" ? "tr-TR" : "en-GB";
@@ -29,7 +29,7 @@ export function EventCard({ event, displayTitle }: { event: Event; displayTitle?
     : viewer?.country && !sameCountry
       ? country || city || locationFallback
       : city || venue || country || locationFallback;
-  const location = event.format === "online" ? onlineLabel : event.format === "hybrid" ? `${onlineLabel} & ${hybridLocation}` : offlineLocation;
+  const location = nearby && event.format !== "online" ? venue || city || locationFallback : event.format === "online" ? onlineLabel : event.format === "hybrid" ? `${onlineLabel} & ${hybridLocation}` : offlineLocation;
   const visibility = event.visibility === "invite_only"
     ? language === "tr" ? "Sadece davetli" : "Invite only"
     : event.visibility === "approval_required"

@@ -5,7 +5,7 @@ import { MessagesService } from "./messages.service";
 describe("MessagesService admin inbox permissions", () => {
   const userMessage = { findUnique: jest.fn(), update: jest.fn() };
   const user = { findUnique: jest.fn() };
-  const service = new MessagesService({ userMessage, user } as never);
+  const service = new MessagesService({ userMessage, user } as never, {} as never, {} as never);
   const admin = { id: "admin-1", role: "admin" } as never;
 
   beforeEach(() => jest.clearAllMocks());

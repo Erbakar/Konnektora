@@ -1,8 +1,9 @@
+jest.mock("../notifications/activity-events", () => ({ notifyEntityCreated: jest.fn().mockResolvedValue(undefined), notifyEntityChanges: jest.fn().mockResolvedValue(undefined), notifyUserActivity: jest.fn().mockResolvedValue(undefined), notifyEventAvailability: jest.fn().mockResolvedValue(undefined), isUndiscoverable: jest.fn().mockResolvedValue(false), notifyRegistration: jest.fn().mockResolvedValue(undefined), notifyMembershipInvite: jest.fn().mockResolvedValue(undefined), notifyComment: jest.fn().mockResolvedValue(undefined), recordActivity: jest.fn().mockResolvedValue(undefined) }));
 import { ContactsService } from "./contacts.service";
 
 describe("ContactsService", () => {
   const prisma = {
-    user: { findMany: jest.fn(), findUnique: jest.fn() },
+    user: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
     userInterestTag: { findMany: jest.fn() },
     contactInvite: { create: jest.fn().mockResolvedValue({}) },
   };

@@ -1,2 +1,17 @@
 pnpm-lock.yaml
 apps/web/tsconfig.tsbuildinfo
+tmp/
+private-uploads/
+verification-uploads/
+uploads/
+.env
+.env.*
+apps/**/.env
+apps/**/.env.*
+node_modules/
+.netlify/
+.git/
+apps/web/social-preview.html
+
+output/
+backups/

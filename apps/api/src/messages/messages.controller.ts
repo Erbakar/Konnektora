@@ -4,7 +4,7 @@ import { AdminGuard } from "../auth/admin.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RequirePermissions } from "../auth/permissions";
-import { AdminMessageQueryDto, CreateUserMessageDto, UpdateUserMessageDto } from "./messages.dto";
+import { ConfirmDeletionRequestDto, AdminMessageQueryDto, CreateUserMessageDto, UpdateUserMessageDto } from "./messages.dto";
 import { MessagesService } from "./messages.service";
 
 @Controller()
@@ -14,6 +14,11 @@ export class MessagesController {
   @Post("messages")
   createMessage(@Body() body: CreateUserMessageDto) {
     return this.messagesService.createMessage(body);
+  }
+
+  @Post("messages/deletion/confirm")
+  confirmDeletionRequest(@Body() body: ConfirmDeletionRequestDto) {
+    return this.messagesService.confirmDeletionRequest(body.token);
   }
 
   @Post("me/messages")

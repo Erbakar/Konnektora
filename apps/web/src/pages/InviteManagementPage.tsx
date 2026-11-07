@@ -1,3 +1,6 @@
+import { ContactsPage } from "./ContactsPage";
+import { FollowStar } from "../components/MemberSignals";
+import { InviteAssessmentProvider, useInviteAssessment, useInviteTargetKind } from "../components/InviteAssessment";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CheckInPassport,
@@ -24,6 +27,9 @@ import type { TableCell, TDocumentDefinitions } from "pdfmake/interfaces";
 import { QrCheckInScanner } from "../components/QrCheckInScanner";
 import { GuestListAction, type GuestListContext, type GuestListTarget } from "../components/GuestListAction";
 import {
+  listPlaceInviteRecommendations,
+  listPlacePastEvents,
+  listPlacePastAttendees,
   addGuestListMember,
   createGuestList,
   decideEventCheckInPassport,
@@ -43,6 +49,7 @@ import {
   listFollowing,
   listMyEvents,
   listPlaceMembers,
+  listMyPlaces,
   listSentPlaceInvitations,
   removeGuestListMember,
   renameGuestList,
@@ -53,6 +60,7 @@ import {
   resolveMediaUrl,
 } from "../lib/api";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
+import { formatShortDate } from "../lib/formats";
 import { useLanguage } from "../lib/i18n";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
@@ -60,6 +68,7 @@ type InviteMethod =
   | "recommendations"
   | "following"
   | "guest_lists"
+  | "place_members"
   | "old_attendees"
   | "username"
   | "email"
@@ -72,7 +81,9 @@ export function EventInviteManagementPage() {
   const { language } = useLanguage();
   const tr = language === "tr";
   const { slug = "" } = useParams();
-  const checkInMode = useLocation().hash === "#check-in";
+  const location = useLocation();
+  const checkInMode = location.hash === "#check-in";
+  const returnedInviteCount = Number(location.state?.invitedCount) || 0;
   const user = getUserSession();
   const [inviteMethod, setInviteMethod] = useState<InviteMethod>("following");
   const [passport, setPassport] = useState<CheckInPassport | null>(null);
@@ -90,9 +101,9 @@ export function EventInviteManagementPage() {
     event.data &&
     user &&
     (event.data.createdById === user.id ||
-      (event.data.viewerParticipation?.status === "accepted" &&
+      (["accepted", "attended", "not_attending"].includes(event.data.viewerParticipation?.status ?? "") &&
         ["organizer", "manager"].includes(
-          event.data.viewerParticipation.role,
+          event.data.viewerParticipation!.role,
         )) ||
       ["admin", "super_admin", "curator"].includes(user.role)),
   );
@@ -130,6 +141,24 @@ export function EventInviteManagementPage() {
         new Date(b.endsAt ?? b.startsAt).getTime() -
         new Date(a.endsAt ?? a.startsAt).getTime(),
     );
+  const [memberPlaceId, setMemberPlaceId] = useState("");
+  const managedPlaces = useQuery({
+    queryKey: ["my-places", user?.id],
+    queryFn: listMyPlaces,
+    enabled: Boolean(user && inviteMethod === "place_members"),
+  });
+  const memberPlaces = (managedPlaces.data ?? [])
+    .filter((place) =>
+      place.createdById === user?.id ||
+      (place.viewerMembership?.status === "accepted" && ["manager", "organizer"].includes(place.viewerMembership.role)),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name, "tr", { sensitivity: "base" }));
+  const placeMembers = useQuery({
+    queryKey: ["place-members", memberPlaceId, "event-invite-source"],
+    queryFn: () => listPlaceMembers(memberPlaceId),
+    enabled: Boolean(memberPlaceId && inviteMethod === "place_members"),
+    retry: false,
+  });
   const previousAttendees = useQuery({
     queryKey: ["event-participants", oldEventId, "invite-source"],
     queryFn: () => listEventParticipants(oldEventId, "user"),
@@ -263,16 +292,19 @@ export function EventInviteManagementPage() {
       </section>
     );
   return (
-    <ManagementShell
+    <InviteAssessmentProvider kind="event" id={event.data.id}><ManagementShell
       title={event.data.title}
       back={`/events/${event.data.slug}`}
       shareUrl={`${window.location.origin}/events/${event.data.slug}`}
       kind={tr ? "Etkinlik" : "Event"}
     >
       <div hidden={checkInMode}>
+        {returnedInviteCount > 0 ? <p role="status" className="filter-notice">{returnedInviteCount} {tr ? "kişiye davet gönderildi." : "invitations sent."}</p> : null}
+        {!["phonebook","gmail"].includes(inviteMethod) ? <p>{sentInvitations.data?.length ?? 0} {tr ? "kişi davet edildi" : "people invited"}</p> : null}
         <InviteMethodPicker
           active={inviteMethod}
           includeOldEvents={canManage}
+          includePlaceMembers
           includeGuestLists={canUseGuestLists}
           includeRecommendations={canManage}
           onChange={(method) => {
@@ -319,7 +351,7 @@ export function EventInviteManagementPage() {
           />
         ) : null}
         {inviteMethod === "recommendations" && canManage ? (
-          <InviteSource title={tr ? "AI ile önerilen Top 25" : "AI-recommended Top 25"}>
+          <InviteSource title={tr ? "AI ile önerilen Top 50" : "AI-recommended Top 50"}>
             <p className="form-help">
               {tr
                 ? "Etkinlik ilgi alanları, konum, takip ilişkileri, eski katılımlar, Guest List ve profil sinyallerine göre şeffaf biçimde sıralanır."
@@ -376,6 +408,48 @@ export function EventInviteManagementPage() {
             </details>
           </>
         ) : null}
+        {inviteMethod === "place_members" ? (
+          <InviteSource title={tr ? "Mekân üyelerinden davet et" : "Invite from place members"}>
+            <label>
+              {tr ? "Mekân" : "Place"}
+              <select
+                value={memberPlaceId}
+                onChange={(change) => setMemberPlaceId(change.target.value)}
+              >
+                <option value="">{tr ? "Mekân seç" : "Select a place"}</option>
+                {memberPlaces.map((place) => (
+                  <option key={place.id} value={place.id}>
+                    {place.name}{place.city ? `, ${place.city}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {managedPlaces.isLoading ? <p className="form-help">{tr ? "Mekânlar yükleniyor…" : "Loading places…"}</p> : null}
+            {memberPlaceId ? (
+              placeMembers.isError ? (
+                <p className="form-error" role="alert">{tr ? "Mekân üyeleri yüklenemedi." : "Place members could not be loaded."}</p>
+              ) : (
+                <InviteUserCards
+                  title={tr ? "Mekân üyeleri" : "Place members"}
+                  users={(placeMembers.data ?? []).flatMap((member) =>
+                    member.user && member.status === "accepted" && member.userId !== user.id ? [member.user] : [],
+                  )}
+                  invitedUserIds={invitedUserIds}
+                  pending={invite.isPending || inviteUsers.isPending}
+                  guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
+                  onInvite={(userId) => invite.mutate({ userId, role: "attendee" })}
+                  onInviteAll={(userIds) => inviteUsers.mutate(userIds)}
+                  onAddToGuestList={(listId, userId) => addToGuestList.mutate({ listId, userId })}
+                />
+              )
+            ) : null}
+            {managedPlaces.isSuccess && !memberPlaces.length ? (
+              <p className="form-help">
+                {tr ? "Yöneticisi olduğunuz bir mekân bulunamadı." : "No place you manage was found."}
+              </p>
+            ) : null}
+          </InviteSource>
+        ) : null}
         {inviteMethod === "old_attendees" ? (
           <InviteSource title={tr ? "Eski etkinlik katılımcıları" : "Past event attendees"}>
             <label>
@@ -387,10 +461,7 @@ export function EventInviteManagementPage() {
                 <option value="">{tr ? "Etkinlik seç" : "Select an event"}</option>
                 {oldEvents.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {new Date(item.endsAt ?? item.startsAt).toLocaleDateString(
-                      tr ? "tr-TR" : "en-US",
-                    )}{" "}
-                    - {item.title}
+                    {formatShortDate(item.startsAt)} - {item.title}
                   </option>
                 ))}
               </select>
@@ -423,22 +494,12 @@ export function EventInviteManagementPage() {
         ) : null}
         {inviteMethod === "phonebook" ? (
           <InviteSource title={tr ? "Telefon rehberi" : "Phone contacts"}>
-            <Link
-              className="secondary-action"
-              to={`/contacts?source=phone&targetType=event&targetId=${event.data.id}`}
-            >
-              {tr ? "Telefon rehberini tara" : "Scan phone contacts"}
-            </Link>
+            <ContactsPage key="phone" inviteTarget={{type:"event", id:event.data.id, source:"phone"}}/>
           </InviteSource>
         ) : null}
         {inviteMethod === "gmail" ? (
           <InviteSource title="Gmail">
-            <Link
-              className="secondary-action"
-              to={`/contacts?source=google&targetType=event&targetId=${event.data.id}`}
-            >
-              {tr ? "Google Contacts ile tara" : "Scan with Google Contacts"}
-            </Link>
+            <ContactsPage key="google" inviteTarget={{type:"event", id:event.data.id, source:"google"}}/>
           </InviteSource>
         ) : null}
       </div>
@@ -456,7 +517,7 @@ export function EventInviteManagementPage() {
           ) : (
             <EventGuestList
               items={(participants.data ?? []).filter((item) =>
-                ["accepted", "attended"].includes(item.status) || Boolean(item.tickets?.length),
+                ["accepted", "attended", "invited"].includes(item.status) || Boolean(item.tickets?.length),
               )}
               pending={status.isPending || passportLoad.isPending}
               guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
@@ -505,7 +566,7 @@ export function EventInviteManagementPage() {
           }
         />
       ) : null}
-    </ManagementShell>
+    </ManagementShell></InviteAssessmentProvider>
   );
 }
 
@@ -513,7 +574,9 @@ export function PlaceInviteManagementPage() {
   const { language } = useLanguage();
   const tr = language === "tr";
   const { slug = "" } = useParams();
-  const checkInMode = useLocation().hash === "#check-in";
+  const location = useLocation();
+  const checkInMode = location.hash === "#check-in";
+  const returnedInviteCount = Number(location.state?.invitedCount) || 0;
   const user = getUserSession();
   const [inviteMethod, setInviteMethod] = useState<InviteMethod>("following");
   const [passport, setPassport] = useState<CheckInPassport | null>(null);
@@ -556,6 +619,10 @@ export function PlaceInviteManagementPage() {
     queryFn: listGuestLists,
     enabled: Boolean(user && canUseGuestLists),
   });
+  const [pastEventId,setPastEventId]=useState("");
+  const recommendations=useQuery({queryKey:["place-invite-recommendations",place.data?.id],queryFn:()=>listPlaceInviteRecommendations(place.data!.id),enabled:Boolean(place.data&&canManage&&inviteMethod==="recommendations")});
+  const pastEvents=useQuery({queryKey:["place-past-events",place.data?.id],queryFn:()=>listPlacePastEvents(place.data!.id),enabled:Boolean(place.data&&canManage&&inviteMethod==="old_attendees")});
+  const pastAttendees=useQuery({queryKey:["place-past-attendees",place.data?.id,pastEventId],queryFn:()=>listPlacePastAttendees(place.data!.id,pastEventId),enabled:Boolean(place.data&&pastEventId&&canManage&&inviteMethod==="old_attendees")});
   const invitedUserIds = new Set((sentInvitations.data ?? []).map((item) => item.id));
   const refresh = () => {
     void client.invalidateQueries({
@@ -673,15 +740,19 @@ export function PlaceInviteManagementPage() {
       </section>
     );
   return (
-    <ManagementShell
+    <InviteAssessmentProvider kind="place" id={place.data.id}><ManagementShell
       title={place.data.name}
       back={`/places/${place.data.slug}`}
       shareUrl={`${window.location.origin}/places/${place.data.slug}`}
       kind={tr ? "Mekân" : "Place"}
     >
       <div hidden={checkInMode}>
+        {returnedInviteCount > 0 ? <p role="status" className="filter-notice">{returnedInviteCount} {tr ? "kişiye davet gönderildi." : "invitations sent."}</p> : null}
+        {!["phonebook","gmail"].includes(inviteMethod) ? <p>{sentInvitations.data?.length ?? 0} {tr ? "kişi davet edildi" : "people invited"}</p> : null}
         <InviteMethodPicker
           active={inviteMethod}
+          includeRecommendations={canManage}
+          includeOldEvents={canManage}
           includeGuestLists={canUseGuestLists}
           onChange={(method) => {
             setInviteMethod(method);
@@ -717,6 +788,8 @@ export function PlaceInviteManagementPage() {
             }
           />
         ) : null}
+        {inviteMethod === "recommendations" && canManage ? <InviteUserCards title={tr?"AI ile önerilen Top 50":"AI-recommended Top 50"} users={(recommendations.data??[]).map(user=>({...user,recommendationScore:user.score,recommendationReasons:user.reasons}))} invitedUserIds={invitedUserIds} pending={invite.isPending||invitePlaceUsers.isPending} guestLists={canUseGuestLists?(guestLists.data??[]):[]} onInvite={userId=>invite.mutate({userId,role:"member"})} onInviteAll={ids=>invitePlaceUsers.mutate(ids)} onAddToGuestList={(listId,userId)=>addToGuestList.mutate({listId,userId})}/> : null}
+        {inviteMethod === "old_attendees" && canManage ? <InviteSource title={tr?"Eski etkinliklerden seç":"Choose from past events"}><label>{tr?"Etkinlik":"Event"}<select value={pastEventId} onChange={event=>setPastEventId(event.target.value)}><option value="">{tr?"Etkinlik seç":"Select an event"}</option>{(pastEvents.data??[]).map(event=><option key={event.id} value={event.id}>{formatShortDate(event.startsAt)} - {event.title}</option>)}</select></label><InviteUserCards users={pastAttendees.data??[]} invitedUserIds={invitedUserIds} pending={invite.isPending||invitePlaceUsers.isPending} guestLists={canUseGuestLists?(guestLists.data??[]):[]} onInvite={userId=>invite.mutate({userId,role:"member"})} onInviteAll={ids=>invitePlaceUsers.mutate(ids)} onAddToGuestList={(listId,userId)=>addToGuestList.mutate({listId,userId})}/></InviteSource>:null}
         {inviteMethod === "following" ? (
           <InviteUserCards
             title={tr ? "Takip ettiklerim" : "People I follow"}
@@ -761,22 +834,12 @@ export function PlaceInviteManagementPage() {
         ) : null}
         {inviteMethod === "phonebook" ? (
           <InviteSource title={tr ? "Telefon rehberi" : "Phone contacts"}>
-            <Link
-              className="secondary-action"
-              to={`/contacts?source=phone&targetType=place&targetId=${place.data.id}`}
-            >
-              {tr ? "Telefon rehberini tara" : "Scan phone contacts"}
-            </Link>
+            <ContactsPage key="phone" inviteTarget={{type:"place", id:place.data.id, source:"phone"}}/>
           </InviteSource>
         ) : null}
         {inviteMethod === "gmail" ? (
           <InviteSource title="Gmail">
-            <Link
-              className="secondary-action"
-              to={`/contacts?source=google&targetType=place&targetId=${place.data.id}`}
-            >
-              {tr ? "Google Contacts ile tara" : "Scan with Google Contacts"}
-            </Link>
+            <ContactsPage key="google" inviteTarget={{type:"place", id:place.data.id, source:"google"}}/>
           </InviteSource>
         ) : null}
       </div>
@@ -794,7 +857,7 @@ export function PlaceInviteManagementPage() {
           ) : (
             <PlaceMemberList
               items={(members.data ?? []).filter((item) =>
-                item.status === "accepted" || Boolean(item.checkedInAt),
+                ["accepted", "invited"].includes(item.status) || Boolean(item.checkedInAt),
               )}
               pending={update.isPending || passportLoad.isPending}
               guestLists={canUseGuestLists ? (guestLists.data ?? []) : []}
@@ -843,7 +906,7 @@ export function PlaceInviteManagementPage() {
           }
         />
       ) : null}
-    </ManagementShell>
+    </ManagementShell></InviteAssessmentProvider>
   );
 }
 
@@ -910,10 +973,12 @@ function InviteMethodPicker({
   includeOldEvents = false,
   includeGuestLists = false,
   includeRecommendations = false,
+  includePlaceMembers = false,
   onChange,
 }: {
   active: InviteMethod;
   includeOldEvents?: boolean;
+  includePlaceMembers?: boolean;
   includeGuestLists?: boolean;
   includeRecommendations?: boolean;
   onChange: (method: InviteMethod) => void;
@@ -922,11 +987,14 @@ function InviteMethodPicker({
   const tr = language === "tr";
   const methods: Array<[InviteMethod, string]> = [
     ...(includeRecommendations
-      ? [["recommendations", tr ? "AI ile önerilen Top 25" : "AI-recommended Top 25"] as [InviteMethod, string]]
+      ? [["recommendations", tr ? "AI ile önerilen Top 50" : "AI-recommended Top 50"] as [InviteMethod, string]]
       : []),
     ["following", tr ? "Takip ettiklerimden seç" : "Choose from people I follow"],
     ...(includeGuestLists
       ? [["guest_lists", tr ? "Guest listeden seç" : "Choose from a guest list"] as [InviteMethod, string]]
+      : []),
+    ...(includePlaceMembers
+      ? [["place_members", tr ? "Mekân üyelerinden davet et" : "Invite from place members"] as [InviteMethod, string]]
       : []),
     ...(includeOldEvents
       ? [
@@ -1020,11 +1088,52 @@ function recommendationReasonLabel(reason: string, tr: boolean, sharedInterestCo
     verified: ["doğrulanmış profil", "verified profile"],
     active_recently: ["yakın zamanda aktif", "recently active"],
     popular: ["toplulukta popüler", "popular in the community"],
+    event_partner: ["etkinlik partneri uyumu", "event partner compatibility"],
+    attendee_compatibility: ["katılımcılarla uyum", "attendee compatibility"],
   };
   return labels[reason]?.[tr ? 0 : 1] ?? reason;
 }
 
-function InviteUserCards({
+/** Davet kartındaki uyum sinyalleri: tamamı kutucuk, tekrar yok, eski katılımcı rozeti gösterilmez. */
+function InviteSignalBoxes({
+  evaluation,
+  kind,
+  recommendationReasons,
+  recommendationScore,
+  sharedInterestCount,
+  tr,
+}: {
+  evaluation?: { eventPartner?: number; attendeeCompatibility?: number; score: number; reasons: string[]; sharedInterestCount: number };
+  kind?: "event" | "place";
+  recommendationReasons?: string[];
+  recommendationScore?: number;
+  sharedInterestCount?: number;
+  tr: boolean;
+}) {
+  const reasons = new Set([...(evaluation?.reasons ?? []), ...(recommendationReasons ?? [])]);
+  const shared = evaluation?.sharedInterestCount || sharedInterestCount || 0;
+  const score = evaluation?.score ?? recommendationScore;
+  const boxed = new Set(["event_partner", "attendee_compatibility", "shared_interests", "active_recently", "past_attendee"]);
+  const extra = [...reasons].filter((reason) => !boxed.has(reason));
+  const scoreLabel = kind === "place"
+    ? tr ? "Mekânla eşleşme puanı" : "Place match score"
+    : tr ? "Etkinlik eşleşme puanı" : "Event match score";
+  if (!evaluation && score === undefined && !shared && !extra.length) return null;
+  return (
+    <>
+      <div className="member-compatibility invite-signal-boxes">
+        {evaluation?.eventPartner !== undefined ? <span className="compatibility-score"><span>{tr ? "Etkinlik partneri uyumu" : "Event partner compatibility"}</span><strong>%{evaluation.eventPartner}</strong></span> : null}
+        {evaluation?.attendeeCompatibility !== undefined ? <span className="compatibility-score is-partner"><span>{tr ? "Katılımcılarla uyum" : "Attendee compatibility"}</span><strong>%{evaluation.attendeeCompatibility}</strong></span> : null}
+        {shared > 0 ? <span className="compatibility-score is-shared"><span>{tr ? "Ortak ilgi alanı" : "Shared interests"}</span><strong>{shared}</strong></span> : null}
+        {score !== undefined ? <span className="compatibility-score is-match" title={tr ? "Genel uyum, etkinlik partneri uyumu ve katılımcılarla uyumun ortalaması; yakın zamanda aktif olma ve daha önce katılım küçük bir ek puan verir." : "Average of overall, event partner and attendee compatibility, with a small bonus for recent activity and past attendance."}><span>{scoreLabel}</span><strong>{Math.min(100, score)}</strong></span> : null}
+        {reasons.has("active_recently") ? <span className="compatibility-score is-active"><span>{tr ? "Yakın zamanda aktif" : "Recently active"}</span></span> : null}
+      </div>
+      {extra.length ? <small className="invite-recommendation-reasons">{extra.map((reason) => recommendationReasonLabel(reason, tr, shared)).join(" · ")}</small> : null}
+    </>
+  );
+}
+
+export function InviteUserCards({
   title,
   users,
   invitedUserIds,
@@ -1057,9 +1166,13 @@ function InviteUserCards({
     (item, index, all) =>
       Boolean(item.username) && all.findIndex((other) => other.id === item.id) === index,
   );
-  const available = unique.filter((item) => !invitedUserIds.has(item.id));
+  const assessment=useInviteAssessment(unique.map(item=>item.id));
+  const targetKind=useInviteTargetKind();
+  const evaluations=new Map((assessment.data??[]).map(row=>[row.id,row]));
+  const unavailable=unique.filter(item=>!invitedUserIds.has(item.id)&&evaluations.get(item.id)?.canInvite===false);
+  const available = unique.filter((item) => !invitedUserIds.has(item.id) && evaluations.get(item.id)?.canInvite!==false);
   const invited = unique.filter((item) => invitedUserIds.has(item.id));
-  const cards = (source: typeof unique, alreadyInvited: boolean) =>
+  const cards = (source: typeof unique, alreadyInvited: boolean, forbidden=false) =>
     source.map((member) => (
       <article className="invite-user-card" key={member.id}>
         <Link className="management-avatar" to={`/users/id/${member.id}`}>
@@ -1070,29 +1183,29 @@ function InviteUserCards({
           )}
         </Link>
         <div>
-          <strong>
+          <strong className="member-name-line"><FollowStar id={member.id}/>
             <Link to={`/users/id/${member.id}`}>
               {member.username ? `@${member.username}` : member.name}
             </Link>
           </strong>
-          {member.recommendationScore !== undefined ? (
-            <small className="invite-recommendation-reasons">
-              {tr ? `Eşleşme puanı ${member.recommendationScore}` : `Match score ${member.recommendationScore}`}
-              {member.recommendationReasons?.length
-                ? ` · ${member.recommendationReasons.map((reason) => recommendationReasonLabel(reason, tr, member.sharedInterestCount)).join(" · ")}`
-                : ""}
-            </small>
-          ) : null}
+          <InviteSignalBoxes
+            evaluation={evaluations.get(member.id)}
+            kind={targetKind}
+            recommendationReasons={member.recommendationReasons}
+            recommendationScore={member.recommendationScore}
+            sharedInterestCount={member.sharedInterestCount}
+            tr={tr}
+          />
         </div>
         <div className="row-actions">
           <button
             className="secondary-action"
-            disabled={pending || alreadyInvited}
+            disabled={pending || alreadyInvited || forbidden || assessment.isFetching || assessment.isError}
             onClick={() => onInvite(member.id)}
             type="button"
           >
             <UserPlus size={16} />
-            {alreadyInvited
+            {forbidden ? tr?"Davet yetkiniz yok":"Invitation not allowed" : alreadyInvited
               ? tr
                 ? "Davet edildi"
                 : "Invited"
@@ -1111,10 +1224,11 @@ function InviteUserCards({
   return (
     <div className="invite-user-cards">
       {title ? <h2>{title}</h2> : null}
+      {assessment.isError ? <p role="alert" className="form-error">{tr?"Davet izinleri yüklenemedi. Lütfen yeniden deneyin.":"Invitation permissions could not be loaded. Please retry."}</p> : null}
       {available.length ? (
         <button
           className="create-inline-link invite-all-link"
-          disabled={pending}
+          disabled={pending || assessment.isFetching || assessment.isError}
           onClick={() => onInviteAll(available.map((item) => item.id))}
           type="button"
         >
@@ -1122,12 +1236,8 @@ function InviteUserCards({
         </button>
       ) : null}
       {cards(available, false)}
-      {invited.length ? (
-        <>
-          <h3>{tr ? "Zaten davet ettikleriniz" : "Already invited"}</h3>
-          {cards(invited, true)}
-        </>
-      ) : null}
+      {invited.length ? <details><summary>{tr ? `Zaten davet ettikleriniz (${invited.length})` : `Already invited (${invited.length})`}</summary>{cards(invited,true)}</details> : null}
+      {unavailable.length ? <details><summary>{tr ? `Davet yetkiniz olmayanlar (${unavailable.length})` : `Invitation not allowed (${unavailable.length})`}</summary>{cards(unavailable,false,true)}</details> : null}
       {!unique.length ? (
         <p className="form-help">
           {tr ? "Listelenecek kullanıcı bulunamadı." : "No users to display."}
@@ -1588,6 +1698,7 @@ function EventGuestList({
                 </strong>
                 <span>
                   <Link to={`/users/id/${item.userId}`}>{item.user?.name}</Link>
+                  {item.user?.status === "invited" ? <small>{item.user.phone || (item.user.email.endsWith("@invite.konnektora.local") ? "" : item.user.email)}</small> : null}
                 </span>
                 <small>
                   {translateRole(item.role, language)} · {translateStatus(item.status, language)}
@@ -1779,6 +1890,7 @@ function PlaceMemberList({
                 </strong>
                 <span>
                   <Link to={`/users/id/${item.userId}`}>{item.user?.name}</Link>
+                  {item.user?.status === "invited" ? <small>{item.user.phone || (item.user.email.endsWith("@invite.konnektora.local") ? "" : item.user.email)}</small> : null}
                 </span>
                 <small>
                   {translateRole(item.role, language)} · {translateStatus(item.status, language)}
@@ -1817,18 +1929,7 @@ function PlaceMemberList({
               ) : null}
               {item.status === "accepted" ? (
                 <>
-                  <select
-                    aria-label={tr ? "Üye rolü" : "Member role"}
-                    disabled={pending}
-                    value={item.role}
-                    onChange={(event) =>
-                      onUpdate(item.userId, { role: event.target.value })
-                    }
-                  >
-                    <option value="member">{tr ? "Üye" : "Member"}</option>
-                    <option value="manager">{tr ? "Sahip" : "Owner"}</option>
-                    <option value="organizer">{tr ? "Organizatör" : "Organizer"}</option>
-                  </select>
+
                   <button
                     className="management-action management-action-checkin"
                     disabled={pending}
@@ -1942,7 +2043,7 @@ function CheckInHistory({
                 )}
               </Link>
               <div>
-                <strong>
+                <strong className="member-name-line">{item.user?.id?<FollowStar id={item.user.id}/>:null}
                   <Link to={`/users/id/${item.user?.id ?? ""}`}>
                     {item.user?.username ? `@${item.user.username}` : item.name}
                   </Link>
@@ -2127,6 +2228,7 @@ function CheckInPassportDialog({
               ) : null}
             </h3>
             <p>{passport.user.name}</p>
+            {passport.user.status === "invited" ? <p>{passport.user.phone || (passport.user.email.endsWith("@invite.konnektora.local") ? "" : passport.user.email)}</p> : null}
           </div>
           <span
             className={`status-pill status-${passport.alreadyInside ? "attended" : passport.status}`}

@@ -1,0 +1,4 @@
+City names derived from GeoNames cities500, downloaded 2026-10-03.
+https://www.geonames.org/ https://download.geonames.org/export/dump/
+CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+Names grouped by country and deduplicated. Covers populated places above 500 inhabitants and administrative seats; not every settlement.

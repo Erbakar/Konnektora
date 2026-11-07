@@ -1,3 +1,4 @@
+import { FollowStar } from "./MemberSignals";
 import { ArrowUpRight, CalendarDays, Hash, MapPin, UserRound } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useRef } from "react";
@@ -13,7 +14,7 @@ export function DiscoveryCard({ item, hideSubtitle = false, standard = false }: 
   const { language } = useLanguage();
   const Icon = icons[item.kind];
   const initials = item.title
-    .replace(/^#/, "")
+    .replace(/^[@#]/, "")
     .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0])
@@ -50,7 +51,7 @@ export function DiscoveryCard({ item, hideSubtitle = false, standard = false }: 
     <article className={`event-card${item.kind === "place" ? " place-card" : ""}`} ref={cardRef}>
       <Link className={`event-card-media${item.imageUrl ? "" : " event-card-media-fallback"}`} onClick={() => rememberContentSource(item.kind, item.id)} to={item.href}>
         {item.imageUrl ? <img alt="" src={resolveMediaUrl(item.imageUrl)}/> : item.kind === "event" ? <CalendarDays aria-hidden="true" size={34}/> : <MapPin aria-hidden="true" size={34}/>}
-        <span className="event-card-visibility-badge">{kindLabel}</span>
+        <span className="event-card-visibility-badge">{item.visibility ? (language === "tr" ? { open: "Herkese açık", approval_required: "Onay gerekli", invite_only: "Sadece davetli" } : { open: "Open to everyone", approval_required: "Approval required", invite_only: "Invite only" })[item.visibility] : kindLabel}</span>
       </Link>
       <div><h3><Link onClick={() => rememberContentSource(item.kind, item.id)} to={item.href}>{item.title}</Link></h3>{!hideSubtitle && subtitle ? <p>{subtitle}</p> : null}</div>
       <div className="event-details">
@@ -61,8 +62,8 @@ export function DiscoveryCard({ item, hideSubtitle = false, standard = false }: 
     </article>
   );
   return (
-    <Link className={`discovery-card discovery-${item.kind}`} onClick={() => rememberContentSource(item.kind, item.id)} ref={(node) => { cardRef.current = node; }} to={item.href}>
-      <span className="discovery-card-visual">
+    <div className={`discovery-card-shell ${item.kind === "user" ? "is-user" : ""}`}><article className={`discovery-card discovery-${item.kind}`} ref={cardRef}>
+      <Link to={item.href} className="discovery-card-visual" onClick={() => rememberContentSource(item.kind, item.id)}>
         {item.imageUrl ? (
           <img alt="" src={resolveMediaUrl(item.imageUrl)} />
         ) : item.kind === "user" ? (
@@ -70,16 +71,16 @@ export function DiscoveryCard({ item, hideSubtitle = false, standard = false }: 
         ) : (
           <span className="discovery-card-icon"><Icon size={22} /></span>
         )}
-      </span>
+      </Link>
       <span className="discovery-card-copy">
         <small>{kindLabel}</small>
-        <strong>{item.title}</strong>
+        <strong className="member-name-line">{item.kind === "user" ? <FollowStar id={item.id}/> : null}<Link to={item.href} onClick={() => rememberContentSource(item.kind, item.id)}>{item.title}</Link></strong>
         {!hideSubtitle && subtitle ? <span className="discovery-card-subtitle">{subtitle}</span> : null}
         <span className="discovery-card-meta">{meta}</span>
         {item.kind === "event" && item.attendeeCount != null ? <span className="discovery-card-meta">{item.attendeeCount} {language === "tr" ? "katılımcı" : "attendees"}</span> : null}
         {(item.kind === "event" || item.kind === "place") ? <DistanceLabel latitude={item.latitude} longitude={item.longitude}/> : null}
       </span>
-      <span className="discovery-card-arrow" aria-hidden="true"><ArrowUpRight size={17} /></span>
-    </Link>
+      <Link className="discovery-card-arrow" to={item.href} onClick={() => rememberContentSource(item.kind, item.id)} aria-label={language === "tr" ? `${item.title} sayfasını aç` : `Open ${item.title}`}><ArrowUpRight aria-hidden="true" size={17} /></Link>
+    </article></div>
   );
 }

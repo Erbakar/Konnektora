@@ -34,6 +34,12 @@ describe("NotificationsService", () => {
     expect(notificationDelivery.update).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps the in-app and push notification without duplicating a transactional email", async () => {
+    await service.dispatch({ userId: "user-1", topic: NotificationTopic.event_invite, type: "ticket_transfer", title: "Bilet", body: "Bilet devredildi", skipEmail: true });
+    expect(notification.create).toHaveBeenCalledWith({ data: expect.objectContaining({ deliveries: { create: [{ userId: "user-1", channel: "push" }] } }) });
+    expect(mail.sendNotificationEmail).not.toHaveBeenCalled();
+  });
+
   it("does not create or deliver notifications when the topic is disabled", async () => {
     notificationPreference.findUnique.mockResolvedValue({ channel: DeliveryChannel.none });
     await expect(service.dispatch({ userId: "user-1", topic: NotificationTopic.comment, type: "comment", title: "Yorum", body: "Yeni yorum" })).resolves.toBeNull();

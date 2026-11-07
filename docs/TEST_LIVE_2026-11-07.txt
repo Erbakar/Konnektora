@@ -1,0 +1,19 @@
+KONNEKTORA — 07/11 LİSTESİ / 7 KASIM 2026
+
+Kaynak: Konnektora Testler, 07/11 sekmesi (gid=1376110755), 27 madde.
+Canlı: https://konnektora.com — Railway production
+Yayınlar: 49a75c20-58ad-4405-825a-3dd8665405a3 (13:30 UTC), 5b4e8582-9218-4f3f-b4e4-76b78960d5dc (13:53 UTC, SUCCESS)
+Yeni migration: 20261107120000_content_polls (yalnız yeni tablolar: content_polls, content_poll_options, content_poll_votes)
+
+SONUÇ
+27 maddenin 27'si tamamlandı; tabloda C sütununa not yazıldı, A:C arka planı #b7e1cd yapıldı.
+1. maddedeki "Eşleşme puanı nedir?" sorusu C4'te cevaplandı (ekibin sorusu korunarak altına eklendi).
+
+DOĞRULAMA
+- Birim testleri: web 206/206 (vitest), api 485/485 (jest). Yeni: apps/web/src/test/nov07-acceptance.spec.tsx, apps/api/src/content/polls.spec.ts
+- Uçtan uca: aynı sürüm yerel PostgreSQL + API + web ile 4 QA hesabıyla Playwright (davet sayfaları, bildirimler, anket, lightbox, akış, cihaz bildirimi istemi, KYC).
+- Canlı (girişsiz): Hakkımızda, /business/center 404, ana sayfa sayaçları ve üye kartları, akış kartları (#7, #24), mekân etkinlik sekmeleri (#9), mobil Tüm etkinlikler (#15), lightbox tabbar/numara menüsü (#16, #17), etiket gönderi zaman hizası (#20), profil sayaç hizası (#22), /api/comments yanıtında poll alanı, anket uçları 401.
+- Canlı üretim veritabanına QA kaydı yazılmadı.
+
+AÇIK KALANLAR (bu listede değil)
+- 3/11 sekmesindeki SMS (32) ve gerçek telefon rehberi / Gmail maddeleri (24, 25, 26, 39, 40) dokunulmadı.

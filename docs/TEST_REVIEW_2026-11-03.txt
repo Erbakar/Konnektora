@@ -1,0 +1,217 @@
+KONNEKTORA — 3/11 TEST LİSTESİ / 4 KASIM 2026 DOĞRULAMA
+
+Kaynak: https://docs.google.com/spreadsheets/d/1tZdzPN7diSJJR7omUtJJp_bdMWERAICPFI4S2bngHSk/edit?gid=599477572
+Kaynağın okunmuş kopyası: output/nov03-qa/source.json
+
+SONUÇ VE SINIR
+40 madde tek tek ele alındı. 35 madde yerel ortamda doğrulandı; 24, 25, 26, 32, 39 kısmi/açık.
+“Yerel doğrulandı” canlıya yayınlandığı veya gerçek sağlayıcı kabulünün yapıldığı anlamına gelmez.
+Değişiklikler canlıya yayınlanmadı; Google tablosunda tamamlandı/yeşil işareti verilmedi.
+Testler ayrı PostgreSQL veritabanı, gerçek yerel API ve Chrome ile yapıldı. Gerçek kişilere mesaj/davet gönderilmedi.
+Rehber seçim ve sağlayıcı hata senaryolarında otomatik ekran testleri kontrollü sağlayıcı yanıtları kullanır; gerçek Google/telefon kabulü değildir.
+Kullanıcı SMS testi için henüz hazır olmadığımızı bildirdi. Bu madde açık bırakıldı.
+
+DOĞRULAMA SONUÇLARI
+API: 64 test dosyası, 500/500 başarılı; finans veritabanı testleri dahil, atlanan yok.
+Web: 47 test dosyası, 203/203 başarılı.
+3/11 gerçek HTTP kabul testi: 10 kontrol başarılı.
+23/10 gerçek veritabanı kabul testi: 37/37 başarılı.
+23/10 davet matrisi: 39/39 başarılı.
+Lint ve üretim derlemesi (TypeScript dahil) başarılı. Derlemede mevcut büyük dosya boyutu uyarısı var.
+Masaüstü Chrome ve 390 px dar görünüm kontrol edildi. Dar görünüm gerçek telefon donanımı değildir.
+Kanıt klasörü: output/nov03-qa/ — ekran görüntüleri, test çıktıları, HTTP sonuçları ve gizlilik seçenekleri.
+
+MADDELER
+
+1. [YEREL DOĞRULANDI] Etkinlik gönderisindeki takip yıldızı
+   Gerçek API'ye bağlı tarayıcıda boş → dolu → boş denendi; takip listesi HTTP üzerinden tekrar okundu.
+   Mevcut ortak yıldız normal üye hesapları arasında çalıştı. İstek hatalarının sessiz kalmaması için görünür hata eklendi.
+
+2. [YEREL DOĞRULANDI] Etkinlik alt yorumundaki takip yıldızı
+   Yorum yazarı üzerinde takip değişimi ve ortak takip durumunun güncellenmesi denendi.
+   Aynı kullanıcıya ait iki yıldızın birlikte güncellenmesi ayrıca otomatik etkileşim testiyle doğrulandı.
+
+3. [YEREL DOĞRULANDI] Mekân gönderisindeki takip yıldızı
+   Tarayıcıda iki yönde değişim ve sunucudan okunmuş kalıcı durum doğrulandı.
+
+4. [YEREL DOĞRULANDI] Mekân alt yorumundaki takip yıldızı
+   Tarayıcıda takip et / takibi bırak işlemleri denendi; iki durumda ikon değişti.
+
+5. [YEREL DOĞRULANDI] İlgi alanı gönderisindeki takip yıldızı
+   Eksik yıldız eklendi. Gerçek etiket gönderisi üzerinde iki yönde takip değişimi test edildi.
+
+6. [YEREL DOĞRULANDI] Listede tekrarlanan mekân yorum yıldızı
+   4. maddeyle aynı istek tekrar doğrulandı. Olası etiket yorumu niyeti de kapsandı:
+   etiket alt yorumunda dolu → boş → dolu ve kalp açık/kapalı denendi. Kanıt: tag-comment-liked.png.
+
+7. [YEREL DOĞRULANDI] Etkinlik davet kartındaki uyum değerleri
+   API'ye sayısal etkinlik partneri ve katılımcı uyumu eklendi; kartlara yüzde olarak bağlandı.
+   Gerçek örnekte %45 / %14 görüldü; 0 değerinin de gösterimi otomatik testte doğrulandı.
+   Kanıt: event-invite-scores.png, http-results.json.
+
+8. [YEREL DOĞRULANDI] Mekân davet kartındaki uyum değerleri
+   Mekân katılımcılarından hesaplanan aynı iki alan gerçek API yanıtında ve mekân davet ekranında doğrulandı.
+   Değerlendirme yüklenemezse davet düğmeleri kapanır ve hata görünür.
+
+9. [YEREL DOĞRULANDI] Etkinlikle ilgili kullanıcılar sayfasının davet düğmesi
+   Başlık, davet bağlantısı ve kişi sayısı hizalandı. Düğmeye ikon, 44 px yükseklik ve okunur beyaz metin verildi.
+   Son tarayıcı ölçümü ve ekran görüntüsü: event-related.png.
+
+10. [YEREL DOĞRULANDI] Mekânla ilgili kullanıcılar sayfasının davet düğmesi
+    Aynı düzen mekân sayfasında açılıp doğrulandı. Kanıt: place-related.png.
+
+11. [YEREL DOĞRULANDI] Takvime ekle penceresi
+    Takvim seçenekleri paylaşım penceresinin ortak düğme düzenini kullanıyor.
+    Gerçek etkinlikte pencere açıldı ve görünümü kontrol edildi. Kanıt: calendar.png.
+
+12. [YEREL DOĞRULANDI] Akış kartlarının takip yıldızı
+    Gerçek akışta yıldız değiştirildi. Aynı yazara ait diğer kartlar ve takip düğmesi birlikte güncellendi.
+
+13. [YEREL DOĞRULANDI] Akış kartlarının takip et düğmesi
+    Düğmeyle takip edildi, yıldızla geri alındı; durumlar eşleşti. Başarısız istek için görünür hata eklendi.
+    İlk rapordaki çalışmama normal aktif yerel hesapta tekrarlanmadı; bütün canlı hesap türleri için kabul iddiası yok.
+
+14. [YEREL DOĞRULANDI] Akış etkinlik metninin kullanıcı adının yanında başlaması
+    Etkinlik metni aynı satır akışına alındı; kullanıcı adıyla yazı boyutu/ağırlığı eşitlendi.
+    Tarayıcıda satır konumu ve hesaplanan stiller kontrol edildi.
+
+15. [YEREL DOĞRULANDI] Paylaş düğmesinin imleci
+    Ortak düğme stilinde cursor:pointer. Tarayıcıdaki hesaplanan stil doğrulandı.
+
+16. [YEREL DOĞRULANDI] Takip et / mesaj gönder / paylaş düğmelerinin birliği
+    Yazı boyutu, boşluk, çerçeve, arka plan ve hizalama ortaklaştırıldı; akışta açılıp kontrol edildi.
+
+17. [YEREL DOĞRULANDI] Üç nokta menüsünün görünmeyen seçenekleri
+    Sorun gerçek tarayıcıda tekrarlandı: hem kart hem aksiyon satırı menüyü kesiyordu.
+    İki taşma kuralı düzeltildi; menü katmanı düzenlendi. “Rapor et” görünürken kaydedildi: feed-menu.png.
+
+18. [YEREL DOĞRULANDI] Tırnak işareti ve gönderi metni
+    Büyük tırnak metnin soluna yerleştirildi; içerik sağından başlıyor. Kanıt: feed-menu.png.
+
+19. [YEREL DOĞRULANDI] Akış kartlarının görünümü
+    Kimlik, etkinlik metni, bağlantılar ve aksiyonların boyut/hizaları düzenlendi.
+    Gerçek içerikle tarayıcı kontrolü yapıldı. Tasarımın kişisel beğeni onayı ayrıca kullanıcıya aittir.
+
+20. [YEREL DOĞRULANDI] Bilet özetinin para birimi
+    Fiyat aralığı para birimiyle gösterilir. TRY, TL olarak yazılır; farklı para birimleri ayrı aralıklardır.
+    100 ve 250 TRY örneği gerçek etkinlikte TL100–TL250 olarak görüldü.
+
+21. [YEREL DOĞRULANDI] Dış satış düğmesinin satır sayısı
+    Düğmeye yeterli genişlik verildi. 390 px ekranda “Satış sayfasına git” tek satırda görüldü.
+    Bu test ayrıca alt mobil menünün bilet penceresinin önüne geçtiğini gösterdi; pencere katmanı düzeltildi.
+    Kanıt: tickets-mobile.png. Dış sitede satın alma yapılmadı.
+
+22. [YEREL DOĞRULANDI] Mesaj başlığında yıldız konumu
+    Yıldız kullanıcı adının solunda aynı hizaya alındı. Tarayıcı ölçümü: yıldız y=137, isim y=138.25.
+    Kanıt: message.png ve messages-corporate.png.
+
+23. [YEREL DOĞRULANDI] Mesaj başlığında yıldız etkileşimi
+    Gerçek konuşmada takip et / bırak işlemleri ve ikonun iki durumu test edildi.
+
+24. [KISMİ / GERÇEK CİHAZ BEKLİYOR] Telefon rehberinde tümünü seç
+    Uygulamanın seçim adımına tümünü seç / seçimi kaldır eklendi; kişiler başlangıçta seçili değil.
+    Etkinlik ve mekân için otomatik etkileşim testleri geçti. Masaüstü desteklememe hatası da tarayıcıda denendi.
+    Gerçek telefon kişi seçicisi denenmedi. Telefonun yerel seçici ekranındaki “tümünü seç” imkânını cihaz/tarayıcı belirler.
+    Mevcut tek eşleştirme isteği sınırı 500 kayıttır; daha büyük seçim ekranda açıklanır ve engellenir.
+
+25. [KISMİ / GOOGLE KABULÜ AÇIK] Etkinlikte Gmail rehberi
+    Tarama → kişi seçimi → eşleştirme → açık davet eylemi ayrıldı; taramada davet gönderilmiyor.
+    Manuel arama ve eski davet sayısı kaldırıldı, etkinlik davet ekranı korunuyor.
+    Engellenen/kapatılan Google penceresi görünür hata verir; gerçek modda sahte kişi dönüşü kaldırıldı.
+    Başarılı seçim ve erişim reddi kontrollü ekran testleriyle doğrulandı.
+    “Google doğrulama sürecini tamamlamadı” sorununun gerçek hesap/Google projesi tarafı giderilmiş sayılmıyor.
+
+26. [KISMİ / GOOGLE KABULÜ AÇIK] Mekânda Gmail rehberi
+    25. maddenin aynı akışı mekân hedefi için ayrı test edildi; tarayıcıda mekân davet yolu korundu.
+    Gerçek Google izin ve kişi erişimi kabulü hâlâ açık.
+
+27. [YEREL DOĞRULANDI] Guest List ad/şehir/yaş/cinsiyet gizliliği
+    Liste özeti ve detay yanıtında kişisel ad, konum ve demografi izinleri sunucu tarafında uygulanıyor.
+    Gerçek HTTP testinde gizli ad yerine kullanıcı adı; şehir, ülke, doğum tarihi ve cinsiyet null döndü.
+    Gizlilik ayarı nesnesi de yanıttan çıkarıldı. Kanıt: http-results.json.
+
+28. [YEREL DOĞRULANDI] Bildirim kartının takip yıldızı
+    Avatar → yıldız → kullanıcı adı sırası ve satır hizası düzenlendi. Kanıt: notifications.png.
+
+29. [YEREL DOĞRULANDI] Bildirim kartlarının görünümü
+    Kart arka planı, çerçeve, iç boşluk, başlık ve tarih stili düzenlendi; gerçek bildirimle görsel kontrol yapıldı.
+    Kanıt: notifications.png.
+
+30. [YEREL DOĞRULANDI] Ana sayfa topluluk yıldızları ve anonim boşluk
+    Yıldız kullanıcı adının doğrudan soluna alındı; iç içe etkileşimli bağlantı yapısı kaldırıldı.
+    Girişli ve çıkış yapılmış oturum ayrı kontrol edildi. Anonimde yıldız sayısı 0, isim sol kenarı kapsayıcıyla aynı, padding=0.
+    Kanıt: home-members.png, home-anonymous.png.
+
+31. [YEREL DOĞRULANDI] Gönderi/yorum beğenisinin dolu kırmızı görünmesi
+    Gerçek hata bulundu: yorum listeleri oturum bilgisini göndermediğinden sayı artsa bile liked=false okunuyordu.
+    Etkinlik/mekân/etiket yorum listelerine oturum eklendi; etiket sorgusu kullanıcıya göre ayrıldı.
+    Üç içerik türünde gönderi ve alt yorum beğenileri tarayıcıda denendi; etkinlik/mekân için HTTP geri okuma da yapıldı.
+    Beğenilmiş kalp aria-pressed=true, rgb(220,38,38), fill=currentColor; geri alınca boş. Kanıt: tag-comment-liked.png.
+
+32. [AÇIK / KULLANICI SMS TESTİNE HAZIR DEĞİL] Telefon numarasını değiştirme
+    Mevcut akış önce eski doğrulanmış numaraya, ardından yeni numaraya kod gönderiyor.
+    Gerçek veritabanlı iki aşama ve kodun tekrar kullanılamaması testi geçti; SMS göndericisi testte taklit edildi.
+    İstenen uyarı metni SmsService içinde mevcut. Gerçek SMS teslimi denenmedi ve tamamlandı sayılmadı.
+
+33. [YEREL DOĞRULANDI] Mesajlarda gizli kişisel ad
+    Gerçek konuşma API'sinde ve tarayıcıda “Gizli İsim” görünmedi; yalnız @nov03user1 gösterildi.
+    Kanıt: message.png, http-results.json.
+
+34. [YEREL DOĞRULANDI] Gizlilik açılır menülerinin sırası
+    Herkes → takip ettiklerimin takip ettikleri → takip ettiklerim → varsa hiç kimse.
+    Mevcut seçenekler korunarak yalnız sıralama değiştirildi. Dokuz menünün gerçek DOM seçenekleri kaydedildi: privacy-options.json.
+
+35. [YEREL DOĞRULANDI] Kullanıcı adında boşluk yasağı
+    Ortak UsernameField, uygunluk API'si ve profil doğrulaması güncellendi.
+    İç, baştaki ve sondaki boşluk; sekme karakteri HTTP testinde 400 döndü. Alan etkileşim testi geçersizliği doğruladı.
+    Kayıt akışının profil adımında ve profil düzenlemede kullanılan ortak alan kapsam dahilinde.
+
+36. [YEREL DOĞRULANDI] Ana sayfada büyük kullanıcı adı, küçük kişisel/marka adı
+    Keşif verisi @kullanıcı adını başlık, izin verilen ad/markayı alt başlık verir.
+    Bireysel Bob ve kurumsal Test Markası kartları tarayıcıda; gizli kişisel adın yokluğu HTTP testinde doğrulandı.
+    Kanıt: home-members.png, home-anonymous.png, http-results.json.
+
+37. [YEREL DOĞRULANDI] Profilde büyük kullanıcı adı, küçük kişisel/marka adı
+    Başlık düzenlendi ve boyutu dar kenar çubuğuna uygun hale getirildi.
+    Kurumsal profil @nov03user2 / Test Markası olarak görüldü; gizli bireysel ad ayrıca görünmedi.
+    Kanıt: profile-corporate.png.
+
+38. [YEREL DOĞRULANDI] Mesaj kenar çubuğu ve başlık kimlik düzeni
+    Sol tarafta kullanıcı adı; sağda kullanıcı adı büyük, izin verilen ad/marka küçük gösterilir.
+    Gerçek test yeni kurumsal konuşmada temsilci adının geldiğini ortaya çıkardı; profil verisinden marka seçimi düzeltildi.
+    Tarayıcıda Test Markası doğrulandı; bu durum için ek otomatik regresyon testi geçti. Kanıt: messages-corporate.png.
+
+39. [KISMİ / GERÇEK REHBER KABULÜ AÇIK] Telefon/Gmail ayrıntılı davet akışı
+    1: Seçim adımı ve tümünü seç eklendi. Gerçek cihaz seçicisi ve Google erişimi açık.
+    2.1: Eşleştirme sonrası manuel arama, tarama düğmeleri ve eski davet sayısı gösterilmez.
+    2.2.1: Bulunan üyeler ortak davet/Guest List kartını ve sunucudan değerlendirmeyi kullanır.
+    2.2.2: Tümünü davet et yalnız uygun üyelere gider; yükleme/hata sırasında kapalıdır.
+    2.2.3–4: Zaten davetliler ve gizlilik nedeniyle davet edilemeyenler ayrı kapalı bölümlerde; tekrar davet kapalı.
+    2.3.1: E-posta/telefon tekrarları tekilleştirilir. Aynı üyenin e-posta ve telefonu ayrı davet adayı olarak kalmaz.
+    2.3.2–3: Kutular solda; seçilenleri davet et bağlantısı listenin üstünde.
+    Test: etkinlik/mekân × telefon/Google dört seçim ve dört hata senaryosu, uygun/yasak/davetli kart testi, gerçek HTTP tekilleştirme testi.
+    Gerçek Google listesi, cihaz rehberi ve gerçek davet teslimi denenmedi. Google okuyucusunun mevcut ilk 500 kişi sınırı da sürüyor.
+
+40. [YEREL DOĞRULANDI] Tarama sırasında hedef davet sayfasında kalma
+    Rehber bileşeni etkinlik/mekân davet sayfasının içine alındı; genel arkadaş bul sayfasına yönlendirme kaldırıldı.
+    İki hedefin telefon/Google ekranı yerel tarayıcıda açıldı; desteklenmeyen telefon taramasından sonra URL ve başlık korundu.
+    Başarılı seçim ve hata akışları otomatik testlerde de hedef başlıkla doğrulandı. Kanıt: contact-error-context.png.
+
+23/10'DAN KALANLAR
+6 — AÇIK: Kayıp eski medyanın özgün dosya/yedeği hâlâ yok. Yeni medya kalıcılığı ve video aralık isteği gerçek DB testinde yeniden geçti; bu, eski dosyaların kurtarıldığı anlamına gelmez.
+19 — AÇIK: Gerçek SMS teslimi kullanıcı hazır olmadığı için yapılmadı. Gerçek Facebook/Meta hesap kabulü ve gerçek tahsilat/iade testi de bu çalışmada yapılmadı.
+20 — AÇIK: Kampanya için yetkili sosyal hesap, gönderi bağlantıları, başlangıç/bitiş tarihi ve hediye sınırı gerekiyor. Mevcut taslak: docs/KAMPANYA_TASLAGI_2026-10-23.txt.
+37 — AÇIK: Destek Merkezi videosundaki materyallerin teslimi ve yeni video gelince değiştirilmesi. Mevcut video, kapak, altyazı ve 6 kare output/konnektora-destek-video-materyalleri.zip içinde. Yerleşim Popüler soruların altında, başlıksız. Yeni video/özgün tasarım projesi alınmadı. Kullanıcıya işin özeti ve paket bağlantısı bu görüşmede verildi.
+Diğer eski yazılım senaryoları için 37 kabul + 39 davet matrisi kontrolü yeniden çalıştırıldı; önceki canlı rapor bu çalışmanın yeni canlı kabulü olarak kullanılmadı.
+
+TEKRAR ÇALIŞTIRMA
+Node 22 kullanılır. Yerel PostgreSQL port 55433, qa rolü, konnektora_test DB; migrasyonlar uygulanmış olmalı.
+scripts/seed-nov03-acceptance.cjs yalnız bu sabit yerel DB'ye sahte örnek veri yazar; gerçek mesaj göndermez.
+API localhost:3013 üzerinde aynı DB ile; web VITE_API_URL=http://localhost:3013 ve VITE_MOCK_API=false ile localhost:5173 üzerinde çalıştırılır.
+node scripts/seed-nov03-acceptance.cjs
+node scripts/verify-nov03-acceptance.cjs
+npm run test -w apps/web -- --maxWorkers=2
+FINANCE_TEST_DATABASE_URL ayrı yerel test DB'sini göstermelidir; npm run test -w apps/api -- --runInBand
+TEST_DATABASE_URL yerel kabul DB'sini göstermelidir; npm run test:oct23:acceptance ve npm run test:oct23:invitations
+npm run lint ve npm run build
+Yerel test hesabı seeder içinde tanımlıdır; üretim hesabı/anahtarı değildir.

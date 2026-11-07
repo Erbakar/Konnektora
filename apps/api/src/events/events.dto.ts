@@ -110,6 +110,7 @@ export class CheckInDecisionDto {
 }
 
 export class CreateEventDto {
+  @IsOptional() @IsString() @MaxLength(24) postalCode?: string;
   @IsString()
   @MinLength(3)
   @MaxLength(160)
@@ -117,7 +118,7 @@ export class CreateEventDto {
 
   @IsOptional()
   @IsUUID()
-  placeId?: string;
+  placeId?: string | null;
 
   @IsOptional()
   @IsString()
@@ -137,7 +138,7 @@ export class CreateEventDto {
 
   @IsOptional()
   @IsDateString()
-  endsAt?: string;
+  endsAt?: string | null;
 
   @IsOptional()
   @IsString()
@@ -172,6 +173,9 @@ export class CreateEventDto {
   @MaxLength(120)
   country?: string;
 
+  @IsOptional() @IsString() @MaxLength(120)
+  region?: string;
+
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
@@ -200,7 +204,7 @@ export class CreateEventDto {
   @IsUrl()
   externalRegistrationUrl?: string;
 
-  @IsOptional() @IsUrl() liveUrl?: string;
+  @IsOptional() @IsUrl() liveUrl?: string | null;
   @IsOptional() @IsString() @MaxLength(3000) timeline?: string;
   @IsOptional() @IsArray() lineup?: Array<{
     type?: "heading" | "subheading" | "session" | "break";

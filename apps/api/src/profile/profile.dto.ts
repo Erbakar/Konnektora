@@ -2,6 +2,8 @@ import { Type } from "class-transformer";
 import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsOptional, IsString, IsUrl, IsUUID, Matches, MaxLength, MinLength, ValidateNested } from "class-validator";
 
 export class UpdateProfileDto {
+  @IsOptional() @IsString() @MaxLength(120) region?: string;
+  @IsOptional() @IsString() @MaxLength(24) postalCode?: string;
   @IsString()
   @MinLength(2)
   @MaxLength(160)
@@ -16,7 +18,7 @@ export class UpdateProfileDto {
   @IsString()
   @MinLength(2)
   @MaxLength(80)
-  @Matches(/^[\p{L}\p{N} .-]+$/u)
+  @Matches(/^[\p{L}\p{N}.-]+$/u)
   username?: string;
 
   @IsOptional()
@@ -79,6 +81,8 @@ export class UpdateProfileDto {
 }
 
 export class UpgradeCorporateAccountDto {
+  @IsOptional() @IsString() @MaxLength(120) region?: string;
+  @IsOptional() @IsString() @MaxLength(24) postalCode?: string;
   @IsString() @MinLength(2) @MaxLength(160)
   companyName!: string;
 

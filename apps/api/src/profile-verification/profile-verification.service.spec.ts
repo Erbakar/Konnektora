@@ -53,13 +53,14 @@ describe("ProfileVerificationService", () => {
       "blink",
     );
     expect(result.verified).toBe(true);
-    expect(profileVerification.create).toHaveBeenCalledWith({
+    expect(profileVerification.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         status: "approved",
         faceMatchScore: 0.98,
         livenessScore: 0.97,
       }),
-    });
+      omit: { selfieBytes: true },
+    }));
     expect(user.update).toHaveBeenCalledWith({
       where: { id: "user-1" },
       data: { profileVerifiedAt: expect.any(Date) },
@@ -102,5 +103,17 @@ describe("ProfileVerificationService", () => {
       where: { id: "user-1" },
       data: { profileVerifiedAt: expect.any(Date) },
     });
+  });
+  it("reads stored private evidence without relying on the temporary upload directory", async () => {
+    const bytes = new Uint8Array([255, 216, 255, 0, 255, 217]);
+    profileVerification.findUnique.mockResolvedValue({ selfieUrl: "missing-from-disk.jpg", selfieBytes: bytes });
+    expect(await service.evidence("request-1")).toEqual(Buffer.from(bytes));
+  });
+  it("omits evidence bytes from status and admin list responses", async () => {
+    user.findUnique.mockResolvedValue({ accountType: "individual", profileVerifiedAt: null });
+    profileVerification.findFirst.mockResolvedValue(null); profileVerification.findMany.mockResolvedValue([]);
+    await service.status("user-1"); await service.listAdmin();
+    expect(profileVerification.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({ omit: { selfieBytes: true } }));
+    expect(profileVerification.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ omit: { selfieBytes: true } }));
   });
 });

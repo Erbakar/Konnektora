@@ -1,9 +1,12 @@
+import { notifyComment, notifyProfileMediaAdded } from "../notifications/activity-events";
+import { publicName } from "../common/public-name";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { ReportTargetType, User } from "@prisma/client";
-import { unlink } from "fs/promises";
+import { removeDurableUpload } from "../media-storage/durable-storage";
 import { resolve } from "path";
 import { PrismaService } from "../prisma/prisma.service";
-import { CreateCommentDto, CreateMediaDto, CreateReactionDto } from "./content.dto";
+import { CreateCommentDto, CreateMediaDto, CreateReactionDto, CreatePollDto, VotePollDto } from "./content.dto";
+import { createPoll, pollSummaries, votePoll } from "./polls";
 
 @Injectable()
 export class ContentService {
@@ -11,9 +14,8 @@ export class ContentService {
 
   listMedia(targetType?: ReportTargetType, targetId?: string) {
     return this.prisma.mediaFile.findMany({
-      where: { status: "active", contentType: targetType, contentId: targetId },
+      where: { status: "active", contentType: targetType, contentId: targetId, NOT: { contentId: { startsWith: "pending:" } } },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-      include: { uploadedBy: { select: { id: true, email: true, name: true, role: true, status: true } } }
     });
   }
 
@@ -44,7 +46,8 @@ export class ContentService {
       if (comment.authorId !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu yoruma medya yükleme yetkiniz yok.");
     }
     const count = await this.prisma.mediaFile.count({ where: { contentType: targetType, contentId: targetId, status: "active" } });
-    if (count >= 20) throw new BadRequestException("Bir içerikte en fazla 20 medya bulunabilir.");
+    const limit = commentTypes.has(targetType) ? 50 : 20;
+    if (count >= limit) throw new BadRequestException(`Bir içerikte en fazla ${limit} medya bulunabilir.`);
     return this.prisma.mediaFile.create({ data: { url, type, contentType: targetType, contentId: targetId, uploadedById: user.id, sortOrder: count } });
   }
 
@@ -77,16 +80,28 @@ export class ContentService {
     const current = await this.prisma.mediaFile.findMany({ where: { contentType: targetType, contentId: targetId, status: "active" }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] });
     if (mediaIds.length !== current.length || new Set(mediaIds).size !== mediaIds.length || current.some((item) => !mediaIds.includes(item.id))) throw new BadRequestException("Sıralama albümdeki tüm medyaları tam olarak bir kez içermelidir.");
     const first = current.find((item) => item.id === mediaIds[0]);
-    if (first && first.type !== "image") throw new BadRequestException("Albümün ilk medyası kapak olarak kullanılabilecek bir fotoğraf olmalıdır.");
+    if (first && first.type !== "image" && current.some(item => item.type === "image")) throw new BadRequestException("Albümün ilk medyası kapak olarak kullanılabilecek bir fotoğraf olmalıdır.");
     await this.prisma.$transaction([
       ...mediaIds.map((id, sortOrder) => this.prisma.mediaFile.update({ where: { id }, data: { sortOrder } })),
-      ...(first && targetType === ReportTargetType.event ? [this.prisma.event.update({ where: { id: targetId }, data: { coverImageUrl: first.url } })] : []),
-      ...(first && targetType === ReportTargetType.place ? [this.prisma.place.update({ where: { id: targetId }, data: { coverImageUrl: first.url } })] : []),
+      ...(first?.type === "image" && targetType === ReportTargetType.event ? [this.prisma.event.update({ where: { id: targetId }, data: { coverImageUrl: first.url } })] : []),
+      ...(first?.type === "image" && targetType === ReportTargetType.place ? [this.prisma.place.update({ where: { id: targetId }, data: { coverImageUrl: first.url } })] : []),
     ]);
     return this.listMedia(targetType, targetId);
   }
 
   async deleteContentMedia(targetType: ReportTargetType, targetId: string, mediaId: string, user: User) {
+    const commentTypes: ReportTargetType[] = [ReportTargetType.tag_comment, ReportTargetType.event_comment, ReportTargetType.place_comment, ReportTargetType.comment_reply];
+    if (commentTypes.includes(targetType)) {
+      // İleti/yorum albümü: yalnız ileti sahibi veya yönetici silebilir (medya lightbox "Sil" aksiyonu).
+      const comment = await this.prisma.contentComment.findUnique({ where: { id: targetId }, select: { authorId: true, status: true } });
+      if (!comment || comment.status !== "active") throw new NotFoundException("Yorum bulunamadı.");
+      if (comment.authorId !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu medyayı silme yetkiniz yok.");
+      const media = await this.prisma.mediaFile.findFirst({ where: { id: mediaId, contentId: targetId, contentType: { in: commentTypes }, status: "active" } });
+      if (!media) throw new NotFoundException("Medya bulunamadı.");
+      await this.prisma.mediaFile.update({ where: { id: mediaId }, data: { status: "deleted" } });
+      if (media.url.startsWith("/uploads/")) await removeDurableUpload(resolve(process.cwd(), media.url.slice(1))).catch(() => undefined);
+      return this.prisma.mediaFile.findMany({ where: { contentId: targetId, contentType: { in: commentTypes }, status: "active" }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] });
+    }
     if (targetType !== ReportTargetType.event && targetType !== ReportTargetType.place) throw new BadRequestException("Bu medya albümünden silme yapılamaz.");
     await this.ensureContentMediaManager(targetType, targetId, user);
     const media = await this.prisma.mediaFile.findFirst({ where: { id: mediaId, contentType: targetType, contentId: targetId, status: "active" } });
@@ -99,7 +114,7 @@ export class ContentService {
       ...(media.sortOrder === 0 && targetType === ReportTargetType.event ? [this.prisma.event.update({ where: { id: targetId }, data: { coverImageUrl: nextCover } })] : []),
       ...(media.sortOrder === 0 && targetType === ReportTargetType.place ? [this.prisma.place.update({ where: { id: targetId }, data: { coverImageUrl: nextCover } })] : []),
     ]);
-    if (media.url.startsWith("/uploads/")) await unlink(resolve(process.cwd(), media.url.slice(1))).catch(() => undefined);
+    if (media.url.startsWith("/uploads/")) await removeDurableUpload(resolve(process.cwd(), media.url.slice(1))).catch(() => undefined);
     return this.listMedia(targetType, targetId);
   }
 
@@ -109,7 +124,7 @@ export class ContentService {
       const event = await this.prisma.event.findUnique({ where: { id: targetId }, select: { createdById: true } });
       if (!event) throw new NotFoundException("Etkinlik bulunamadı.");
       if (event.createdById === user.id) return;
-      const manager = await this.prisma.eventParticipant.findFirst({ where: { eventId: targetId, userId: user.id, status: { in: ["accepted", "attended"] }, role: { in: ["organizer", "manager"] } }, select: { id: true } });
+      const manager = await this.prisma.eventParticipant.findFirst({ where: { eventId: targetId, userId: user.id, status: { in: ["accepted", "attended", "not_attending"] }, role: { in: ["organizer", "manager"] } }, select: { id: true } });
       if (manager) return;
       throw new ForbiddenException("Bu etkinliğin medya albümünü yönetme yetkiniz yok.");
     }
@@ -136,7 +151,7 @@ export class ContentService {
     }
     const isFirst = current.length === 0;
     const insertOrder = isFirst ? 0 : 1;
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       if (!isFirst) {
         await tx.mediaFile.updateMany({
           where: { uploadedById: userId, contentType: ReportTargetType.user, contentId: userId, status: "active", sortOrder: { gte: insertOrder } },
@@ -155,6 +170,9 @@ export class ContentService {
         }
       });
     });
+    // Bildirimi açık kullanıcılara bildirim ve akış kartı için kayıt (07/11 #23, #24).
+    await notifyProfileMediaAdded(this.prisma, userId, created.createdAt).catch(() => undefined);
+    return created;
   }
 
   async makeProfilePicture(userId: string, mediaId: string) {
@@ -188,7 +206,7 @@ export class ContentService {
     const current = await this.listProfileMedia(userId);
     const images = current.filter((item) => item.type === "image");
     if (media.type === "image" && images.length === 1) {
-      throw new BadRequestException("Profilde en az bir fotoğraf bulunmalıdır.");
+      throw new BadRequestException("En az 1 profil resminizin olması zorunludur. Yeni bir resim yükledikten sonra bu görseli silebilirsiniz.");
     }
     const nextProfilePicture = media.isProfilePicture ? images.find((item) => item.id !== media.id) : undefined;
     await this.prisma.$transaction([
@@ -198,7 +216,7 @@ export class ContentService {
         : [])
     ]);
     if (media.url.startsWith("/uploads/")) {
-      await unlink(resolve(process.cwd(), media.url.slice(1))).catch(() => undefined);
+      await removeDurableUpload(resolve(process.cwd(), media.url.slice(1))).catch(() => undefined);
     }
     return this.listProfileMedia(userId);
   }
@@ -212,29 +230,44 @@ export class ContentService {
     return media;
   }
 
-  async listComments(targetType: ReportTargetType, targetId: string) {
+  async listComments(targetType: ReportTargetType, targetId: string, viewerId?: string) {
     const comments = await this.prisma.contentComment.findMany({
       where: { status: "active", targetType, targetId, parentId: null },
       orderBy: [{ createdAt: "desc" }],
       include: {
-        author: { select: { id: true, email: true, name: true, username: true, role: true, status: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } },
+        author: { select: { id: true, email: true, name: true, username: true, accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true } }, role: true, status: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } },
         replies: {
           where: { status: "active" },
           orderBy: [{ createdAt: "asc" }],
-          include: { author: { select: { id: true, email: true, name: true, username: true, role: true, status: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } }
+          include: { author: { select: { id: true, email: true, name: true, username: true, accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true } }, role: true, status: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } }
         }
       }
     });
     const commentIds = comments.flatMap((comment) => [comment.id, ...comment.replies.map((reply) => reply.id)]);
     const media = commentIds.length ? await this.prisma.mediaFile.findMany({ where: { contentId: { in: commentIds }, contentType: { in: ["tag_comment", "event_comment", "place_comment", "comment_reply"] }, status: "active" }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }) : [];
+    const reactions = viewerId && commentIds.length ? await this.prisma.contentReaction.findMany({ where: { userId: viewerId, targetId: { in: commentIds }, targetType: ReportTargetType.comment_reply, reaction: "like" }, select: { targetId: true } }) : [];
+    const likedIds = new Set(reactions.map((reaction) => reaction.targetId));
     const mediaByComment = new Map<string, typeof media>();
     for (const item of media) mediaByComment.set(item.contentId, [...(mediaByComment.get(item.contentId) ?? []), item]);
-    const present = (comment: any): any => ({ ...comment, media: mediaByComment.get(comment.id) ?? [], author: comment.author ? { ...comment.author, avatarUrl: comment.author.uploadedMedia?.[0]?.url ?? null, uploadedMedia: undefined } : null, replies: comment.replies?.map(present) });
+    const polls = targetType === "event" || targetType === "place" ? await pollSummaries(this.prisma, comments.map((comment) => comment.id), viewerId) : new Map<string, unknown>();
+    const present = (comment: any): any => ({ ...comment, poll: polls.get(comment.id) ?? null, liked: likedIds.has(comment.id), media: mediaByComment.get(comment.id) ?? [], author: comment.author ? { ...comment.author, name: publicName(comment.author), privacySettings: undefined, avatarUrl: comment.author.uploadedMedia?.[0]?.url ?? null, uploadedMedia: undefined } : null, replies: comment.replies?.map(present) });
     return comments.map(present);
   }
 
-  createComment(input: CreateCommentDto, user: User) {
-    return this.prisma.contentComment.create({
+  createPoll(commentId: string, input: CreatePollDto, user: User) {
+    return createPoll(this.prisma, commentId, input, user);
+  }
+
+  votePoll(pollId: string, input: VotePollDto, user: User) {
+    return votePoll(this.prisma, pollId, input, user);
+  }
+
+  async createComment(input: CreateCommentDto, user: User) {
+    if (input.parentId) {
+      const parent = await this.prisma.contentComment.findUnique({ where: { id: input.parentId } });
+      if (!parent || parent.status !== "active" || parent.parentId || parent.targetType !== input.targetType || parent.targetId !== input.targetId) throw new BadRequestException("Yalnız aynı gönderiye birinci düzey yorum ekleyebilirsiniz.");
+    }
+    const comment = await this.prisma.contentComment.create({
       data: {
         targetType: input.targetType,
         targetId: input.targetId,
@@ -243,6 +276,8 @@ export class ContentService {
         body: input.body.trim().replace(/\n{3,}/g, "\n\n")
       }
     });
+    await notifyComment(this.prisma, comment);
+    return comment;
   }
 
   async updateComment(id: string, body: string, user: User) {

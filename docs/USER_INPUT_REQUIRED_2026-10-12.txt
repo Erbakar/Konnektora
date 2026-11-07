@@ -1,0 +1,26 @@
+Konnektora — Kullanıcı bilgisi, karar veya hesap erişimi gerekenler
+Güncelleme: 13 Ekim 2026
+
+1. Domain ve şirket
+Gerçek şirket unvanı, kayıt sahibi/yetkili, şirket iletişim ve adres bilgileri; mevcut domain kayıt firması ve hedef şirket hesabı. Şirketin hukuki kuruluşu veya sahipliğini asistan adına oluşturma yapılmadı. Parola paylaşmak yerine yetkili hesapta giriş/delege erişimi kullanılmalı.
+
+2. Ödeme ve KYC/KYB
+Seçilen ödeme sağlayıcısı, şirket hesabı ve başvuru/yanıtın bulunduğu e-posta veya kanal; sağlayıcının test ve canlı entegrasyon bilgileri. KYC/KYB sağlayıcısı, desteklenen ülkeler ve istenen şirket belgeleri. Canlı tahsilat, iade ve para çekme tamamlanmış değildir.
+
+3. SMS
+SMS sağlayıcısı hesabı, gönderici başlığı onayı ve test numarası. Telefon davetleri, cüzdan erişim kodu ve gerçek teslim kontrolleri buna bağlı.
+
+4. Google Contacts ve Facebook
+Google Cloud OAuth uygulamasının doğrulama başvurusu için proje sahibi erişimi; Meta uygulamasının üretim/onay durumu için yetkili hesap. Kod değişikliği sağlayıcı onayının yerini tutmaz.
+
+5. Gerçek cihaz kabul testi
+Yetkili kullanıcıyla gerçek telefonda rehber izni, davet kabulü ve push bildiriminin teslimi doğrulanmalı. E-posta/PDF ile gerçek uçtan uca test için belirlenmiş test alıcısı kullanılmalı.
+
+6. Küratör anlaşmaları
+Üretimde kayıtlı anlaşma bulunmuyor. Gerçek küratör hesabı, ülke/şehir/bölge ataması ve varsa referans küratör bilgisi yönetim paneline girilmeli. Varsayılan oranlar güncel belgeden gelir; geçmiş kayıtları değiştirmeden yeni sürüm açılır. Bu bilgiler olmadan yazılımın gelir payı oluşturacağı bir hak sahibi yoktur.
+
+Yazılım dışındaki ilk e-posta maddeleri
+- Marka başvurusu: başvuru sahibi, ülke/kapsam, resmî bilgiler ve yetkili başvuru süreci.
+- Ekip mesajları: alıcılar ve kullanılacak kanal. Henüz gönderilmedi.
+- Günhan hissesi: rol, zaman taahhüdü, mevcut ortaklık yapısı ve hak ediş kararı.
+- Buluşma: şehir/semt ve ekip müsaitliği.

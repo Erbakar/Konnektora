@@ -1,0 +1,38 @@
+Konnektora — 12 Ekim 2026 çalışma durumu
+
+Uygulama değişiklikleri (12 Ekim test düzeltmeleriyle birlikte yayınlandı)
+- Ana sayfadaki video carousel’i, geçiş düğmeleri ve video üzerindeki başlık/altyazı açıklaması kaldırıldı. Rehber metni korundu.
+- Ana sayfa rehberine mutualizm, profil takası ve kişiselleştirilmiş etkinlik/davet metinleri eklendi. İşletme rehber metni değiştirilmedi.
+- İşletmeler sayfasına ortalanmış, açılır 20 Türkçe SSS eklendi. Mağaza, Üyeler ve Üye kartı bağlantıları bağlandı.
+- Ödeme henüz etkin olmadığından SSS’de çevrim içi satış hazırmış gibi sunulmadı; kesinleşmemiş komisyon ve iade taahhütleri daraltıldı. İçerik sahibinin bu farkları incelemesi gerekir.
+- Mağaza sayfasına Bireysel hizmetler / Kurumsal hizmetler seçenekleri, güncel USD fiyatları ve MVP sonrası hizmetler için yakında etiketleri eklendi.
+- Yeni paketlerin satın alma ve hak etkinleştirme altyapısı tamamlanmadığı açıkça yazıldı. Eski paketlere sahte ödeme belirteci üreten satın alma düğmeleri kaldırıldı.
+
+Tamamlanmayan işler ve bağımlılıklar
+1. Yeni videolar: 12 Ekim yeniden denemesinde Drive üzerinden iki MOV ve iki İngilizce SRT indirildi. Ana sayfa (230,233 saniye) ve işletmeler (86 saniye) videoları web uyumlu MP4 olarak hazırlandı. İngilizce altyazılar WebVTT’ye dönüştürüldü. Türkçe altyazı kaynak klasörde bulunmuyor; eski Türkçe altyazılar yeni videolara bağlanmadı. Yayın tamamlandı (54dc462e-3f34-4eab-85d2-fcb7e2dd923c); canlı dosya özetleri yerel dosyalarla eşleşiyor. Kullanıcının tercihi doğrultusunda şimdilik yalnız İngilizce altyazı kullanılıyor.
+2. Paket altyapısı: mevcut free/plus/premium ve starter/growth/scale modellerinden yeni kataloğa geçiş; mevcut aboneliklerin eşlenmesi; 31 günlük dönem; yönetici panelinden fiyat/limit değişimi; yeni sohbet, etiket, etkinlik ve davet kotaları; istisnalar; deneme paketi hediye etme tamamlanmalı. Katalog görünümü bu hakların uygulandığı anlamına gelmez.
+3. Backoffice: güncel belge okundu. Mevcut finans/küratör kodunun tüm yeni gereksinimlerle fark analizi ve kabul testleri tamamlanmadı.
+4. Küratör oranları: mevcut anlaşmalar değiştirilmedi. Ana tablo kapı %50, sponsorluk %30, bilet komisyonu %30, kurumsal abonelik %30, bireysel %10, araştırmacı %20, kurumsal ekstra davet/mesaj %30, üç reklam türü %30 ve referans %5 diyor. 12 Ekim kullanıcı kararıyla küratör belgesinin ana tablosu esas alındı: ek davet/mesaj %30. Üç reklam kategorisi anlaşma ve manuel gelir formuna eklendi. Yeni anlaşmalar bu oranları öneriyor; mevcut anlaşmalara otomatik yeni sürüm açılmadı. Geçmiş muhasebe kayıtları yeni oranlarla yeniden hesaplanmamalı.
+5. Komisyon: gelir modeli %5 veya %2,5 + sağlayıcı komisyonu diyor; SSS 2028’e kadar %5 diyor. Tek sözleşmesel kural netleşmeli.
+6. Domain: şirket unvanı, kayıt sahibi, mevcut kayıt firması ve hedef şirket hesabı hazır değil. Devir yapılmadı.
+7. LinkedIn: gerçek yetkili kişinin hesabı ve şirket bilgileri hazır değil. Sayfa oluşturulmadı; footer’a doğrulanmamış URL eklenmedi.
+8. Sosyal takip çağrısı ve pazartesi ekip görevlendirmesi: alıcılar/kanal belli değil; mesaj gönderilmedi ve otomasyon kurulmadı.
+9. Marka tescili: başvuru sahibi, ülke/kapsam ve resmî başvuru bilgileri eksik. 9, 41, 42, 43, 35 sınıfları kullanıcının önerisi olarak kaydedildi; uygunluk incelemesi veya başvuru yapılmadı.
+10. SMS: sağlayıcı hesabı ve gönderici onayı olmadan canlı entegrasyon tamamlanmadı.
+11. Ödeme: bağlı Gmail’de Konnektora ve ödeme/payment/iyzico/stripe/paytr aramasında sonuç bulunmadı. Başka hesap veya kanalda yanıt bulunabilir. Kodda canlı tahsilatı kapatan koruma var; üretimde ödeme tamamlandı denemez.
+12. Günhan hissesi: rol, zaman taahhüdü, yatırım, mevcut sermaye yapısı ve hak ediş koşulları bilinmiyor; oran taahhüdü verilmedi.
+13. Test buluşması: şehir/semt, ekip müsaitliği ve mekân doğrulaması gerekiyor. Asistan fiziksel olarak katılamaz.
+
+Önerilen açılış takvimi
+21 Ekim 2026 akşamı: ekip ve küratör çevresine kontrollü beta; kayıt/giriş, davet, etkinlik oluşturma, bilet, erişim yetkileri ve hata bildirimi kabul testleri tamamlanmış olmalı. Çalışmayan ücretli işlemler açılmamalı.
+22–27 Ekim: gerçek içerikle test, hata önceliklendirme ve düzeltme doğrulaması. Konnektora’ya öneriler alanının mevcut durumu ayrıca doğrulanmalı.
+28 Ekim 2026 akşamı: kritik hata kalmadıysa genel açılış. Tarih otomatik bir yayınlama talimatı değildir; 12 Ekim düzeltmeleri yayınlandı; genel açılış duyurusu yapılmadı.
+
+LinkedIn için kullanılabilecek taslak bilgiler
+Ad: Konnektora App
+Slogan: İlgi alanlarından gerçek bağlantılara.
+Açıklama: Konnektora, insanları ortak ilgi alanları, etkinlikler ve mekânlar etrafında buluşturan sosyal keşif platformudur. Üyelerin topluluklarını keşfetmesine; organizatörlerin ve işletmelerin etkinliklerini tanıtmasına, katılımcılarıyla iletişim kurmasına ve topluluklarını büyütmesine yardımcı olur. Kontrollü beta hazırlıkları sürmektedir.
+Logo önerisi: Konnektora Logo Kutu.jpeg. Şirket türü, büyüklüğü, adresi ve kurumsal web adresi gerçek bilgilerle tamamlanmalı.
+
+Ekip sosyal takip mesajı taslağı (gönderilmedi)
+Merhaba ekip, Konnektora’nın duyurularını takip etmek için sosyal hesaplarımızı takip edebilir, isterseniz bildirimleri açabilirsiniz. İlginizi çeken paylaşımlara kendi görüşlerinizle katkıda bulunmanız bizi destekler. Instagram: https://www.instagram.com/konnektora/ Facebook: https://www.facebook.com/konnektora TikTok: https://www.tiktok.com/@_konnektora X: https://x.com/konnektora YouTube: https://youtube.com/@konnektora

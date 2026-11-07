@@ -1,3 +1,5 @@
+jest.mock("../common/invite-assessment",()=>({assessInvitees:jest.fn().mockResolvedValue([])}));
+jest.mock("../notifications/activity-events", () => ({ actorLabel: jest.requireActual("../notifications/activity-events").actorLabel, notifyEntityCreated: jest.fn().mockResolvedValue(undefined), notifyEntityChanges: jest.fn().mockResolvedValue(undefined), notifyUserActivity: jest.fn().mockResolvedValue(undefined), notifyEventAvailability: jest.fn().mockResolvedValue(undefined), isUndiscoverable: jest.fn().mockResolvedValue(false), notifyRegistration: jest.fn().mockResolvedValue(undefined), notifyMembershipInvite: jest.fn().mockResolvedValue(undefined), notifyComment: jest.fn().mockResolvedValue(undefined), recordActivity: jest.fn().mockResolvedValue(undefined) }));
 import { BadRequestException, ConflictException, ForbiddenException } from "@nestjs/common";
 import { EventParticipantRole, EventParticipantStatus } from "@prisma/client";
 import { EventsService } from "./events.service";
@@ -10,13 +12,15 @@ describe("EventsService", () => {
     role: "user",
     status: "active",
     accountType: "corporate",
-    businessPlan: "growth",
+    businessPlan: "pro",
     memberPlan: "free",
+    createdAt: new Date("2026-01-01"),
   };
 
   const createService = () => {
     const prisma = {
       event: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ createdBy: null, startsAt: new Date("2026-09-01T18:00:00.000Z"), endsAt: null }),
         create: jest.fn(),
         findUnique: jest.fn(),
         findFirst: jest.fn(),
@@ -24,12 +28,14 @@ describe("EventsService", () => {
         count: jest.fn(),
         update: jest.fn(),
       },
+      eventRevision: { create: jest.fn() },
       eventTag: { findMany: jest.fn(), count: jest.fn() },
       tag: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-      userBlock: { findMany: jest.fn() },
-      user: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn() },
+      userBlock: { findMany: jest.fn().mockResolvedValue([]) },
+      privacySettings: { findUnique: jest.fn().mockResolvedValue(null) },
+      user: { findUniqueOrThrow: jest.fn().mockResolvedValue(actor), findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn() },
       userInterestTag: { findMany: jest.fn() },
-      userFollow: { count: jest.fn(), findMany: jest.fn() },
+      userFollow: { count: jest.fn(), findMany: jest.fn(), findFirst: jest.fn() },
       guestList: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
       guestListMember: { upsert: jest.fn(), deleteMany: jest.fn() },
       guestListShare: { count: jest.fn(), upsert: jest.fn(), deleteMany: jest.fn() },
@@ -37,8 +43,9 @@ describe("EventsService", () => {
       placeInvitation: { findMany: jest.fn() },
       placeMember: { findUnique: jest.fn() },
       eventTicketOrder: { findMany: jest.fn(), update: jest.fn() },
-      financialAccount: { findUnique: jest.fn(), update: jest.fn() },
-      paymentTransaction: { update: jest.fn() },
+      curatorLedgerEntry: { findMany: jest.fn().mockResolvedValue([]) },
+      financialAccount: { findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      paymentTransaction: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       ticketRefund: { create: jest.fn() },
       ownedEventTicket: { updateMany: jest.fn() },
       eventTicketType: { update: jest.fn() },
@@ -51,6 +58,8 @@ describe("EventsService", () => {
         upsert: jest.fn(),
         delete: jest.fn(),
       },
+      $queryRaw: jest.fn(),
+      planUsage: { findUnique: jest.fn(), count: jest.fn().mockResolvedValue(0), create: jest.fn() },
       $transaction: jest.fn(),
     };
     prisma.$transaction.mockImplementation(async (operation: unknown) =>
@@ -59,7 +68,7 @@ describe("EventsService", () => {
         : Promise.all(operation as Promise<unknown>[]),
     );
     const mailService = {
-      sendEventInviteEmail: jest.fn(),
+      sendContactInviteEmail: jest.fn().mockResolvedValue({}), sendEventInviteEmail: jest.fn(),
     };
     const authService = {
       createInviteAcceptToken: jest.fn(),
@@ -68,7 +77,7 @@ describe("EventsService", () => {
       dispatch: jest.fn(),
     };
     const smsService = {
-      sendEventInvite: jest.fn(),
+      sendContactInvite: jest.fn().mockResolvedValue({}), sendEventInvite: jest.fn(),
     };
 
     return {
@@ -80,22 +89,56 @@ describe("EventsService", () => {
         smsService as never,
       ),
       prisma,
+      mailService,
       notifications,
       smsService,
     };
   };
 
+  it("13/10 #14 resolves a country-code phone to the existing member without a duplicate", async () => {
+    const {service,prisma} = createService(); prisma.user.findFirst.mockResolvedValue({...actor,phone:"+905551234567"});
+    const resolve = service as unknown as {resolveInvitee(input:{phone:string}):Promise<{id:string}>};
+    expect(await resolve.resolveInvitee({phone:"905551234567"})).toMatchObject({id:actor.id});
+    expect(prisma.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({where:{phone:{in:["+905551234567","905551234567","00905551234567"]},status:"active"}})); expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { label: "manager at quota", manager: true, price: 0, status: "active", blocked: true },
+    { label: "paid corporate event", manager: true, price: 50, status: "active", blocked: false },
+    { label: "ordinary attendee", manager: false, price: 0, status: "active", blocked: false },
+    { label: "unregistered invitee", manager: true, price: 0, status: "invited", blocked: false },
+  ])("applies invitation quota exceptions: $label", async ({ manager, price, status, blocked }) => {
+    const { service, prisma } = createService();
+    prisma.event.findUnique.mockResolvedValueOnce({ createdById: manager ? actor.id : "other-owner" }).mockResolvedValueOnce({
+      id: "event-1", title: "Night", slug: "night", status: "published", createdBy: actor, price, ticketTypes: [],
+      startsAt: new Date(Date.now() + 60000), endsAt: null, participants: [{ status: "accepted" }],
+    });
+    prisma.eventParticipant.findUnique.mockResolvedValue({ role: "attendee", status: "accepted" });
+    prisma.user.findUnique.mockResolvedValue({ id: "invitee", username: "guest", email: "guest@example.com", name: "Guest", status });
+    prisma.planUsage.count.mockResolvedValue(1000);
+    prisma.eventParticipant.upsert.mockResolvedValue({ id: "participant" });
+    const action = service.inviteParticipant("event-1", { username: "guest" }, actor as never);
+    if (blocked) {
+      await expect(action).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.eventInvitation.create).not.toHaveBeenCalled();
+      expect(prisma.eventParticipant.upsert).not.toHaveBeenCalled();
+    } else {
+      await expect(action).resolves.toEqual({ id: "participant" });
+      expect(prisma.planUsage.create).not.toHaveBeenCalled();
+    }
+  });
+
   it("creates and lists named guest lists for the current owner", async () => {
     const { service, prisma } = createService();
-    prisma.guestList.create.mockResolvedValue({ id: "list-1", name: "VIP", ownerId: actor.id, members: [] });
-    prisma.guestList.findMany.mockResolvedValue([{ id: "list-1", name: "VIP", ownerId: actor.id, members: [] }]);
+    prisma.guestList.create.mockResolvedValue({ id: "list-1", name: "VIP", ownerId: actor.id, members: [], shares: [] });
+    prisma.guestList.findMany.mockResolvedValue([{ id: "list-1", name: "VIP", ownerId: actor.id, members: [], shares: [] }]);
     await expect(service.createGuestList(" VIP ", actor as never)).resolves.toEqual(expect.objectContaining({ name: "VIP" }));
     await service.listGuestLists(actor as never);
     expect(prisma.guestList.create).toHaveBeenCalledWith(expect.objectContaining({ data: { ownerId: actor.id, name: "VIP" } }));
     expect(prisma.guestList.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { OR: [{ ownerId: actor.id }, { shares: { some: { userId: actor.id } } }] } }));
   });
 
-  it("ranks at most 25 transparent invite recommendations and excludes current or blocked users", async () => {
+  it("ranks at most 50 transparent invite recommendations and excludes current or blocked users", async () => {
     const { service, prisma } = createService();
     prisma.event.findUnique
       .mockResolvedValueOnce({ createdById: actor.id })
@@ -140,7 +183,7 @@ describe("EventsService", () => {
         interestTags: [{ tagId: "tag-1", sentiment: "like" }],
         uploadedMedia: [{ url: "/best.jpg" }],
       },
-      ...Array.from({ length: 25 }, (_, index) => ({
+      ...Array.from({ length: 60 }, (_, index) => ({
         id: `candidate-${index}`,
         name: `Candidate ${index}`,
         username: `candidate-${index}`,
@@ -156,7 +199,7 @@ describe("EventsService", () => {
 
     const result = await service.listInviteRecommendations("event-1", actor as never);
 
-    expect(result).toHaveLength(25);
+    expect(result).toHaveLength(50);
     expect(result[0]).toEqual(expect.objectContaining({
       id: "candidate-best",
       avatarUrl: "/best.jpg",
@@ -188,7 +231,7 @@ describe("EventsService", () => {
 
   it("lets a free member read only Guest Lists explicitly shared with them", async () => {
     const { service, prisma } = createService();
-    const freeMember = { ...actor, accountType: "individual", businessPlan: "starter", memberPlan: "free" };
+    const freeMember = { ...actor, accountType: "individual", businessPlan: "free", memberPlan: "free" };
     prisma.event.findFirst.mockResolvedValue(null);
     prisma.guestListShare.count.mockResolvedValue(1);
     prisma.guestList.findMany.mockResolvedValue([{ id: "list-1", ownerId: "owner-2", name: "VIP", members: [], shares: [] }]);
@@ -208,7 +251,7 @@ describe("EventsService", () => {
 
   it("allows custom Guest Lists for a manager with an active paid event", async () => {
     const { service, prisma } = createService();
-    const freeManager = { ...actor, accountType: "individual", businessPlan: "starter", memberPlan: "free" };
+    const freeManager = { ...actor, accountType: "individual", businessPlan: "free", memberPlan: "free" };
     prisma.event.findFirst.mockResolvedValue({ id: "paid-event" });
     prisma.guestList.findMany.mockResolvedValue([]);
     await expect(service.listGuestLists(freeManager as never)).resolves.toEqual([]);
@@ -217,7 +260,7 @@ describe("EventsService", () => {
 
   it("rejects custom Guest Lists without a qualifying plan or paid event", async () => {
     const { service, prisma } = createService();
-    const freeMember = { ...actor, accountType: "individual", businessPlan: "starter", memberPlan: "free" };
+    const freeMember = { ...actor, accountType: "individual", businessPlan: "free", memberPlan: "free" };
     prisma.event.findFirst.mockResolvedValue(null);
     await expect(service.listGuestLists(freeMember as never)).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.guestList.findMany).not.toHaveBeenCalled();
@@ -325,6 +368,24 @@ describe("EventsService", () => {
     });
   });
 
+  it("audits date changes in the same event update transaction", async () => {
+    const { service, prisma } = createService();
+    prisma.event.findUnique.mockResolvedValue({ visibility: "open" });
+    prisma.eventTag.findMany.mockResolvedValue([]);
+    prisma.event.update.mockResolvedValue({ id: "event-1", visibility: "open", startsAt: new Date("2026-09-02T18:00:00.000Z"), endsAt: null, price: 0, latitude: null, longitude: null, tags: [] });
+    await service.updateManagedEvent("event-1", { startsAt: "2026-09-02T18:00:00.000Z" }, { ...actor, role: "admin" } as never);
+    expect(prisma.eventRevision.create).toHaveBeenCalledWith({data:expect.objectContaining({eventId:"event-1",before:expect.objectContaining({startsAt:"2026-09-01T18:00:00.000Z"}),after:expect.objectContaining({startsAt:"2026-09-02T18:00:00.000Z"})})});
+  });
+
+  it("clears optional event fields instead of keeping their old values", async () => {
+    const { service, prisma } = createService();
+    prisma.event.findUnique.mockResolvedValue({ visibility: "open" });
+    prisma.eventTag.findMany.mockResolvedValue([]);
+    prisma.event.update.mockResolvedValue({ id: "event-1", visibility: "open", startsAt: new Date("2026-09-01T18:00:00.000Z"), endsAt: null, price: 0, latitude: null, longitude: null, tags: [] });
+    await service.updateManagedEvent("event-1", { endsAt: null, placeId: null, liveUrl: null, locationName: "", locationAddress: "" }, { ...actor, role: "admin" } as never);
+    expect(prisma.event.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ endsAt: null, place: { disconnect: true }, liveUrl: null, locationName: "", locationAddress: "" }) }));
+  });
+
   it("keeps invite-only events closed to users without an invitation", async () => {
     const { service, prisma } = createService();
     prisma.event.findUnique.mockResolvedValue({
@@ -395,14 +456,15 @@ describe("EventsService", () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it("lets an attendee leave but protects event managers", async () => {
+  it("lets attendees and managers leave while preserving management roles", async () => {
     const { service, prisma } = createService();
     prisma.eventParticipant.findUnique.mockResolvedValue({ id: "participant-1", role: EventParticipantRole.attendee });
     await expect(service.leaveEvent("event-1", actor.id)).resolves.toEqual({ left: true });
     expect(prisma.eventParticipant.delete).toHaveBeenCalledWith({ where: { id: "participant-1" } });
 
     prisma.eventParticipant.findUnique.mockResolvedValue({ id: "manager-1", role: EventParticipantRole.manager });
-    await expect(service.leaveEvent("event-1", actor.id)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.leaveEvent("event-1", actor.id)).resolves.toEqual({ left: true });
+    expect(prisma.eventParticipant.update).toHaveBeenCalledWith({ where: { id: "manager-1" }, data: { status: "not_attending", checkedInAt: null } });
   });
 
   it("allows the event creator to manage the guest list", async () => {
@@ -715,6 +777,18 @@ describe("EventsService", () => {
     );
   });
 
+  it("honors the recipient's event invitation audience before recording or sending an invite", async () => {
+    const { service, prisma, mailService } = createService();
+    prisma.event.findUnique.mockResolvedValueOnce({ createdById: actor.id }).mockResolvedValueOnce({ id: "event-1", title: "Konser", slug: "konser", status: "published", startsAt: new Date(Date.now() + 60000), endsAt: new Date(Date.now() + 3600000), participants: [] });
+    prisma.user.findUnique.mockResolvedValue({ id: "member-1", username: "member", status: "active" });
+    prisma.privacySettings.findUnique.mockResolvedValue({ eventInviteAudience: "network" });
+    prisma.userFollow.findMany.mockResolvedValue([{ followingId: actor.id }]);
+    prisma.userFollow.findFirst.mockResolvedValue(null);
+    await expect(service.inviteParticipant("event-1", { username: "member" }, actor as never)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.eventInvitation.create).not.toHaveBeenCalled();
+    expect(mailService.sendEventInviteEmail).not.toHaveBeenCalled();
+  });
+
   it("blocks the same member from being invited to the same event twice by one inviter", async () => {
     const { service, prisma } = createService();
     prisma.event.findUnique
@@ -812,7 +886,7 @@ describe("EventsService", () => {
     await service.inviteParticipant("event-1", { phone: "+90 555 111 22 33" }, actor as never);
 
     expect(prisma.user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ phone: "+905551112233", status: "invited" }) }));
-    expect(smsService.sendEventInvite).toHaveBeenCalledWith("+905551112233", actor.name, "Community Night", "community-night", undefined);
+    expect(smsService.sendEventInvite).toHaveBeenCalledWith("+905551112233", "Bir üye", "Community Night", "community-night", undefined);
   });
 
   it("closes check-in 12 hours after an explicit event end", async () => {
@@ -881,13 +955,13 @@ describe("EventsService", () => {
       .mockResolvedValueOnce({ createdById: actor.id })
       .mockResolvedValueOnce({ startsAt: new Date(Date.now() - 60_000), endsAt: new Date(Date.now() + 60_000) });
     prisma.eventParticipant.findUnique.mockResolvedValue({ status: EventParticipantStatus.accepted, event: { title: "Community Night" } });
-    prisma.eventTicketOrder.findMany.mockResolvedValue([{ id: "order-1", ticketTypeId: "type-1", quantity: 2, currency: "TRY", payment: { id: "payment-1", payeeId: actor.id, netAmount: 190, grossAmount: 200, provider: "sandbox" } }]);
+    prisma.eventTicketOrder.findMany.mockResolvedValue([{ id: "order-1", ticketTypeId: "type-1", quantity: 2, currency: "TRY", payment: { id: "payment-1", payeeId: actor.id, netAmount: 190, grossAmount: 200, refundedAmount: 0, status: "succeeded", currency: "TRY", releasedAt: null, provider: "sandbox" } }]);
     prisma.financialAccount.findUnique.mockResolvedValue({ availableBalance: 500 });
     prisma.eventParticipant.update.mockResolvedValue({ id: "participant-1", status: EventParticipantStatus.declined });
 
     await service.decideCheckInPassport("event-1", "member-1", { decision: "decline", method: "qr" }, actor as never);
 
-    expect(prisma.paymentTransaction.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "payment-1" }, data: expect.objectContaining({ status: "refunded" }) }));
+    expect(prisma.paymentTransaction.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: "payment-1" }), data: expect.objectContaining({ status: "refunded" }) }));
     expect(prisma.ownedEventTicket.updateMany).toHaveBeenCalledWith({ where: { orderId: "order-1" }, data: { status: "refunded" } });
     expect(notifications.dispatch).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining("200 TRY bilet ücretiniz iade edildi") }));
   });

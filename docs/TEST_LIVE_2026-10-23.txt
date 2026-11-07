@@ -1,0 +1,278 @@
+KONNEKTORA — CANLI YAYIN VE MADDE BAZLI TEST RAPORU
+Tarih: 23 Ekim 2026 UTC / 23–24 Ekim Türkiye saati
+Adres: https://konnektora.com
+Son başarılı yayın: cbe99072-0190-405c-a440-45a0ed71fbc0
+
+Dört eklemeli veritabanı geçişi üretime uygulandı. Öncesinde şifreli yedek alındı ve açılarak bütünlüğü doğrulandı.
+Yerel sonuç: API 499/499 (20 finans entegrasyon testi dahil), web 180/180; 76 gerçek yerel DB kabul senaryosu. Lint ve üretim derlemesi geçti. Web testindeki yük altı zaman aşımının ardından tüm 180 test tek işçiyle tekrar geçti.
+Canlı: 16 işlevsel senaryo grubu + 35 salt-okuma kontrolü + genel sağlık/içerik kontrolleri. İşlevsel senaryolar ana yayında, iki ek düzeltme ve salt-okuma/sağlık kontrolleri son yayında doğrulandı.
+Canlı tarayıcı: giriş, akış, takip, profil medyası sürükle-bırak, güvenlik bildirimi seçenekleri, satış uyarısı, UBO/belgeler, etkinlik bilgi penceresi, eski bağlantı, mobil/tablet menü ve Basın Kiti.
+Canlı testte bulunan iki hata düzeltildi: üye kartında konum gizliliği; kabul edilen kısa etkinlik özetinin arayüzde reddedilmesi.
+QA hesapları/içerikleri temizlendi. Önce/sonra sayıları aynı: 24 üye, 26 etkinlik, 9 mekân, 109 medya, 81 kalıcı yükleme, 4 bilet. Gerçek ödeme yapılmadı veya dışarı mesaj gönderilmedi.
+
+DURUMLAR
+CANLI KAPSAM TESTİ GEÇTİ: aşağıdaki belirtilen bölüm gerçekten canlı API/Chrome üzerinde denendi; maddenin her varyantının canlı kabul edildiği anlamına gelmez.
+YAYINLANDI / YEREL DOĞRULANDI: uygulama ve yerel test mevcut; bu maddeye özgü canlı kullanıcı işlemi bu turda yürütülmedi.
+KISMİ / HARİCİ: özgün dosya, gerçek sağlayıcı veya yetkili sosyal hesap/yeni video gerekiyor. 82 maddenin tamamı uçtan uca canlı bitmiş sayılmamıştır.
+Gerçek SMS teslimi, Facebook hesap/onay akışı, tahsilat/iade, fiziksel cihaz takvimine kaydetme/rehber izinleri ve gerçek push teslimi bu raporda başarılı sayılmadı. Canlı sağlık yanıtında SMS yapılandırması kapalıdır.
+
+KANIT DOSYALARI
+output/oct23-live/functional-verification.json
+output/oct23-live/hotfix-verification.json
+output/oct23-live/readonly-verification.json
+output/oct23-live/cleanup.json
+output/oct23-live/public-smoke-final.log
+output/oct23-live/deployment-final.json
+output/oct23-live/press-final.png ve mobile-menu.png
+
+1. [CANLI KAPSAM TESTİ GEÇTİ] Ilgi Alani Detay / Etkinlik Detay / Mekan Detay sayfalarndaki Post ve yorumllarda bulunan kalp seklindeki begeni ikonu begeniyorsam kirmizi yansin, begenilmemisse mevcuttaki giibi gorunsun
+    Canlı API: live replies, mention/owner notifications, like state, edit and newest-first sorting.
+
+2. [YAYINLANDI / YEREL DOĞRULANDI] Ilgi Alani Detay / Etkinlik Detay / Mekan Detay sayfalarndaki Post ve yorumllarda bulunan Begeni, yorum, paylas vb butonlari mouse hover olunca cursor pointer (el) olsun
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+3. [CANLI KAPSAM TESTİ GEÇTİ] Akis sayfasindaki kartlarda gorulen 1- Detaylar gor linki olmasin 2- Kullaniciyi takip et / takip kaldir olsun basta. Sonrasinda "Mesaj gonder" ve "Paylas" ikonlari olacak. 3- "Rapor et" linki 3 nokta ust uste 
+    Canlı API: live follow/unfollow changes are reflected in the shared following list. Chrome akış kartları; takip/mesaj/paylaş/rapor sırası görüldü.
+
+4. [CANLI KAPSAM TESTİ GEÇTİ] Desktop Akis satfasindaki Filtrele'nin altindaki "Tum iceriklerin" en saginda "Etiketler' icin yeterli yer var. Bir alt satirdan baslamasina gerek yok.
+    Masaüstünde Tüm içerikler ve Etiketler aynı satırda ölçüldü.
+
+5. [YAYINLANDI / YEREL DOĞRULANDI] Akis satfasindaki iceriklerin gorunumune calisilsin,. cok estetik gorunmuyor su an. 1- Mesela tum etiket olan metinlerin basinda # simgesi olsun. 2- Post iceriklerin basinda guzel orta boy cift tirnak baslangic
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+6. [KISMİ / HARİCİ] Yuklenen imajllarla ilgili sorun mu var? Bir onceki testte yukledigim medyalar kaybolmus yerlerinde dummy icerikkler gorunuyor
+    Canlı API: live PNG upload persists, last-image protection and saved ordering work. Eski kayıp özgün medya için dosya/yedek gerekiyor; yeni yükleme ve üç eski dosyanın byte bütünlüğü doğrulandı.
+
+7. [YAYINLANDI / YEREL DOĞRULANDI] Uyelige Davet Et sayfasinda eposta adresine gonderrilen "Konnektora'ya davetlisin" mailindeki davet eden isim soyisiminde (davet eden kurumsaal uye ise isim soyisim yeine "İşletme adi" gosterilir) sonra parante
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+8. [CANLI KAPSAM TESTİ GEÇTİ] Insanlar bolumu 1- Yeni üyeler, Popüler, Takip ettiklerim, Orrtak Ilgi Alanlari sayfalaindaki kartlarrdaki "takipci sayisi' ve "ortak ilgi alani sayisi" bilgilerinin arasina "Genel uyum yuzdesi" billgisi gelece
+    Canlı API: live compatibility and invitation assessment respect restricted invite audiences; entitled QA Guest List create/add/list works against the live API. Chrome İnsanlar kartları, yüzdeler, takip yıldızı ve gizli konum kontrolü geçti.
+
+9. [CANLI KAPSAM TESTİ GEÇTİ] 1- Illgi Alani Detay sayfasi "Ilgili Kullanicilari Listeleme" sayfasindaki Kullanici Karrtlarindaki "Ortak Ilgi Alani" basina "Genel uyum yuzdesi" billgisi gelecek. "Genel uyum yuzdesi"nden sonra varsa Ortak il
+    Canlı API: live compatibility and invitation assessment respect restricted invite audiences.
+
+10. [CANLI KAPSAM TESTİ GEÇTİ] 1- Etkinlik Detay sayfasi "Ilgili Kullanicilari Listeleme" sayfasindaki Kullanici Karrtlarindaki "Ortak Ilgi Alani" basina "Genel uyum yuzdesi" billgisi gelecek. "Genel uyum yuzdesi"nden sonra varsa Ortak ilgi 
+    Canlı API: live compatibility and invitation assessment respect restricted invite audiences.
+
+11. [CANLI KAPSAM TESTİ GEÇTİ] 1- Mekan Detay sayfasi "Ilgili Kullanicilari Listeleme" sayfasindaki Kullanici Karrtlarindaki "Ortak Ilgi Alani" basina "Genel uyum yuzdesi" billgisi gelecek. "Genel uyum yuzdesi"nden sonra varsa Ortak ilgi ala
+    Canlı API: live compatibility and invitation assessment respect restricted invite audiences.
+
+12. [CANLI KAPSAM TESTİ GEÇTİ] Medya Detay Sayfasindaki resim (video degil) tuslandiginda varsa albumdeki bi sonraki imaja gitsin
+    Canlı API: live PNG upload persists, last-image protection and saved ordering work.
+
+13. [CANLI KAPSAM TESTİ GEÇTİ] Etkinlik Detay Sayfasinda "3 nokta ust usteli diger aksiyonlar" menusunde kullanicinin etkinlig cihazindaki takvim uygulamasina ekleyebilmesi icin “Takvimime ekle” baglantisi gorunur. Tuslandiginda kaydedilecek
+    Canlı API: invite-only event/place creation succeeds and users without an invitation cannot join.
+
+14. [CANLI KAPSAM TESTİ GEÇTİ] 1- Etkinlik Detay Sayfasinda "3 nokta ust usteli diger aksiyonlar" menusunde tuslaninca acillan "Bildirimleri Ac" lightboxindaki "Bu etkinliği varsayılan takvimime de eklemek istiyorum." checkbox'i secili ise i
+    Canlı API: invite-only event/place creation succeeds and users without an invitation cannot join.
+
+15. [CANLI KAPSAM TESTİ GEÇTİ] Ayarlar merkezi "Profil fotoğrafları" sayfasinda listelenen medyalar surukle-birak ile siralamasi degistiirlebilliyor. Harika. Ama; 1- Bir medya hover ollunca 4 yone ok seklndeki drrag&drop ikonu gorunsun. (htt
+    Canlı API: live PNG upload persists, last-image protection and saved ordering work. Gerçek sürükle-bırak ile ikinci/üçüncü medya yer değiştirdi; yenileme sonrası sıra korundu.
+
+16. [CANLI KAPSAM TESTİ GEÇTİ] Ayarlar Merkezi "Bildirim Ayarlari" sayfasindaki "Şifre değişikliği", "E-posta değişikliği', "Telefon değişikliği" dropdownlarinda "Kapali" secenegi olmasin. Kullanici tercih edecegi sekilde mutlaka bilgilendir
+    Canlı API: mandatory security notifications and wallet verification remain enforced. Üç güvenlik bildirimi alanında Kapalı seçeneğinin bulunmadığı görüldü.
+
+17. [YAYINLANDI / YEREL DOĞRULANDI] Ayarlar Merkezi "'Hesap Ayarlari" sayfasinda "Telefon numarası" degistirilmek istendiginde once kullanicinin mevcut telefon numarasina kod iceren birr SMS gonderilmeli. SMS icceriginde suna benzerr bir ifade ol
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+18. [CANLI KAPSAM TESTİ GEÇTİ] Ayarlar Merkezi "'Hesap Ayarlari" sayfasinda kullanici yeni sifre tanimladiginda eski sifrre ile login oldugu cihazlardan cikis yapilir.
+    Canlı API: isolated active QA account accepted by deployed authentication; live guards reject old sessions while accepting the current session version.
+
+19. [KISMİ / HARİCİ] SMS, odeme, Facebook entegrasyonlari konusunda ne durumdayiz?
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir. SMS yapılandırması/teslimi, Meta gerçek hesap onayı ve ödeme sağlayıcı kabulü açık.
+
+20. [KISMİ / HARİCİ] Ekibimiz ve senin tarattan kimse sosyal medya hesaplariimiza uye olmamislar. Onlari da heyecanimiza ortak edellim, Ne kadar kalabalik gorunursek o kadar iyi. Bunun icin aklima bir fikir geldi. Kampanya yapalim,
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir. Kampanya taslağı hazır; yetkili sosyal hesap erişimi ve yayın tarihleri gerekiyor.
+
+21. [CANLI KAPSAM TESTİ GEÇTİ] Kulanicinin takip ettigi diger kullanicilari kollay ayirt etmek icin bir sey yapalim. A secenegi) Kullanicinin listelendigi yerlerdeki yuvarlak avatarinin cerceveesi olsun B secenegi) kullanici adilarinin basla
+    Canlı API: live follow/unfollow changes are reflected in the shared following list. QA üyede yıldızla takip; Takipte ve basılı durum doğrulandı.
+
+22. [YAYINLANDI / YEREL DOĞRULANDI] Etkinlik Detay Sayfasi "Etkinlikle ilgili kullanicilar" sayfasinda ki etkinligi acan kisi icin kullandigimiz "sahip" jargonunu "Etkinlik kurucusu" olarak degistirelim.
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+23. [YAYINLANDI / YEREL DOĞRULANDI] Mekan Detay Sayfasi "Mekanla ilgili kullanicilar" sayfasinda ki mekani acan kisi icin kullandigimiz "sahip" jargonunu "Mekan kurucusu" olarak degistirelim.
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+24. [CANLI KAPSAM TESTİ GEÇTİ] Ayarlar merkezi "Profil fotoğrafları" sayfasinda son kalan profil fotografimi silmeye calistigimda gosterilen hata mesaji metnine "İşlem tamamlanamadı. Yüklenen dosyalar korunmuştur; kalan dosyaları yeniden seç
+    Canlı API: live PNG upload persists, last-image protection and saved ordering work.
+
+25. [YAYINLANDI / YEREL DOĞRULANDI] "Etiket Detay" Sayfasindaki "Profilime ekle butonlari"ndan selected olana tekrar tuslaninca secim kaldirrilmali (yani profilden kaldirilmali)
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+26. [YAYINLANDI / YEREL DOĞRULANDI] 1- "Etiket Detay" Sayfasindaki "Profilime ekle butonlari"ndan "Kararrsizim" butonunun ikonu tek renk olunca iyi gorunmedi, daha basit bir emoji tek renk onerim var: Notr yuz. 😐 Sanirm bu. daha iyi anlatiyor ve 
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+27. [YAYINLANDI / YEREL DOĞRULANDI] "Billdirim Ayarlari" sayfasindaki "Cihaz bildirimleri. Gerçek zamanlı bildirim almak için bu cihazı etkinleştir. Bu cihazda etkinleştir" bari cok guzel. Bunun aynisinii "Billdiimler AnaSayfasi"nda da gosterreli
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+28. [CANLI KAPSAM TESTİ GEÇTİ] "Etkinllik Olustur" ve "Etkinlik Duzenle" sayfasi "Biletler Sekmesinde" "Satış platformu" dropdown'inda "Konnektora onlne satis" secildiginde etkinik kurucusu kullanicinin yetkisi yok ise acilan uyari lightboxi
+    Canlı API: live server rejects unauthorized online ticket selling. Konnektora online satış seçimi koşul penceresini açtı; Ayarlar bağlantısı ve metin görüldü.
+
+29. [CANLI KAPSAM TESTİ GEÇTİ] https://konnektora.com/settings/business sayfaasinda "Fatura ve vergi bilgileri" ile "Cüzdan" butonlari yanlisliikla ayni sayfaya linklenmiis. Bunlarin 2 farkli sayfa olmasi gerekiyor.
+    Canlı API: mandatory security notifications and wallet verification remain enforced.
+
+30. [CANLI KAPSAM TESTİ GEÇTİ] KYB/KYC basvuru surecinde yetkili kisi bilgilerini girrmek ok ama "Nihai faydalanıcılar (UBO)" bilgilerini girmek gerekli mi? Gerekli ise bu basligin altina "Nihai faydalanıcılar (UBO)"in ne demek oldugunu da y
+    Kurumsal QA hesabında UBO açıklaması ve örnek yüzdelik hesabı görüldü.
+
+31. [CANLI KAPSAM TESTİ GEÇTİ] KYB/KYC basvuru surecinde "Zorunlu belgeler" adiminda ""Zorunlu belgeler" basliginin altina kisa bir aciklama girelim: "Basvuruda asaagidaki belgelerden en az 2 tanesini (mumkun oldugunca cok) ekleyiniz." (Sist
+    Belgeler adımında en az iki belge açıklaması ve eksik başvuruda gönderim engeli görüldü.
+
+32. [CANLI KAPSAM TESTİ GEÇTİ] Mekan Detay Sayfasi'ndaki 3 nokta ust usteli diger aksiyonlar menusunda mekan yoneticisi kullanicilaraa da "Mekani duzenle" ve "Mekani sil" butonllari gosterilmelli.
+    Canlı API: place manager invitation responds correctly and unrelated past-event sources are rejected; live event and place edits emit change notifications and allow accepted managers.
+
+33. [YAYINLANDI / YEREL DOĞRULANDI] "Mekan Duzenle Lightbox'i" acildiginda detay sayfasindaki haritasinin arkasinda kaliyor
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+34. [YAYINLANDI / YEREL DOĞRULANDI] 1- "Mekan Check-in" sayfasinda "Üye listesi" widgetinda listelenen kartlarda kullanici adinin asagisinda "kurumsal uye" olan kullanicinin Ad Soyadi degil, "İşletme adı" billgisi gosterilmeli 2- "Pasaport Kontro
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+35. [YAYINLANDI / YEREL DOĞRULANDI] 1- "Etkinlik Check-in" sayfasinda "Üye listesi" widgetinda listelenen kartlarda kullanici adinin asagisinda "kurumsal uye" olan kullanicinin Ad Soyadi degil, "İşletme adı" billgisi gosterilmeli 2- "Pasaport Kon
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+36. [CANLI KAPSAM TESTİ GEÇTİ] "Isletmeler icin" sayfasi FOLD alanindaki "İşletme merkezine git" butonu https://konnektora.com/business/center sayfasina linklenmis. Boyle bir sayfa olmayacak. Oysa https://konnektora.com/settings/business say
+    İşletmeler ana çağrısının Ayarlar Merkezi bağlantısı doğrulandı.
+
+37. [KISMİ / HARİCİ] 1- "Destek Merkezi" anasayffasindaki videoda kuullandiginiz ekran goruntulerini/tasarrimlari gonderebilir misin? Altyazisiz videoya da raziyim. 2- Yeni video gelince basliik olmadan "Popüler sorular" widget"ini
+    Mevcut videonun Popüler sorular sonrasında başlıksız yerleşimi görüldü; yeni video bekleniyor. Yeni video/özgün tasarım kaynağı bekleniyor; mevcut materyal paketi hazır.
+
+38. [YAYINLANDI / YEREL DOĞRULANDI] Profil Detay Sayfasi sidebardaki kullanicinin sehri bilgisinde eyalatlerden olusmayan Turkiye gibi yerlerin "Ilce, Sehir" billgisi gosteriliyor. Oysa "Sehir, Ulke" ya da "Sehir, Eyalet, Ullke" ya da "Eyalet, Ul
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+39. [YAYINLANDI / YEREL DOĞRULANDI] Ilgi Alani Detay sayfasi Illgili Kulllanicilar sayfasindaki Filtreleme Alani: 1- En basta "Duygu" ayari gorunsun. 2- Duygu ayarindan sonra "Ulkelere" gore yeni filtreleme ayari olsun 3- Ulkelere goreden sonra "
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+40. [CANLI KAPSAM TESTİ GEÇTİ] "Etkinlikle Ilgili Kullnicilar" sayfasnda yukarida "Etkinlige davet et" butonuu olsun.
+    Canlı API: invite-only event/place creation succeeds and users without an invitation cannot join.
+
+41. [CANLI KAPSAM TESTİ GEÇTİ] "Mekanla Ilgili Kullnicilar" sayfasnda yukarida "Mekana davet et" butonu olsun.
+    Canlı API: invite-only event/place creation succeeds and users without an invitation cannot join.
+
+42. [CANLI KAPSAM TESTİ GEÇTİ] "Etkinlikle Ilgili Kullnicilar" sayfasnda "Check in" sekmesini sadece admin, kuratorller, etkinlik yoneticileri (kurucu ve organizatorler) gorebilir.
+    Canlı API: invite-only event/place creation succeeds and users without an invitation cannot join.
+
+43. [CANLI KAPSAM TESTİ GEÇTİ] Etkinlik Detay ve Mekan Detay sayfalarinda kullanici bir post yayinladigi zaman, ekran yayinlanan posta scroll olsun
+    Canlı API: live replies, mention/owner notifications, like state, edit and newest-first sorting.
+
+44. [CANLI KAPSAM TESTİ GEÇTİ] 1- Tablet bilgisayarlar icin de mobildeki tabbar yapisinda ayni navigaasyonu yapalim. 2- Mobil ve Tablette menu icerisinde zaten tabbarda olan secenekler olmasin. kullanimi kolaylastirmamiz gerekiyor.
+    390px ve 1024px gerçek Chrome: tabbar var, yatay taşma yok.
+
+45. [CANLI KAPSAM TESTİ GEÇTİ] "Ilgi Alani Detay" sayfasinda bir Post editlenmek uzere "Duzenle" tuslandiginda sistem default pop-up aciliyor. Oysa "Etkinlik Detay" Sayfasindaki gibi post duzenlenmek istediginde ayni sayfada postun altinda g
+    Canlı API: live replies, mention/owner notifications, like state, edit and newest-first sorting.
+
+46. [YAYINLANDI / YEREL DOĞRULANDI] AnaSayfa'daki "Topluluğun nabzını yakala." widgetinda listlenen "Popüler hesaplar" ve "Yeni uyeler" listelerrindeki; "Gizlillilik ayarrlari" sayfasinda "Ad soyad görünürlüğü" "Hic kimse" olarak ayarrlanmis kull
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+47. [CANLI KAPSAM TESTİ GEÇTİ] Etkinlige katil butonnu var da ayril butonu neden yok? Etkinlik katilimcisi ve etkinlik yoneticileri dahil herkes etkinliklere izinleri dahilinde katilabilmeli ve ayrrilabilmeli.
+    Canlı API: invite-only event/place creation succeeds and users without an invitation cannot join; manager leaves and rejoins while preserving management rights.
+
+48. [YAYINLANDI / YEREL DOĞRULANDI] Mobilde Etkinliklerim AnaSayfasinda "Tum etkinliklerim' widgetinda ayni anda dar ekrana 2 etkinlik sigdirilmaya calisiligindan gorunum bozulmus.
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+49. [YAYINLANDI / YEREL DOĞRULANDI] Bir kimse "Arkadaşlarını bul & davet et" sayfasinda sistemde kayitli olmayan bir eposta adresi veya telefon numarrasina uyelige davet epostasi/sms'i gonderilmis ve bu kullanici o eposta adresi veya telefon numa
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+50. [CANLI KAPSAM TESTİ GEÇTİ] Bir kimse "Etkinlige davet et" veya "Mekana davet et" sayfalarinda sistemde kayitli olmayan bir eposta adresi veya telefon numarrasina hem uyelige davet epostasi gonderilmis ve hem de etkinlige/mekana davet epo
+    Canlı API: username manager invite produces a live card, checks recipient ownership and accepts only once without external delivery; place manager invitation responds correctly and unrelated past-event sources are rejected.
+
+51. [CANLI KAPSAM TESTİ GEÇTİ] Bir kimse "Etkinlige bilet devir et" sayfasinda sistemde kayitli olmayan bir eposta adresi veya telefon numarrasina hem uyelige davet epostasi/sms'i gonderilmis ve hem de etkinlik bilet devir epostasi/sms'i dev
+    Canlı API: zero-cost QA tickets transfer between QA accounts, emit the live card and create no payment.
+
+52. [CANLI KAPSAM TESTİ GEÇTİ] Bir kimse "Etkinlige bilet devir et" sayfasinda sistemde kayitli olan bir kullanici adina etkinlik bilet devri epostasi gonderilmis bu devir edilen kullanici Bildirimler sayfasinda asagidaki bildirim kartini go
+    Canlı API: zero-cost QA tickets transfer between QA accounts, emit the live card and create no payment.
+
+53. [YAYINLANDI / YEREL DOĞRULANDI] Bir kimse "Etkinlige bilet devir et" sayfasinda sistemde kayitli olan bir eposta adresi veya telefon numarrasina etkinlik bilet devri epostasi gonderilmis ama kullanicinin gizlilik ayarlarinda "Arkadaşlarım ben
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+54. [CANLI KAPSAM TESTİ GEÇTİ] Bir kimse "Etkinlige bilet devir et" sayfasinda sistemde kayitli olan bir eposta adresi veya telefon numarrasina etkinlik bilet devri epostasi gonderilmis ama kullanicinin gizlilik ayarlarinda "Arkadaşlarım ben
+    Canlı API: zero-cost QA tickets transfer between QA accounts, emit the live card and create no payment.
+
+55. [YAYINLANDI / YEREL DOĞRULANDI] Bir uye uye olmayan bir kimseye "Arkadaşlarını bul & davet et", "Etkinlige davet et", "Etkinlik bileti devir et" veya "Mekana davet et" ssayfalari araciligiyla eposta adresi veya telefon numarrasina uyelige dav
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+56. [YAYINLANDI / YEREL DOĞRULANDI] Bir kimse "Arkadaşlarını bul & davet et" sayfasinda sistemde kayitli olan bir eposta adresi veya telefon numarrasina uyelige davet epostasi/sms'i gondermek istemis ama o kullanici o eposta adresi veya telefon n
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+57. [CANLI KAPSAM TESTİ GEÇTİ] Bir uye zaten uye olan bir kimseye "Etkinlige davet et" veya "Mekana davet et" sayfalari araciligiyla eposta adresi veya telefon numarrasina uyelige davet gondermek istemis ama o kukllanici o eposta adresi veya
+    Canlı API: live compatibility and invitation assessment respect restricted invite audiences.
+
+58. [CANLI KAPSAM TESTİ GEÇTİ] Bir uye zaten uye olan bir kimseye "Etkinlige davet et" veya "Mekana davet et" sayfalari araciligiyla eposta adresi veya telefon numarrasina uyelige davet gondermek istemis ama o kukllanici o eposta adresi veya
+    Canlı API: username manager invite produces a live card, checks recipient ownership and accepts only once without external delivery.
+
+59. [CANLI KAPSAM TESTİ GEÇTİ] Bir uye "Etkinlige davet et" veya "Mekana davet et" sayfalari araciligiyla davet edilecek kisinin kullanici adini girmis ve "Kimler etkinliğe/mekana davet edebilir?" ayarinda kullaniciya yetki verrmis ise arani
+    Canlı API: username manager invite produces a live card, checks recipient ownership and accepts only once without external delivery; place manager invitation responds correctly and unrelated past-event sources are rejected.
+
+60. [CANLI KAPSAM TESTİ GEÇTİ] Bir kullaniciyi mentionladigim zaman kendisi "Bildirimler" sayfasinda bilgilendirilmeliydi. 1. Etiket postunda kullanici adinin gecmesi: 1.1. %mentionlayan kullanici adi% %etiket adi% etiketindeki iletisinde si
+    Canlı API: live replies, mention/owner notifications, like state, edit and newest-first sorting.
+
+61. [CANLI KAPSAM TESTİ GEÇTİ] Yazdigin bir posta bir baskasi tarafindan yorum yazildiginda post sahibi kullanici bilgilendirilmeliydi. 1. Yazdigin Etiket postuna yorum yazilmasi: 1.1. Metin: 1.1.A. Tekil: "%yazan kullanici adi% isimli kulla
+    Canlı API: live replies, mention/owner notifications, like state, edit and newest-first sorting.
+
+62. [CANLI KAPSAM TESTİ GEÇTİ] Bildirimi acik bir etkinlikle ilgili bildirimler: 1. Bildirimi acik bir etkinlikte yeni bilet tanimlandi: 1.1. Bildirimlerini actiginiz bir etkinlige yeni bilet(ler) tanimlandi. (Cumle icerisindeki “yeni bilet(
+    Canlı API: live replies, mention/owner notifications, like state, edit and newest-first sorting.
+
+63. [YAYINLANDI / YEREL DOĞRULANDI] Bildirimi acik bir kullanici ilgili bildirimler: 1. Bildirimi acik bir kullanici bir etiket olusturdu: 1,1, Bildiimlerini actiginiz %Kullanici adi% isimli kullanici %etiket duygusu% diyerek %etiket adi% yeni et
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+64. [YAYINLANDI / YEREL DOĞRULANDI] Bildirimi acik bir etiket ilgili bildirimler: 1. Bildirimi acik bir etikete post yazildi: 1.1. Metin: 1.1.A. Tekil: "%Kullanici adi% isimli kullanici bildirimlerini actiginiz %etiket adi% etiketine ileti yazdi.
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+65. [YAYINLANDI / YEREL DOĞRULANDI] Bildirimi acik bir mekanla ilgili bildirimler: 1. Bildirimi acik bir mekana bir kullanici post yazdi: 1.1. Metin: 1.1.A. Tekil: "Bildirimlerini actiginiz bir mekana %Kullanici adi% isimli kullanici tarafindan i
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+66. [CANLI KAPSAM TESTİ GEÇTİ] Katilimcisi oldugun / Yoneticisi oldugun / Biletin olan / Bildirimlerini Actigin: Diger etkinlik bildirimleri 1. Etkinlik adi degistirildi: 1.1. Eski adi “%Eski etkinlik adi%” olan etkinligin ismi "%Etkinlik ye
+    Canlı API: live event and place edits emit change notifications and allow accepted managers.
+
+67. [CANLI KAPSAM TESTİ GEÇTİ] Uyeesi oldugun / Yoneticisi oldugun / Bildirimlerini Actigin: Diger Mekan Bildirrimleri: 1.1. Mekan adi degistirildi: 1.1. Eski adi “%Eski mekan adi%” olan mekan adi "%Yeni mekan adi%” olarak degistirildi. 1.2.
+    Canlı API: live event and place edits emit change notifications and allow accepted managers.
+
+68. [YAYINLANDI / YEREL DOĞRULANDI] Konnektora Admin Panel Mudahale Edilen Icerik Bildirimleri: 1- Post yazilan ya da profiline yapisik etiketin tasinmasi / isminin degismesi: 1.1- Konnektora Admin Panel logosu 1.2- Konnektora: İlişkili olduğunuz
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+69. [YAYINLANDI / YEREL DOĞRULANDI] Konnektora Admin Panele Bildirilen Sikayetlerin Sonucunun Sikayetci Kullaniciya Bildirilmesi: 1- Etiket sikayet edildi ise: 1.1- Konnektora Admin Panel logosu 1.2.A- Sikayet haksiz bulundu ise: Konnektora: "%Ta
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+70. [YAYINLANDI / YEREL DOĞRULANDI] Konnektora Admin Panel Mudahale Edilen Kullanici E-postalari: 1- Hesabın 7 Gün Askıya Alınması Epostasi: Konu: Konnektora hesabiniz 7 gunlugune askiya alinmistir. Icerik: Hesabiniz Konnektora Kurallarrini ihmal
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+71. [CANLI KAPSAM TESTİ GEÇTİ] Mobilde tabbar'daki menu acikken, menu tekrar tuslandiginda menu kapansin.
+    Aynı Menü düğmesi ile aç/kapa geçti.
+
+72. [CANLI KAPSAM TESTİ GEÇTİ] Dekstop navigasyonu aynii kalacak ama Mobiilde.tabbar'daki menu icerisinde: 1- zaten tabbar'da olan secenekler olmasiin 2- kullanici adi ve cikisin altinda sirasiyla allt alta su secenekler olacak: Profilim, Bi
+    Mobil menü sırası ve tabbar bağlantılarının menüde tekrarlanmaması görüldü.
+
+73. [YAYINLANDI / YEREL DOĞRULANDI] Tum iiceriklerdeki "Rapor et" lightboxindan. sikayet. gonderilince lightboxin kapanmasi ardindan yeni bir.islem basarrili lightboxi gosterelim ve. bu lightbox uzeriinde su mesaji gosterelim: "Sikayetiniz bize u
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+74. [CANLI KAPSAM TESTİ GEÇTİ] Etkinlige Davet Et Sayfasi testleri AI ile önerilen Top 25 1- Top 50 olsun 2- Oneri degerlendirmesinde "ziyaretci kullanici ile listelenen kullaanici ile etkinlik partner uyumu" ve "Katilimci kullanicilar ile z
+    Canlı API: invite-only event/place creation succeeds and users without an invitation cannot join; live compatibility and invitation assessment respect restricted invite audiences; place manager invitation responds correctly and unrelated past-event sources are rejected; entitled QA Guest List create/add/list works against the live API.
+
+75. [CANLI KAPSAM TESTİ GEÇTİ] Mekana Davet Et Sayfasi kalan testleri 1- "Etkinlik Davet Et" icin yazilanlar burasi icin de gecerlidir. 2- Ayrica:burada da "AI ile önerilen Top 50" olsun. 3- Ayrica burada da "Mekanda duzenlenen etkinlik kati
+    Canlı API: invite-only event/place creation succeeds and users without an invitation cannot join; live compatibility and invitation assessment respect restricted invite audiences; place manager invitation responds correctly and unrelated past-event sources are rejected; entitled QA Guest List create/add/list works against the live API.
+
+76. [CANLI KAPSAM TESTİ GEÇTİ] Bildirimler sayfasindaki kartlar yukaridan-asagi yeniden-eskiye siralamasinda listelensin. En yeniler yukarida olmali.
+    Canlı API: live replies, mention/owner notifications, like state, edit and newest-first sorting.
+
+77. [CANLI KAPSAM TESTİ GEÇTİ] Etkinlik Detay Sayfasi'ndan "Fotoğraf/video yükle" tuslayarak Etkinlik afis ve Medyalarini toplu secmek istedim ama toplu secime izin vermedi
+    Canlı API: live PNG upload persists, last-image protection and saved ordering work.
+
+78. [CANLI KAPSAM TESTİ GEÇTİ] Tum medya ekleme alanlarinda daha cok dosya turu secimini desteklemeli ve desteklemedigimiz bir dosya turu seciliginde hangi dosya tiplerini destekledigimiz konusunda kullanici bilgiendirilmeli
+    Canlı API: live PNG upload persists, last-image protection and saved ordering work; unsupported media returns the supported-format explanation.
+
+79. [YAYINLANDI / YEREL DOĞRULANDI] Akis sayfasinda listelenen bir kart iceriginde Youtube ya da Soundcloud icerigi kullanilmis ise player olarak gorulmeli
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+80. [YAYINLANDI / YEREL DOĞRULANDI] Ilgi Alani AnaSayfasinda bir etiket olustup, etiket detay sayfasina yonlendirilldiktten sonra Ilgi Alani AnaSayfasinaa geri donunce search boxin icinde olusturdugum etiket kalmis olluyor. Bu yuzden sayfayi tam 
+    Maddeye özgü canlı işlem yapılmadı; ayrıntılı yerel kanıt TEST_REVIEW_2026-10-23.txt içindedir.
+
+81. [CANLI KAPSAM TESTİ GEÇTİ] https://konnektora.com/events/nott-presents-baris-k-ilhan-ersahin-semih-akay-berk-ivelik-643714 etkinligini olusturdum. Etkinlik Detay sayfasinda "Etkinlik ve mekân hakkında daha fazla bilgi" tuslayarak actigim
+    Canlı API: invite-only event/place creation succeeds and users without an invitation cannot join. Kısa özetli QA etkinliği eski bağlantısıyla açıldı; bilgi penceresinde tek adres alanı görüldü.
+
+82. [CANLI KAPSAM TESTİ GEÇTİ] "Basin Kiti" sayfasi yapmamiz lazim. Sayfayi yapinca erisimi Footer'da "Yardim" basliginin altindan saglanacak. Bu sayfada sunlar olmali: 1- Farkli arka planlarda ve sekillerde logolarimiz (ornegin: siyah arka 
+    Canlı Basın Kiti: beş logo varyantı, SVG bağlantıları, font/renk/kullanım rehberi ve footer erişimi görüldü.
+
+83. [CANLI DOĞRULANDI / KAPATILDI] Post ve yorum metinleri masaüstünde ekran boyunca uzamasın.
+    Ortak post-copy sınıfı ile metin en çok 560px; dört medyalı albüm 540px. Akış postları/yorumları, etiket postları, etkinlik/mekân ana yorumları ve yanıtları, hesap etiket yorumlarında uygulandı. Medya ve kart genişlikleri korunur; uzun kelimeler kırılır, satır sonları ve bağlantılar korunur.
+    180/180 arayüz testi, web lint ve üretim derlemesi geçti. Canlı gerçek etiket postu: önce 1052px, sonra 560px. 390px mobilde metin 286px, sayfa/scroll 390px; yatay taşma yok. Genel canlı sağlık/içerik kontrolleri ve test edilen derleme ile yayınlanan arayüz eşleşmesi geçti.
+    Yayın: cae8b3c8-642a-452c-985a-398824b91804 — SUCCESS. Yeni DB geçişi gerekmedi. 23/10!A87:C87 yeşil yapıldı; hücre değerlerinin korunması ve renk tekrar okunarak ve tarayıcıda doğrulandı.
+    Kanıt: tmp/oct23-item83-tests.log, tmp/oct23-item83-lint.log, tmp/oct23-item83-build.log; output/oct23-live/item83-deployment.json, item83-smoke.log, item83-before.png, item83-after-desktop.png, item83-after-mobile.png, item83-sheet-green.png.

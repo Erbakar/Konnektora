@@ -1,3 +1,5 @@
+import { moderationCopy } from "./moderation-copy";
+import { notifyRemovedEntity, notifyTagModeration } from "../notifications/moderation-activity";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { EventStatus, Prisma, ReportStatus, ReportTargetType, TagStatus, User, UserStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
@@ -186,6 +188,11 @@ export class ReportsService {
       throw new BadRequestException("Askıya alma için askı bitiş zamanı zorunludur.");
     }
 
+    const summary = await this.resolveTargetSummary(targetType, targetId);
+    const contentName = summary?.title?.slice(0,160) || "İlgili içerik";
+    const copy=moderationCopy(targetType,summary as any);
+    const removal=["archive_event","archive_place","archive_tag","remove_media","remove_comment","remove_private_messages"].includes(input.action);
+    const mediaUrl = targetType === "media" ? (summary?.payload as any)?.url : undefined;
     return this.prisma.$transaction(async (tx) => {
       let userId: string | null = targetType === ReportTargetType.user ? targetId : null;
 
@@ -329,14 +336,26 @@ export class ReportsService {
       });
       const uniqueReporters = new Map(affectedReports.map((report) => [report.reporter.email, report.reporter]));
 
+      if(input.decision === "violation") {
+        if(targetType === "tag" && input.action === "archive_tag") await notifyTagModeration(tx as any,{id:targetId,name:contentName},{id:targetId,name:contentName,status:"archived",updatedAt:new Date()});
+        if((targetType === "event" && input.action === "archive_event") || (targetType === "place" && input.action === "archive_place")) await notifyRemovedEntity(tx as any,targetType,targetId,contentName,decision.id);
+        if(targetType === "media" && input.action === "remove_media") {
+          const payload=(summary as any)?.payload;
+          if(payload && ["event","place"].includes(payload.contentType)) {
+            const entity=payload.contentType === "event"?await tx.event.findUnique({where:{id:payload.contentId}}):await tx.place.findUnique({where:{id:payload.contentId}});
+            if(entity)await notifyRemovedEntity(tx as any,payload.contentType,payload.contentId,"title" in entity?entity.title:entity.name,decision.id,mediaUrl);
+          }
+        }
+      }
       const notificationRows = [
-        ...(decision.userId
+        ...(decision.userId && input.decision === "violation" && !((targetType === "event" && input.action === "archive_event") || (targetType === "place" && input.action === "archive_place"))
           ? [
               {
                 userId: decision.userId,
                 type: "moderation_decision",
+                context: { admin: true, targetUrl: "/help/rules", targetLabel: "Konnektora Kuralları", ...(mediaUrl ? {mediaUrl} : {}) },
                 title: "Moderasyon kararı",
-                body: input.note?.trim() || this.defaultDecisionNote(input),
+                body: `Konnektora: ${copy.description}${removal?", kurallar gereği yayından kaldırılmıştır.":" hakkında yönetim işlemi yapılmıştır."}${copy.excerpt?` İleti: “${copy.excerpt}”`:""} ${input.note?.trim() || ""} Konnektora Kurallarını öğrenmek için Destek Merkezini ziyaret ediniz.`,
                 targetType,
                 targetId
               }
@@ -345,8 +364,9 @@ export class ReportsService {
         ...affectedReports.map((report) => ({
           userId: report.reporterId,
           type: "report_feedback",
+          context: { admin: true, targetUrl: "/help/rules", targetLabel: "Konnektora Kuralları", decision: input.decision },
           title: "Şikayet geri bildirimi",
-          body: input.note?.trim() || this.defaultDecisionNote(input),
+          body: `Konnektora: ${copy.subject} ilişkin şikayetiniz ${input.decision === "violation" ? "haklı bulunmuş ve gerekli işlemler yapılmıştır" : "kurallara aykırı bulunmamıştır"}. Konnektora Kuralları için Destek Merkezini ziyaret ediniz.`,
           targetType,
           targetId
         }))
@@ -802,13 +822,15 @@ export class ReportsService {
         include: { uploadedBy: { select: TARGET_OWNER_SELECT } } as any
       });
       if (!media) return null;
+      const root=media.contentType==="event"?await this.prisma.event.findUnique({where:{id:media.contentId}}):media.contentType==="place"?await this.prisma.place.findUnique({where:{id:media.contentId}}):media.contentType==="tag"?await this.prisma.tag.findUnique({where:{id:media.contentId}}):null;
+      const rootLabel=root?("title" in root?root.title:root.name):undefined;
       return {
         title: media.url,
         subtitle: `${media.contentType} · ${media.contentId}`,
         status: media.status,
         owner: media.uploadedBy,
         metrics: {},
-        payload: { type: media.type, url: media.url }
+        payload: { type: media.type, url: media.url, contentType: media.contentType, contentId: media.contentId,rootLabel,rootKind:media.contentType }
       };
     }
 
@@ -823,6 +845,10 @@ export class ReportsService {
       });
       if (!comment) return null;
       const commentCounts = (comment as any)._count ?? {};
+      const parent=(comment as any).parent;
+      const kind=comment.targetType==="tag_comment"?"tag":comment.targetType;
+      const root=kind==="tag"?await this.prisma.tag.findUnique({where:{id:comment.targetId}}):kind==="event"?await this.prisma.event.findUnique({where:{id:comment.targetId}}):kind==="place"?await this.prisma.place.findUnique({where:{id:comment.targetId}}):null;
+      const rootLabel=root?("title" in root?root.title:root.name):undefined;
       return {
         title: comment.body,
         subtitle: `${comment.targetType} · ${comment.targetId}`,
@@ -832,7 +858,7 @@ export class ReportsService {
           likes: comment.likeCount,
           replies: commentCounts.replies ?? 0
         },
-        payload: { parent: comment.parent }
+        payload: { parent, rootLabel, rootKind:kind, excerpt:comment.body }
       };
     }
 

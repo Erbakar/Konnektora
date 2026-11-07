@@ -1,0 +1,23 @@
+KONNEKTORA — 16 EKİM 2026 CANLI YAYIN
+
+Adres: https://konnektora.com
+Yayın: b9c213ea-33ba-4a3f-aaf6-a58277b3573d — SUCCESS
+Doğrulama: 16 Ekim 2026 20:51 (Europe/Istanbul)
+Önceki başarılı yayın: 9540850b-5a5f-4329-84ab-11036ecdf106
+
+Kapsam: Çalışma alanındaki test listesi düzeltmeleri, 13 akış içeriği türü ve ödeme sağlayıcısı ücretini toplam %5 içine alan SSS açıklaması; web ve API birlikte Railway üzerinden yayımlandı. Git commit/push yapılmadı; mevcut çalışma ağacı korundu. Geçici dosyalar, çıktı kanıtları ve yedekler yayın paketinden hariç tutuldu.
+
+Yayın öncesi 45.313.202 bayt PostgreSQL yedeği AES-256-GCM ile şifrelenip özel yerel yedek alanına kaydedildi; çözme/birebir karşılaştırma başarılı. Anahtarlar yayın paketine konulmadı.
+20261016120000_ticket_availability_activity geçişi canlıda başarıyla uygulandı.
+Önce/sonra kayıt sayıları aynı: 20 kullanıcı, 83 medya kaydı, 68 kalıcı dosya.
+
+CANLI DOĞRULAMA
+- Railway yayın ve readiness kontrolü başarılı.
+- /api/health/live, /api/health/ready: başarılı; veritabanı hazır.
+- Ana sayfa, medya CSP, etkinlik liste/detay, mekân liste/detay, duyuru, SSS: başarılı.
+- Yetkili salt okunur kontroller: yönetim paneli, yönetim SSS, profil, yeni akış, mesaj konuşmaları, yeni üyeler, kendi etkinlikleri/mekânları/biletleri HTTP200.
+- Cüzdan doğrulaması olmadan finans erişimi HTTP403: koruma çalışıyor.
+- Gerçek tarayıcıda işletme SSS açıldı: ödeme sağlayıcısının işlem ücreti dahil toplam %5 metni görüldü.
+
+Kanıtlar: output/oct16-final-acceptance/live-release.json, live-smoke.log, live-faq.png.
+Bu kontroller yayın doğrulamasıdır. Gerçek ödeme/SMS işlemi yapılmadı; 30 maddenin ve 13 akış türünün tamamı üretimde baştan sona yeniden oynatıldı iddiası değildir. Ayrıntılı yerel kabul sonuçları TEST_ACCEPTANCE_2026-10-16.txt içindedir.

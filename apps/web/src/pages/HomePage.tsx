@@ -1,3 +1,4 @@
+import { ProductGuide } from "../components/ProductGuide";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -45,6 +46,7 @@ export function HomePage() {
   const user = getUserSession();
   const [signupChoice, setSignupChoice] = useState<"individual" | "corporate" | null>(null);
   const [announcementRevision, setAnnouncementRevision] = useState(0);
+  const [placeTab, setPlaceTab] = useState<"trendy" | "recent">("trendy");
   const [trendScope, setTrendScope] = useState<"local" | "global">("local");
   const c =
     language === "tr"
@@ -160,7 +162,7 @@ export function HomePage() {
             "Konnektora is shaped for a controlled community launch with enough structure for real events and enough focus to improve with the right users.",
           openFeed: "Open event feed",
         };
-  const { data: eventList } = useQuery({
+  const { data: eventList, isPlaceholderData: eventListIsPlaceholder, isSuccess: eventListLoaded } = useQuery({
     queryKey: ["events", "home"],
     queryFn: () => listEvents(),
     placeholderData: {
@@ -171,7 +173,7 @@ export function HomePage() {
       hasNextPage: false,
     },
   });
-  const { data: tags = [] } = useQuery({
+  const { data: tags = [], isSuccess: tagsLoaded } = useQuery({
     queryKey: ["tags", "home"],
     queryFn: () => listTags(),
   });
@@ -180,11 +182,11 @@ export function HomePage() {
     queryFn: listAnnouncements,
   });
   const { data: recentPlaces } = useQuery({
-    queryKey: ["places", "home", "recent"],
-    queryFn: () => listPlaces(new URLSearchParams({ page: "1", pageSize: "8" })),
+    queryKey: ["places", "home", placeTab],
+    queryFn: () => listPlaces(new URLSearchParams({ page: "1", pageSize: "8", ...(placeTab === "trendy" ? { scope: "trendy" } : {}) })),
   });
   const { data: discovery } = useQuery({
-    queryKey: ["discovery-feed", trendScope],
+    queryKey: ["discovery-feed", getUserSession()?.id, trendScope],
     queryFn: () => getDiscoveryFeed({ scope: trendScope }),
     placeholderData: (previous) => previous,
   });
@@ -251,7 +253,7 @@ export function HomePage() {
               {c.title.split(" ").slice(0, 3).join(" ")}
               <span> {c.title.split(" ").slice(3).join(" ")}</span>
             </h1>
-            <p className="corp-hero-lead">{language === "tr" ? <><strong>Konnektora</strong>, insanların <strong>ilgi alanları, etkinlikler, mekânlar ve ortak tutkular</strong> üzerinden birbirlerini keşfetmesini ve gerçek hayatta bağlantı kurmasını sağlayan sosyal keşif platformudur. İnsanlar nelerle ilgileniyor, ne yapmak istiyor ve bunu kimlerle birlikte yapabilir sorusuna odaklanır.</> : <><strong>Konnektora</strong> is a social discovery platform that helps people discover one another and connect in real life through <strong>interests, events, places and shared passions</strong>. It focuses on what people care about, what they want to do and who they can do it with.</>}</p>
+            <p className="corp-hero-lead">{language === "tr" ? <><strong>Konnektora</strong>, insanların <strong>ilgi alanları, etkinlikler, mekânlar ve ortak tutkular</strong> üzerinden birbirlerini keşfetmesini ve gerçek hayatta bağlantı kurmasını sağlayan sosyal keşif platformudur. İnsanlar <strong>nelerle ilgileniyor</strong>, ne yapmak istiyor ve bunu <strong>kimlerle birlikte yapabilir</strong> sorusuna odaklanır.</> : <><strong>Konnektora</strong> is a social discovery platform that helps people discover one another and connect in real life through <strong>interests, events, places and shared passions</strong>. It focuses on what people care about, what they want to do and who they can do it with.</>}</p>
             <div className="corp-hero-actions">
               <Link className="corp-btn corp-btn-primary" to="/events">
                 {c.explore}
@@ -271,40 +273,7 @@ export function HomePage() {
             </form>
           </div>
 
-          <aside className="hero-discovery-network" aria-label={language === "tr" ? "Konnektora keşif akışı" : "Konnektora discovery flow"}>
-            <span className="hero-network-orbit hero-network-orbit-one" aria-hidden="true" />
-            <span className="hero-network-orbit hero-network-orbit-two" aria-hidden="true" />
-            <section className="hero-network-step hero-network-interests">
-              <span className="hero-network-step-number">1</span>
-              <small>{language === "tr" ? "İLGİ ALANINI SEÇ" : "CHOOSE AN INTEREST"}</small>
-              <div className="hero-interest-cloud">
-                <span><Hash size={13} />{language === "tr" ? "Müzik" : "Music"}</span>
-                <span><Hash size={13} />Startup</span>
-                <span><Hash size={13} />{language === "tr" ? "Sanat" : "Art"}</span>
-              </div>
-            </section>
-            <ArrowRight className="hero-network-arrow hero-network-arrow-one" aria-hidden="true" size={22} />
-            <section className="hero-network-step hero-network-event">
-              <div className="hero-event-cover" aria-hidden="true"><Sparkles size={28} /></div>
-              <div>
-                <span className="hero-network-step-number">2</span>
-                <small>{language === "tr" ? "ETKİNLİĞİ KEŞFET" : "DISCOVER AN EVENT"}</small>
-                <strong>{language === "tr" ? "Yaratıcılar Buluşması" : "Creators Meetup"}</strong>
-                <p><MapPin size={13} /> İstanbul · {language === "tr" ? "Bu hafta" : "This week"}</p>
-              </div>
-            </section>
-            <ArrowRight className="hero-network-arrow hero-network-arrow-two" aria-hidden="true" size={22} />
-            <section className="hero-network-step hero-network-people">
-              <span className="hero-network-step-number">3</span>
-              <div className="hero-network-avatars" aria-hidden="true">
-                <span>EK</span><span>MD</span><span>+8</span>
-              </div>
-              <div>
-                <small>{language === "tr" ? "BİRLİKTE KATIL" : "JOIN TOGETHER"}</small>
-                <strong>{language === "tr" ? "Senin gibi insanlarla tanış" : "Meet people like you"}</strong>
-              </div>
-            </section>
-          </aside>
+
         </div>
       </section>
 
@@ -378,7 +347,7 @@ export function HomePage() {
                 </div>
               </header>
               <div className="discovery-row">
-                {discovery.popularMembers.slice(0, 4).map((item) => (
+                {discovery.popularMembers.filter((item) => item.imageUrl).slice(0, 4).map((item) => (
                   <DiscoveryCard item={item} key={item.id} />
                 ))}
               </div>
@@ -394,7 +363,7 @@ export function HomePage() {
                 </div>
               </header>
               <div className="discovery-row">
-                {discovery.newMembers.slice(0, 4).map((item) => (
+                {discovery.newMembers.filter((item) => item.imageUrl).slice(0, 4).map((item) => (
                   <DiscoveryCard item={item} key={item.id} />
                 ))}
               </div>
@@ -492,30 +461,14 @@ export function HomePage() {
           </h2>
           <p>
             {language === "tr"
-              ? "Sen diğer profil sayfaları arasında gezinirken diğer kullanıcılarla uyumunu yapay zekâ desteğiyle görüp, AI'dan beraber katılabileceğin etkinlikler hakkında dahi akıl alabilirsin. Üstelik mesajlaşma ücretsiz."
+              ? <>Sen diğer profil sayfaları arasında gezinirken diğer kullanıcılarla uyumunu <strong>yapay zekâ desteğiyle</strong> görüp, AI'dan <strong>beraber katılabileceğin etkinlikler hakkında dahi akıl</strong> alabilirsin. Üstelik mesajlaşma ücretsiz.</>
               : "While browsing profiles, use AI-assisted compatibility insights and even get suggestions for events you could attend together. Messaging is free, too."}
           </p>
           {!user ? <a className="corp-btn corp-btn-primary" href={publicSiteHref("/onboarding")}>
             {c.joinCommunity}
           </a> : null}
         </div>
-        <div className="home-story-media">
-          <video
-            autoPlay
-            loop
-            muted
-            playsInline
-            poster="/media/konnektora-community-ai.png"
-            preload="metadata"
-          >
-            <source src="/media/konnektora-community-ai.mp4" type="video/mp4" />
-          </video>
-          <span>
-            {language === "tr"
-              ? "Konnektora topluluğu"
-              : "The Konnektora community"}
-          </span>
-        </div>
+        <div className="home-story-media home-story-guide"><ProductGuide kind="intro"/></div>
       </section>
 
       <section className="corp-section home-trending-interests">
@@ -538,9 +491,10 @@ export function HomePage() {
       {recentPlaces?.items.length ? (
         <section className="corp-section corp-section-muted">
           <div className="corp-section-head">
-            <div><h2>{language === "tr" ? "Yeni eklenen mekânlar" : "Recently added places"}</h2><p>{language === "tr" ? "Topluluğa en son katılan mekânları keşfet." : "Discover the newest places in the community."}</p></div>
-            <Link className="corp-link" to="/places">{language === "tr" ? "Tüm mekânlar" : "All places"}<ArrowRight size={18}/></Link>
+            <div><h2>{language === "tr" ? "Mekânlar" : "Places"}</h2><p>{language === "tr" ? (placeTab === "trendy" ? "Son 7 günde en çok görüntülenen mekânlar." : "Topluluğa en son katılan mekânları keşfet.") : (placeTab === "trendy" ? "Most viewed places in the last 7 days." : "Discover the newest places in the community.")}</p></div>
+            <div className="home-place-tools"><div className="trend-scope-tabs" aria-label={language === "tr" ? "Mekân sıralaması" : "Place order"}><button type="button" aria-pressed={placeTab === "trendy"} onClick={() => setPlaceTab("trendy")}>Trendy</button><button type="button" aria-pressed={placeTab === "recent"} onClick={() => setPlaceTab("recent")}>{language === "tr" ? "Yeniler" : "Recently added"}</button></div><Link className="corp-link" to="/places">{language === "tr" ? "Tüm mekânlar" : "All places"}<ArrowRight size={18}/></Link></div>
           </div>
+
           <div className="corp-carousel">
             {recentPlaces.items.map((place) => <PlaceCard key={place.id} place={place} />)}
           </div>
@@ -614,18 +568,18 @@ export function HomePage() {
         <div className="corp-proof-copy">
           <p className="corp-eyebrow">{c.communityFirst}</p>
           <h2>{c.connections}</h2>
-          <p>{c.connectionsCopy}</p>
+          <p>{language === "tr" ? <>Kurumsal üyelik, mekân ve etkinlik oluşturmak ve bağlantılarınızı buraya taşımak için sunduğumuz araçlar <strong>ücretsiz</strong>. Kişiselleştirebileceğiniz özel davetli listelerini check-in sırasında görmek ya da <strong>işinizi büyütmek</strong> için ihtiyaç duyduğunuz <strong>gelişmiş istatistikler</strong> ile <strong>yapay zekâ içgörüleri</strong> için daha fazlasını keşfedin.</> : c.connectionsCopy}</p>
           <Link className="corp-btn corp-btn-primary" to="/business">
             {language === "tr" ? "Daha fazla" : "Learn more"}
           </Link>
         </div>
         <div className="corp-proof-stats">
           <div>
-            <strong>{events.length || "15+"}</strong>
+            <strong>{eventListLoaded && !eventListIsPlaceholder ? eventList?.total ?? events.length : "—"}</strong>
             <span>{c.curatedEvents}</span>
           </div>
           <div>
-            <strong>{tags.length || "4"}</strong>
+            <strong>{tagsLoaded ? tags.filter((tag) => tag.status === "active").length >= 100 ? "100+" : tags.filter((tag) => tag.status === "active").length : "—"}</strong>
             <span>{c.activeTags}</span>
           </div>
           <div>

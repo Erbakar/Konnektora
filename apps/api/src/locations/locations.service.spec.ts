@@ -9,6 +9,18 @@ describe("LocationsService", () => {
     jest.restoreAllMocks();
   });
 
+  it("rejects invalid GPS coordinates without contacting the provider", async () => {
+    global.fetch = jest.fn();
+    await expect(new LocationsService().reverse(91, 0)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(new LocationsService().reverse(NaN, 0)).rejects.toBeInstanceOf(BadRequestException);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("returns country and city for a GPS lookup", async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ address: { country_code: "tr", city: "İstanbul" } }) });
+    await expect(new LocationsService().reverse(41, 29)).resolves.toEqual({ country: "TR", city: "İstanbul" });
+  });
+
   it("validates address length", () => {
     const service = new LocationsService();
     expect(() => service.geocode("x")).toThrow(BadRequestException);

@@ -1,3 +1,6 @@
+import { PressKitPage } from "./pages/PressKitPage";
+import { LegalPage, CookiePreferencesPage } from "./pages/LegalPage";
+import { WalletPage } from "./pages/WalletPage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { lazy as reactLazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
@@ -11,7 +14,7 @@ import {
 import { AdminRouteGuard } from "./components/AdminRouteGuard";
 import { AppLayout } from "./components/AppLayout";
 import { ServiceFeedback } from "./components/ServiceFeedback";
-import { ApiHttpError } from "./lib/api";
+import { ApiHttpError, getUserSession, USER_SESSION_CHANGED_EVENT } from "./lib/api";
 import { publicSiteHref } from "./lib/domains";
 import { LanguageProvider, useLanguage } from "./lib/i18n";
 import "./styles.css";
@@ -141,11 +144,6 @@ const GuestListDetailPage = lazy(() =>
     default: module.GuestListDetailPage,
   })),
 );
-const FinancePage = lazy(() =>
-  import("./pages/FinancePage").then((module) => ({
-    default: module.FinancePage,
-  })),
-);
 const BusinessLandingPage = lazy(() =>
   import("./pages/BusinessLandingPage").then((module) => ({
     default: module.BusinessLandingPage,
@@ -252,6 +250,9 @@ const PolicyPage = lazy(() =>
     default: module.PolicyPage,
   })),
 );
+const DataDeletionPage = lazy(() =>
+  import("./pages/DataDeletionPage").then((module) => ({ default: module.DataDeletionPage })),
+);
 const SettingsCenterPage = lazy(() =>
   import("./pages/SettingsCenterPage").then((module) => ({ default: module.SettingsCenterPage })),
 );
@@ -278,6 +279,15 @@ const queryClient = new QueryClient({
   },
 });
 
+let cachedSessionId = getUserSession()?.id;
+window.addEventListener(USER_SESSION_CHANGED_EVENT, () => {
+  const nextId = getUserSession()?.id;
+  if (nextId !== cachedSessionId) {
+    cachedSessionId = nextId;
+    queryClient.clear();
+  }
+});
+
 const router = createBrowserRouter([
   {
     path: "/mobile",
@@ -301,6 +311,7 @@ const router = createBrowserRouter([
       },
       { path: "places", element: <PlacesPage /> },
       { path: "places/:slug", element: <PlaceDetailPage /> },
+      { path: "places/:slug/edit", element: <PlaceDetailPage editPage /> },
       {
         path: "places/:slug/users",
         element: <RelatedUsersPage kind="place" />,
@@ -315,6 +326,7 @@ const router = createBrowserRouter([
       { path: "tags/:slug/users", element: <RelatedUsersPage kind="tag" /> },
       { path: "stats/:targetType/:targetId", element: <InteractionStatsPage /> },
       { path: "contact", element: <ContactPage /> },
+      { path: "press", element: <PressKitPage /> },
       { path: "help", element: <HelpCenterPage /> },
       { path: "help/faqs", element: <HelpCenterPage /> },
       { path: "help/faqs/:categorySlug", element: <HelpCenterPage /> },
@@ -326,7 +338,9 @@ const router = createBrowserRouter([
           { path: "feed", element: <FeedPage /> },
           { path: "community", element: <CommunityPage /> },
           { path: "community/guest-lists/:listId", element: <GuestListDetailPage /> },
-          { path: "finance", element: <FinancePage /> },
+          { path: "finance", element: <Navigate to="/settings/business" replace /> },
+          { path: "settings/billing", element: <WalletPage billingOnly /> },
+          { path: "wallet", element: <WalletPage /> },
           { path: "finance/kyc", element: <CorporateKycPage /> },
           { path: "store", element: <StorePage /> },
           { path: "messages", element: <MessagesPage /> },
@@ -359,8 +373,14 @@ const router = createBrowserRouter([
         ],
       },
       { path: "privacy", element: <PolicyPage type="privacy" /> },
+      { path: "data-deletion", element: <DataDeletionPage /> },
       { path: "terms", element: <PolicyPage type="terms" /> },
-      { path: "cookies", element: <PolicyPage type="cookies" /> },
+      { path: "cookies", element: <LegalPage type="cookies" /> },
+      { path: "kvkk", element: <LegalPage type="kvkk" /> },
+      { path: "information", element: <LegalPage type="information" /> },
+      { path: "distance-selling", element: <LegalPage type="distance-selling" /> },
+      { path: "pre-information", element: <LegalPage type="pre-information" /> },
+      { path: "cookie-preferences", element: <CookiePreferencesPage /> },
       { path: "about", element: <PolicyPage type="about" /> },
       { path: "*", element: <NotFoundPage /> },
     ],

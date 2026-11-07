@@ -1,3 +1,6 @@
+import { ticketWindowText } from "../lib/ticket-window";
+import { FollowStar } from "../components/MemberSignals";
+import type { Event as KonnektoraEvent } from "@konnektora/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Ban,
@@ -20,10 +23,11 @@ import {
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
+import { ContentMediaGallery } from "../components/ContentMediaGallery";
 import { ContentComments } from "../components/ContentComments";
 import { EventCard } from "../components/EventCard";
 import { LocationMap } from "../components/LocationMap";
-import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
+import { CalendarDialog, NotificationDialog, ShareDialog } from "../components/ContentDialogs";
 import { ReportDialog } from "../components/ReportDialog";
 import { formatEventDateRange, formatTimeZoneOffset, localizeCityName, localizeCountryName } from "../lib/formats";
 import { getServiceErrorMessage, getServiceErrorPresentation } from "../lib/serviceErrors";
@@ -58,6 +62,7 @@ export function EventDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [reportOpen, setReportOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [moreInfoOpen, setMoreInfoOpen] = useState(false);
@@ -76,7 +81,7 @@ export function EventDetailPage() {
     enabled: Boolean(slug),
     retry: false,
   });
-  const canManage = Boolean(event && user && (event.createdById === user.id || event.viewerParticipation?.status === "accepted" && ["organizer", "manager"].includes(event.viewerParticipation.role) || ["admin", "super_admin", "curator"].includes(user.role)));
+  const canManage = Boolean(event && user && (event.createdById === user.id || ["accepted", "attended", "not_attending"].includes(event.viewerParticipation?.status ?? "") && ["organizer", "manager"].includes(event.viewerParticipation!.role) || ["admin", "super_admin", "curator"].includes(user.role)));
   const ticketTypesQuery = useQuery({
     queryKey: ["event-ticket-types", event?.id],
     queryFn: () => listEventTicketTypes(event!.id),
@@ -133,11 +138,26 @@ export function EventDetailPage() {
   });
   const attendMutation = useMutation({
     mutationFn: requestEventAttendance,
-    onSuccess: () => refreshAttendance(),
+    onSuccess: async (participation) => {
+      await queryClient.cancelQueries({ queryKey: ["event", slug] });
+      queryClient.setQueryData<KonnektoraEvent>(["event", slug], (previous) => {
+        if (!previous) return previous;
+        const counted = ["accepted", "attended"].includes(previous.viewerParticipation?.status ?? "");
+        const nowCounted = ["accepted", "attended"].includes(participation.status);
+        return { ...previous, viewerParticipation: { role: participation.role, status: participation.status }, attendeeCount: Math.max(0, (previous.attendeeCount ?? 0) + Number(nowCounted) - Number(counted)) };
+      });
+      leaveMutation.reset();
+      refreshAttendance();
+    },
   });
   const leaveMutation = useMutation({
     mutationFn: leaveEvent,
-    onSuccess: () => refreshAttendance(),
+    onSuccess: async () => {
+      await queryClient.cancelQueries({ queryKey: ["event", slug] });
+      queryClient.setQueryData<KonnektoraEvent>(["event", slug], (previous) => previous ? { ...previous, viewerParticipation: previous.viewerParticipation && ["organizer", "manager"].includes(previous.viewerParticipation.role) ? { ...previous.viewerParticipation, status: "not_attending" } : null, attendeeCount: Math.max(0, (previous.attendeeCount ?? 0) - Number(["accepted", "attended"].includes(previous.viewerParticipation?.status ?? ""))) } : previous);
+      attendMutation.reset();
+      refreshAttendance();
+    },
   });
   function refreshAttendance() {
     void queryClient.invalidateQueries({ queryKey: ["event", slug] });
@@ -200,7 +220,7 @@ export function EventDetailPage() {
     ? new Date(event.endsAt).getTime() + 12 * 60 * 60 * 1000
     : new Date(event.startsAt).getTime() + 24 * 60 * 60 * 1000;
   const inviteAllowed = canManage || event.viewerParticipation?.status === "accepted" || event.viewerParticipation?.status === "attended" || event.viewerParticipation?.status === "invited";
-  const canLeave = event.viewerParticipation?.role === "attendee" && ["accepted", "attended", "requested"].includes(event.viewerParticipation.status);
+  const canLeave = Boolean(event.viewerParticipation) && ["accepted", "attended", "requested"].includes(event.viewerParticipation!.status);
   const invitedPreviewCount = canManage
     ? participantsQuery.data?.filter((item) => item.status === "invited").length ?? 0
     : (relatedUsersQuery.data ?? []).filter((item) => item.status === "invited").length;
@@ -208,15 +228,11 @@ export function EventDetailPage() {
 
   return (
     <article className="page detail-page">
-      {event.coverImageUrl ? (
-        <div className="detail-media">
-          <img alt="" src={resolveMediaUrl(event.coverImageUrl)} />
-        </div>
-      ) : null}
+      <ContentMediaGallery targetType="event" targetId={event.id} canManage={canManage} coverImageUrl={event.coverImageUrl} coverAlt={event.title} />
       <p className="eyebrow">
         {event.format === "online" ? language === "tr" ? "ÇEVRİM İÇİ" : "ONLINE" : event.format === "hybrid" ? language === "tr" ? "HİBRİT" : "HYBRID" : language === "tr" ? "YÜZ YÜZE" : "IN PERSON"} {language === "tr" ? "ETKİNLİK" : "EVENT"} – {event.visibility === "open" ? language === "tr" ? "HERKESE AÇIK" : "OPEN TO EVERYONE" : event.visibility === "approval_required" ? language === "tr" ? "ONAY GEREKLİ" : "APPROVAL REQUIRED" : language === "tr" ? "SADECE DAVETLİ" : "INVITE ONLY"}
       </p>
-      <h1>{event.title}</h1>
+      <h1><a href={`/events/${event.slug}`}>{event.title}</a></h1>
       <div className="detail-meta">
         <span>
           <CalendarDays size={16} />
@@ -228,7 +244,7 @@ export function EventDetailPage() {
         </span>
         <span>
           <ShieldCheck size={16} />
-          {event.createdById ? <Link to={`/users/id/${event.createdById}`}>{event.organizerName || (language === "tr" ? "Konnektora topluluğu" : "Konnektora community")}</Link> : event.organizerName || (language === "tr" ? "Konnektora topluluğu" : "Konnektora community")}
+          {event.createdById ? <><FollowStar id={event.createdById}/><Link to={`/users/id/${event.createdById}`}>{event.organizerName || (language === "tr" ? "Konnektora topluluğu" : "Konnektora community")}</Link></> : event.organizerName || (language === "tr" ? "Konnektora topluluğu" : "Konnektora community")}
         </span>
       </div>
       <button className="detail-more-link" onClick={() => setMoreInfoOpen(true)} type="button">{language === "tr" ? "Etkinlik ve mekân hakkında daha fazla bilgi" : "More about the event and place"}</button>
@@ -238,7 +254,7 @@ export function EventDetailPage() {
         ))}
       </div>
       <div className="detail-actions event-primary-actions">
-        {user && !canManage ? (
+        {user ? (
           <button
             className="primary-action"
             disabled={attendMutation.isPending || leaveMutation.isPending}
@@ -252,10 +268,6 @@ export function EventDetailPage() {
                 ? event.viewerParticipation?.status === "requested"
                   ? language === "tr" ? "Katılım isteğini geri çek" : "Withdraw request"
                   : language === "tr" ? "Etkinlikten ayrıl" : "Leave event"
-              : attendMutation.isSuccess
-              ? event.visibility === "approval_required"
-                ? language === "tr" ? "Onay bekliyor" : "Pending approval"
-                : language === "tr" ? "Katılımın onaylandı" : "Attendance confirmed"
               : attendMutation.isPending
                 ? language === "tr" ? "Gönderiliyor" : "Sending"
                 : event.visibility === "invite_only"
@@ -286,6 +298,7 @@ export function EventDetailPage() {
           <summary aria-label={language === "tr" ? "Etkinlik işlemleri" : "Event actions"}><MoreVertical size={20}/></summary>
           <div>
             {user ? <button aria-pressed={notificationQuery.data?.enabled} disabled={notificationMutation.isPending} onClick={() => setNotificationOpen(true)}><Bell size={18}/>{notificationQuery.data?.enabled ? language === "tr" ? "Bildirimleri kapat" : "Turn off notifications" : language === "tr" ? "Bildirimleri aç" : "Turn on notifications"}</button> : null}
+            <button onClick={() => setCalendarOpen(true)}><CalendarDays size={18}/>{language === "tr" ? "Takvimime ekle" : "Add to calendar"}</button>
             {ticketTypesQuery.data?.length ? <button onClick={() => setTicketPickerOpen(true)}><CreditCard size={18}/>{language === "tr" ? "Biletleri gör" : "View tickets"}</button> : null}
             {user && event.price > 0 ? <button disabled={paymentMutation.isPending || paymentMutation.isSuccess} onClick={() => paymentMutation.mutate()}><CreditCard size={18}/>{paymentMutation.isSuccess ? language === "tr" ? "Ödeme tamamlandı" : "Payment complete" : paymentMutation.isPending ? language === "tr" ? "Ödeniyor…" : "Processing…" : language === "tr" ? "Bilet al" : "Get ticket"}</button> : null}
             {canManage ? <button onClick={() => {
@@ -331,8 +344,9 @@ export function EventDetailPage() {
             <div className="admin-list">
               {ticketTypesQuery.data?.map((type) => {
                 const quantity = ticketQuantities[type.id] ?? 0;
+                const isOnlineSale = type.salesPlatform === "konnektora";
                 const unavailable =
-                  type.remaining <= 0 || type.status !== "active";
+                  type.status !== "active" || (isOnlineSale && type.remaining <= 0);
                 return (
                   <article className="admin-list-row" key={type.id}>
                     <div>
@@ -345,20 +359,13 @@ export function EventDetailPage() {
                               currency: type.currency,
                             }).format(type.price)
                           : language === "tr" ? "Ücretsiz" : "Free"}{" "}
-                        · {type.remaining} {language === "tr" ? "kaldı" : "remaining"}
+                        {isOnlineSale ? <>· {type.remaining} {language === "tr" ? "kaldı" : "remaining"}</> : null}
                       </span>
-                      {type.saleStartsAt || type.saleEndsAt ? (
-                        <small>
-                          {type.saleStartsAt
-                            ? language === "tr" ? `${new Date(type.saleStartsAt).toLocaleString("tr-TR")} itibariyle` : `From ${new Date(type.saleStartsAt).toLocaleString("en-GB")}`
-                            : ""}
-                          {type.saleEndsAt
-                            ? language === "tr" ? ` ${new Date(type.saleEndsAt).toLocaleString("tr-TR")} tarihine kadar` : ` until ${new Date(type.saleEndsAt).toLocaleString("en-GB")}`
-                            : ""}
-                        </small>
-                      ) : null}
+                      {ticketWindowText(type.saleStartsAt, type.saleEndsAt, "sale", language) ? <small>{ticketWindowText(type.saleStartsAt, type.saleEndsAt, "sale", language)}</small> : null}
+                      {ticketWindowText(type.gateOpensAt, type.gateClosesAt, "gate", language) ? <small>{ticketWindowText(type.gateOpensAt, type.gateClosesAt, "gate", language)}</small> : null}
                     </div>
                     <div className="row-actions">
+                      {isOnlineSale ? <>
                       <button
                         disabled={quantity <= 0}
                         onClick={() =>
@@ -385,13 +392,14 @@ export function EventDetailPage() {
                       >
                         +
                       </button>
-                      <button
+                      </> : null}
+                      {type.salesPlatform !== "door" ? <button
                         className="primary-action"
-                        disabled={unavailable || (type.salesPlatform !== "external" && quantity < 1) || ticketPurchase.isPending}
-                        onClick={() => type.salesPlatform === "external" && type.externalSalesUrl ? window.open(type.externalSalesUrl, "_blank", "noopener,noreferrer") : ticketPurchase.mutate({ id: type.id, quantity })}
+                        disabled={unavailable || (isOnlineSale ? quantity < 1 || ticketPurchase.isPending : !type.externalSalesUrl)}
+                        onClick={() => { if (isOnlineSale) ticketPurchase.mutate({ id: type.id, quantity }); else if (type.externalSalesUrl) window.open(type.externalSalesUrl, "_blank", "noopener,noreferrer"); }}
                       >
-                        {unavailable ? language === "tr" ? "Tükendi" : "Sold out" : type.salesPlatform === "external" ? language === "tr" ? "Satış sayfasına git" : "Go to sales page" : type.salesPlatform === "door" ? language === "tr" ? "Bileti ayır" : "Reserve ticket" : language === "tr" ? "Satın al" : "Buy"}
-                      </button>
+                        {unavailable ? language === "tr" ? "Tükendi" : "Sold out" : type.salesPlatform === "external" ? language === "tr" ? "Satış sayfasına git" : "Go to sales page" : language === "tr" ? "Satın al" : "Buy"}
+                      </button> : null}
                     </div>
                   </article>
                 );
@@ -416,6 +424,7 @@ export function EventDetailPage() {
             : language === "tr" ? "Katılım talebin organizatöre gönderildi." : "Your attendance request was sent to the organiser."}
         </p>
       ) : null}
+      {leaveMutation.isError ? <p className="form-error" role="alert">{getServiceErrorMessage(leaveMutation.error, language === "tr" ? "Etkinlikten ayrılamadın. Tekrar dene." : "Could not leave the event. Try again.")}</p> : null}
       {attendMutation.isError ? (
         <p className="form-error">
           {getServiceErrorMessage(attendMutation.error, event.visibility === "invite_only" ? language === "tr" ? "Bu etkinliğe katılmak için organizatör daveti gerekiyor." : "You need an organiser invitation to join this event." : language === "tr" ? "Katılım talebi gönderilemedi. Lütfen tekrar dene." : "The attendance request could not be sent. Please try again.")}
@@ -423,14 +432,31 @@ export function EventDetailPage() {
       ) : null}
       <section className="admin-form event-attendee-preview">
         <h2>{language === "tr" ? "Katılımcılar" : "Attendees"}</h2>
-        <span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).sort((a, b) => Number((followingQuery.data ?? []).some((item) => item.id === b.id)) - Number((followingQuery.data ?? []).some((item) => item.id === a.id))).slice(0, 8).map((participant) => <Link key={participant.id} title={participant.name} to={`/users/id/${participant.id}`}>{participant.avatarUrl ? <img alt="" src={resolveMediaUrl(participant.avatarUrl)}/> : participant.name?.[0] ?? "?"}</Link>)}</span>
+        <span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).filter(item => !item.isProvisional && ["accepted", "attended"].includes(item.status ?? "")).slice(0, 8).map((participant) => <Link key={participant.id} title={participant.name} to={`/users/id/${participant.id}`}>{participant.avatarUrl ? <img alt="" src={resolveMediaUrl(participant.avatarUrl)}/> : participant.name?.[0] ?? "?"}</Link>)}</span>
         <strong className="related-count-links"><Link to={`/events/${event.slug}/users?filter=attendees`}>{event.attendeeCount ?? relatedUsersQuery.data?.length ?? 0} {language === "tr" ? "katılımcı" : (event.attendeeCount ?? relatedUsersQuery.data?.length ?? 0) === 1 ? "attendee" : "attendees"}</Link>{canManage && event.visibility === "approval_required" ? <><span>·</span><Link to={`/events/${event.slug}/users?filter=pending`}>{participantsQuery.data?.filter((item) => item.status === "requested").length ?? 0} {language === "tr" ? "bekleyen" : "pending"}</Link></> : null}<span>·</span><Link to={`/events/${event.slug}/users?filter=invited`}>{invitedPreviewCount} {language === "tr" ? "davetli" : "invited"}</Link><span>·</span><Link to={`/events/${event.slug}/users?filter=following`}>{(relatedUsersQuery.data ?? []).filter((participant) => (followingQuery.data ?? []).some((item) => item.id === participant.id)).length} {language === "tr" ? "takip ettiğin kişi" : "people you follow"}</Link></strong>
       </section>
       <section className="detail-copy" id="more-info">
         <RichText text={!overviewExpanded && event.description.length > 650 ? `${event.description.slice(0, 650).trim()}…` : event.description} />
         {event.description.length > 650 ? <button className="text-action" onClick={() => setOverviewExpanded((expanded) => !expanded)} type="button">{overviewExpanded ? language === "tr" ? "Daha az göster" : "Show less" : language === "tr" ? "Devamını göster" : "Show more"}</button> : null}
       </section>
-      {moreInfoOpen ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setMoreInfoOpen(false)}><section aria-modal="true" aria-labelledby="event-more-title" className="content-dialog event-more-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><div className="section-header"><div><p className="eyebrow">{language === "tr" ? "Etkinlik ve mekân" : "Event and place"}</p><h2 id="event-more-title">{event.title}</h2></div><button onClick={() => setMoreInfoOpen(false)} type="button">{language === "tr" ? "Kapat" : "Close"}</button></div>{event.format !== "online" && event.latitude != null && event.longitude != null ? <LocationMap items={[{ id: event.id, title: event.place?.name ?? event.locationName ?? event.title, latitude: event.latitude, longitude: event.longitude, location: [event.place?.address, event.locationAddress, localizeCityName(event.city ?? event.place?.city, language), localizeCountryName(event.country ?? event.place?.country, language)].filter(Boolean).join(", ") }]} /> : null}<dl className="event-more-facts"><div><dt>{language === "tr" ? "Zaman" : "Time"}</dt><dd>{formatEventDateRange(event.startsAt, event.endsAt, { withDuration: true, locale })} ({formatTimeZoneOffset(event.timezone, event.startsAt)})</dd></div><div><dt>Format</dt><dd>{event.format === "online" ? language === "tr" ? "Çevrim içi" : "Online" : event.format === "hybrid" ? language === "tr" ? "Hibrit" : "Hybrid" : language === "tr" ? "Yüz yüze" : "In person"}</dd></div><div><dt>{language === "tr" ? "Katılım" : "Access"}</dt><dd>{event.visibility === "open" ? language === "tr" ? "Herkese açık" : "Open to everyone" : event.visibility === "approval_required" ? language === "tr" ? "Onay gerekli" : "Approval required" : language === "tr" ? "Sadece davetli" : "Invite only"}</dd></div>{event.format !== "online" ? <><div><dt>{language === "tr" ? "Etkinlik yeri" : "Event location"}</dt><dd>{event.place ? <Link to={`/places/${event.place.slug}`}>{event.place.name}</Link> : event.locationName || (language === "tr" ? "Konum adı belirtilmedi" : "Location name not provided")}</dd></div><div><dt>{language === "tr" ? "Adres" : "Address"}</dt><dd>{[event.place?.address, event.locationAddress, localizeCityName(event.city ?? event.place?.city, language), localizeCountryName(event.country ?? event.place?.country, language)].filter(Boolean).join(", ") || (event.latitude != null && event.longitude != null ? `${event.latitude}, ${event.longitude}` : language === "tr" ? "Adres belirtilmedi" : "Address not provided")}</dd></div></> : null}{event.format !== "offline" && event.liveUrl ? <div><dt>{language === "tr" ? "Canlı etkinlik bağlantısı" : "Live event URL"}</dt><dd><a href={event.liveUrl} rel="noreferrer" target="_blank">{event.liveUrl}<ExternalLink size={14}/></a></dd></div> : null}</dl></section></div> : null}
+      {moreInfoOpen ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setMoreInfoOpen(false)}><section aria-modal="true" aria-labelledby="event-more-title" className="content-dialog event-more-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><div className="section-header"><div><p className="eyebrow">{language === "tr" ? "Etkinlik ve mekân" : "Event and place"}</p><h2 id="event-more-title">{event.title}</h2></div><button onClick={() => setMoreInfoOpen(false)} type="button">{language === "tr" ? "Kapat" : "Close"}</button></div>{event.format !== "online" && event.latitude != null && event.longitude != null ? <LocationMap items={[{ id: event.id, title: event.place?.name ?? event.locationName ?? event.title, latitude: event.latitude, longitude: event.longitude, location: [event.place?.address || event.locationAddress, localizeCityName(event.city ?? event.place?.city, language), localizeCountryName(event.country ?? event.place?.country, language)].filter(Boolean).join(", ") }]} /> : null}<dl className="event-more-facts"><div><dt>{language === "tr" ? "Zaman" : "Time"}</dt><dd>{formatEventDateRange(event.startsAt, event.endsAt, { withDuration: true, locale })} ({formatTimeZoneOffset(event.timezone, event.startsAt)})</dd></div><div><dt>Format</dt><dd>{event.format === "online" ? language === "tr" ? "Çevrim içi" : "Online" : event.format === "hybrid" ? language === "tr" ? "Hibrit" : "Hybrid" : language === "tr" ? "Yüz yüze" : "In person"}</dd></div><div><dt>{language === "tr" ? "Katılım" : "Access"}</dt><dd>{event.visibility === "open" ? language === "tr" ? "Herkese açık" : "Open to everyone" : event.visibility === "approval_required" ? language === "tr" ? "Onay gerekli" : "Approval required" : language === "tr" ? "Sadece davetli" : "Invite only"}</dd></div>{event.format !== "online" ? <><div><dt>{language === "tr" ? "Etkinlik yeri" : "Event location"}</dt><dd>{event.place ? <Link to={`/places/${event.place.slug}`}>{event.place.name}</Link> : event.locationName || (language === "tr" ? "Konum adı belirtilmedi" : "Location name not provided")}</dd></div><div><dt>{language === "tr" ? "Adres" : "Address"}</dt><dd>{[event.place?.address || event.locationAddress, localizeCityName(event.city ?? event.place?.city, language), localizeCountryName(event.country ?? event.place?.country, language)].filter(Boolean).join(", ") || (event.latitude != null && event.longitude != null ? `${event.latitude}, ${event.longitude}` : language === "tr" ? "Adres belirtilmedi" : "Address not provided")}</dd></div></> : null}{event.format !== "offline" && event.liveUrl ? <div><dt>{language === "tr" ? "Canlı etkinlik bağlantısı" : "Live event URL"}</dt><dd><a href={event.liveUrl} rel="noreferrer" target="_blank">{event.liveUrl}<ExternalLink size={14}/></a></dd></div> : null}</dl></section></div> : null}
+      {ticketTypesQuery.data?.length ? (
+        <section className="admin-form event-ticket-summary" id="tickets">
+          <h2>{language === "tr" ? "Biletler" : "Tickets"}</h2>
+          <p>
+            {Math.min(...ticketTypesQuery.data.map((item) => item.price)) ===
+            Math.max(...ticketTypesQuery.data.map((item) => item.price))
+              ? `${language === "tr" ? "Bilet" : "Ticket"}: ${new Intl.NumberFormat(language === "tr" ? "tr-TR" : "en-GB", { style: "currency", currency: ticketTypesQuery.data[0]!.currency }).format(ticketTypesQuery.data[0]!.price)}`
+              : `${language === "tr" ? "Bilet" : "Ticket"}: ${[...new Set(ticketTypesQuery.data.map(item => item.currency))].map(currency => { const prices = ticketTypesQuery.data!.filter(item => item.currency === currency).map(item => item.price); const format = (price: number) => new Intl.NumberFormat(locale, { style: "currency", currency, currencyDisplay: "code" }).format(price).replace("TRY", "TL"); return `${format(Math.min(...prices))} – ${format(Math.max(...prices))}`; }).join(" · ")}`}
+          </p>
+          <button
+            className="primary-action"
+            onClick={() => setTicketPickerOpen(true)}
+          >
+            {language === "tr" ? "Biletleri gör" : "View tickets"}
+          </button>
+        </section>
+      ) : null}
       {event.timeline ? (
         <section className="admin-form">
           <h2>{language === "tr" ? "Genel bakış" : "Overview"}</h2>
@@ -493,23 +519,6 @@ export function EventDetailPage() {
           </div>
         </section>
       ) : null}
-      {ticketTypesQuery.data?.length ? (
-        <section className="admin-form">
-          <h2>{language === "tr" ? "Biletler" : "Tickets"}</h2>
-          <p>
-            {Math.min(...ticketTypesQuery.data.map((item) => item.price)) ===
-            Math.max(...ticketTypesQuery.data.map((item) => item.price))
-              ? `${language === "tr" ? "Bilet" : "Ticket"}: ${new Intl.NumberFormat(language === "tr" ? "tr-TR" : "en-GB", { style: "currency", currency: ticketTypesQuery.data[0]!.currency }).format(ticketTypesQuery.data[0]!.price)}`
-              : `${language === "tr" ? "Bilet" : "Ticket"}: ${Math.min(...ticketTypesQuery.data.map((item) => item.price))} - ${Math.max(...ticketTypesQuery.data.map((item) => item.price))}`}
-          </p>
-          <button
-            className="primary-action"
-            onClick={() => setTicketPickerOpen(true)}
-          >
-            {language === "tr" ? "Biletleri gör" : "View tickets"}
-          </button>
-        </section>
-      ) : null}
       {event.externalRegistrationUrl ? (
         <a
           className="primary-action"
@@ -522,6 +531,7 @@ export function EventDetailPage() {
         </a>
       ) : null}
       <ContentComments
+        shareContext={{ title: event.title, location: event.place?.name ?? event.locationName ?? event.city ?? "", date: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", timeZone: event.timezone }).format(new Date(event.startsAt)), tags: event.tags.slice().sort((a, b) => b.usageCount - a.usageCount).map(tag => tag.name), icon: "🎪" }}
         targetId={event.id}
         targetType="event"
         title={language === "tr" ? "Etkinlik yorumları" : "Event posts and comments"}
@@ -529,8 +539,9 @@ export function EventDetailPage() {
         canManage={canManage}
       />
       {recommendedEvents.length ? <section className="admin-form event-recommendations"><div className="section-header compact"><div><h2>{language === "tr" ? "İlginizi çekebilecek diğer etkinlikler" : "Other events you may like"}</h2><p>{language === "tr" ? "Ortak ilgi alanları, konum, organizatör ve popülerliğe göre seçildi." : "Selected by shared interests, location, organiser and popularity."}</p></div></div><div className="event-grid recommendation-carousel">{recommendedEvents.map((item) => <EventCard event={item} key={item.id}/>)}</div></section> : null}
+      {calendarOpen ? <CalendarDialog event={{ title: event.title, startsAt: event.startsAt, endsAt: event.endsAt, location: [event.locationName, event.locationAddress, event.city, event.country].filter(Boolean).join(", "), description: event.description, url: new URL(`/events/${event.slug}`, window.location.origin).toString() }} onClose={() => setCalendarOpen(false)}/> : null}
       <NotificationDialog
-        calendar={{ title: event.title, startsAt: event.startsAt, endsAt: event.endsAt, location: [event.locationName, event.locationAddress, event.city, event.country].filter(Boolean).join(", "), description: event.description }}
+        calendar={{ title: event.title, startsAt: event.startsAt, endsAt: event.endsAt, location: [event.locationName, event.locationAddress, event.city, event.country].filter(Boolean).join(", "), description: event.description, url: new URL(`/events/${event.slug}`, window.location.origin).toString() }}
         open={notificationOpen}
         onClose={() => setNotificationOpen(false)}
         enabled={Boolean(notificationQuery.data?.enabled)}
@@ -544,7 +555,7 @@ export function EventDetailPage() {
         targetId={event.id}
         targetType="event"
         title={event.title}
-        text={[event.title, formatEventDateRange(event.startsAt, event.endsAt, { locale }), [event.locationName, event.city].filter(Boolean).join(" · "), event.tags.slice(0, 5).map((tag) => `#${tag.name.replace(/\s+/g, "")}`).join(" ")].filter(Boolean).join("\n")}
+        text={[`🎪 ${event.title}`, `📍 ${event.place?.name ?? event.locationName ?? event.city ?? ""}`, `📅 ${new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", timeZone: event.timezone }).format(new Date(event.startsAt))}`, event.tags.slice().sort((a, b) => b.usageCount - a.usageCount).slice(0, 4).map((tag) => `#${tag.name}`).join(" "), "🌎 Konnektora →"].filter(Boolean).join("\n")}
         storyDetails={{
           startsAt: event.startsAt,
           endsAt: event.endsAt,
@@ -553,7 +564,7 @@ export function EventDetailPage() {
           address: event.place?.address ?? event.locationAddress,
           city: event.place?.city ?? event.city,
         }}
-        url={window.location.href}
+        url={new URL(`/events/${event.slug}`, window.location.origin).toString()}
       />
     </article>
   );

@@ -1,0 +1,30 @@
+KONNEKTORA CANLI YAYIN
+Adres: https://konnektora.com
+Platform: Railway / production
+Ana yayın: 86fb1b6b-08c5-4822-abcf-55e4639a71e2 — SUCCESS
+Son yayın: cbe99072-0190-405c-a440-45a0ed71fbc0 — SUCCESS
+
+Uygulanan eklemeli geçişler:
+20261023120000_session_version
+20261023130000_phone_change_approval
+20261023140000_manager_attendance
+20261023150000_notification_context
+
+Şifreli DB yedeği: /Users/kadirerbakar/.local/share/konnektora-backups/oct23-release-1792783561105.enc
+Boyut: 66.801.143 byte; şifre çözme ve SHA256 doğrulaması geçti. Anahtar ayrı ve özel izinli dosyada; bu rapora eklenmedi.
+Geçişler eski sütunları silmedi. Önceki uygulama sürümüne dönüş gerektiğinde Railway deploy geri alma kullanılabilir; DB yedeği kendiliğinden geri yüklenmemelidir.
+
+API 499, web 180 test başarılı; 76 yerel gerçek DB kabul senaryosu. Lint ve üretim derlemesi başarılı.
+Canlı 16 işlevsel grup, son sürümde 35 salt-okuma kontrolü ve genel sağlık/içerik kontrolü başarılı.
+Konum gizliliği ve kısa etkinlik özeti canlıda bulunan sorunlardı; düzeltildi ve yeni sürümde doğrulandı.
+Test temizliği sonrası sayılar başlangıçla aynı: 24 üye / 26 etkinlik / 9 mekân / 109 medya / 81 kalıcı yükleme / 4 bilet.
+Önceden mevcut çalışma alanı değişiklikleri korundu. Git commit/push yapılmadı; yayın mevcut çalışma alanı Railway yüklemesiyle yapıldı.
+
+Madde bazlı kapsam ve kalanlar: docs/TEST_LIVE_2026-10-23.txt.
+Harici kalanlar: #6 eski kayıp özgün medya, #19 gerçek SMS/Meta/ödeme sağlayıcı kabulü, #20 sosyal kampanya erişimi/tarihleri, #37 yeni video/özgün kaynak.
+
+83. MADDE EK YAYINI: cae8b3c8-642a-452c-985a-398824b91804 — SUCCESS.
+Post/yorum metni azami 560px; medya/kart ölçüleri korunur. Web 180/180, lint, üretim derlemesi ve canlı sağlık/içerik kontrolleri başarılı. Canlı masaüstü/mobil genişlik doğrulandı. Yeni geçiş yok. Tabloda A87:C87 yeşil.
+
+24 EKİM DEVAMI — 85/86/89/90:
+Son yayın e614b430-620d-4152-a588-5e5bbdda123c SUCCESS. API500/web191 test; lint/derleme başarılı. Canlı bildirim bağlantıları, bilet yerleşimi/zamanları ve mobil takip yıldızı doğrulandı; QA temizliği ve 35 salt-okuma/genel sağlık kontrolü başarılı. Yeni geçiş yok. Ayrıntılar docs/ACIK_MADDELER_2026-10-24.txt.

@@ -1,6 +1,17 @@
 # Konnektora Deployment
 
-Bu rehber iki production yolunu kapsar:
+Güncel canlı ortam Railway üzerinde aynı servisten web ve API yayınlar. Aşağıdaki Netlify/Render bölümleri alternatif kurulumları açıklar.
+
+## Güncel Railway dağıtımı — 8 Ekim 2026
+
+- Uygulama: `https://konnektora.com`; API: `https://konnektora.com/api`.
+- Node.js 22; mevcut Railway build ve pre-deploy ayarlarını koruyun.
+- Yeni sürüm altı migration içerir. Canlıdan alınan şifreli custom-format yedek ayrı PostgreSQL 18 ortamına geri yüklendi; migration sonrası mevcut kayıtlar ve bakiyeler korundu. Bu doğrulama canlıya migration/deploy uygulandığı anlamına gelmez.
+- İlk kalıcı depoya geçişte yazma trafiğini bakım penceresinde durdurun. Mevcut canlı konteyner değiştirilmeden yeni migration dosyalarıyla `npm run db:deploy` çalıştırın. Sonra aynı eski API konteynerinin dosya sisteminde `node scripts/migrate-legacy-uploads.cjs` çalıştırın. Script eski public dosyaları `stored_uploads`, kamera kanıtlarını özel `selfie_bytes` alanına kopyalar; tekrar çalıştırılması aynı dosyayı çoğaltmaz. Çıktıdaki `missingEvidence` sayısını inceleyin. Eski dosyalara yalnız yeni konteynerden erişmeye çalışmak onları kaybettirebilir.
+- Kopyalama doğrulandıktan sonra yeni web/API sürümünü beraber dağıtın. Gerçek ödeme/SMS bu yayın hazırlığında kapsam dışıdır; üretimde sandbox tahsilat başarılı gösterilmez.
+- Üretim seed çalıştırmayın. `SMOKE_BASE_URL=https://konnektora.com/api SMOKE_WEB_URL=https://konnektora.com npm run ops:smoke` ile kontrol edin. Yetkili salt okunur kontrol için `SMOKE_ADMIN_USER_ID` açıkça belirtilmelidir; token platform secret store üzerinden alınır.
+
+Alternatif production yolları:
 
 1. Netlify frontend + Netlify Function API + Netlify Database/Postgres
 2. Netlify frontend + Render backend + Render PostgreSQL

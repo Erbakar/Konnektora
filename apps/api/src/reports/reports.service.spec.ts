@@ -1,3 +1,4 @@
+jest.mock("../notifications/moderation-activity",()=>({notifyRemovedEntity:jest.fn(),notifyTagModeration:jest.fn()}));
 import { BadRequestException } from "@nestjs/common";
 import { EventStatus, ReportStatus, ReportTargetType, UserStatus } from "@prisma/client";
 import { ModerationAction } from "./reports.dto";

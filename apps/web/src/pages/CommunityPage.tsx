@@ -1,7 +1,7 @@
+import { FollowStar, MemberCompatibility, MemberSignalsProvider } from "../components/MemberSignals";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MemberCard } from "@konnektora/shared";
 import { CalendarCheck, Mail, MapPin, MoreVertical, Sparkles, UserRound, Users } from "lucide-react";
-import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { GuestListAction } from "../components/GuestListAction";
 import { GuestListHub } from "../components/GuestListHub";
@@ -17,9 +17,10 @@ export function CommunityPage() {
   const tr = language === "tr";
   const client = useQueryClient();
   const user = getUserSession();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("scope");
-  const [tab, setTab] = useState<DirectoryTab>(requestedTab === "following" || requestedTab === "guests" || requestedTab === "mutual" || requestedTab === "popular" ? requestedTab : "new");
+  const tab: DirectoryTab = requestedTab === "following" || requestedTab === "guests" || requestedTab === "mutual" || requestedTab === "popular" ? requestedTab : "new";
+  const setTab = (value: DirectoryTab) => { const next = new URLSearchParams(searchParams); next.set("scope", value); setSearchParams(next); };
   const suggestions = useQuery({ queryKey: ["member-suggestions", user?.id], queryFn: listMemberSuggestions, enabled: Boolean(user) });
   const newMembers = useQuery({ queryKey: ["new-members", user?.id], queryFn: listNewMembers, enabled: Boolean(user) });
   const following = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
@@ -36,7 +37,7 @@ export function CommunityPage() {
   const pending = (tab === "new" && newMembers.isLoading) || suggestions.isLoading || following.isLoading;
   const toggle = useMutation({
     mutationFn: (member: MemberCard) => member.following ? unfollowUser(member.id) : followUser(member.id),
-    onSuccess: async () => { await Promise.all([client.invalidateQueries({ queryKey: ["following"] }), client.invalidateQueries({ queryKey: ["member-suggestions"] })]); },
+    onSuccess: async () => { await Promise.all([client.invalidateQueries({ queryKey: ["following"] }), client.invalidateQueries({ queryKey: ["member-suggestions"] }),client.invalidateQueries({ queryKey: ["new-members"] })]); },
   });
 
   if (!user) return <div className="page"><section className="feed-state"><h1>{tr ? "Topluluk" : "Community"}</h1><strong>{tr ? "Topluluğu görmek için giriş yap." : "Log in to view the community."}</strong><Link className="primary-action" to="/login">{tr ? "Giriş yap" : "Log in"}</Link></section></div>;
@@ -49,11 +50,11 @@ export function CommunityPage() {
       {canViewGuestLists ? <button className={tab === "guests" ? "active" : ""} onClick={() => setTab("guests")}><CalendarCheck size={17}/> Guest Lists</button> : null}
       <button className={tab === "mutual" ? "active" : ""} onClick={() => setTab("mutual")}><Sparkles size={17}/> {tr ? "Ortak ilgi alanları" : "Shared interests"}</button>
     </div>
-    {tab === "guests" ? <GuestListHub/> : pending ? <div className="feed-state">{tr ? "Kişiler yükleniyor…" : "Loading people…"}</div> : members.length ? <section className="community-grid">{members.map((member) => <article className="community-card" key={member.id}>
+    {tab === "guests" ? <GuestListHub/> : pending ? <div className="feed-state">{tr ? "Kişiler yükleniyor…" : "Loading people…"}</div> : members.length ? <MemberSignalsProvider ids={members.map(member=>member.id)}><section className="community-grid">{members.map((member) => <article className="community-card" key={member.id}>
       <UserIdentityLink user={member} avatarClassName="post-avatar" showName={false}/>
-      <div className="community-card-body"><Link to={userProfilePath(member)}><strong>{member.username ? `@${member.username}` : member.name}</strong></Link>{tab === "new" && member.createdAt ? <span>{new Intl.RelativeTimeFormat(tr ? "tr" : "en", { numeric: "auto" }).format(Math.ceil((new Date(member.createdAt).getTime() - Date.now()) / 86_400_000), "day")} {tr ? "katıldı" : "joined"}</span> : null}{member.birthDate ? <span>{memberAge(member.birthDate)} {tr ? "yaşında" : "years old"}</span> : null}<span><MapPin size={14}/>{member.city || member.country ? (tr ? `${member.city || member.country} konumunda` : `located in ${member.city || member.country}`) : (tr ? "Konum belirtilmedi" : "Location not specified")}</span><small>{member.followerCount} {tr ? "takipçi" : "followers"} · {member.commonTagCount} {tr ? "ortak ilgi alanı" : "shared interests"}</small></div>
-      <div className="community-card-actions"><button className={member.following ? "secondary-action" : "primary-action"} disabled={toggle.isPending} onClick={() => toggle.mutate(member)}>{member.following ? (tr ? "Takipte" : "Following") : (tr ? "Takip et" : "Follow")}</button><GuestListAction canUse={canUseGuestLists} target={{ id: member.id, name: member.name, username: member.username, avatarUrl: member.avatarUrl, accountType: member.accountType }}/><details className="action-menu"><summary aria-label={tr ? "Kullanıcı aksiyonları" : "User actions"}><MoreVertical size={18}/></summary><div><Link to={`/messages?peer=${member.id}`}><Mail size={17}/> {tr ? "Mesaj gönder" : "Send message"}</Link></div></details></div>
-    </article>)}</section> : <div className="feed-state"><strong>{tr ? "Bu listede kullanıcı bulunmuyor." : "No members in this list."}</strong></div>}
+      <div className="community-card-body"><div className="member-name-line"><FollowStar id={member.id}/><Link to={userProfilePath(member)}><strong>{member.username ? `@${member.username}` : member.name}</strong></Link></div>{tab === "new" && member.createdAt ? <span>{new Intl.RelativeTimeFormat(tr ? "tr" : "en", { numeric: "auto" }).format(Math.ceil((new Date(member.createdAt).getTime() - Date.now()) / 86_400_000), "day")} {tr ? "katıldı" : "joined"}</span> : null}{member.birthDate ? <span>{memberAge(member.birthDate)} {tr ? "yaşında" : "years old"}</span> : null}<span><MapPin size={14}/>{member.city || member.country ? (tr ? `${member.city || member.country} konumunda` : `located in ${member.city || member.country}`) : (tr ? "Konum belirtilmedi" : "Location not specified")}</span><small>{member.followerCount} {tr ? "takipçi" : "followers"}</small><MemberCompatibility id={member.id} commonTagCount={member.commonTagCount}/></div>
+      <div className="community-card-actions">{member.id!==user.id?<><button className={member.following ? "secondary-action" : "primary-action"} disabled={toggle.isPending} onClick={() => toggle.mutate(member)}>{member.following ? (tr ? "Takipte" : "Following") : (tr ? "Takip et" : "Follow")}</button><GuestListAction canUse={canUseGuestLists} target={{ id: member.id, name: member.name, username: member.username, avatarUrl: member.avatarUrl, accountType: member.accountType }}/><details className="action-menu"><summary aria-label={tr ? "Kullanıcı aksiyonları" : "User actions"}><MoreVertical size={18}/></summary><div><Link to={`/messages?peer=${member.id}`}><Mail size={17}/> {tr ? "Mesaj gönder" : "Send message"}</Link></div></details></>:null}</div>
+    </article>)}</section></MemberSignalsProvider> : <div className="feed-state"><strong>{tr ? "Bu listede kullanıcı bulunmuyor." : "No members in this list."}</strong></div>}
   </div>;
 }
 

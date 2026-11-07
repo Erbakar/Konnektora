@@ -16,9 +16,10 @@ export class OptionalJwtAuthGuard implements CanActivate {
     if (!header.startsWith("Bearer ")) throw new UnauthorizedException("Geçersiz token.");
 
     try {
-      const payload = await this.jwtService.verifyAsync<{ sub: string }>(header.slice(7));
+      const payload = await this.jwtService.verifyAsync<{ sub: string; sessionVersion?: number }>(header.slice(7));
       const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
       if (!user || user.status !== "active") throw new UnauthorizedException("Aktif kullanıcı gerekli.");
+      if ((payload.sessionVersion ?? 0) !== (user.sessionVersion ?? 0)) throw new UnauthorizedException("Oturumunuz sona erdi. Yeniden giriş yapın.");
       request.user = user;
       return true;
     } catch (error) {

@@ -1,33 +1,27 @@
+import { contentMediaExtensions, contentMediaHelp } from "../common/media-policy";
 import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ReportTargetType, User } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { mkdirSync } from "fs";
-import { unlink } from "fs/promises";
-import { diskStorage } from "multer";
+import { durableStorage, removeDurableUpload } from "../media-storage/durable-storage";
 import { resolve } from "path";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { OnboardingJwtAuthGuard } from "../auth/onboarding-jwt-auth.guard";
 import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
-import { CreateCommentDto, CreateMediaDto, CreateReactionDto, ReorderProfileMediaDto, UpdateCommentDto } from "./content.dto";
+import { CreateCommentDto, CreateMediaDto, CreatePollDto, CreateReactionDto, ReorderProfileMediaDto, UpdateCommentDto, VotePollDto } from "./content.dto";
 import { ContentService } from "./content.service";
 
 mkdirSync(resolve(process.cwd(), "uploads"), { recursive: true });
-const mediaExtensions: Record<string, string> = {
-  "image/jpeg": ".jpg",
-  "image/png": ".png",
-  "image/webp": ".webp",
-  "image/gif": ".gif",
-  "video/mp4": ".mp4",
-  "video/webm": ".webm"
-};
+const mediaExtensions = contentMediaExtensions;
 
 @Controller()
 export class ContentController {
   constructor(private readonly contentService: ContentService) {}
 
   @Get("media")
+  @UseGuards(OptionalJwtAuthGuard)
   listMedia(@Query("targetType") targetType?: ReportTargetType, @Query("targetId") targetId?: string) {
     return this.contentService.listMedia(targetType, targetId);
   }
@@ -41,27 +35,27 @@ export class ContentController {
   @Post("media/:targetType/:targetId/upload")
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor("file", {
-    storage: diskStorage({ destination: resolve(process.cwd(), "uploads"), filename: (_request, file, callback) => callback(null, `${randomUUID()}${mediaExtensions[file.mimetype] ?? ""}`) }),
+    storage: durableStorage({ destination: resolve(process.cwd(), "uploads"), filename: (_request, file, callback) => callback(null, `${randomUUID()}${mediaExtensions[file.mimetype] ?? ""}`) }),
     limits: { fileSize: 10 * 1024 * 1024 },
-    fileFilter: (_request, file, callback) => { const allowed = Boolean(mediaExtensions[file.mimetype]); callback(allowed ? null : new BadRequestException("Yalnız JPG, PNG, WebP, GIF, MP4 veya WebM yüklenebilir."), allowed); }
+    fileFilter: (_request, file, callback) => { const allowed = Boolean(mediaExtensions[file.mimetype]); callback(allowed ? null : new BadRequestException(contentMediaHelp), allowed); }
   }))
   async uploadContentMedia(@Param("targetType") targetType: ReportTargetType, @Param("targetId") targetId: string, @UploadedFile() file: Express.Multer.File | undefined, @CurrentUser() user: User) {
     if (!file) throw new BadRequestException("Yüklenecek dosya bulunamadı.");
     try { return await this.contentService.createContentMedia(targetType, targetId, user, `/uploads/${file.filename}`, file.mimetype.startsWith("image/") ? "image" : "video"); }
-    catch (error) { await unlink(file.path).catch(() => undefined); throw error; }
+    catch (error) { await removeDurableUpload(file.path).catch(() => undefined); throw error; }
   }
 
   @Post("media/event/pending/:batchId/upload")
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor("file", {
-    storage: diskStorage({ destination: resolve(process.cwd(), "uploads"), filename: (_request, file, callback) => callback(null, `${randomUUID()}${mediaExtensions[file.mimetype] ?? ""}`) }),
+    storage: durableStorage({ destination: resolve(process.cwd(), "uploads"), filename: (_request, file, callback) => callback(null, `${randomUUID()}${mediaExtensions[file.mimetype] ?? ""}`) }),
     limits: { fileSize: 10 * 1024 * 1024 },
-    fileFilter: (_request, file, callback) => { const allowed = Boolean(mediaExtensions[file.mimetype]); callback(allowed ? null : new BadRequestException("Yalnız JPG, PNG, WebP, GIF, MP4 veya WebM yüklenebilir."), allowed); }
+    fileFilter: (_request, file, callback) => { const allowed = Boolean(mediaExtensions[file.mimetype]); callback(allowed ? null : new BadRequestException(contentMediaHelp), allowed); }
   }))
   async uploadPendingEventMedia(@Param("batchId") batchId: string, @UploadedFile() file: Express.Multer.File | undefined, @CurrentUser() user: User) {
     if (!file) throw new BadRequestException("Yüklenecek dosya bulunamadı.");
     try { return await this.contentService.createPendingEventMedia(batchId, user, `/uploads/${file.filename}`, file.mimetype.startsWith("image/") ? "image" : "video"); }
-    catch (error) { await unlink(file.path).catch(() => undefined); throw error; }
+    catch (error) { await removeDurableUpload(file.path).catch(() => undefined); throw error; }
   }
 
   @Post("media/event/:eventId/claim/:batchId")
@@ -91,14 +85,14 @@ export class ContentController {
   @Post("profile/media/upload")
   @UseGuards(OnboardingJwtAuthGuard)
   @UseInterceptors(FileInterceptor("file", {
-    storage: diskStorage({
+    storage: durableStorage({
       destination: resolve(process.cwd(), "uploads"),
       filename: (_request, file, callback) => callback(null, `${randomUUID()}${mediaExtensions[file.mimetype] ?? ""}`)
     }),
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_request, file, callback) => {
       const allowed = Boolean(mediaExtensions[file.mimetype]);
-      callback(allowed ? null : new BadRequestException("Yalnız JPG, PNG, WebP, GIF, MP4 veya WebM yüklenebilir."), allowed);
+      callback(allowed ? null : new BadRequestException(contentMediaHelp), allowed);
     }
   }))
   async uploadProfileMedia(@UploadedFile() file: Express.Multer.File | undefined, @CurrentUser() user: User) {
@@ -106,7 +100,7 @@ export class ContentController {
     try {
       return await this.contentService.createProfileMedia(user.id, `/uploads/${file.filename}`, file.mimetype.startsWith("image/") ? "image" : "video");
     } catch (error) {
-      await unlink(file.path).catch(() => undefined);
+      await removeDurableUpload(file.path).catch(() => undefined);
       throw error;
     }
   }
@@ -130,8 +124,9 @@ export class ContentController {
   }
 
   @Get("comments")
-  listComments(@Query("targetType") targetType: ReportTargetType, @Query("targetId") targetId: string) {
-    return this.contentService.listComments(targetType, targetId);
+  @UseGuards(OptionalJwtAuthGuard)
+  listComments(@Query("targetType") targetType: ReportTargetType, @Query("targetId") targetId: string, @CurrentUser() user?: User) {
+    return this.contentService.listComments(targetType, targetId, user?.id);
   }
 
   @Post("comments")
@@ -150,6 +145,18 @@ export class ContentController {
   @UseGuards(JwtAuthGuard)
   deleteComment(@Param("id") id: string, @CurrentUser() user: User) {
     return this.contentService.deleteComment(id, user);
+  }
+
+  @Post("comments/:id/poll")
+  @UseGuards(JwtAuthGuard)
+  createPoll(@Param("id") id: string, @Body() body: CreatePollDto, @CurrentUser() user: User) {
+    return this.contentService.createPoll(id, body, user);
+  }
+
+  @Post("polls/:id/vote")
+  @UseGuards(JwtAuthGuard)
+  votePoll(@Param("id") id: string, @Body() body: VotePollDto, @CurrentUser() user: User) {
+    return this.contentService.votePoll(id, body, user);
   }
 
   @Post("comments/:id/like")

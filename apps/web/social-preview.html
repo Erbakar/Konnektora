@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Konnektora Sosyal Şablon Önizleme</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+      body { background: #181b19; color: #fff; margin: 0; padding: 32px; }
+      header { margin: 0 auto 28px; max-width: 1440px; }
+      header h1 { margin: 0 0 8px; }
+      header p { color: #bfc8c2; margin: 0; }
+      main { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 28px; margin: auto; max-width: 1440px; }
+      figure { margin: 0; }
+      figcaption { color: #d8ff54; font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+      img { background: #fff; border-radius: 8px; box-shadow: 0 12px 38px #0009; display: block; height: auto; width: 340px; }
+      .story img { width: 300px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Konnektora Instagram şablonları</h1>
+      <p>PDF brifine göre oluşturulan Story ve haftalık carousel önizlemeleri.</p>
+    </header>
+    <main aria-live="polite"></main>
+    <script type="module">
+      import { createEventStoryFile, createWeeklyEventFiles, getCurrentWeekWindow } from "/src/lib/socialTemplates.ts";
+
+      const base = new Date("2026-09-28T16:00:00+03:00");
+      const titles = [
+        "Yapay Zekâ ve Yaratıcı Endüstriler Buluşması",
+        "Kurucular İçin Yatırımcı Kahvaltısı",
+        "Elektronik Müzik Gecesi",
+        "Sürdürülebilir Tasarım Atölyesi",
+        "Yeni Nesil Topluluklar Paneli",
+        "Mobil Ürün Yönetimi Zirvesi",
+        "Bağımsız Sanatçılar Sahnesi",
+        "Global Girişimcilik Forumu",
+        "Şehirde Pazar Kahvaltısı",
+      ];
+      const events = titles.map((title, index) => {
+        const startsAt = new Date(base);
+        startsAt.setDate(base.getDate() + (index % 7));
+        startsAt.setHours(18 + (index % 3), 30, 0, 0);
+        const endsAt = new Date(startsAt);
+        endsAt.setHours(startsAt.getHours() + 2);
+        return {
+          title,
+          startsAt: startsAt.toISOString(),
+          endsAt: endsAt.toISOString(),
+          timezone: "Europe/Istanbul",
+          coverImageUrl: null,
+          locationName: index % 2 ? "Konnektora Hub" : "Bomontiada",
+          city: "İstanbul",
+          place: null,
+        };
+      });
+
+      const story = await createEventStoryFile("Yapay Zekâ ve Yaratıcı Endüstriler Buluşması", {
+        startsAt: events[0].startsAt,
+        endsAt: events[0].endsAt,
+        timezone: "Europe/Istanbul",
+        venue: "Konnektora Hub",
+        address: "Merkez Mahallesi, Birahane Sokak No: 1",
+        city: "İstanbul",
+      }, "tr");
+      const weekly = await createWeeklyEventFiles(events, "tr", getCurrentWeekWindow(new Date("2026-09-29T12:00:00+03:00")));
+      const previews = [
+        { file: story, label: "Gelecek etkinlik Story", className: "story" },
+        ...weekly.map((file, index) => ({ file, label: `Haftalık carousel ${index + 1}/${weekly.length}`, className: "" })),
+      ];
+      const main = document.querySelector("main");
+      previews.forEach(({ file, label, className }) => {
+        const figure = document.createElement("figure");
+        figure.className = className;
+        const caption = document.createElement("figcaption");
+        caption.textContent = label;
+        const image = document.createElement("img");
+        image.alt = label;
+        image.src = URL.createObjectURL(file);
+        figure.append(caption, image);
+        main.append(figure);
+      });
+    </script>
+  </body>
+</html>

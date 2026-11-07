@@ -1,4 +1,4 @@
-import { ChevronDown, Facebook, Instagram, Youtube } from "lucide-react";
+import { ChevronDown, Facebook, Instagram, Linkedin, Youtube } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { publicSiteHref } from "../lib/domains";
@@ -22,9 +22,10 @@ export function SiteFooter() {
           <nav aria-label={language === "tr" ? "Sosyal medya" : "Social media"} className="site-footer-social">
             <a aria-label="Instagram" href="https://www.instagram.com/konnektora/" rel="noreferrer" target="_blank"><Instagram size={19}/></a>
             <a aria-label="Facebook" href="https://www.facebook.com/konnektora" rel="noreferrer" target="_blank"><Facebook size={19}/></a>
-            <a aria-label="TikTok" href="https://www.tiktok.com/@_konnektora" rel="noreferrer" target="_blank">TikTok</a>
+            <a aria-label="TikTok" href="https://www.tiktok.com/@_konnektora" rel="noreferrer" target="_blank"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16.6 2c.4 2.8 2 4.5 4.4 4.7v3.5a8.8 8.8 0 0 1-4.4-1.4v7.1a6 6 0 1 1-5.2-5.9v3.6a2.5 2.5 0 1 0 1.7 2.3V2z"/></svg></a>
             <a aria-label="X" href="https://x.com/konnektora" rel="noreferrer" target="_blank">X</a>
             <a aria-label="YouTube" href="https://youtube.com/@konnektora" rel="noreferrer" target="_blank"><Youtube size={19}/></a>
+            <a aria-label="LinkedIn" href="https://www.linkedin.com/company/konnektora-app/" rel="noreferrer" target="_blank"><Linkedin size={19}/></a>
           </nav>
         </div>
         <nav className="site-footer-columns" aria-label={language === "tr" ? "Alt bilgi bağlantıları" : "Footer links"}>
@@ -34,7 +35,7 @@ export function SiteFooter() {
             </button>
             <strong className="site-footer-section-title">Konnektora</strong>
             <div className="site-footer-section-links" id="footer-konnektora-links">
-              <a href={publicSiteHref("/store")}>{language === "tr" ? "Mağaza" : "Store"}</a>
+              <a href={publicSiteHref("/store")}>{language === "tr" ? "Mağaza & Fiyatlar" : "Store & Pricing"}</a>
               <Link to="/business">{language === "tr" ? "İşletmeler için" : "For business"}</Link>
             </div>
           </div>
@@ -57,18 +58,25 @@ export function SiteFooter() {
             <div className="site-footer-section-links" id="footer-help-links">
               <Link to="/contact">{t("contact")}</Link>
               <Link to="/help">{t("help")}</Link>
+              <Link to="/press">{language === "tr" ? "Basın Kiti" : "Press Kit"}</Link>
             </div>
           </div>
           <div className={`site-footer-section${openSection === "legal" ? " is-open" : ""}`}>
             <button className="site-footer-section-toggle" aria-controls="footer-legal-links" aria-expanded={openSection === "legal"} onClick={() => toggleSection("legal")} type="button">
-              <span>{language === "tr" ? "Yasal" : "Legal"}</span><ChevronDown size={18} />
+              <span>{language === "tr" ? "Şirket" : "Company"}</span><ChevronDown size={18} />
             </button>
-            <strong className="site-footer-section-title">{language === "tr" ? "Yasal" : "Legal"}</strong>
+            <strong className="site-footer-section-title">{language === "tr" ? "Şirket" : "Company"}</strong>
             <div className="site-footer-section-links" id="footer-legal-links">
               <Link to="/about">{t("about")}</Link>
               <Link to="/privacy">{t("privacy")}</Link>
-              <Link to="/terms">{t("terms")}</Link>
-              <Link to="/cookies">{t("cookies")}</Link>
+              <Link to="/data-deletion">{language === "tr" ? "Veri silme talebi" : "Data deletion"}</Link>
+              <Link to="/cookies">{language === "tr" ? "Çerez Politikası" : "Cookie Policy"}</Link>
+              <Link to="/kvkk">KVKK</Link>
+              <Link to="/information">{language === "tr" ? "Bilgilendirme" : "Information"}</Link>
+              <Link to="/terms">{language === "tr" ? "Kullanım Şartları" : "Terms of Use"}</Link>
+              <Link to="/distance-selling">{language === "tr" ? "Mesafeli Satış Sözleşmesi" : "Distance Sales Agreement"}</Link>
+              <Link to="/pre-information">{language === "tr" ? "Ön Bilgilendirme Formu" : "Preliminary Information Form"}</Link>
+              <Link to="/cookie-preferences">{language === "tr" ? "Çerez Tercihleri" : "Cookie Preferences"}</Link>
             </div>
           </div>
           <div className="site-footer-language">

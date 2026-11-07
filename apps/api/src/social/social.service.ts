@@ -1,3 +1,8 @@
+import { audienceAllows } from "../common/privacy-context";
+import { assessInvitees } from "../common/invite-assessment";
+import { targetVisible } from "../notifications/activity-events";
+import { memberCompatibility } from "../common/compatibility";
+import { publicName } from "../common/public-name";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -6,6 +11,7 @@ const memberSelect = {
   name: true,
   username: true,
   accountType: true,
+  companyName: true,
   city: true,
   country: true,
   followerCount: true,
@@ -18,13 +24,17 @@ const memberSelect = {
     orderBy: { sortOrder: "asc" },
     take: 1,
   },
-  privacySettings: { select: { demographicsAudience: true } },
+  privacySettings: { select: { profileNameAudience: true, demographicsAudience: true, locationAudience: true } },
   interestTags: { select: { tagId: true } }
 } as const;
 
 @Injectable()
 export class SocialService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async inviteAssessment(userId: string, kind: "event" | "place", targetId: string, ids: string[]) { if (!await targetVisible(this.prisma,kind,targetId,userId)) throw new NotFoundException("Davet hedefi bulunamadı."); return assessInvitees(this.prisma,userId,kind,targetId,ids); }
+
+  compatibility(userId: string, ids: string[]) { return memberCompatibility(this.prisma, userId, ids); }
 
   async suggestions(userId: string) {
     const [viewer, follows, ownBlocks, blockedBy] = await Promise.all([
@@ -119,15 +129,15 @@ export class SocialService {
     return { ok: true as const, following: false };
   }
 
-  private toMemberCard(user: { id: string; name: string; username: string | null; accountType: string; city: string | null; country: string | null; followerCount: number; gender?: string | null; birthDate?: Date | null; createdAt?: Date; uploadedMedia?: Array<{ url: string }>; privacySettings?: { demographicsAudience: string } | null; interestTags: { tagId: string }[] }, ownTags: Set<string>, following: boolean) {
+  private toMemberCard(user: { id: string; name: string; username: string | null; accountType: string; city: string | null; country: string | null; followerCount: number; gender?: string | null; birthDate?: Date | null; createdAt?: Date; uploadedMedia?: Array<{ url: string }>; companyName?: string | null; privacySettings?: { profileNameAudience?: string; demographicsAudience: string; locationAudience?: string } | null; interestTags: { tagId: string }[] }, ownTags: Set<string>, following: boolean) {
     return {
       id: user.id,
-      name: user.name,
+      name: publicName(user),
       username: user.username,
       avatarUrl: user.uploadedMedia?.[0]?.url ?? null,
       accountType: user.accountType === "corporate" ? "corporate" as const : "individual" as const,
-      city: user.city,
-      country: user.country,
+      city: audienceAllows(user.id, user.privacySettings?.locationAudience ?? "everybody") ? user.city : null,
+      country: audienceAllows(user.id, user.privacySettings?.locationAudience ?? "everybody") ? user.country : null,
       followerCount: user.followerCount,
       commonTagCount: user.interestTags.filter((item) => ownTags.has(item.tagId)).length,
       following,

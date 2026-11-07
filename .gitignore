@@ -8,3 +8,7 @@ coverage/
 .env.local
 .DS_Store
 *.log
+
+# Yerel QA ve çalışma çıktıları
+tmp/
+output/

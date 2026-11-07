@@ -1,3 +1,9 @@
+import { assessInvitees } from "../common/invite-assessment";
+import { actorLabel, notifyEntityCreated, notifyEntityChanges, notifyUserActivity, isUndiscoverable, notifyMembershipInvite } from "../notifications/activity-events";
+import { invitePhone, invitePhoneVariants } from "../common/invite-phone";
+import { privacyContext } from "../common/privacy-context";
+import { publicName } from "../common/public-name";
+import { analyticsReference, uniqueAnalyticsReferences } from "../analytics/references";
 import {
   BadRequestException,
   ConflictException,
@@ -33,8 +39,10 @@ import { MailService } from "../mail/mail.service";
 import { SmsService } from "../sms/sms.service";
 
 const memberUserSelect = {
+  privacySettings: { select: { profileNameAudience: true } },
   id: true,
   email: true,
+  phone: true,
   name: true,
   username: true,
   role: true,
@@ -101,6 +109,20 @@ export class PlacesService {
         ? { members: { some: { userId: viewerId ?? "", status: "accepted" } } }
         : {}),
     };
+    if (query.scope === "trendy") {
+      const candidates = await this.prisma.place.findMany({ where, select: { id: true, createdAt: true } });
+      const views = candidates.length ? await this.prisma.contentView.groupBy({
+        by: ["targetId"],
+        where: { targetType: "place", targetId: { in: candidates.map((item) => item.id) }, kind: "detail", createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+        _count: { _all: true },
+      }) : [];
+      const counts = new Map(views.map((item) => [item.targetId, item._count._all]));
+      const ranked = candidates.sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0) || b.createdAt.getTime() - a.createdAt.getTime() || a.id.localeCompare(b.id));
+      const ids = ranked.slice((page - 1) * pageSize, page * pageSize).map((item) => item.id);
+      const rows = ids.length ? await this.prisma.place.findMany({ where: { AND: [where, { id: { in: ids } }] }, include: this.viewerInclude(viewerId) }) : [];
+      rows.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+      return { items: rows.map((place) => this.toPublicPlace(place, viewerId)), total: candidates.length, page, pageSize, hasNextPage: page * pageSize < candidates.length };
+    }
     const [foundItems, total] = await this.prisma.$transaction([
       this.prisma.place.findMany({
         where,
@@ -154,20 +176,43 @@ export class PlacesService {
     if (blocked) throw new NotFoundException("Mekân bulunamadı.");
     const place = await this.prisma.place.findFirst({
       where: { AND: [slugWhere, { OR: [{ visibility: { not: "invite_only" } }, ...(viewerId ? [{ members: { some: { userId: viewerId, status: { in: [PlaceMemberStatus.invited, PlaceMemberStatus.accepted] } } } } as Prisma.PlaceWhereInput] : [])] }], status: "active" },
-      include: this.viewerInclude(viewerId, true),
+      include: { ...this.viewerInclude(viewerId, true), createdBy: { select: { id: true, name: true, username: true } } },
     });
     if (!place) throw new NotFoundException("Mekân bulunamadı.");
     const managers = await this.prisma.placeMember.findMany({
       where: { placeId: place.id, status: "accepted", role: { in: ["organizer", "manager"] } },
-      orderBy: [{ role: "desc" }, { createdAt: "asc" }],
-      select: { role: true, user: { select: { id: true, name: true, username: true, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } },
+      orderBy: [{ createdAt: "desc" }, { userId: "asc" }],
+      select: { role: true, user: { select: { id: true, name: true, username: true, status: true, accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true } }, uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 } } } },
     });
-    return { ...this.toPublicPlace(place, viewerId), managers: (managers ?? []).map((item) => ({ id: item.user.id, name: item.user.name, username: item.user.username, role: item.role, avatarUrl: item.user.uploadedMedia?.[0]?.url ?? null })) };
+    return { ...this.toPublicPlace(place, viewerId), managers: (managers ?? []).map((item) => ({ id: item.user.id, name: publicName(item.user), username: item.user.username, role: item.role, avatarUrl: item.user.uploadedMedia?.[0]?.url ?? null })) };
+  }
+
+  private async ensureCanViewAnalytics(placeId: string, actor: User) {
+    if (!["admin", "super_admin", "curator"].includes(actor.role)) await this.ensureCanManage(placeId, actor);
+    if (!canUseAdvancedAnalytics(actor)) throw new ForbiddenException("Gelişmiş istatistikler admin, küratör ve uygun paket sahipleri tarafından kullanılabilir.");
+  }
+
+  async getAnalyticsReferences(placeId: string, actor: User) {
+    await this.ensureCanViewAnalytics(placeId, actor);
+    const place = await this.prisma.place.findUnique({ where: { id: placeId }, select: { id: true } });
+    if (!place) throw new NotFoundException("Mekân bulunamadı.");
+    const [events, members] = await Promise.all([
+      this.prisma.event.findMany({ where: { placeId, status: "published" }, select: { title: true, slug: true, createdBy: { select: { id: true, username: true, name: true } }, participants: { where: { status: "attended" }, select: { userId: true, user: { select: { username: true, name: true } } } } } }),
+      this.prisma.placeMember.findMany({ where: { placeId, status: "accepted" }, select: { userId: true, user: { select: { username: true, interestTags: { select: { tag: { select: { name: true, slug: true } } } } } } } }),
+    ]);
+    const visitors = new Map<string, string>();
+    for (const event of events) for (const member of event.participants) visitors.set(member.userId, member.user.username ? `@${member.user.username}` : member.user.name);
+    for (const member of members) visitors.set(member.userId, member.user.username ? `@${member.user.username}` : member.userId);
+    return uniqueAnalyticsReferences([
+      ...events.flatMap(event => ["fullEvent", "emptyEvent"].map(prefix => analyticsReference(prefix, event.title, `/events/${event.slug}`, "event"))),
+      ...events.flatMap(event => event.createdBy ? ["organizerEvents", "organizerAttendanceRate"].map(prefix => analyticsReference(prefix, event.createdBy!.username ? `@${event.createdBy!.username}` : event.createdBy!.name, `/users/id/${event.createdBy!.id}`, "user")) : []),
+      ...[...visitors.entries()].map(([id, name]) => analyticsReference("topVisitor", name, `/users/id/${id}`, "user")),
+      ...members.flatMap(member => member.user.interestTags.map(({ tag }) => analyticsReference("interest", tag.name, `/tags/${tag.slug}`, "tag"))),
+    ]);
   }
 
   async getInteractionStats(placeId: string, actor?: User) {
-    if (actor && !["admin", "super_admin", "curator"].includes(actor.role)) await this.ensureCanManage(placeId, actor);
-    if (actor && !canUseAdvancedAnalytics(actor)) throw new ForbiddenException("Gelişmiş istatistikler admin, küratör ve uygun paket sahipleri tarafından kullanılabilir.");
+    if (actor) await this.ensureCanViewAnalytics(placeId, actor);
     const place = await this.prisma.place.findUnique({
       where: { id: placeId },
       select: { id: true, followerCount: true, inviteCount: true },
@@ -346,6 +391,7 @@ export class PlacesService {
           description: input.description?.trim() || null,
           placeType: input.placeType ?? "community",
           visibility: (input.visibility as any) ?? "open",
+          region: input.region?.trim() || null, postalCode: input.postalCode?.trim() || null,
           country: input.country?.trim() || null,
           city: input.city?.trim() || null,
           address: input.address?.trim() || null,
@@ -369,6 +415,7 @@ export class PlacesService {
       });
       return created;
     });
+    await notifyEntityCreated(this.prisma, "place", place.id, actor.id);
     return this.getBySlug(place.slug, actor.id);
   }
 
@@ -414,6 +461,7 @@ export class PlacesService {
         description: this.optionalText(input.description),
         placeType: input.placeType,
         visibility: input.visibility as any,
+        region: this.optionalText(input.region), postalCode: this.optionalText(input.postalCode),
         country: this.optionalText(input.country),
         city: this.optionalText(input.city),
         address: this.optionalText(input.address),
@@ -429,14 +477,17 @@ export class PlacesService {
     if (current.visibility === "approval_required" && input.visibility === "open") {
       await this.prisma.placeMember.updateMany({ where: { placeId: id, status: "pending" }, data: { status: "accepted" } });
     }
+    await notifyEntityChanges(this.prisma, "place", current, updated);
     return this.getBySlug(updated.slug, actor.id);
   }
 
   async archive(id: string, actor: User) {
     const place = await this.prisma.place.findUnique({ where: { id } });
     if (!place) throw new NotFoundException("Mekân bulunamadı.");
-    if (actor.role === "user" && place.createdById !== actor.id)
-      throw new ForbiddenException("Mekânı yalnız sahibi arşivleyebilir.");
+    const manager = actor.role === "user" && place.createdById !== actor.id
+      ? await this.prisma.placeMember.findFirst({ where: { placeId: id, userId: actor.id, status: "accepted", role: { in: ["manager", "organizer"] } }, select: { userId: true } }) : null;
+    if (actor.role === "user" && place.createdById !== actor.id && !manager)
+      throw new ForbiddenException("Mekânı yalnız kurucusu veya yöneticileri arşivleyebilir.");
     return this.prisma.place.update({
       where: { id },
       data: { status: "archived", updatedById: actor.id },
@@ -466,6 +517,7 @@ export class PlacesService {
           throw error;
       }
     }
+    if (!existing && (existingMember?.status === "accepted" || !existingMember && place.visibility === "open")) await notifyUserActivity(this.prisma, userId, "place", placeId, "joined", `join:place:${placeId}:${userId}`);
     return { following: true };
   }
 
@@ -491,13 +543,13 @@ export class PlacesService {
     await this.ensureCanManage(placeId, actor);
     const members = await this.prisma.placeMember.findMany({
       where: { placeId },
-      orderBy: [{ role: "desc" }, { createdAt: "asc" }],
+      orderBy: [{ createdAt: "desc" }, { userId: "asc" }],
       include: { user: { select: { ...memberUserSelect, followerCount: true, _count: { select: { followers: { where: { follower: { placeMemberships: { some: { placeId, status: PlaceMemberStatus.accepted } } } } } } } } } },
     });
     const joinOrder = new Map([...members].sort((a, b) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime()).map((member, index) => [member.userId, index + 1]));
     return members.map(({ user, ...member }) => {
       const { uploadedMedia, _count, ...identity } = user;
-      return { ...member, joinOrder: joinOrder.get(member.userId), user: { ...identity, relatedFollowerCount: _count?.followers ?? 0, avatarUrl: uploadedMedia[0]?.url ?? null } };
+      return { ...member, joinOrder: joinOrder.get(member.userId), user: { ...identity, name: publicName(user), privacySettings: undefined, relatedFollowerCount: _count?.followers ?? 0, avatarUrl: uploadedMedia[0]?.url ?? null } };
     });
   }
 
@@ -529,7 +581,7 @@ export class PlacesService {
               }
             : { status: PlaceMemberStatus.accepted }),
       },
-      orderBy: [{ role: "desc" }, { createdAt: "asc" }],
+      orderBy: [{ createdAt: "desc" }, { userId: "asc" }],
       take: 100,
       include: {
         user: {
@@ -541,9 +593,9 @@ export class PlacesService {
             country: true,
             gender: true,
             birthDate: true,
-            profileVerifiedAt: true,
+            status: true, profileVerifiedAt: true,
             uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
-            privacySettings: { select: { demographicsAudience: true, locationAudience: true } },
+            accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true, demographicsAudience: true, locationAudience: true } },
             interestTags: { select: { tagId: true } },
           },
         },
@@ -552,20 +604,35 @@ export class PlacesService {
     const viewerTagIds = new Set(viewerInterests.map((item) => item.tagId));
     return members.map((member) => ({
       id: member.user.id,
-      name: member.user.name,
+      name: publicName(member.user),
+      isProvisional: member.user.status === "invited",
       username: member.user.username,
       city: actor?.id === member.user.id ? member.user.city : null,
       country: actor?.id === member.user.id ? member.user.country : null,
-      gender: actor?.id === member.user.id || member.user.privacySettings?.demographicsAudience === "everybody" ? member.user.gender : null,
-      birthDate: actor?.id === member.user.id || member.user.privacySettings?.demographicsAudience === "everybody" ? member.user.birthDate : null,
+      gender: privacyContext.getStore()?.advancedFilters ? (actor?.id === member.user.id || member.user.privacySettings?.demographicsAudience === "everybody" ? member.user.gender : null) : null,
+      birthDate: privacyContext.getStore()?.advancedFilters ? (actor?.id === member.user.id || member.user.privacySettings?.demographicsAudience === "everybody" ? member.user.birthDate : null) : null,
       profileVerifiedAt: member.user.profileVerifiedAt,
       avatarUrl: member.user.uploadedMedia?.[0]?.url ?? null,
       commonTagCount: (member.user.interestTags ?? []).filter((item) => viewerTagIds.has(item.tagId)).length,
-      relation: member.role,
+      relation: member.user.id === place.createdById ? "creator" : member.role,
       status: member.status,
       checkedIn: Boolean(member.checkedInAt),
       checkedInAt: member.checkedInAt,
     }));
+  }
+
+  async inviteRecommendations(placeId: string, actor: User) {
+    await this.ensureCanInvite(placeId,actor);
+    const users=await this.prisma.user.findMany({where:{status:"active",id:{not:actor.id},username:{not:null}},take:500,select:{id:true,name:true,username:true,accountType:true,companyName:true,privacySettings:{select:{profileNameAudience:true}},uploadedMedia:{where:{contentType:"user",status:"active",isProfilePicture:true},select:{url:true},take:1}}});
+    const scores=new Map((await assessInvitees(this.prisma,actor.id,"place",placeId,users.map(user=>user.id))).map(row=>[row.id,row]));
+    const invited=new Set((await this.prisma.placeInvitation.findMany({where:{placeId,inviterId:actor.id},select:{inviteeId:true}})).map(row=>row.inviteeId));
+    return users.filter(user=>scores.get(user.id)?.canInvite&&!invited.has(user.id)).map(user=>({id:user.id,name:publicName(user),username:user.username!,avatarUrl:user.uploadedMedia[0]?.url??null,score:scores.get(user.id)!.score,reasons:scores.get(user.id)!.reasons,sharedInterestCount:scores.get(user.id)!.sharedInterestCount})).sort((a,b)=>b.score-a.score).slice(0,50);
+  }
+  async pastEvents(placeId:string,actor:User){await this.ensureCanInvite(placeId,actor);return this.prisma.event.findMany({where:{placeId,endsAt:{lt:new Date()},OR:[{visibility:"open"},{createdById:actor.id},{participants:{some:{userId:actor.id,status:{in:["accepted","attended","not_attending"]}}}}]},orderBy:{endsAt:"desc"},take:100,select:{id:true,title:true,startsAt:true,endsAt:true}});}
+  async pastAttendees(placeId:string,eventId:string,actor:User){
+    const events=await this.pastEvents(placeId,actor);if(!events.some(event=>event.id===eventId))throw new ForbiddenException("Bu etkinliğin katılımcılarına erişemezsiniz.");
+    const participants=await this.prisma.eventParticipant.findMany({where:{eventId,status:{in:["accepted","attended"]},user:{status:"active"}},select:{user:{select:{id:true,name:true,username:true,accountType:true,companyName:true,privacySettings:{select:{profileNameAudience:true}},uploadedMedia:{where:{contentType:"user",status:"active",isProfilePicture:true},select:{url:true},take:1}}}},take:500});
+    return participants.map(({user})=>({id:user.id,name:publicName(user),username:user.username,avatarUrl:user.uploadedMedia[0]?.url??null}));
   }
 
   async invite(placeId: string, input: InvitePlaceMemberDto, actor: User) {
@@ -575,13 +642,14 @@ export class PlacesService {
       throw new BadRequestException(
         "Kullanıcı adı, telefon veya e-posta belirtilmelidir.",
       );
-    let user = await this.prisma.user.findFirst({
+    const activePhoneOwner = input.phone && !input.userId && !input.username ? await this.prisma.user.findFirst({ where: { phone: { in: invitePhoneVariants(input.phone) }, status: "active" } }) : null;
+    let user = activePhoneOwner ?? await this.prisma.user.findFirst({
       where: input.userId
         ? { id: input.userId }
         : input.username
           ? { username: input.username.replace(/^@/, "").toLowerCase().trim() }
           : input.phone
-            ? { phone: input.phone.replace(/[\s()-]/g, "") }
+            ? { phone: { in: invitePhoneVariants(input.phone) } }
             : input.email
               ? { email: input.email.toLowerCase().trim() }
               : { name: { equals: input.name!.trim(), mode: "insensitive" }, status: "active" },
@@ -591,7 +659,7 @@ export class PlacesService {
       user = await this.prisma.user.create({ data: { email, name: input.name?.trim() || email.split("@")[0] || email, passwordHash: await hash(randomUUID(), 10), role: "user", status: "invited" } });
     }
     if (!user && input.phone) {
-      const phone = input.phone.replace(/[\s()-]/g, "");
+      const phone = invitePhone(input.phone);
       const digest = createHash("sha256").update(phone).digest("hex").slice(0, 20);
       user = await this.prisma.user.create({ data: { email: `phone-${digest}@invite.konnektora.local`, phone, name: input.name?.trim() || phone, passwordHash: await hash(randomUUID(), 10), role: "user", status: "invited" } });
     }
@@ -645,19 +713,26 @@ export class PlacesService {
       userId: user.id,
       topic: type,
       type,
+      context: { actorId: actor.id, groupKey: `${type}:${placeId}` },
       title:
         role === PlaceMemberRole.member
           ? "Mekân daveti"
           : "Mekân yöneticiliği daveti",
-      body: `${place.name} mekânına davet edildiniz.`,
+      body: `${actor.username ? "@" + actor.username : "Bir üye"}, ${place.name} mekânına davet etti.`,
       targetType: "place",
       targetId: placeId,
+      skipEmail: !input.phone && Boolean(user.email && !user.email.endsWith("@invite.konnektora.local")),
     });
+    if (user.status === "invited" || (input.email || input.phone) && await isUndiscoverable(this.prisma, user.id)) await notifyMembershipInvite(this.prisma, actor, user, `place:${placeId}`, Boolean(input.email || input.phone));
     const acceptToken = user.status === "invited" ? await this.authService.createInviteAcceptToken(user.id) : undefined;
+    if(user.status === "invited") {
+      if(input.phone && user.phone)await this.smsService.sendContactInvite(user.phone,actorLabel(actor));
+      else if(!user.email.endsWith("@invite.konnektora.local"))await this.mailService.sendContactInviteEmail({to:user.email,name:user.name,invitedByName:actorLabel(actor)});
+    }
     if (input.phone && user.phone) {
-      await this.smsService.sendPlaceInvite(user.phone, actor.name, place.name, place.slug, acceptToken);
+      await this.smsService.sendPlaceInvite(user.phone, actor.username ? `@${actor.username}` : "Bir üye", place.name, place.slug, acceptToken);
     } else if (user.email && !user.email.endsWith("@invite.konnektora.local")) {
-      await this.mailService.sendPlaceInviteEmail({ to: user.email, name: user.name, placeName: place.name, placeSlug: place.slug, invitedByName: actor.name, acceptToken });
+      await this.mailService.sendPlaceInviteEmail({ to: user.email, name: user.name, placeName: place.name, placeSlug: place.slug, invitedByName: actor.username ? `@${actor.username}` : "Bir üye", acceptToken, manager: role !== PlaceMemberRole.member });
     }
     return { ...member, user: this.pickUser(user) };
   }
@@ -670,7 +745,7 @@ export class PlacesService {
         invitee: {
           select: {
             id: true,
-            name: true,
+            name: true, privacySettings: { select: { profileNameAudience: true } }, status: true,
             username: true,
             uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
           },
@@ -679,7 +754,7 @@ export class PlacesService {
     });
     return invitations.map((invitation) => ({
       id: invitation.invitee.id,
-      name: invitation.invitee.name,
+      name: publicName(invitation.invitee),
       username: invitation.invitee.username,
       avatarUrl: invitation.invitee.uploadedMedia[0]?.url ?? null,
       invitedAt: invitation.createdAt,
@@ -768,8 +843,8 @@ export class PlacesService {
         place: { select: { id: true, name: true } },
         user: {
           select: {
-            id: true, email: true, name: true, username: true, role: true, status: true,
-            accountType: true, memberPlan: true, businessPlan: true, followerCount: true, profileVerifiedAt: true,
+            id: true, email: true, phone: true, name: true, username: true, role: true, status: true,
+            accountType: true, companyName: true, memberPlan: true, businessPlan: true, followerCount: true, profileVerifiedAt: true,
             uploadedMedia: {
               where: { contentType: "user", status: "active" },
               orderBy: [{ isProfilePicture: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
@@ -808,7 +883,7 @@ export class PlacesService {
       targetType: "place" as const,
       targetId: placeId,
       targetName: member.place.name,
-      user: { id: member.user.id, email: member.user.email, name: member.user.name, username: member.user.username, role: member.user.role, status: member.user.status, accountType: member.user.accountType, avatarUrl, followerCount: member.user.followerCount, plan: this.getPassportPlan(member.user), profileVerifiedAt: member.user.profileVerifiedAt, media },
+      user: { id: member.user.id, email: member.user.email, phone: member.user.status === "invited" ? member.user.phone : null, name: publicName(member.user), username: member.user.username, role: member.user.role, status: member.user.status, accountType: member.user.accountType, avatarUrl, followerCount: member.user.followerCount, plan: this.getPassportPlan(member.user), profileVerifiedAt: member.user.profileVerifiedAt, media },
       status: member.status,
       role: member.role,
       alreadyInside: Boolean(member.checkedInAt),
@@ -825,7 +900,7 @@ export class PlacesService {
   private getPassportPlan(user: { role: string; accountType: string; memberPlan: string; businessPlan: string }) {
     if (["admin", "super_admin"].includes(user.role)) return "Admin";
     if (user.role === "curator") return "Küratör";
-    if (user.accountType === "corporate") return user.businessPlan === "starter" ? "Kurumsal Başlangıç" : `Kurumsal ${user.businessPlan}`;
+    if (user.accountType === "corporate") return user.businessPlan === "free" ? "Kurumsal Free" : `Kurumsal ${user.businessPlan}`;
     return user.memberPlan === "free" ? "Standart" : user.memberPlan;
   }
 
@@ -965,7 +1040,7 @@ export class PlacesService {
       where: { followerId: targetUserId },
       select: { followingId: true },
     });
-    if (direct.some((item) => item.followingId === actorUserId)) return;
+    if (audience === "following" && direct.some((item) => item.followingId === actorUserId)) return;
     if (audience === "network" && direct.length > 0) {
       const secondDegree = await this.prisma.userFollow.findFirst({
         where: {
@@ -1072,7 +1147,7 @@ export class PlacesService {
     return {
       id: user.id,
       email: user.email,
-      name: user.name,
+      name: user.status === "invited" ? "Davetli" : user.username || "Konnektora üyesi",
       role: user.role,
       status: user.status,
     };

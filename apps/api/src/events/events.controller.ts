@@ -32,6 +32,10 @@ import { EventsService } from "./events.service";
 export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
+  @Get("me/ticket-sales-eligibility")
+  @UseGuards(JwtAuthGuard)
+  ticketSalesEligibility(@CurrentUser() user: User) { return this.eventsService.ticketSalesEligibility(user); }
+
   @Get("events")
   @UseGuards(OptionalJwtAuthGuard)
   listPublicEvents(@Query() query: EventQueryDto, @CurrentUser() user?: User) {

@@ -82,12 +82,16 @@ describe("mekân detay gereksinimleri", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Konnektora Studio" })).toBeVisible();
-    expect(screen.queryByLabelText("Mekân medyaları")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Mekân medyaları")).toBeVisible();
+    const invite = screen.getByRole("button", { name: "Davet et" });
+    const share = screen.getByRole("button", { name: /^Paylaş$/ });
+    expect(invite.parentElement).toBe(share.parentElement);
+    expect(invite.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const followers = screen.getByRole("heading", { name: "Takipçiler" }).closest("section")!;
     await waitFor(() => expect(within(followers).getByRole("link", { name: /2 üye · 1 davetli/ })).toHaveTextContent("2 üye · 1 davetli · 1 bekleyen · 1 takip ettiğiniz"));
     expect(screen.getByLabelText("Mekân ve kullanıcı konumu haritası")).toBeVisible();
 
-    const visibleTags = screen.getByRole("heading", { name: "Etiketler" }).closest("section")!;
+    const visibleTags = screen.getByRole("link", { name: "#Etiket 1" }).closest("section")!;
     expect(within(visibleTags).getAllByRole("link").map((link) => link.textContent)).toEqual(tags.slice(0, 6).map((tag) => `#${tag.name}`));
     expect(within(visibleTags).queryByRole("link", { name: "#Etiket 7" })).not.toBeInTheDocument();
     await userEvent.click(within(visibleTags).getByRole("button", { name: "Tümünü göster (7)" }));
@@ -161,4 +165,18 @@ describe("mekân detay gereksinimleri", () => {
     expect(within(carousel as HTMLElement).getByRole("link", { name: "Önerilen Mekân 8" })).toBeVisible();
     expect(screen.queryByRole("link", { name: "Önerilen Mekân 9" })).not.toBeInTheDocument();
   });
+});
+
+it("opens media as a separate edit step and leaves the editor when cancelled", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><LanguageProvider><MemoryRouter initialEntries={["/places/konnektora-studio-310001/edit"]}><Routes><Route path="/places/:slug/edit" element={<PlaceDetailPage editPage />} /><Route path="/places/:slug" element={<PlaceDetailPage />} /></Routes></MemoryRouter></LanguageProvider></QueryClientProvider>);
+  await screen.findByRole("heading", { name: "Mekânı düzenle" });
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Mekân medyaları" }));
+  expect(screen.getByLabelText("Mekân medyaları")).toBeVisible();
+
+  expect(screen.getByLabelText("Mekân adı")).not.toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "Vazgeç" }));
+  await screen.findByRole("heading", { name: "Konnektora Studio" });
+  expect(screen.queryByRole("heading", { name: "Mekânı düzenle" })).not.toBeInTheDocument();
 });

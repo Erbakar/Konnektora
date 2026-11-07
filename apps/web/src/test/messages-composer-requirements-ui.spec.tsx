@@ -7,6 +7,7 @@ import { LanguageProvider } from "../lib/i18n";
 import { MessagesPage } from "../pages/MessagesPage";
 
 const apiMocks = vi.hoisted(() => ({
+  getPublicProfileById: vi.fn(),
   getTyping: vi.fn(),
   getUserSession: vi.fn(),
   listConversationMessages: vi.fn(),
@@ -41,6 +42,7 @@ beforeEach(() => {
   }]);
   apiMocks.listConversationMessages.mockResolvedValue({ items: [], page: 1, pageSize: 50, total: 0, hasNextPage: false });
   apiMocks.getTyping.mockResolvedValue({ typing: false });
+  apiMocks.getPublicProfileById.mockResolvedValue(null);
   apiMocks.markConversationRead.mockResolvedValue({ ok: true });
   apiMocks.sendPrivateMessage.mockResolvedValue({
     id: "media-message", senderId: "member-1", recipientId: "peer-1", body: "", status: "active",
@@ -58,7 +60,17 @@ afterEach(() => {
 });
 
 describe("özel mesaj medya gereksinimleri 139–141", () => {
-  it("metin olmadan görsel gönderir, medya bağlantısını ikonsuz ve İpuçları ile gösterir", async () => {
+  it("yeni kurumsal konuşmada kullanıcı adı altında marka adını gösterir", async () => {
+    apiMocks.listConversations.mockResolvedValue({ items: [], totalUnread: 0 });
+    apiMocks.listMemberSuggestions.mockResolvedValue([]);
+    apiMocks.getPublicProfileById.mockResolvedValue({ id: "peer-1", username: "marka", name: "Temsilci Adı", accountType: "corporate", companyName: "Test Markası", media: [] });
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><LanguageProvider><MemoryRouter initialEntries={["/messages?peer=peer-1"]}><MessagesPage /></MemoryRouter></LanguageProvider></QueryClientProvider>);
+    expect(await screen.findByText("Test Markası")).toBeVisible();
+    expect(screen.getByRole("link", { name: "@marka" })).toBeVisible();
+    expect(screen.queryByText("Temsilci Adı")).not.toBeInTheDocument();
+  });
+
+  it("metin olmadan görsel gönderir, medya ikonunu ve İpuçlarını gösterir", async () => {
     const { container } = render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
         <LanguageProvider>
@@ -70,7 +82,7 @@ describe("özel mesaj medya gereksinimleri 139–141", () => {
     const mediaButton = await screen.findByRole("button", { name: "Fotoğraf/video ekle" });
     expect(container.querySelector<HTMLImageElement>(".conversation-avatar img")?.src).toMatch(/\/uploads\/deniz\.webp$/);
     expect(container.querySelector<HTMLImageElement>(".thread-peer-avatar img")?.src).toMatch(/\/uploads\/deniz\.webp$/);
-    expect(mediaButton.querySelector("svg")).not.toBeInTheDocument();
+    expect(mediaButton.querySelector("svg")).toBeInTheDocument();
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     const image = new File(["image"], "photo.webp", { type: "image/webp" });
     fireEvent.change(input, { target: { files: [image] } });
@@ -112,4 +124,16 @@ describe("özel mesaj medya gereksinimleri 139–141", () => {
     expect(await screen.findByRole("button", { name: /@ece/ })).toBeVisible();
     expect(container.querySelector<HTMLImageElement>(".message-result-avatar img")?.src).toMatch(/\/uploads\/ece\.webp$/);
   });
+});
+
+it("#4 loads all pages of a long conversation in chronological order without duplicate messages", async () => {
+ const all=Array.from({length:120},(_,i)=>({id:`long-${i}`,senderId:"peer-1",recipientId:"member-1",body:`Uzun mesaj ${i+1}`,status:"active",createdAt:new Date(2026,9,1,12,i).toISOString(),reactions:[]}));
+ apiMocks.listConversationMessages.mockImplementation(async (_peer,page=1)=>({items:all.slice(Math.max(0,120-page*50),120-(page-1)*50),page,pageSize:50,total:120,hasNextPage:page*50<120}));
+ render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><LanguageProvider><MemoryRouter initialEntries={["/messages?peer=peer-1"]}><MessagesPage/></MemoryRouter></LanguageProvider></QueryClientProvider>);
+ await screen.findByText("Uzun mesaj 120"); expect(screen.queryByText("Uzun mesaj 1")).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button",{name:"Önceki mesajları yükle"}));await screen.findByText("Uzun mesaj 21");
+ fireEvent.click(screen.getByRole("button",{name:"Önceki mesajları yükle"}));await screen.findByText("Uzun mesaj 1");
+ expect(screen.getAllByText(/^Uzun mesaj \d+$/)).toHaveLength(120);expect(screen.queryByRole("button",{name:"Önceki mesajları yükle"})).not.toBeInTheDocument();
+ expect(screen.getByText("Uzun mesaj 1").compareDocumentPosition(screen.getByText("Uzun mesaj 120")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ expect(apiMocks.listConversationMessages).toHaveBeenCalledWith("peer-1",3);
 });

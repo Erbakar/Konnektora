@@ -51,7 +51,7 @@ describe("business account settings", () => {
     await userEvent.selectOptions(screen.getByLabelText("Şirket türü"), "limited_or_corporation");
     await userEvent.selectOptions(screen.getByLabelText("İşletme kategorisi"), "event_organizer");
     await userEvent.selectOptions(screen.getByLabelText("Firmanın ülkesi"), "Türkiye");
-    await userEvent.selectOptions(screen.getByLabelText("Firmanın şehri (opsiyonel)"), "İstanbul");
+    await userEvent.type(screen.getByLabelText("Firmanın şehri (opsiyonel)"), "İstanbul");
     await userEvent.type(screen.getByLabelText("Firmanın ilçesi (opsiyonel)"), "Beyoğlu");
     await userEvent.type(screen.getByLabelText("Firmanın açık adresi (opsiyonel)"), "İstiklal Caddesi 10");
     await userEvent.click(screen.getByRole("button", { name: "Kurumsal hesaba geç" }));
@@ -61,6 +61,7 @@ describe("business account settings", () => {
       tradeName: "Konnektora Teknoloji Ltd.",
       companyType: "limited_or_corporation",
       businessCategory: "event_organizer",
+      region: "", postalCode: "",
       country: "Türkiye",
       city: "İstanbul",
       district: "Beyoğlu",

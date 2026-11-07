@@ -1,8 +1,12 @@
+import { LegalCompanyDetails } from "../components/LegalCompanyDetails";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import type { PolicyType } from "@konnektora/shared";
 import { getFallbackPolicy, getPolicy } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
+import { SocialLoginPrivacyNotice } from "../components/SocialLoginPrivacyNotice";
+import { aboutContent, aboutHero } from "../lib/aboutContent";
+import { privacyDetails, termsDetails } from "../lib/policyContent";
 
 const policyRouteTypes: Record<string, PolicyType> = {
   privacy: "privacy",
@@ -13,8 +17,8 @@ const policyRouteTypes: Record<string, PolicyType> = {
 
 const fallbackCopy: Record<PolicyType, { tr: { title: string; body: string }; en: { title: string; body: string } }> = {
   privacy: {
-    tr: { title: "Gizlilik Politikası", body: "Konnektora, hesap ve topluluk deneyimi için gerekli verileri güvenli biçimde işler. Ayrıntılı politika içeriği yönetim panelinden güncellenebilir." },
-    en: { title: "Privacy Policy", body: "Konnektora processes the data required for account and community experiences securely. The detailed policy can be updated from the administration panel." },
+    tr: { title: "Gizlilik Politikası", body: "Konnektora; hesap oluşturma ve doğrulama için ad, e-posta ve telefon bilgilerini, profilinizi oluşturmak için paylaştığınız profil ve ilgi alanı bilgilerini işler. Paylaştığınız içerikler, mesajlar ve etkinlik veya mekân katılım bilgileriniz ilgili topluluk özelliklerini sunmak için kullanılır. Profil bilgilerinin kimler tarafından görülebileceğini Ayarlar → Gizlilik bölümünden yönetebilirsiniz. Destek formuna gönderdiğiniz ad, iletişim bilgileri ve mesaj içeriği talebinizin incelenmesi ve size yanıt verilmesi için saklanır." },
+    en: { title: "Privacy Policy", body: "Konnektora processes your name, email and phone number to create and verify your account, and the profile and interest details you provide to build your profile. Your shared content, messages and event or place participation details are used to provide the relevant community features. You can manage visibility of your profile details under Settings → Privacy. Your name, contact details and messages submitted to support are stored to review your request and respond to you." },
   },
   terms: {
     tr: { title: "Kullanım Koşulları", body: "Konnektora'yı kullanırken topluluk kurallarına, güvenlik ilkelerine ve yürürlükteki kullanım koşullarına uymanız gerekir." },
@@ -40,7 +44,10 @@ export function PolicyPage({ type = "privacy" }: { type?: PolicyType }) {
   });
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const fallback = fallbackCopy[policyType][language];
-  const isPublished = Boolean(policyQuery.data?.publishedAt);
+  // Older CMS terms must not hide the completed terms released on 4 October.
+  const isPublished = Boolean(policyQuery.data?.publishedAt) && (
+    (policyType !== "terms" && policyType !== "about") || new Date(policyQuery.data!.publishedAt!).getTime() >= Date.parse(policyType === "about" ? "2026-11-07T00:00:00Z" : "2026-10-04T00:00:00Z")
+  );
 
   return (
     <section className="page policy-page">
@@ -50,12 +57,20 @@ export function PolicyPage({ type = "privacy" }: { type?: PolicyType }) {
         <p>
           {isPublished
             ? t(`Son yayın tarihi: ${new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(new Date(policyQuery.data!.publishedAt!))}`, `Last published: ${new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(policyQuery.data!.publishedAt!))}`)
-            : t("Bu sayfa admin panelinden yayınlandığında güncel içerik burada görünür.", "Updated content will appear here when this page is published from the administration panel.")}
+            : policyType === "about"
+              ? aboutHero[language]
+              : policyType === "privacy"
+              ? t("Hesap, profil ve sosyal giriş verileri hakkında bilgi.", "Information about account, profile and social login data.")
+              : policyType === "terms"
+                ? t("Son güncelleme: 4 Ekim 2026", "Last updated: 4 October 2026")
+                : t("Bu sayfa admin panelinden yayınlandığında güncel içerik burada görünür.", "Updated content will appear here when this page is published from the administration panel.")}
         </p>
       </div>
       <article className="policy-content">
-        {policyQuery.data ? (
-          isPublished ? <div dangerouslySetInnerHTML={{ __html: policyQuery.data.body }} /> : <p>{fallback.body}</p>
+        {policyQuery.data || policyType === "privacy" || policyType === "terms" || policyType === "about" ? (
+          isPublished ? <div dangerouslySetInnerHTML={{ __html: policyQuery.data!.body }} /> : policyType === "about" ? <div className="about-content">{aboutContent[language].map((section, sectionIndex) => <section key={section.title ?? sectionIndex}>{section.title ? <h2>{section.title}</h2> : null}{section.blocks.map((block, index) => block.type === "list" ? <ul key={index}>{block.items.map(item => <li key={item}>{item}</li>)}</ul> : block.type === "h3" ? <h3 key={index}>{block.text}</h3> : block.type === "motto" ? <p className="about-motto" key={index}>{block.text}</p> : <p className={block.type === "lead" ? "about-lead" : undefined} key={index}>{block.text}</p>)}</section>)}</div> : policyType === "terms" ? termsDetails[language].map((section) => (
+            <section key={section.title}><h2>{section.title}</h2>{section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</section>
+          )) : <p>{fallback.body}</p>
         ) : (
           <div>
             <p>{language === "tr" ? "Bu politika sayfası henüz yayınlanmadı." : "This policy has not been published yet."}</p>
@@ -65,6 +80,21 @@ export function PolicyPage({ type = "privacy" }: { type?: PolicyType }) {
           </div>
         )}
       </article>
+      {policyType === "privacy" ? <article className="policy-content">
+        {privacyDetails[language].map((section) => <section key={section.title}><h2>{section.title}</h2>{section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</section>)}
+        <h2>{t("Hizmet sağlayıcı belgeleri", "Service provider documents")}</h2>
+        <ul>
+          <li><a href="https://railway.com/legal/dpa" target="_blank" rel="noreferrer">Railway</a></li>
+          <li><a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noreferrer">Cloudflare</a></li>
+          <li><a href="https://resend.com/legal/privacy-policy" target="_blank" rel="noreferrer">Resend</a></li>
+          <li><a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google</a></li>
+          <li><a href="https://www.facebook.com/privacy/policy/" target="_blank" rel="noreferrer">Meta</a></li>
+        </ul>
+        <SocialLoginPrivacyNotice />
+      </article> : null}
+      {policyType !== "about" ? <LegalCompanyDetails /> : null}
+      {policyType === "privacy" ? <article className="policy-content"><Link to="/kvkk">{t("KVKK Aydınlatma Metni", "KVKK Privacy Notice")}</Link></article> : null}
+      {policyType === "terms" ? <article className="policy-content"><Link to="/privacy">{t("Gizlilik politikası", "Privacy policy")}</Link>{" · "}<Link to="/data-deletion">{t("Veri silme talebi", "Data deletion request")}</Link></article> : null}
     </section>
   );
 }

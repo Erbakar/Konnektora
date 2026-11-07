@@ -1,3 +1,5 @@
+import { ticketWindowText } from "../lib/ticket-window";
+import { formatEventDateRange } from "../lib/formats";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarDays,
@@ -25,6 +27,7 @@ export function TicketsPage() {
   const user = getUserSession();
   const client = useQueryClient();
   const [past, setPast] = useState(false);
+  const [transferNotice, setTransferNotice] = useState("");
   const [transferOrder, setTransferOrder] = useState<OwnedTicketOrder | null>(
     null,
   );
@@ -77,6 +80,7 @@ export function TicketsPage() {
           {t("Geçmiş Biletlerim", "Past tickets")}
         </button>
       </div>
+      {transferNotice ? <p role="status" className="filter-notice">{transferNotice}</p> : null}
       <div className="admin-list">
         {orders.isLoading ? (
           <div className="empty-state">
@@ -130,7 +134,8 @@ export function TicketsPage() {
           order={transferOrder}
           language={language}
           onClose={() => setTransferOrder(null)}
-          onChanged={() => {
+          onChanged={(deliveryFailed) => {
+            setTransferNotice(deliveryFailed ? t("Bilet devredildi ancak e-posta veya bildirim gönderilemedi. Alıcı biletini hesabından görebilir; devir işlemini tekrar yapmayın.", "The ticket was transferred, but delivery failed. The recipient can view it in their account; do not repeat the transfer.") : t("Bilet devredildi.", "Ticket transferred."));
             setTransferOrder(null);
             void client.invalidateQueries({ queryKey: ["owned-tickets"] });
           }}
@@ -166,16 +171,13 @@ function TicketOrderCard({
         />
       ) : null}
       <div>
-        <strong>{order.event.title}</strong>
+        <strong><Link to={`/events/${order.event.slug}`}>{order.event.title}</Link></strong>
         <span>
           <CalendarDays size={15} />{" "}
-          {new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-GB", {
-            dateStyle: "medium",
-            timeStyle: "short",
-          }).format(new Date(order.event.startsAt))}
+          {formatEventDateRange(order.event.startsAt, order.event.endsAt, { locale: language === "tr" ? "tr-TR" : "en-GB" })}
         </span>
         <span>
-          {[order.event.city, order.event.country].filter(Boolean).join(", ") ||
+          {[order.event.locationName, order.event.locationAddress, order.event.city, order.event.country].filter(Boolean).join(", ") ||
             t("Çevrim içi", "Online")}
         </span>
         <b>
@@ -212,18 +214,11 @@ function TicketOrderCard({
         </div>
       </div>
       <div className="row-actions">
-        <Link className="secondary-action" to={`/events/${order.event.slug}`}>
-          {t("Etkinlik", "Event")}
-        </Link>
+
         <button disabled={!active.length} onClick={onTransfer}>
           <UserRoundPlus size={16} /> {t("Devir et", "Transfer")}
         </button>
-        <button
-          disabled={!active.length || order.status !== "paid"}
-          onClick={onRefund}
-        >
-          <Undo2 size={16} /> {t("İade et", "Refund")}
-        </button>
+        {order.eventChanged ? <button disabled={!active.length || order.status !== "paid"} onClick={onRefund}><Undo2 size={16}/> {t("İade et", "Refund")}</button> : null}
         <button onClick={() => void downloadTicketPdf(order, language)}>
           <Download size={16} /> {t("PDF indir", "Download PDF")}
         </button>
@@ -232,36 +227,6 @@ function TicketOrderCard({
   );
 }
 
-function ticketWindowText(
-  startsAt: string | null,
-  endsAt: string | null,
-  kind: "sale" | "gate",
-  language: "tr" | "en",
-) {
-  if (!startsAt && !endsAt) return "";
-  const locale = language === "tr" ? "tr-TR" : "en-GB";
-  const format = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-  const start = startsAt ? format(startsAt) : "";
-  const end = endsAt ? format(endsAt) : "";
-  if (language === "tr") {
-    if (kind === "sale") {
-      if (start && end) return `${start} ile ${end} arasında bu bilet alınabilir.`;
-      if (start) return `${start} tarihi itibarıyla bu bilet alınabilir.`;
-      return `${end} tarihine kadar bu bilet alınabilir.`;
-    }
-    if (start && end) return `${start} ile ${end} arasında giriş yapmalısınız.`;
-    if (start) return `${start} zamanından sonra giriş yapmalısınız.`;
-    return `${end} zamanından önce giriş yapmalısınız.`;
-  }
-  if (kind === "sale") {
-    if (start && end) return `This ticket is available between ${start} and ${end}.`;
-    if (start) return `This ticket is available from ${start}.`;
-    return `This ticket is available until ${end}.`;
-  }
-  if (start && end) return `Enter between ${start} and ${end}.`;
-  if (start) return `Enter after ${start}.`;
-  return `Enter before ${end}.`;
-}
 
 function TicketQr({ payload, status, language }: { payload: string; status: string; language: "tr" | "en" }) {
   const [src, setSrc] = useState("");
@@ -285,7 +250,7 @@ function TransferDialog({
   order: OwnedTicketOrder;
   language: "tr" | "en";
   onClose: () => void;
-  onChanged: () => void;
+  onChanged: (deliveryFailed?: boolean) => void;
 }) {
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const active = order.tickets.filter((ticket) => ticket.status === "active");
@@ -293,7 +258,7 @@ function TransferDialog({
   const transfer = useMutation({
     mutationFn: (input: Parameters<typeof transferOwnedTickets>[0]) =>
       transferOwnedTickets(input),
-    onSuccess: onChanged,
+    onSuccess: (result) => onChanged(result.deliveryFailed),
   });
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -307,7 +272,7 @@ function TransferDialog({
     });
   }
   return (
-    <div className="emotion-modal" role="dialog" aria-modal="true">
+    <div className="emotion-modal ticket-transfer-dialog" role="dialog" aria-modal="true">
       <form className="admin-form" onSubmit={submit}>
         <button aria-label={t("Kapat", "Close")} onClick={onClose} type="button">
           ×
@@ -339,8 +304,8 @@ function TransferDialog({
           <input name="phone" />
         </label>
         <label>
-          {t("Üye değilse adı", "Name, if not a member")}
-          <input name="name" />
+          {t("Alıcının adı (üye değilse, isteğe bağlı)", "Recipient name (optional for non-members)")}
+          <input name="name" /><small>{t("Yeni kullanıcıya gönderilecek davette hitap etmek için kullanılır.", "Used to address a new member in the invitation.")}</small>
         </label>
         <button className="primary-action" disabled={transfer.isPending}>
           {t("Devret", "Transfer")}
@@ -375,13 +340,16 @@ async function downloadTicketPdf(order: OwnedTicketOrder, language: "tr" | "en")
         {
           stack: [
             { text: "KONNEKTORA", color: "#1d7a50", bold: true, fontSize: 11, characterSpacing: 1.3 },
-            { text: order.event.title, style: "title", margin: [0, 12, 0, 12] },
+            { text: order.event.title, link: new URL(`/events/${order.event.slug}`, window.location.origin).href, style: "title", margin: [0, 12, 0, 12] },
             { text: order.ticketType.name, bold: true, fontSize: 15, color: "#174d36" },
+            { text: order.ticketType.description ?? "" },
+            { text: getUserSession()?.name ?? "" },
+            { text: [order.ticketType.gateOpensAt ? `${language === "tr" ? "Giriş başlangıcı" : "Entry opens"}: ${new Date(order.ticketType.gateOpensAt).toLocaleString(locale)}` : "", order.ticketType.gateClosesAt ? `${language === "tr" ? "Bu zamandan önce giriş yapmalısınız" : "Enter before"}: ${new Date(order.ticketType.gateClosesAt).toLocaleString(locale)}` : ""].filter(Boolean).join("\n") },
             {
-              text: new Date(order.event.startsAt).toLocaleString(locale, { dateStyle: "full", timeStyle: "short" }),
+              text: formatEventDateRange(order.event.startsAt, order.event.endsAt, { locale }),
               margin: [0, 10, 0, 4],
             },
-            { text: [order.event.city, order.event.country].filter(Boolean).join(", ") || (language === "tr" ? "Çevrim içi" : "Online") },
+            { text: [order.event.locationName, order.event.locationAddress, order.event.city, order.event.country].filter(Boolean).join(", ") || (language === "tr" ? "Çevrim içi" : "Online") },
             {
               text: new Intl.NumberFormat(locale, { style: "currency", currency: order.currency }).format(order.unitPrice),
               bold: true,

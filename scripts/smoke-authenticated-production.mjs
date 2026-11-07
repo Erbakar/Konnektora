@@ -1,3 +1,6 @@
+// Bound every request so launch checks cannot hang indefinitely.
+const timedFetch = (url, options = {}) => fetch(url, { ...options, signal: AbortSignal.timeout(20000) });
+
 import { createHmac } from "node:crypto";
 
 const baseUrl = (process.env.SMOKE_BASE_URL ?? "").replace(/\/$/, "");
@@ -14,7 +17,7 @@ function sign(userId) {
 }
 
 async function request(path, token, allowedStatuses = [200]) {
-  const response = await fetch(`${baseUrl}${path}`, {
+  const response = await timedFetch(`${baseUrl}${path}`, {
     headers: {
       authorization: `Bearer ${token}`,
       "user-agent": "konnektora-authenticated-smoke/1.0",
@@ -40,11 +43,12 @@ function requireKeys(label, value, keys) {
   }
 }
 
-const publicEvents = await fetch(`${baseUrl}/events?page=1&pageSize=15`).then((response) => response.json());
+const publicEvents = await timedFetch(`${baseUrl}/events?page=1&pageSize=15`).then((response) => response.json());
 const managedEvent = publicEvents.items?.find((event) => event.createdById) ?? publicEvents.items?.[0];
 if (!managedEvent?.createdById) throw new Error("Smoke testi için yönetici etkinliği bulunamadı.");
 
-const adminToken = sign(process.env.SMOKE_ADMIN_USER_ID || managedEvent.createdById);
+if (!process.env.SMOKE_ADMIN_USER_ID) throw new Error("SMOKE_ADMIN_USER_ID zorunludur; etkinlik sahibi admin olarak varsayılmaz.");
+const adminToken = sign(process.env.SMOKE_ADMIN_USER_ID);
 const adminUsers = await request("/admin/users?page=1&pageSize=100", adminToken);
 const users = adminUsers.data?.items ?? adminUsers.data ?? [];
 const regularUser = process.env.SMOKE_USER_ID
@@ -109,7 +113,7 @@ if (passportUser) {
   if (typeof passport.data.alreadyInside !== "boolean") throw new Error("Etkinlik pasaportu içeride durumunu içermiyor.");
 }
 
-const places = await fetch(`${baseUrl}/places?page=1&pageSize=12`).then((response) => response.json());
+const places = await timedFetch(`${baseUrl}/places?page=1&pageSize=12`).then((response) => response.json());
 const place = places.items?.find((item) => item.inviteCount > 0) ?? places.items?.[0];
 if (!place?.id) throw new Error("Smoke testi için mekân bulunamadı.");
 const placeMembers = await request(`/places/${place.id}/members`, adminToken);
