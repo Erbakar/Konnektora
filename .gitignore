@@ -12,3 +12,4 @@ coverage/
 # Yerel QA ve çalışma çıktıları
 tmp/
 output/
+pnpm-lock.yaml
