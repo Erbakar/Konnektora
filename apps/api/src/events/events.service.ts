@@ -4,6 +4,7 @@ import { actorLabel, isUndiscoverable, notifyEntityCreated, notifyEntityChanges,
 import { ticketSalesEligibility, ticketSalesRequirement } from "../common/ticket-sales-eligibility";
 import { invitePhone, invitePhoneVariants } from "../common/invite-phone";
 import { privacyContext, visibleLocation } from "../common/privacy-context";
+import { periodInterestMetrics, socializationMetrics } from "../common/analytics-extras";
 import { consumeQuota, paidCorporateEvent, quotaLock } from "../common/usage-quota";
 import { publicName } from "../common/public-name";
 import { reverseStoredPayment } from "../finance/payment-ledger";
@@ -347,7 +348,7 @@ export class EventsService {
     }
     const exists = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, startsAt: true, endsAt: true },
+      select: { id: true, startsAt: true, endsAt: true, lineup: true },
     });
     if (!exists) throw new NotFoundException("Etkinlik bulunamadı.");
     const [participants, participantDetails, comments, reactions, ratingRows, views, detailViews, viewSources, sharesByChannel, ticketOrders, orderDetails, refunds, ticketTypes, payments] = await Promise.all([
@@ -428,15 +429,37 @@ export class EventsService {
       else decisionBuckets.etkinlik_gunu += 1;
     }
     const participantIds = participantDetails.map((item) => item.userId);
-    const socialConnections = participantIds.length ? await this.prisma.memberScan.count({
-      where: {
-        createdAt: { gte: exists.startsAt, lte: exists.endsAt ?? new Date(exists.startsAt.getTime() + 86_400_000) },
-        OR: [{ scannerId: { in: participantIds } }, { memberId: { in: participantIds } }],
-      },
-    }) : 0;
+    const [eventScans, lineupActions, detailViewers] = await Promise.all([
+      participantIds.length ? this.prisma.memberScan.findMany({
+        where: {
+          createdAt: { gte: exists.startsAt, lte: exists.endsAt ?? new Date(exists.startsAt.getTime() + 86_400_000) },
+          OR: [{ scannerId: { in: participantIds } }, { memberId: { in: participantIds } }],
+        },
+        select: { scannerId: true, memberId: true, method: true },
+        take: 100_000,
+      }) : [],
+      this.prisma.contentAction.groupBy({ by: ["action"], where: { targetType: "event", targetId: eventId, action: { startsWith: "lineup_" } }, _count: { _all: true } }),
+      this.prisma.contentView.findMany({ where: { targetType: "event", targetId: eventId, kind: "detail", userId: { not: null } }, select: { userId: true }, distinct: ["userId"], take: 20_000 }),
+    ]);
+    const socialConnections = eventScans.length;
+    // 07/11 #73: line-up'ta en çok tıklananlar (ContentAction "lineup_<sıra>").
+    const lineupItems = Array.isArray(exists.lineup) ? exists.lineup as Array<{ title?: string } | null> : [];
+    const lineupClicks: Record<string, number> = {};
+    for (const row of lineupActions) {
+      const title = lineupItems[Number(row.action.slice("lineup_".length))]?.title?.trim();
+      if (title) lineupClicks[title] = (lineupClicks[title] ?? 0) + row._count._all;
+    }
+    // 07/11 #75: bilet türüne göre kapasite doluluk oranı.
+    const ticketTypeOccupancy = Object.fromEntries(ticketTypes.filter((ticket) => ticket.capacity > 0).map((ticket) => [ticket.name, Math.round(ticket.soldCount / ticket.capacity * 100)]));
+    const [attendeeInterests, visitorInterests] = await Promise.all([
+      periodInterestMetrics(this.prisma, "attendeeInterest", participantIds),
+      periodInterestMetrics(this.prisma, "visitorInterest", detailViewers.map((row) => row.userId)),
+    ]);
     const acceptedTotal = accepted + attended;
     const shares = sharesByChannel.reduce((sum, item) => sum + item._count._all, 0);
     const ticketTypeSold = distributionSum(orderDetails.map((order) => [order.ticketType.name, order.quantity] as const));
+    // 07/11 #75: sipariş kaydı olmayan (kapıda/harici) satışlar için bilet türünün satılan adedi esas alınır.
+    for (const ticket of ticketTypes) if (ticket.soldCount > (ticketTypeSold[ticket.name] ?? 0)) ticketTypeSold[ticket.name] = ticket.soldCount;
     const ticketTypeRevenue = distributionSum(orderDetails.map((order) => [order.ticketType.name, Number(order.totalAmount)] as const));
     const ticketSaleDay = distributionCount(orderDetails.map((order) => (order.purchasedAt ?? order.createdAt).toISOString().slice(0, 10)));
     const ticketSaleHour = distributionCount(orderDetails.map((order) => hourBucket(order.purchasedAt ?? order.createdAt)));
@@ -489,6 +512,11 @@ export class EventsService {
       ...prefixMetrics("ticketSaleHour", ticketSaleHour),
       ...prefixMetrics("ticketGroup", ticketGroup),
       ...prefixMetrics("checkInHour", checkInHour),
+      ...prefixMetrics("lineupClick", lineupClicks),
+      ...prefixMetrics("ticketTypeOccupancy", ticketTypeOccupancy),
+      ...socializationMetrics(eventScans, participantDetails.filter((item) => item.checkedInAt).map((item) => item.userId).concat(attended ? [] : participantIds)),
+      ...attendeeInterests,
+      ...visitorInterests,
       performanceScore: Math.min(100, Math.round(((detailViews ? acceptedTotal / detailViews : 0) * 40 + (acceptedTotal ? attended / acceptedTotal : 0) * 40 + (detailViews ? (comments + reactions) / detailViews : 0) * 20) * 100)),
     };
   }
@@ -1143,7 +1171,7 @@ export class EventsService {
       },
     });
     if (!participant) throw new NotFoundException("Katılımcı bulunamadı.");
-    const [invitations, guestLists, relatedFollowerCount, relatedPlaceMember, relatedPlaceInvitations] = await Promise.all([
+    const [invitations, guestLists, relatedFollowerCount, relatedPlaceMember, relatedPlaceInvitations, ticketTransfers] = await Promise.all([
       this.prisma.eventInvitation.findMany({
         where: { eventId, inviteeId: userId },
         orderBy: { createdAt: "asc" },
@@ -1165,6 +1193,8 @@ export class EventsService {
       }),
       participant.event.placeId ? this.prisma.placeMember.findUnique({ where: { placeId_userId: { placeId: participant.event.placeId, userId } } }) : Promise.resolve(null),
       participant.event.placeId ? this.prisma.placeInvitation.findMany({ where: { placeId: participant.event.placeId, inviteeId: userId }, include: { inviter: { select: { username: true, name: true } } }, orderBy: { createdAt: "asc" } }) : Promise.resolve([]),
+      // 07/11 #92: bileti devreden kişi de "Davet eden" olarak gösterilir.
+      this.prisma.ticketTransfer.findMany({ where: { toUserId: userId, ticket: { eventId } }, include: { fromUser: { select: { username: true, name: true } } }, orderBy: { createdAt: "asc" } }),
     ]);
     const tickets = new Map<string, { id: string; name: string; description: string | null; quantity: number; unitPrice: number; currency: string; gateOpensAt: Date | null; gateClosesAt: Date | null }>();
     for (const ticket of participant.user.ownedTickets) {
@@ -1185,7 +1215,7 @@ export class EventsService {
       checkedInAt: participant.checkedInAt,
       checkInOrder: participant.checkInOrder,
       checkInMethod: participant.checkInMethod ?? method,
-      invitedBy: invitations.map((item) => item.inviter.username ? `@${item.inviter.username}` : item.inviter.name),
+      invitedBy: [...new Set([...invitations.map((item) => item.inviter.username ? `@${item.inviter.username}` : item.inviter.name), ...ticketTransfers.map((item) => item.fromUser.username ? `@${item.fromUser.username}` : item.fromUser.name)])],
       relatedFollowerCount,
       guestLists: guestLists.map((list) => ({ id: list.id, name: list.name, access: list.ownerId === actor.id ? "owner" as const : "read" as const })),
       relatedPlace: participant.event.place && relatedPlaceMember ? { id: participant.event.place.id, name: participant.event.place.name, status: relatedPlaceMember.status, role: relatedPlaceMember.role, checkedInAt: relatedPlaceMember.checkedInAt, order: relatedPlaceMember.checkInOrder, invitedBy: relatedPlaceInvitations.map((item) => item.inviter.username ? `@${item.inviter.username}` : item.inviter.name) } : null,
@@ -2107,7 +2137,7 @@ function prefixMetrics(prefix: string, values: Record<string, number>) {
 }
 
 function metricKey(value: string) {
-  return value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "belirtilmedi";
+  return value.toLocaleLowerCase("tr-TR").replace(/ı/g, "i").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "belirtilmedi";
 }
 
 function eventDistance(event: { latitude: unknown; longitude: unknown }, latitude: number, longitude: number) {

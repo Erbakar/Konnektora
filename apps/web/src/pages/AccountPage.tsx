@@ -2150,7 +2150,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     />
                   </label>
                   <label>
-                    {t("Bitiş", "End")}<span className="optional-hint"> {t("(opsiyonel)", "(optional)")}</span>
+                    <span>{t("Bitiş", "End")}<span className="optional-hint"> {t("(opsiyonel)", "(optional)")}</span></span>
                     <input
                       defaultValue={editingEvent?.endsAt ? toDateTimeLocal(editingEvent.endsAt) : ""}
                       min={eventStartsAt || new Date().toISOString().slice(0, 16)}
@@ -2365,7 +2365,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         </label>
                         {row.type === "session" ? (
                           <label>
-                            {t("Başlangıç", "Start")}<span className="optional-hint"> {t("(opsiyonel)", "(optional)")}</span>
+                            <span>{t("Başlangıç", "Start")}<span className="optional-hint"> {t("(opsiyonel)", "(optional)")}</span></span>
                             <input
                               name="lineupStartsAt"
                               defaultValue={editingEvent?.lineup?.[index]?.startsAt ? toDateTimeLocal(editingEvent.lineup[index]!.startsAt!) : ""}

@@ -41,6 +41,7 @@ describe("EventsService", () => {
       guestListShare: { count: jest.fn(), upsert: jest.fn(), deleteMany: jest.fn() },
       eventInvitation: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn() },
       placeInvitation: { findMany: jest.fn() },
+      ticketTransfer: { findMany: jest.fn().mockResolvedValue([]) },
       placeMember: { findUnique: jest.fn() },
       eventTicketOrder: { findMany: jest.fn(), update: jest.fn() },
       curatorLedgerEntry: { findMany: jest.fn().mockResolvedValue([]) },

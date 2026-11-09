@@ -422,7 +422,7 @@ export function TagsPage() {
             {t("Paylaş", "Share")}
           </button>
           <details className="detail-action-menu"><summary aria-label={t("Etiket işlemleri", "Tag actions")}><MoreVertical size={20}/></summary><div>
-            <Link to={user ? `/stats/tag/${tag.id}` : `/login?next=${encodeURIComponent(`/stats/tag/${tag.id}`)}`}><BarChart3 size={17}/>{t("Etkileşim istatistikleri", "Engagement statistics")}</Link>
+            <Link to={user ? `/stats/tag/${tag.id}?${new URLSearchParams({ name: tag.name, back: `/tags/${tag.slug}` })}` : `/login?next=${encodeURIComponent(`/stats/tag/${tag.id}?${new URLSearchParams({ name: tag.name, back: `/tags/${tag.slug}` })}`)}`}><BarChart3 size={17}/>{t("Etkileşim istatistikleri", "Engagement statistics")}</Link>
             {user ? <button onClick={() => setReportTarget({ type: "tag", id: tag.id })}><Flag size={17}/>{t("Etiketi rapor et", "Report tag")}</button> : null}
           </div></details>
         </div>

@@ -1,4 +1,4 @@
-import { audienceAllows, visibleLocation } from "../common/privacy-context";
+import { visibleLocation } from "../common/privacy-context";
 import { assessInvitees } from "../common/invite-assessment";
 import { targetVisible } from "../notifications/activity-events";
 import { memberCompatibility } from "../common/compatibility";

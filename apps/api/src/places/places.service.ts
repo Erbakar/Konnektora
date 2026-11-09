@@ -2,6 +2,7 @@ import { assessInvitees } from "../common/invite-assessment";
 import { actorLabel, notifyEntityCreated, notifyEntityChanges, notifyUserActivity, isUndiscoverable, notifyMembershipInvite } from "../notifications/activity-events";
 import { invitePhone, invitePhoneVariants } from "../common/invite-phone";
 import { privacyContext, visibleLocation } from "../common/privacy-context";
+import { densityMetrics, periodInterestMetrics, socializationMetrics } from "../common/analytics-extras";
 import { publicName } from "../common/public-name";
 import { analyticsReference, uniqueAnalyticsReferences } from "../analytics/references";
 import {
@@ -258,7 +259,7 @@ export class PlacesService {
       this.prisma.contentShare.groupBy({ by: ["channel"], where: { targetType: "place", targetId: placeId }, _count: { _all: true } }),
       this.prisma.event.count({ where: { placeId, status: "published" } }),
       this.prisma.event.findMany({ where: { placeId, status: "published" }, select: {
-        id: true, title: true, startsAt: true,
+        id: true, title: true, startsAt: true, timezone: true, tags: { select: { tag: { select: { name: true, status: true } } } },
         createdBy: { select: { id: true, username: true, name: true } },
         participants: { where: { status: "attended" }, select: { userId: true, checkedInAt: true, user: { select: { username: true, name: true, preferredLanguage: true } } } },
         ticketTypeRecords: { select: { capacity: true, soldCount: true, price: true } },
@@ -279,6 +280,42 @@ export class PlacesService {
     const hourCounts = placeDistributionCount(checkInTimes.map((value) => placeHourBucket(value)));
     const memberIds = memberDetails.map((item) => item.userId);
     const socialConnections = memberIds.length ? await this.prisma.memberScan.count({ where: { OR: [{ scannerId: { in: memberIds } }, { memberId: { in: memberIds } }] } }) : 0;
+    const extraNow = new Date();
+    const extraDay = 86_400_000;
+    const since = (days: number) => new Date(extraNow.getTime() - days * extraDay);
+    // 07/11 #84: mekândaki etkinliklerde (etkinlik süresince) QR/NFC profil takası.
+    const eventWindows = eventDetails.map((event) => ({ gte: event.startsAt, lte: new Date(event.startsAt.getTime() + extraDay) }));
+    const placeAttendeeIds = [...new Set(eventDetails.flatMap((event) => event.participants.map((participant) => participant.userId)))];
+    const [placeScans, detailViewers, viewTimes, commentTimes] = await Promise.all([
+      placeAttendeeIds.length && eventWindows.length ? this.prisma.memberScan.findMany({ where: { OR: eventWindows.slice(0, 200).map((createdAt) => ({ createdAt })), AND: [{ OR: [{ scannerId: { in: placeAttendeeIds } }, { memberId: { in: placeAttendeeIds } }] }] }, select: { scannerId: true, memberId: true, method: true }, take: 100_000 }) : [],
+      this.prisma.contentView.findMany({ where: { targetType: "place", targetId: placeId, kind: "detail", userId: { not: null } }, select: { userId: true }, distinct: ["userId"], take: 20_000 }),
+      this.prisma.contentView.findMany({ where: { targetType: "place", targetId: placeId, kind: "detail", createdAt: { gte: since(365) } }, select: { createdAt: true }, take: 100_000 }),
+      this.prisma.contentComment.findMany({ where: { targetType: "place", targetId: placeId, status: "active", createdAt: { gte: since(365) } }, select: { createdAt: true }, take: 100_000 }),
+    ]);
+    // 07/11 #80: dönem toplamları (görüntülenme, yorum).
+    const within = (rows: Array<{ createdAt: Date }>, days: number) => rows.filter((row) => extraNow.getTime() - row.createdAt.getTime() <= days * extraDay).length;
+    const periodTotals = { viewsLast24h: within(viewTimes, 1), viewsLast7d: within(viewTimes, 7), viewsLast30d: within(viewTimes, 30), viewsLast12m: within(viewTimes, 365), commentsLast24h: within(commentTimes, 1), commentsLast7d: within(commentTimes, 7), commentsLast30d: within(commentTimes, 30), commentsLast12m: within(commentTimes, 365) };
+    // 07/11 #81: satılan biletlere göre gün × saat yoğunluğu; #82, #83: son 1/3/12 ayın en dolu / en boş etkinlikleri ve ortak etiketleri.
+    const eventOccupancy = eventDetails.map((event) => {
+      const eventCapacity = event.ticketTypeRecords.reduce((sum, ticket) => sum + ticket.capacity, 0);
+      const eventSold = event.ticketTypeRecords.reduce((sum, ticket) => sum + ticket.soldCount, 0);
+      return { event, sold: eventSold, rate: eventCapacity > 0 ? Math.round(eventSold / eventCapacity * 100) : event._count.participants > 0 ? null : 0 };
+    });
+    const density = densityMetrics(eventOccupancy.map((row) => ({ startsAt: row.event.startsAt, timezone: row.event.timezone, weight: row.sold || row.event._count.participants })));
+    const periodLists: Record<string, number> = {};
+    for (const [label, days] of [["1m", 31], ["3m", 92], ["12m", 365]] as const) {
+      const inPeriod = eventOccupancy.filter((row) => row.rate !== null && row.event.startsAt >= since(days) && row.event.startsAt <= extraNow) as Array<{ event: typeof eventDetails[number]; sold: number; rate: number }>;
+      const fullest = [...inPeriod].sort((a, b) => b.rate - a.rate).slice(0, 5);
+      Object.assign(periodLists, placePrefixMetrics(`fullEvent${label}`, Object.fromEntries(fullest.map((row) => [row.event.title, row.rate]))));
+      Object.assign(periodLists, placePrefixMetrics(`emptyEvent${label}`, Object.fromEntries([...inPeriod].sort((a, b) => a.rate - b.rate).slice(0, 5).map((row) => [row.event.title, row.rate]))));
+      const tagCounts = new Map<string, number>();
+      for (const row of fullest) for (const item of row.event.tags) if (item.tag.status === "active") tagCounts.set(item.tag.name, (tagCounts.get(item.tag.name) ?? 0) + 1);
+      Object.assign(periodLists, placePrefixMetrics(`fullEventTag${label}`, Object.fromEntries([...tagCounts.entries()].filter(([, count]) => count > 0).sort((a, b) => b[1] - a[1]).slice(0, 10))));
+    }
+    const [memberInterests, visitorInterests] = await Promise.all([
+      periodInterestMetrics(this.prisma, "memberInterest", memberIds),
+      periodInterestMetrics(this.prisma, "visitorInterest", detailViewers.map((row) => row.userId)),
+    ]);
     const capacity = ticketSummary._sum.capacity ?? 0;
     const sold = ticketSummary._sum.soldCount ?? 0;
     const eventAttendance = attendeeRows.length;
@@ -377,6 +414,12 @@ export class PlacesService {
       ...placePrefixMetrics("organizerEvents", organizerEvents),
       ...placePrefixMetrics("organizerAttendanceRate", organizerAttendanceRate),
       ...placePrefixMetrics("topVisitor", topVisitors),
+      ...periodTotals,
+      ...density,
+      ...periodLists,
+      ...socializationMetrics(placeScans, placeAttendeeIds),
+      ...memberInterests,
+      ...visitorInterests,
       performanceScore: Math.min(100, Math.round(((detailViews ? members / detailViews : 0) * 35 + (members ? totalVisitors / members : 0) * 35 + (capacity ? sold / capacity : 0) * 30) * 100)),
     };
   }
@@ -1201,5 +1244,5 @@ function placePrefixMetrics(prefix: string, values: Record<string, number>) {
 }
 
 function placeMetricKey(value: string) {
-  return value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "belirtilmedi";
+  return value.toLocaleLowerCase("tr-TR").replace(/ı/g, "i").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "belirtilmedi";
 }

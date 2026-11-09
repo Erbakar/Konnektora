@@ -49,6 +49,7 @@ import {
   recordContentView,
   resolveMediaUrl,
   setContentNotification,
+  recordContentAction,
 } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
 
@@ -291,7 +292,7 @@ export function EventDetailPage() {
             {ticketTypesQuery.data?.length ? <button onClick={() => setTicketPickerOpen(true)}><CreditCard size={18}/>{language === "tr" ? "Biletleri gör" : "View tickets"}</button> : null}
             {/* 07/11 #51: "Bilet al" kaldırıldı; bilet "Biletleri gör" penceresinden seçilip alınır. */}
             {/* 07/11 #51: Etkileşim istatistikleri, Check-in kontrolünün üstünde */}
-            <Link to={user ? `/stats/event/${event.id}` : `/login?next=${encodeURIComponent(`/stats/event/${event.id}`)}`}><BarChart3 size={18}/>{language === "tr" ? "Etkileşim istatistikleri" : "Interaction analytics"}</Link>
+            <Link to={user ? `/stats/event/${event.id}?${new URLSearchParams({ name: event.title, back: `/events/${event.slug}` })}` : `/login?next=${encodeURIComponent(`/stats/event/${event.id}?${new URLSearchParams({ name: event.title, back: `/events/${event.slug}` })}`)}`}><BarChart3 size={18}/>{language === "tr" ? "Etkileşim istatistikleri" : "Interaction analytics"}</Link>
             {canManage ? <button onClick={() => {
               if (Date.now() > eventCutoff) {
                 setActionNotice({ kind: "error", message: language === "tr" ? "Bitmiş bir etkinlik için check-in kontrolü yapamazsınız. Bunda bir sorun olduğunu düşünüyorsanız Etkinlik Düzenle sayfasındaki etkinlik bitiş zamanını güncelleyerek tekrar deneyin." : "You cannot run check-in for an event that has ended. Update the event end time if this is incorrect." });
@@ -480,6 +481,7 @@ export function EventDetailPage() {
                 <article
                   className={`admin-list-row program-${item.type ?? "session"}`}
                   key={`${item.startsAt ?? item.title}-${index}`}
+                  onClickCapture={() => { if (item.type !== "break") void recordContentAction("event", event.id, `lineup_${index}`).catch(() => undefined); /* 07/11 #73 */ }}
                 >
                   <div>
                     <strong>

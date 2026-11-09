@@ -1,6 +1,7 @@
 import { notifyTagModeration } from "../notifications/moderation-activity";
 import { notifyUserActivity, notifyComment } from "../notifications/activity-events";
 import { privacyContext, visibleLocation } from "../common/privacy-context";
+import { toUsd, usdRates } from "../common/analytics-extras";
 import { publicName } from "../common/public-name";
 import {
   ConflictException,
@@ -314,6 +315,7 @@ export class TagsService {
           event: {
             select: {
               startsAt: true,
+              currency: true,
               participants: { select: { status: true } },
               ticketTypeRecords: { where: { status: "active" }, select: { soldCount: true, price: true } },
               payments: { where: { status: "succeeded" }, select: { grossAmount: true } },
@@ -380,6 +382,17 @@ export class TagsService {
     const ticketRevenue = taggedEvents.reduce((sum, item) => sum + item.event.payments.reduce((paymentSum, payment) => paymentSum + Number(payment.grossAmount), 0), 0);
     const refundAmount = taggedEvents.reduce((sum, item) => sum + item.event.ticketRefunds.reduce((refundSum, refund) => refundSum + Number(refund.amount), 0), 0);
     const upcomingEvents = taggedEvents.filter((item) => item.event.startsAt >= now).length;
+    // 07/11 #69: geçmiş etkinlik ve satılan biletlerin ABD doları cinsinden ortalama fiyatı.
+    const pastEvents = taggedEvents.length - upcomingEvents;
+    const rates = ticketsSold > 0 ? await usdRates() : {};
+    let usdTotal = 0; let usdSold = 0;
+    for (const item of taggedEvents) for (const ticket of item.event.ticketTypeRecords) {
+      if (!ticket.soldCount) continue;
+      const usd = toUsd(Number(ticket.price), item.event.currency, rates);
+      if (usd === null) continue;
+      usdTotal += usd * ticket.soldCount; usdSold += ticket.soldCount;
+    }
+    const averageTicketPriceUsd = usdSold ? Math.round(usdTotal / usdSold * 100) / 100 : 0;
     const opportunityScore = Math.min(100, Math.round((interestLast30d * 3 + viewsLast30d + Math.max(0, interestDetails.length - events * 5)) / Math.max(1, interestDetails.length + viewsLast30d) * 100));
     const averageEventsPerInterestedUser = interestDetails.length ? Math.round(interestDetails.reduce((sum, item) => sum + item.user._count.eventParticipations, 0) / interestDetails.length * 10) / 10 : 0;
     const averageConnectionsPerInterestedUser = interestDetails.length ? Math.round(interestDetails.reduce((sum, item) => sum + item.user._count.scansMade + item.user._count.scansReceived, 0) / interestDetails.length * 10) / 10 : 0;
@@ -438,7 +451,9 @@ export class TagsService {
       ticketsSold,
       ticketRevenue: Math.round(ticketRevenue * 100) / 100,
       refundAmount: Math.round(refundAmount * 100) / 100,
+      pastEvents,
       upcomingEvents,
+      averageTicketPriceUsd,
       opportunityScore,
       averageEventsPerInterestedUser,
       averageConnectionsPerInterestedUser,
@@ -974,5 +989,5 @@ function tagPrefix(prefix: string, values: Record<string, number>) {
 }
 
 function tagMetricKey(value: string) {
-  return value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "belirtilmedi";
+  return value.toLocaleLowerCase("tr-TR").replace(/ı/g, "i").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "belirtilmedi";
 }

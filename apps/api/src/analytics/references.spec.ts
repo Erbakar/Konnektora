@@ -3,7 +3,7 @@ import { PlacesService } from "../places/places.service";
 import { ForbiddenException } from "@nestjs/common";
 describe("Analytics identity links", () => {
   it("preserves Turkish names while matching the stored metric key", () => {
-    expect(analyticsReference("organizerEvents", "@Çağrı", "/users/id/u1", "user")).toEqual({ metricKey: "organizerEvents_cagr", name: "@Çağrı", to: "/users/id/u1", kind: "user" });
+    expect(analyticsReference("organizerEvents", "@Çağrı", "/users/id/u1", "user")).toEqual({ metricKey: "organizerEvents_cagri", name: "@Çağrı", to: "/users/id/u1", kind: "user" });
   });
   it("does not point a merged label at an arbitrary same-name record", () => {
     const rows = [analyticsReference("fullEvent", "Akşam", "/events/a", "event"), analyticsReference("fullEvent", "Aksam", "/events/b", "event")];
