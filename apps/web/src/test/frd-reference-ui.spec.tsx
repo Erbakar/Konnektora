@@ -302,13 +302,21 @@ describe("FRD referanslı ekran davranışları", () => {
 
     expect(await screen.findByRole("heading", { name: "Etkinlik istatistikleri" })).toBeVisible();
     await screen.findByRole("heading", { name: "Genel bakış" });
-    for (const heading of ["Dönüşüm hunisi", "Bilet ve gelir", "Keşif kaynakları", "Yaş dağılımı", "Katılım kararı zamanı", "Bilet türüne göre satış", "Veriye dayalı içgörüler"]) {
+    for (const heading of ["Dönüşüm hunisi", "Bilet ve gelir", "Satılan bilet türü", "Veriye dayalı içgörüler"]) {
       expect(screen.getByRole("heading", { name: heading })).toBeVisible();
     }
+    // 07/11 #71, #72, #75, #76: demografi pastası, kaynak halkası (açılır başlık), bilet türü tablosu ve huni grafiği.
+    expect(screen.getByRole("combobox", { name: "Dağılım türü" })).toHaveValue("age");
+    expect(screen.getByRole("img", { name: /Yaş dağılımı: 25 34 100%/ })).toBeVisible();
+    const sources = screen.getByRole("combobox", { name: "Grafik" });
+    expect(within(sources).getByRole("option", { name: "Katılım kararı zamanı" })).toBeInTheDocument();
+    expect(within(sources).getByRole("option", { name: "Keşif kaynakları" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Görüntülenme: 1200/ })).toBeVisible();
+    expect(screen.getByRole("cell", { name: "VIP" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "PDF indir" })).not.toBeInTheDocument();
     expect(screen.getAllByText("1.200").length).toBeGreaterThan(0);
     expect(screen.getByText("25.800 TRY")).toBeVisible();
     expect(screen.getByLabelText("Çubuk grafik")).toBeVisible();
-    expect(screen.getByLabelText("Pasta grafik")).toBeVisible();
     expect(screen.getByLabelText("Çizgi grafik")).toBeVisible();
   });
 
@@ -332,7 +340,8 @@ describe("FRD referanslı ekran davranışları", () => {
 
     expect(await screen.findByRole("heading", { name: "Mekân istatistikleri" })).toBeVisible();
     await screen.findByRole("heading", { name: "Günlere göre etkinlik" });
-    for (const heading of ["Saat aralıkları", "Aylara göre doluluk oranı", "Aylara göre biletli ziyaretçi", "Organizatör katılım oranı", "En sık gelen ziyaretçiler"]) {
+    expect(screen.getByRole("heading", { name: "Check-in saatleri" })).toBeVisible();
+    for (const heading of ["Aylara göre doluluk oranı", "Aylara göre biletli ziyaretçi", "Organizatör katılım oranı", "En sık gelen ziyaretçiler"]) {
       expect(screen.getByRole("heading", { name: heading })).toBeVisible();
     }
     expect(screen.getByText("Tekrar ziyaret oranı")).toBeVisible();
@@ -357,9 +366,12 @@ describe("FRD referanslı ekran davranışları", () => {
     renderStats("tag", "tag-1");
 
     expect(await screen.findByRole("heading", { name: "İlgi alanı istatistikleri" })).toBeVisible();
-    expect(await screen.findByRole("heading", { name: "Dönem toplamları" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Olumlu · yaş" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Olumlu · ilişkili ilgi alanları" })).toBeVisible();
+    // 07/11 #66, #67, #93: dönem çizgisi, Beğenenler/Kararsız/Beğenmeyenler sekmeli demografi ve tek "ortak ilgi alanları" tablosu.
+    expect(await screen.findByRole("heading", { name: "Yeni değerlendirmelerin dönemlere göre değişimi" })).toBeVisible();
+    expect(screen.getAllByRole("tab", { name: "Kararsız" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("combobox", { name: "Dağılım türü" })).toHaveValue("age");
+    expect(screen.getByRole("heading", { name: "Ekleyenlerin ortak ilgi alanları" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Olumlu · yaş" })).not.toBeInTheDocument();
     expect(screen.getByText("Fırsat puanı")).toBeVisible();
   });
 
@@ -389,7 +401,9 @@ describe("FRD referanslı ekran davranışları", () => {
 
     expect(await screen.findByRole("heading", { name: "Profil istatistikleri" })).toBeVisible();
     await screen.findByRole("heading", { name: "Dönem toplamları" });
-    for (const heading of ["Ziyaretçi ülkeleri", "Takipçi yaş dağılımı", "Takipçi dilleri", "Bağlantı şehirleri", "Bilet ve gelir"]) {
+    expect(screen.getByRole("combobox", { name: "Dağılım türü" })).toHaveValue("age");
+    expect(screen.getByRole("tab", { name: "Ziyaretçiler" })).toBeVisible();
+    for (const heading of ["Bağlantı şehirleri", "Bilet ve gelir"]) {
       expect(screen.getByRole("heading", { name: heading })).toBeVisible();
     }
     expect(screen.getByText("Aramadan profile tıklama oranı")).toBeVisible();

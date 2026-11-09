@@ -10,6 +10,8 @@ import { PlacesPage } from "../pages/PlacesPage";
 
 const apiMocks = vi.hoisted(() => ({
   createPlace: vi.fn(),
+  uploadContentMedia: vi.fn(),
+  reorderContentMedia: vi.fn(),
   geocodeAddress: vi.fn(),
   getUserSession: vi.fn(),
   listMemberSuggestions: vi.fn(),
@@ -57,6 +59,8 @@ beforeEach(() => {
   apiMocks.listMemberSuggestions.mockResolvedValue([]);
   apiMocks.listPlaces.mockResolvedValue({ items: [], page: 1, pageSize: 12, total: 0, hasNextPage: false });
   apiMocks.listTags.mockResolvedValue([]);
+  apiMocks.uploadContentMedia.mockResolvedValue({ id: "media-1" });
+  apiMocks.reorderContentMedia.mockResolvedValue(undefined);
   apiMocks.createPlace.mockResolvedValue({ id: "place-1", name: "Konnektora Atölye" });
 });
 
@@ -103,6 +107,12 @@ describe("etkinlik ve mekân adres seçici", () => {
     expect(document.querySelector<HTMLInputElement>('input[name="latitude"]')).toHaveAttribute("type", "hidden");
     expect(document.querySelector<HTMLInputElement>('input[name="longitude"]')).toHaveAttribute("type", "hidden");
     await userEvent.type(screen.getByRole("textbox", { name: "Ad" }), "Konnektora Atölye");
+    // 07/11 #101: en az 1 resim zorunlu; resimsiz gönderimde Adım 3 açılır ve uyarı gösterilir.
+    await userEvent.click(screen.getByRole("button", { name: "Mekânı oluştur" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("En az 1 resim seçmelisin.");
+    expect(apiMocks.createPlace).not.toHaveBeenCalled();
+    Object.assign(URL, { createObjectURL: vi.fn(() => "blob:cover"), revokeObjectURL: vi.fn() });
+    await userEvent.upload(screen.getByLabelText("Fotoğraf ve videolar"), new File(["x"], "kapak.png", { type: "image/png" }));
     await userEvent.click(screen.getByRole("button", { name: "Mekânı oluştur" }));
 
     await waitFor(() => expect(apiMocks.createPlace).toHaveBeenCalled());

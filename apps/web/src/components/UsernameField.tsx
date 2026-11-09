@@ -26,7 +26,7 @@ export function UsernameField({ initialValue }: { initialValue: string }) {
     input.current?.setCustomValidity(!valid || status === "taken" || status === "checking" ? message : "");
   }, [valid, status, message]);
   return <label>{t("Kullanıcı adı", "Username")}
-    <input ref={input} name="username" pattern={String.raw`[\p{L}\p{N}.\-]+`} required minLength={2} maxLength={80} value={value} aria-describedby="username-feedback" aria-invalid={!valid || status === "taken"} onChange={event => { setValue(event.target.value); setStatus(event.target.value.trim() === initialValue ? "available" : "checking"); }}/>
+    <input ref={input} aria-label={t("Kullanıcı adı", "Username")} name="username" pattern={String.raw`[\p{L}\p{N}.\-]+`} required minLength={2} maxLength={80} value={value} aria-describedby="username-feedback" aria-invalid={!valid || status === "taken"} onChange={event => { setValue(event.target.value); setStatus(event.target.value.trim() === initialValue ? "available" : "checking"); }}/>
     <span id="username-feedback" role="status" className={`username-feedback ${valid && status === "available" ? "is-valid" : ""}`}>{valid && status === "checking" ? <LoaderCircle size={16} className="spin"/> : valid && status === "available" ? <CheckCircle2 size={16}/> : <XCircle size={16}/>} {message}</span>
   </label>;
 }

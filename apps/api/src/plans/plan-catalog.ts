@@ -8,7 +8,7 @@ export const defaultPlanCatalog: PlanCatalog = {
   platinum: { ...base, name: "Platinum", price: 7, events: null, tags: 10, invites: 1000, messages: 100, guest: true },
  },
  corporate: {
-  free: { ...base, name: "Free", price: 0, events: 2, tags: 5, invites: 300, messages: 20, sixHours: 15, profileViews: 2, advanced: false },
+  free: { ...base, name: "Kurumsal free", price: 0, events: 2, tags: 5, invites: 300, messages: 20, sixHours: 15, profileViews: 2, advanced: false },
   pro: { ...base, name: "Pro", price: 19, events: 4, tags: 20, invites: 1000, messages: 50, guest: true },
   venue: { ...base, name: "Venue", price: 49, events: null, tags: 100, invites: 5000, messages: 500, guest: true },
   festival: { ...base, name: "Festival", price: 399, events: null, tags: null, invites: 50000, messages: 1000, guest: true },
@@ -19,3 +19,8 @@ export const defaultPlanCatalog: PlanCatalog = {
   enterprise: { ...base, name: "Enterprise", price: 299, events: 0, tags: null, invites: 0, messages: 0 },
  },
 };
+
+/** Paket adları sabittir; kayıtlı katalogdaki eski adlar (ör. kurumsal "Free") güncel adla döndürülür (07/11 #48). */
+export function withCanonicalPlanNames(plans: PlanCatalog): PlanCatalog {
+ return Object.fromEntries(Object.entries(plans).map(([audience, rows]) => [audience, Object.fromEntries(Object.entries(rows).map(([key, row]) => [key, { ...row, name: defaultPlanCatalog[audience]?.[key]?.name ?? row.name }]))]));
+}

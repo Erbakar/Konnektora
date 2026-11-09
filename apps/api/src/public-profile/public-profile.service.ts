@@ -4,6 +4,7 @@ import { consumeQuota } from "../common/usage-quota";
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrivacyAudience } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { periodInterestMetrics } from "../common/analytics-extras";
 import { canUseAdvancedAnalytics } from "../common/analytics-access";
 
 @Injectable()
@@ -56,6 +57,7 @@ export class PublicProfileService {
         where: { targetType: "user", targetId: profile.id, kind: "detail" },
         select: {
           createdAt: true,
+          userId: true,
           user: { select: { birthDate: true, gender: true, city: true, country: true, interestTags: { select: { tag: { select: { name: true } } }, take: 25 } } },
         },
         orderBy: { createdAt: "desc" },
@@ -63,7 +65,7 @@ export class PublicProfileService {
       }) : [],
       canViewStats ? this.prisma.userFollow.findMany({
         where: { followingId: profile.id },
-        select: { createdAt: true, follower: { select: { birthDate: true, gender: true, city: true, country: true, preferredLanguage: true, interestTags: { select: { tag: { select: { name: true } } }, take: 25 } } } },
+        select: { createdAt: true, followerId: true, follower: { select: { birthDate: true, gender: true, city: true, country: true, preferredLanguage: true, interestTags: { select: { tag: { select: { name: true } } }, take: 25 } } } },
         take: 20_000,
       }) : [],
       canViewStats ? this.prisma.userFollow.findMany({
@@ -117,6 +119,11 @@ export class PublicProfileService {
     const followersLast7d = followerDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 7 * day).length;
     const followersLast30d = followerDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 30 * day).length;
     const followersLast90d = followerDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 90 * day).length;
+    // 07/11 #89: takipçi / ziyaretçi ilgi alanları, son 1 hafta–6 ay.
+    const [followerPeriodInterests, visitorPeriodInterests] = canViewStats ? await Promise.all([
+      periodInterestMetrics(this.prisma, "followerInterest", followerDetails.map((item) => item.followerId)),
+      periodInterestMetrics(this.prisma, "visitorInterest", profileViewDetails.map((item) => item.userId).filter((id) => id !== profile.id)),
+    ]) : [{}, {}];
     const eventAccepted = ownedEventStats.reduce((sum, event) => sum + event.participants.filter((participant) => ["accepted", "attended"].includes(participant.status)).length, 0);
     const eventAttended = ownedEventStats.reduce((sum, event) => sum + event.participants.filter((participant) => participant.status === "attended").length, 0);
     const eventDeclined = ownedEventStats.reduce((sum, event) => sum + event.participants.filter((participant) => participant.status === "declined").length, 0);
@@ -200,6 +207,8 @@ export class PublicProfileService {
       ...profilePrefix("networkCountry", networkCountryCounts),
       ...profilePrefix("source", Object.fromEntries(profileViewSources.map((item) => [item.source || "direct", item._count._all]))),
       ...profilePrefix("shareChannel", Object.fromEntries(profileSharesByChannel.map((item) => [item.channel, item._count._all]))),
+      ...followerPeriodInterests,
+      ...visitorPeriodInterests,
     } : undefined;
     return {
       id: profile.id, name: this.canView(privacy.profileNameAudience ?? "everybody", relationship) ? profile.name : profile.username ?? "Konnektora üyesi", username: profile.username ?? profile.id,
@@ -209,7 +218,8 @@ export class PublicProfileService {
       website: this.canView(privacy.websiteAudience ?? "everybody", relationship) ? profile.website : null,
       city: this.canView(privacy.locationAudience ?? "everybody", relationship) ? profile.city : null,
       region: this.canView(privacy.locationAudience ?? "everybody", relationship) ? profile.region : null,
-      country: this.canView(privacy.locationAudience ?? "everybody", relationship) ? profile.country : null,
+      // 07/11 #45: şehir gizli olsa da ülke bilgisi her zaman gösterilir.
+      country: profile.country,
       district: this.canView(privacy.addressAudience ?? "everybody", relationship) ? profile.district : null,
       address: this.canView(privacy.addressAudience ?? "everybody", relationship) ? profile.address : null,
       gender: this.canView(privacy.demographicsAudience ?? "everybody", relationship) ? profile.gender : null,
@@ -315,5 +325,5 @@ function profilePrefix(prefix: string, values: Record<string, number>) {
 }
 
 function profileMetricKey(value: string) {
-  return value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "belirtilmedi";
+  return value.toLocaleLowerCase("tr-TR").replace(/ı/g, "i").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "belirtilmedi";
 }

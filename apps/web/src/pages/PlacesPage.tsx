@@ -35,7 +35,8 @@ export function PlacesPage() {
   const c = placeCopy[language];
   const [searchParams, setSearchParams] = useSearchParams();
   const [createOpen, setCreateOpen] = useState(false);
-  const [createStep, setCreateStep] = useState<"details" | "media">("details");
+  const [createStep, setCreateStep] = useState<"details" | "address" | "media">("details");
+  const [mediaRequired, setMediaRequired] = useState(false);
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [creationWarning, setCreationWarning] = useState<{slug: string; count: number} | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -84,6 +85,8 @@ export function PlacesPage() {
     const form = new FormData(event.currentTarget);
     const tagIds = form.getAll("tagIds").map(String);
     if (tagIds.length > 10) return;
+    // 07/11 #101: en az 1 resim zorunlu (ilk resim mekân avatarı olur).
+    if (!mediaFiles.some((file) => file.type.startsWith("image/"))) { setCreateStep("media"); setMediaRequired(true); return; }
     const address = String(form.get("address") || "").trim();
     const coordinateMatch = address.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,;]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
     const input: PlaceInput & { mediaFiles?: File[]; managerUsernames?: string[] } = {
@@ -126,19 +129,24 @@ export function PlacesPage() {
           ))}
         </nav> : null}
         {createOpen ? (
-          <form className="admin-form" onSubmit={submitPlace} onInvalidCapture={() => setCreateStep("details")}>
+          <form className="admin-form" onSubmit={submitPlace} onInvalidCapture={(event) => { const step = (event.target as HTMLElement).closest("[data-place-step]")?.getAttribute("data-place-step"); if (step === "details" || step === "address" || step === "media") setCreateStep(step); }}>
+            {/* 07/11 #101: Mekân oluşturma 3 adım — Temel, Adres, Kapak ve medyalar. */}
             <h2>{c.newPlace}</h2>
-            <div className="feed-tabs"><button type="button" className={createStep === "details" ? "active" : ""} onClick={() => setCreateStep("details")}>{language === "tr" ? "Mekân bilgileri" : "Place details"}</button><button type="button" className={createStep === "media" ? "active" : ""} onClick={() => setCreateStep("media")}>{c.media} ({mediaFiles.length})</button></div>
-            <div className="form-grid" style={{ display: createStep === "details" ? undefined : "none" }}>
+            <div className="feed-tabs"><button type="button" className={createStep === "details" ? "active" : ""} onClick={() => setCreateStep("details")}>{language === "tr" ? "Adım 1: Temel" : "Step 1: Basics"}</button><button type="button" className={createStep === "address" ? "active" : ""} onClick={() => setCreateStep("address")}>{language === "tr" ? "Adım 2: Adres" : "Step 2: Address"}</button><button type="button" className={createStep === "media" ? "active" : ""} onClick={() => setCreateStep("media")}>{language === "tr" ? "Adım 3: Kapak ve medyalar" : "Step 3: Cover and media"} ({mediaFiles.length})</button></div>
+            <div className="form-grid" data-place-step="details" style={{ display: createStep === "details" ? undefined : "none" }}>
               <label>{c.name}<input name="name" required minLength={2} maxLength={160} /></label>
               <label>{c.placeType}<select name="placeType"><option value="food_drink">🍽️ {language === "tr" ? "Yeme & İçme" : "Food & Drink"}</option><option value="nightlife_music">🎵 {language === "tr" ? "Gece Hayatı & Müzik" : "Nightlife & Music"}</option><option value="events_venues">🎭 {language === "tr" ? "Etkinlik & Mekân" : "Events & Venues"}</option><option value="arts_culture">🎨 {language === "tr" ? "Sanat & Kültür" : "Arts & Culture"}</option><option value="sports_activities">🏃 {language === "tr" ? "Spor & Aktiviteler" : "Sports & Activities"}</option><option value="cafes">☕ {language === "tr" ? "Kafeler" : "Cafés"}</option><option value="outdoors">🌳 {language === "tr" ? "Açık Hava" : "Outdoors"}</option><option value="games_hobbies">🎮 {language === "tr" ? "Oyun & Hobiler" : "Games & Hobbies"}</option><option value="work_networking">💼 {language === "tr" ? "İş & Networking" : "Work & Networking"}</option><option value="wellness">🧘 {language === "tr" ? "Sağlık & İyi Yaşam" : "Wellness"}</option><option value="shopping">🛍️ {language === "tr" ? "Alışveriş" : "Shopping"}</option><option value="hotels_hostels">🏨 {language === "tr" ? "Otel / Hostel" : "Hotels / Hostels"}</option><option value="other">{language === "tr" ? "Diğer" : "Other"}</option></select></label>
               <label>{c.visibility}<select name="visibility"><option value="open">{c.open}</option><option value="approval_required">{c.approval}</option><option value="invite_only">{c.inviteOnly}</option></select></label>
               <TagPicker label={language === "tr" ? "Mekân etiketleri" : "Place tags"} tags={tagsQuery.data ?? []}/>
-              <div className="location-fields-group"><CountryCityFields addressFields/><LocationPicker addressName="address" /></div>
-              <label>{c.managers}<input list="place-manager-suggestions" name="managerUsernames" placeholder="@ayse, @mehmet" /><datalist id="place-manager-suggestions">{suggestionsQuery.data?.map((member) => member.username ? <option key={member.id} value={`@${member.username}`}>{member.name}</option> : null)}</datalist></label>
+              <label><span>{c.managers}<span className="optional-hint"> {language === "tr" ? "(opsiyonel)" : "(optional)"}</span></span><input list="place-manager-suggestions" name="managerUsernames" placeholder="@ayse, @mehmet" /><datalist id="place-manager-suggestions">{suggestionsQuery.data?.map((member) => member.username ? <option key={member.id} value={`@${member.username}`}>{member.name}</option> : null)}</datalist></label>
               <label>{c.description}<textarea name="description" rows={4} maxLength={2000} /></label>
+              <div className="event-step-actions"><span/><button className="primary-action" onClick={() => setCreateStep("address")} type="button">{language === "tr" ? "Sonraki" : "Next"}</button></div>
             </div>
-            <div hidden={createStep !== "media"}><PendingPlaceMedia files={mediaFiles} onChange={setMediaFiles} disabled={createMutation.isPending}/></div>
+            <div className="form-grid" data-place-step="address" style={{ display: createStep === "address" ? undefined : "none" }}>
+              <div className="location-fields-group"><CountryCityFields addressFields/><LocationPicker addressName="address" /></div>
+              <div className="event-step-actions"><button onClick={() => setCreateStep("details")} type="button">{language === "tr" ? "Geri" : "Back"}</button><button className="primary-action" onClick={() => setCreateStep("media")} type="button">{language === "tr" ? "Sonraki" : "Next"}</button></div>
+            </div>
+            <div data-place-step="media" hidden={createStep !== "media"}><PendingPlaceMedia files={mediaFiles} onChange={(files) => { setMediaFiles(files); if (files.some((file) => file.type.startsWith("image/"))) setMediaRequired(false); }} disabled={createMutation.isPending}/>{mediaRequired ? <p className="form-error" role="alert">{language === "tr" ? "En az 1 resim seçmelisin. İlk resim mekân avatarı olur." : "Select at least 1 image. The first image becomes the place avatar."}</p> : null}<div className="event-step-actions"><button onClick={() => setCreateStep("address")} type="button">{language === "tr" ? "Geri" : "Back"}</button></div></div>
             <button className="primary-action" disabled={createMutation.isPending} type="submit">{createMutation.isPending ? c.creating : c.createPlace}</button>
             {createMutation.isError ? <p className="form-error">{c.createFailed}</p> : null}
           </form>

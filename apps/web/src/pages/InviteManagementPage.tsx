@@ -1130,10 +1130,11 @@ function InviteSignalBoxes({
   return (
     <>
       <div className="member-compatibility invite-signal-boxes">
+        {/* 07/11 #46, #47: organizatörün ilk baktığı eşleşme puanı en başta. */}
+        {score !== undefined ? <span className="compatibility-score is-match" title={tr ? "Genel uyum, etkinlik partneri uyumu ve katılımcılarla uyumun ortalaması; yakın zamanda aktif olma ve daha önce katılım küçük bir ek puan verir." : "Average of overall, event partner and attendee compatibility, with a small bonus for recent activity and past attendance."}><span>{scoreLabel}</span><strong>{Math.min(100, score)}</strong></span> : null}
         {evaluation?.eventPartner !== undefined ? <span className="compatibility-score"><span>{tr ? "Etkinlik partneri uyumu" : "Event partner compatibility"}</span><strong>%{evaluation.eventPartner}</strong></span> : null}
         {evaluation?.attendeeCompatibility !== undefined ? <span className="compatibility-score is-partner"><span>{tr ? "Katılımcılarla uyum" : "Attendee compatibility"}</span><strong>%{evaluation.attendeeCompatibility}</strong></span> : null}
         {shared > 0 ? <span className="compatibility-score is-shared"><span>{tr ? "Ortak ilgi alanı" : "Shared interests"}</span><strong>{shared}</strong></span> : null}
-        {score !== undefined ? <span className="compatibility-score is-match" title={tr ? "Genel uyum, etkinlik partneri uyumu ve katılımcılarla uyumun ortalaması; yakın zamanda aktif olma ve daha önce katılım küçük bir ek puan verir." : "Average of overall, event partner and attendee compatibility, with a small bonus for recent activity and past attendance."}><span>{scoreLabel}</span><strong>{Math.min(100, score)}</strong></span> : null}
         {reasons.has("active_recently") ? <span className="compatibility-score is-active"><span>{tr ? "Yakın zamanda aktif" : "Recently active"}</span></span> : null}
       </div>
       {extra.length ? <small className="invite-recommendation-reasons">{extra.map((reason) => recommendationReasonLabel(reason, tr, shared)).join(" · ")}</small> : null}

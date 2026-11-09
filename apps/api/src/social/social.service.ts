@@ -1,4 +1,4 @@
-import { audienceAllows } from "../common/privacy-context";
+import { visibleLocation } from "../common/privacy-context";
 import { assessInvitees } from "../common/invite-assessment";
 import { targetVisible } from "../notifications/activity-events";
 import { memberCompatibility } from "../common/compatibility";
@@ -24,7 +24,7 @@ const memberSelect = {
     orderBy: { sortOrder: "asc" },
     take: 1,
   },
-  privacySettings: { select: { profileNameAudience: true, demographicsAudience: true, locationAudience: true } },
+  privacySettings: { select: { profileNameAudience: true, demographicsAudience: true, locationAudience: true, addressAudience: true } },
   interestTags: { select: { tagId: true } }
 } as const;
 
@@ -129,15 +129,14 @@ export class SocialService {
     return { ok: true as const, following: false };
   }
 
-  private toMemberCard(user: { id: string; name: string; username: string | null; accountType: string; city: string | null; country: string | null; followerCount: number; gender?: string | null; birthDate?: Date | null; createdAt?: Date; uploadedMedia?: Array<{ url: string }>; companyName?: string | null; privacySettings?: { profileNameAudience?: string; demographicsAudience: string; locationAudience?: string } | null; interestTags: { tagId: string }[] }, ownTags: Set<string>, following: boolean) {
+  private toMemberCard(user: { id: string; name: string; username: string | null; accountType: string; city: string | null; country: string | null; followerCount: number; gender?: string | null; birthDate?: Date | null; createdAt?: Date; uploadedMedia?: Array<{ url: string }>; companyName?: string | null; privacySettings?: { profileNameAudience?: string; demographicsAudience: string; locationAudience?: string; addressAudience?: string } | null; interestTags: { tagId: string }[] }, ownTags: Set<string>, following: boolean) {
     return {
       id: user.id,
       name: publicName(user),
       username: user.username,
       avatarUrl: user.uploadedMedia?.[0]?.url ?? null,
       accountType: user.accountType === "corporate" ? "corporate" as const : "individual" as const,
-      city: audienceAllows(user.id, user.privacySettings?.locationAudience ?? "everybody") ? user.city : null,
-      country: audienceAllows(user.id, user.privacySettings?.locationAudience ?? "everybody") ? user.country : null,
+      ...visibleLocation(user),
       followerCount: user.followerCount,
       commonTagCount: user.interestTags.filter((item) => ownTags.has(item.tagId)).length,
       following,

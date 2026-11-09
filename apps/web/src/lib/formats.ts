@@ -49,6 +49,13 @@ export function localizeCityName(value: string | null | undefined, language: "tr
   return value;
 }
 
+/** Üye kartı konumu: "İstanbul, Türkiye merkezli" / yalnız ülke görünürse "Türkiye merkezli" (07/11 #42, #43). */
+export function memberLocationLabel(city: string | null | undefined, country: string | null | undefined, language: "tr" | "en") {
+  const place = [localizeCityName(city, language), localizeCountryName(country, language)].filter(Boolean).join(", ");
+  if (!place) return language === "tr" ? "Konum belirtilmedi" : "Location not specified";
+  return language === "tr" ? `${place} merkezli` : `Based in ${place}`;
+}
+
 export function formatPostDateTime(
   value: string | Date,
   language: "tr" | "en",

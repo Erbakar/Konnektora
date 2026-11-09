@@ -22,7 +22,7 @@ export function PendingPlaceMedia({ files, onChange, disabled = false }: { files
   };
   return <section>
     <label>{t("Fotoğraf ve videolar", "Photos and videos")}<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,image/bmp,video/mp4,video/webm" multiple disabled={disabled} onChange={event => { const added = Array.from(event.currentTarget.files ?? []); update([...files, ...added].slice(0, 20)); event.currentTarget.value = ""; }}/></label>
-    <p>{t("En fazla 20 dosya. İlk fotoğraf mekân avatarı olur. Sürükleyerek veya oklarla sıralayın.", "Up to 20 files. The first photo becomes the place avatar. Drag or use the arrows to reorder.")}</p>
+    <p>{t("En az 1 resim, en fazla 20 dosya seçebilirsin. İlk resim mekan avatarı olur. Sürükleyerek veya oklarla sıralayın.", "Select at least 1 image and up to 20 files. The first image becomes the place avatar. Drag or use the arrows to reorder.")}</p>
     <div className="pending-media-grid">{files.map((file, index) => <article key={`${file.name}-${file.lastModified}-${index}`} draggable={!disabled} onDragStart={() => setDragIndex(index)} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); if (dragIndex !== null) move(dragIndex, index); setDragIndex(null); }}>
       {file.type.startsWith("image/") ? <img src={urls[index]} alt={file.name}/> : <video src={urls[index]} controls preload="metadata"/>}
       <span>{file.name}</span>

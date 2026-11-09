@@ -1,12 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, User } from "@prisma/client";
-import { defaultPlanCatalog, PlanCatalog } from "./plan-catalog";
+import { defaultPlanCatalog, PlanCatalog, withCanonicalPlanNames } from "./plan-catalog";
 import { PrismaService } from "../prisma/prisma.service";
 import { quotaLock } from "../common/usage-quota";
 @Injectable()
 export class PlansService {
  constructor(private readonly prisma: PrismaService) {}
- async catalog() { const row = await this.prisma.planConfiguration.findUnique({where:{id:"catalog"}}); return { revision: row?.revision ?? 0, plans: (row?.data ?? defaultPlanCatalog) as PlanCatalog }; }
+ async catalog() { const row = await this.prisma.planConfiguration.findUnique({where:{id:"catalog"}}); return { revision: row?.revision ?? 0, plans: withCanonicalPlanNames((row?.data ?? defaultPlanCatalog) as PlanCatalog) }; }
  async update(input: { revision: number; plans: PlanCatalog }, actor: User) {
   const plans = input?.plans;
   if (!Number.isInteger(input?.revision) || !plans || Object.keys(plans).sort().join() !== Object.keys(defaultPlanCatalog).sort().join()) throw new BadRequestException("Geçersiz paket kataloğu.");

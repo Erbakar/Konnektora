@@ -1,0 +1,43 @@
+KONNEKTORA — 07/11 LİSTESİ #41–#102 / 9 KASIM 2026
+
+Kaynak: Konnektora Testler, 07/11 sekmesi (gid=1376110755), 62 madde.
+PR: https://github.com/Erbakar/Konnektora/pull/21 (CI build başarılı)
+Migration: yok.
+
+SONUÇ
+61 madde tamamlandı; tabloda C sütununa not yazıldı, A:C arka planı #b7e1cd yapıldı.
+#94 KISMEN: yüksek çözünürlüklü PNG logolar ve amblem SVG düzeltmesi yapıldı; WeTransfer'deki yeni logoart
+dosyaları dış kaynaktan indirme gerektirdiği için kullanıcı onayı bekliyor (satır yeşile boyanmadı).
+
+ÖNEMLİ DEĞİŞİKLİKLER
+- Konum gizliliği: ülke her zaman görünür; şehir bireyselde locationAudience, kurumsalda addressAudience ile.
+- İstatistik sayfası yeniden tasarlandı (src/components/StatsCharts.tsx): dönem çizgi grafiği, açılır başlıklı
+  demografi pastası, kaynak halkası, huni, gün×saat yoğunluk haritası, dönemsel listeler, sosyalleşme analizi.
+- Yeni metrikler (apps/api/src/common/analytics-extras.ts): dönemsel ilgi alanları, QR/NFC profil takası,
+  yoğunluk, USD kur çevirisi (frankfurter.app/ECB, 12 saat önbellek, erişilemezse yedek kur).
+- Line-up tıklamaları ContentAction "lineup_<sıra>" olarak kaydediliyor (veri bu sürümden itibaren birikir).
+- İstatistik anahtarlarında "ı" harfi kayboluyordu ("VIP" → "v_p"); tüm servislerde düzeltildi.
+
+DOĞRULAMA
+- Birim testleri: web 211/211 (vitest), api 488/488 (jest); lint, typecheck, build temiz.
+  Yeni: apps/web/src/test/nov07-stats-ui.spec.tsx; güncellenen: frd-reference-ui, location-picker-ui,
+  country-city-fields, social.service, events.service, analytics/references.
+- Uçtan uca (yerel): PostgreSQL 18 + API'nin sunduğu üretim build'i (SERVE_WEB_APP=true), tmp/nov07-qa-seed.cjs
+  verisiyle 3 QA hesabı. Kontrol edilen: akış kartları (#41, #53, #58), profil başlığı (#44, #45), üyeler (#42),
+  ilgili kullanıcılar (#43, #49), davet kutuları (#46, #47), mağaza (#48), etkinlik menüsü ve takvim (#51, #52),
+  mekân/etkinlik oluşturma (#60, #100, #101), menü (#59), profil bağlantıları (#64, #65), mekân/etkinlik/etiket
+  istatistikleri (#66–#93, #96).
+- 360° yerel tarama: smoke testleri + giriş yapmış kullanıcıyla tüm ana sayfalar (sonuç aşağıda).
+- Canlı üretim veritabanına QA kaydı yazılmadı.
+
+NOT
+- Yerel API dakikada 300 istek sınırına sahip; hızlı taramalar 429 alır (tasarım gereği).
+
+360° YEREL TARAMA SONUCU
+- Smoke (scripts/smoke-production.mjs, duyuru kontrolü hariç — yerel DB'de duyuru yok): 9/9 OK.
+- Giriş yapmış kullanıcıyla 32 sayfa: ana sayfa, akış, etkinlikler/mekânlar/etiketler (liste, detay, ilgili
+  kullanıcılar, davet), üyeler, profiller, bildirimler, mesajlar, biletler, üye kartı, ayarlar, business, mağaza,
+  rehber, arama, hakkımızda, basın kiti, yardım, etkinlik/mekân oluştur, profil ve mekân istatistikleri:
+  hepsi içerikle açıldı, hata ekranı ve JS hatası yok. Davet sayfalarındaki "Listelenecek kullanıcı bulunamadı"
+  yalnız boş "Takip ettiklerim" sekmesinin beklenen mesajı.
+- Canlı yayın: PR main'e birleştirilince Railway dağıtımı ve canlı smoke yapılacak (kullanıcı onayı bekleniyor).

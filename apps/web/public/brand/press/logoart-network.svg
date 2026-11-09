@@ -14,8 +14,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -39,8 +39,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -64,8 +64,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -89,8 +89,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -114,8 +114,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -139,8 +139,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -164,8 +164,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -189,8 +189,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -214,8 +214,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -239,8 +239,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -264,8 +264,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -289,8 +289,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -314,8 +314,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -339,8 +339,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -364,8 +364,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -389,8 +389,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -414,8 +414,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -439,8 +439,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -464,8 +464,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -489,8 +489,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -514,8 +514,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -539,8 +539,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -564,8 +564,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -589,8 +589,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -614,8 +614,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -639,8 +639,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -664,8 +664,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -689,8 +689,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -714,8 +714,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -739,8 +739,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -764,8 +764,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -789,8 +789,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -814,8 +814,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -839,8 +839,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -864,8 +864,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -889,8 +889,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -914,8 +914,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -939,8 +939,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -964,8 +964,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -989,8 +989,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1014,8 +1014,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1039,8 +1039,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1064,8 +1064,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1089,8 +1089,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1114,8 +1114,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1139,8 +1139,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1164,8 +1164,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1189,8 +1189,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1214,8 +1214,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1239,8 +1239,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1264,8 +1264,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1289,8 +1289,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1314,8 +1314,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1339,8 +1339,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>
@@ -1364,8 +1364,8 @@
   <line x1="14" y1="14" x2="14" y2="34" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" stroke-linecap="round"/>
 
   <!-- Main paths -->
-  <path d="M14 14 L34 34" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <path d="M34 14 L22 24 L34 34" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 14 L34 34" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M34 14 L22 24 L34 34" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Nodes -->
   <circle cx="14" cy="14" r="4.5" fill="#22c55e"/>

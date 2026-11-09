@@ -145,6 +145,7 @@ export function ContactsPage({ inviteTarget }: { inviteTarget?: { type: "event" 
           <p>
             {t("Yalnızca seçtiğin kişiler eşleştirilir; rehberin Konnektora’da saklanmaz.", "Only contacts you select are matched; your address book is not stored by Konnektora.")}
           </p>
+          {user?.onboardingCompleted === false ? <p><Link className="text-link" to="/onboarding">{t("← Üyelik adımlarına geri dön", "← Back to sign-up steps")}</Link></p> : null}
         </div>
         <BookUser size={42} />
       </header>

@@ -17,6 +17,16 @@ function embeddedUrls(text: string) {
   );
 }
 
+/**
+ * 07/11 #54: youtube-nocookie gömmesi çerezsiz oturumlarda "bot olmadığını doğrula" ekranına düşüyordu.
+ * Standart youtube.com gömmesi, origin parametresi ve playsinline ile oynatılır.
+ */
+export function youtubeEmbedUrl(id: string) {
+  const params = new URLSearchParams({ autoplay: "1", playsinline: "1", rel: "0" });
+  if (typeof window !== "undefined") params.set("origin", window.location.origin);
+  return `https://www.youtube.com/embed/${id}?${params}`;
+}
+
 export function EmbeddedMedia({ text }: { text: string }) {
   const { language } = useLanguage();
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
@@ -26,7 +36,7 @@ export function EmbeddedMedia({ text }: { text: string }) {
   const soundcloud = urls.find((url) => /soundcloud\.com\//i.test(url));
   const sourceUrl = youtube?.url ?? soundcloud;
   const { title: sourceTitle, soundcloudPlayerUrl } = useEmbedMetadata(sourceUrl, youtube ? t("YouTube videosu", "YouTube video") : t("SoundCloud kaydı", "SoundCloud recording"));
-  if (youtube) return <div className="embedded-media"><a href={youtube.url} rel="noreferrer" target="_blank">{sourceTitle}</a>{playing ? <iframe allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowFullScreen loading="lazy" referrerPolicy="strict-origin-when-cross-origin" src={`https://www.youtube-nocookie.com/embed/${youtube.id}?autoplay=1`} title={sourceTitle}/> : <button className="youtube-preview" onClick={() => setPlaying(true)} type="button"><img alt={t(`${sourceTitle} önizlemesi`, `${sourceTitle} preview`)} src={`https://i.ytimg.com/vi/${youtube.id}/hqdefault.jpg`}/><span><Play fill="currentColor" size={25}/></span></button>}</div>;
+  if (youtube) return <div className="embedded-media"><a href={youtube.url} rel="noreferrer" target="_blank">{sourceTitle}</a>{playing ? <iframe allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowFullScreen loading="lazy" referrerPolicy="strict-origin-when-cross-origin" src={youtubeEmbedUrl(youtube.id!)} title={sourceTitle}/> : <button className="youtube-preview" onClick={() => setPlaying(true)} type="button"><img alt={t(`${sourceTitle} önizlemesi`, `${sourceTitle} preview`)} src={`https://i.ytimg.com/vi/${youtube.id}/hqdefault.jpg`}/><span><Play fill="currentColor" size={25}/></span></button>}</div>;
   if (soundcloud) return <div className="embedded-media embedded-audio"><a href={soundcloud} rel="noreferrer" target="_blank">{sourceTitle}</a>{soundcloudPlayerUrl ? <iframe allow="autoplay" loading="lazy" src={soundcloudPlayerUrl} title={sourceTitle}/> : null}</div>;
   return null;
 }

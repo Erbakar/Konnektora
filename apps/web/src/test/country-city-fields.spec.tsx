@@ -43,10 +43,10 @@ it("restores the full address, scopes city suggestions by region and clears depe
   vi.stubGlobal("fetch", vi.fn(async (url:string) => ({ok:true,json:async()=>url.includes("/regions/")?[{code:"CA",name:"California",cities:["Los Angeles"]},{code:"NY",name:"New York",cities:["Buffalo"]}]:["Los Angeles","Buffalo"]})));
   render(<LanguageProvider><CountryCityFields addressFields defaultCountry="US" defaultRegion="California" defaultCity="Los Angeles" defaultPostalCode="90001"/></LanguageProvider>);
   const region=screen.getByRole("combobox",{name:"Eyalet / bölge"});
-  expect(region).toHaveValue("California");expect(screen.getByLabelText("Posta kodu")).toHaveValue("90001");
+  expect(region).toHaveValue("California");expect(screen.getByLabelText("Posta kodu (opsiyonel)")).toHaveValue("90001");
   await waitFor(()=>expect(document.querySelector('datalist option[value="New York"]')).not.toBeNull());
   await userEvent.clear(region);await userEvent.type(region,"New York");
-  expect(screen.getByRole("combobox",{name:"Şehir"})).toHaveValue("");expect(screen.getByLabelText("Posta kodu")).toHaveValue("");
+  expect(screen.getByRole("combobox",{name:"Şehir"})).toHaveValue("");expect(screen.getByLabelText("Posta kodu (opsiyonel)")).toHaveValue("");
   expect(document.querySelector('datalist option[value="Buffalo"]')).not.toBeNull();
   expect(document.querySelector('datalist option[value="Los Angeles"]')).toBeNull();
   await userEvent.selectOptions(screen.getByRole("combobox",{name:"Ülke"}),"Türkiye");expect(region).toHaveValue("");

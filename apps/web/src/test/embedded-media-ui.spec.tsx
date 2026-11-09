@@ -32,7 +32,7 @@ describe("post içi YouTube ve SoundCloud oynatıcıları", () => {
     await userEvent.click(screen.getByRole("button", { name: /Konnektora Community Session önizlemesi/ }));
     expect(screen.getByTitle("Konnektora Community Session")).toHaveAttribute(
       "src",
-      "https://www.youtube-nocookie.com/embed/AbCdEf12345?autoplay=1",
+      `https://www.youtube.com/embed/AbCdEf12345?autoplay=1&playsinline=1&rel=0&origin=${encodeURIComponent(window.location.origin)}`,
     );
   });
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Check, ThumbsUp, ThumbsDown, Minus, ImagePlus, Sparkles, UserPlus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ThumbsUp, ThumbsDown, ImagePlus, Sparkles, UserPlus } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { TagSentiment } from "@konnektora/shared";
@@ -10,6 +10,8 @@ import { CountryCityFields, normalizeCountry } from "../components/CountryCityFi
 import { checkAvailability, clearUserSession, completeOnboarding, confirmPhoneVerification, followUser, getDiscoveryFeed, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, resolveMediaUrl, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, updateUserSession, uploadProfileMedia } from "../lib/api";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
 import { useLanguage } from "../lib/i18n";
+import { ThinkingIcon } from "../components/ThinkingIcon";
+import { UsernameField } from "../components/UsernameField";
 
 const individualSteps = {
   tr: ["Hesap", "Telefon", "Temel bilgiler", "Profil fotoğrafı", "İlgi alanları", "Topluluk"],
@@ -46,9 +48,7 @@ export function OnboardingPage() {
   const [photoZoom, setPhotoZoom] = useState(1);
   const [photoRotation, setPhotoRotation] = useState(0);
   const emailCheck = useRef(0);
-  const usernameCheck = useRef(0);
   const [availabilityText, setAvailabilityText] = useState("");
-  const [usernameAvailabilityText, setUsernameAvailabilityText] = useState("");
   const [registrationError, setRegistrationError] = useState("");
   const [verificationEmailSent, setVerificationEmailSent] = useState<boolean | undefined>();
   const [sentiments, setSentiments] = useState<Record<string, TagSentiment>>({});
@@ -429,16 +429,8 @@ export function OnboardingPage() {
             }}
           >
             <h2>{profile.data.accountType === "corporate" ? t("Firma bilgileri", "Company information") : t("Temel bilgiler", "Basic information")}</h2>
-            <label>
-              {t("Kullanıcı adı", "Username")}
-              <input defaultValue={profile.data.username ?? ""} name="username" onChange={(event) => {
-                const revision = ++usernameCheck.current;
-                const value = event.target.value.trim();
-                if (value.length < 2) return setUsernameAvailabilityText(t("Kullanıcı adı en az 2 karakter olmalı", "Username must be at least 2 characters"));
-                void checkAvailability({ username: value }).then((data) => { if (revision === usernameCheck.current) setUsernameAvailabilityText(data.usernameAvailable || value === profile.data?.username ? t("Kullanıcı adı uygun", "Username is available") : t("Kullanıcı adı kullanımda", "Username is in use")); }).catch(() => { if (revision === usernameCheck.current) setUsernameAvailabilityText(""); });
-              }} pattern="[A-Za-z0-9 .-]+" required />
-              {usernameAvailabilityText ? <span className={/uygun|available/i.test(usernameAvailabilityText) ? "form-success" : "form-error"}>{usernameAvailabilityText}</span> : null}
-            </label>
+            {/* 07/11 #55: kullanıcı adı anında doğrulanır; geçersizse kabul edilen karakterler, kullanımdaysa uyarı kırmızıyla yazılır. */}
+            <UsernameField initialValue={profile.data.username ?? ""}/>
             {profile.data.accountType === "corporate" ? <>
               <label>{t("Firma unvanı", "Company legal name")}<input defaultValue={profile.data.companyName ?? ""} name="companyName" required /></label>
               <label>{t("Ticari ad", "Trading name")}<input defaultValue={profile.data.tradeName ?? ""} name="tradeName" required /></label>
@@ -681,7 +673,7 @@ export function OnboardingPage() {
                 }}
                 type="button"
               >
-                {sentiment === "like" ? <ThumbsUp aria-hidden="true" size={20}/> : sentiment === "dislike" ? <ThumbsDown aria-hidden="true" size={20}/> : <Minus aria-hidden="true" size={20}/>} {sentimentLabel(sentiment, language)}
+                {sentiment === "like" ? <ThumbsUp aria-hidden="true" size={20}/> : sentiment === "dislike" ? <ThumbsDown aria-hidden="true" size={20}/> : <ThinkingIcon aria-hidden size={20}/>} {sentimentLabel(sentiment, language)}
               </button>
             ))}
           </div>
@@ -708,7 +700,7 @@ function WizardButtons({ back, next, disabled, nextLabel }: { back: () => void; 
 
 function sentimentLabel(sentiment: TagSentiment, language: "tr" | "en") {
   if (sentiment === "like") return language === "tr" ? "Beğeniyorum" : "Like";
-  if (sentiment === "ok") return language === "tr" ? "Nötr" : "Neutral";
+  if (sentiment === "ok") return language === "tr" ? "Kararsızım" : "Undecided"; // 07/11 #56
   return language === "tr" ? "Beğenmiyorum" : "Dislike";
 }
 

@@ -29,6 +29,7 @@ describe("content security policy", () => {
     expect(contentSecurityPolicyDirectives.frameSrc).toEqual(
       expect.arrayContaining([
         "https://www.youtube-nocookie.com",
+        "https://www.youtube.com",
         "https://w.soundcloud.com",
       ]),
     );

@@ -782,6 +782,12 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       });
       return;
     }
+    // 07/11 #100: yeni etkinlikte en az 1 resim zorunlu (ilk resim etkinlik avatarı olur).
+    if (!editingEvent && !pendingEventMediaRef.current.some((item) => item.type === "image")) {
+      setEventStep(3);
+      setNotice({ tone: "error", message: t("En az 1 resim yüklemelisin. İlk resim etkinlik avatarı olur.", "Upload at least 1 image. The first image becomes the event avatar.") });
+      return;
+    }
     const address = String(form.get("locationAddress") || "").trim();
     const coordinateMatch = address.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,;]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
     const parsedLatitude = coordinateMatch ? Number(coordinateMatch[1]) : undefined;
@@ -2144,7 +2150,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     />
                   </label>
                   <label>
-                    {t("Bitiş", "End")}
+                    <span>{t("Bitiş", "End")}<span className="optional-hint"> {t("(opsiyonel)", "(optional)")}</span></span>
                     <input
                       defaultValue={editingEvent?.endsAt ? toDateTimeLocal(editingEvent.endsAt) : ""}
                       min={eventStartsAt || new Date().toISOString().slice(0, 16)}
@@ -2182,7 +2188,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     </select>
                   </label>
                 </div>
-                <TagPicker initialIds={editingEvent?.tags.map((tag) => tag.id)} label={t("Etkinlik etiketleri", "Event tags")} recommendedIds={interestTagIds} tags={tags}/>
+                <TagPicker initialIds={editingEvent?.tags.map((tag) => tag.id)} label={t("Etkinlik etiketleri", "Event tags")} optional recommendedIds={interestTagIds} tags={tags}/>
                 <div className="event-step-actions">
                   <button
                     className="primary-action"
@@ -2260,7 +2266,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         : eventMediaUpload.completed < eventMediaUpload.total
                           ? t(`${eventMediaUpload.completed}/${eventMediaUpload.total} dosya yükleniyor…`, `Uploading ${eventMediaUpload.completed}/${eventMediaUpload.total} files…`)
                           : t(`${eventMediaUpload.completed} dosya yüklendi.`, `${eventMediaUpload.completed} files uploaded.`)
-                      : t("En fazla 20 dosya seçebilirsin. Seçimden hemen sonra yükleme başlar.", "You can select up to 20 files. Upload starts immediately after selection.")}
+                      : t("En az 1 resim, en fazla 20 dosya seçebilirsin. İlk resim etkinlik avatarı olur. Seçimden hemen sonra yükleme başlar.", "Select at least 1 image and up to 20 files. The first image becomes the event avatar. Upload starts immediately after selection.")}
                   </span>
                 </label>
                 <h3>{t("Adım 3: Etkinlik medyası", "Step 3: Event media")}</h3>
@@ -2278,7 +2284,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 </div>
               </div>
               <div data-event-step="4" hidden={eventStep !== 4}>
-                <h3>{t("Adım 4: Etkinlik yöneticileri", "Step 4: Event managers")}</h3>
+                <h3>{t("Adım 4: Etkinlik yöneticileri", "Step 4: Event managers")}<span className="optional-hint"> {t("(opsiyonel)", "(optional)")}</span></h3>
                 {editingEvent ? <section aria-label={t("Mevcut yöneticiler", "Current managers")}>{editingManagers.isPending ? <p>{t("Yöneticiler yükleniyor…", "Loading managers…")}</p> : editingManagers.isError ? <p role="alert">{t("Yöneticiler yüklenemedi.", "Managers could not be loaded.")}</p> : editingManagers.data?.filter(p=>["manager","organizer"].includes(p.role)).map(p=><p key={p.userId}><Link to={`/users/id/${p.userId}`}>@{p.user?.username??p.user?.name??p.userId}</Link> · {p.role === "manager" ? t("Yönetici", "Manager") : t("Organizatör", "Organiser")} · {p.status === "invited" ? t("Davet bekliyor", "Invitation pending") : p.status === "accepted" ? t("Onaylandı", "Accepted") : p.status}</p>)}<Link to={`/events/${editingEvent.slug}/users?filter=organizers`}>{t("Yönetici rollerini düzenle", "Manage organizer roles")}</Link></section> : null}
                 <label>
                   {t("Yönetici kullanıcı adları", "Manager usernames")}
@@ -2305,7 +2311,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 </div>
               </div>
               <div data-event-step="5" hidden={eventStep !== 5}>
-                <h3>{t("Adım 5: Etkinlik programı / Line up", "Step 5: Event programme / Line-up")}</h3>
+                <h3>{t("Adım 5: Etkinlik programı / Line up", "Step 5: Event programme / Line-up")}<span className="optional-hint"> {t("(opsiyonel)", "(optional)")}</span></h3>
                 <div className="lineup-editor">
                   {lineupRows.map((row, index) => (
                     <fieldset
@@ -2359,7 +2365,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         </label>
                         {row.type === "session" ? (
                           <label>
-                            {t("Başlangıç", "Start")}
+                            <span>{t("Başlangıç", "Start")}<span className="optional-hint"> {t("(opsiyonel)", "(optional)")}</span></span>
                             <input
                               name="lineupStartsAt"
                               defaultValue={editingEvent?.lineup?.[index]?.startsAt ? toDateTimeLocal(editingEvent.lineup[index]!.startsAt!) : ""}
@@ -2441,7 +2447,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 </div>
               </div>
               <div data-event-step="6" hidden={eventStep !== 6}>
-                <h3>{t("Adım 6: Etkinlik biletleri", "Step 6: Event tickets")}</h3>
+                <h3>{t("Adım 6: Etkinlik biletleri", "Step 6: Event tickets")}<span className="optional-hint"> {t("(opsiyonel)", "(optional)")}</span></h3>
                 {Array.from({ length: eventTicketCount }, (_, index) => (
                   <fieldset
                     className="ticket-definition"
@@ -2561,19 +2567,19 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 >
                   <Plus size={16} /> {t("Yeni bir bilet tanımla", "Add another ticket")}
                 </button>
-                <button
-                  className="secondary-action"
-                  disabled={eventMutation.isPending}
-                  type="submit"
-                >
-                  <Plus size={18} />
-                  {editingEvent
-                    ? t("Etkinliği güncelle", "Update event")
-                    : t("Etkinlik yayınla", "Publish event")}
-                </button>
-                <div className="event-step-actions">
+                {/* 07/11 #60: "+" karakteri yok; yayınla/güncelle bilet bağlantısının altında, "Geri"nin sağında. */}
+                <div className="event-step-actions event-step-actions-final">
                   <button onClick={() => setEventStep(5)} type="button">
                     {t("Geri", "Back")}
+                  </button>
+                  <button
+                    className="primary-action"
+                    disabled={eventMutation.isPending}
+                    type="submit"
+                  >
+                    {editingEvent
+                      ? t("Etkinliği güncelle", "Update event")
+                      : t("Etkinlik yayınla", "Publish event")}
                   </button>
                 </div>
               </div>
