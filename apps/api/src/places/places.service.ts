@@ -1,7 +1,7 @@
 import { assessInvitees } from "../common/invite-assessment";
 import { actorLabel, notifyEntityCreated, notifyEntityChanges, notifyUserActivity, isUndiscoverable, notifyMembershipInvite } from "../notifications/activity-events";
 import { invitePhone, invitePhoneVariants } from "../common/invite-phone";
-import { privacyContext } from "../common/privacy-context";
+import { privacyContext, visibleLocation } from "../common/privacy-context";
 import { publicName } from "../common/public-name";
 import { analyticsReference, uniqueAnalyticsReferences } from "../analytics/references";
 import {
@@ -595,7 +595,7 @@ export class PlacesService {
             birthDate: true,
             status: true, profileVerifiedAt: true,
             uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
-            accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true, demographicsAudience: true, locationAudience: true } },
+            accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true, demographicsAudience: true, locationAudience: true, addressAudience: true } },
             interestTags: { select: { tagId: true } },
           },
         },
@@ -607,8 +607,7 @@ export class PlacesService {
       name: publicName(member.user),
       isProvisional: member.user.status === "invited",
       username: member.user.username,
-      city: actor?.id === member.user.id ? member.user.city : null,
-      country: actor?.id === member.user.id ? member.user.country : null,
+      ...visibleLocation(member.user),
       gender: privacyContext.getStore()?.advancedFilters ? (actor?.id === member.user.id || member.user.privacySettings?.demographicsAudience === "everybody" ? member.user.gender : null) : null,
       birthDate: privacyContext.getStore()?.advancedFilters ? (actor?.id === member.user.id || member.user.privacySettings?.demographicsAudience === "everybody" ? member.user.birthDate : null) : null,
       profileVerifiedAt: member.user.profileVerifiedAt,

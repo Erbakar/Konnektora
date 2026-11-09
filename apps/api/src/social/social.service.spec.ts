@@ -123,8 +123,14 @@ describe("SocialService", () => {
     prisma.user.findMany.mockResolvedValue([{id:"target",name:"Ada",username:"ada",accountType:"individual",city:"İstanbul",country:"TR",followerCount:0,interestTags:[],privacySettings:{demographicsAudience:"nobody",locationAudience:audience}}]);
     const context={viewerId:"viewer",following:new Set(related?["target"]:[]),network:new Set(related?["target"]:[]),blocked:new Set<string>()};
     const result=await privacyContext.run(context,()=>service.newMembers("viewer"));
-    expect(result[0]!.city).toBe(visible?"İstanbul":null);expect(result[0]!.country).toBe(visible?"TR":null);
+    expect(result[0]!.city).toBe(visible?"İstanbul":null);expect(result[0]!.country).toBe("TR"); // 07/11 #42: ülke her zaman görünür
     expect(prisma.user.findMany.mock.calls[0][0].select.privacySettings.select.locationAudience).toBe(true);
+  });
+  it("uses the address audience for corporate members' city (07/11 #43)",async()=>{
+    const {service,prisma}=createService();prisma.userInterestTag.findMany.mockResolvedValue([]);prisma.userFollow.findMany.mockResolvedValue([]);prisma.userBlock.findMany.mockResolvedValue([]);
+    prisma.user.findMany.mockResolvedValue([{id:"firm",name:"Firma",username:"firma",accountType:"corporate",city:"İzmir",country:"TR",followerCount:0,interestTags:[],privacySettings:{demographicsAudience:"nobody",locationAudience:"everybody",addressAudience:"nobody"}}]);
+    const result=await privacyContext.run({viewerId:"viewer",following:new Set<string>(),network:new Set<string>(),blocked:new Set<string>()},()=>service.newMembers("viewer"));
+    expect(result[0]!.city).toBeNull();expect(result[0]!.country).toBe("TR");
   });
   it("keeps the owner's own location visible to them",async()=>{
     const {service,prisma}=createService();prisma.userInterestTag.findMany.mockResolvedValue([]);prisma.userFollow.findMany.mockResolvedValue([]);prisma.userBlock.findMany.mockResolvedValue([]);

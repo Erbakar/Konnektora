@@ -1,7 +1,8 @@
-import { Bell, BellOff, Copy, Instagram, Mail, QrCode, Share2 } from "lucide-react";
+import { Bell, BellOff, CalendarDays, Copy, Instagram, Mail, QrCode, Share2 } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { useLanguage } from "../lib/i18n";
+import { formatTimeZoneOffset } from "../lib/formats";
 import { recordContentShare } from "../lib/api";
 import { createEventStoryFile, shareOrDownloadSocialFiles, type EventStoryDetails } from "../lib/socialTemplates";
 
@@ -44,6 +45,7 @@ export function ShareDialog({
       role="dialog"
       aria-modal="true"
       aria-label={language === "tr" ? "Paylaş" : "Share"}
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); /* 07/11 #97–#99: siyah alana tıklayınca kapanır */ }}
     >
       <div>
         <button aria-label={language === "tr" ? "Kapat" : "Close"} onClick={onClose}>
@@ -204,6 +206,7 @@ export function NotificationDialog({
       role="dialog"
       aria-modal="true"
       aria-label={language === "tr" ? "Bildirim ayarı" : "Notification setting"}
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); /* 07/11 #97–#99 */ }}
     >
       <div>
         <button aria-label={language === "tr" ? "Kapat" : "Close"} onClick={onClose}>
@@ -238,7 +241,7 @@ export function NotificationDialog({
   );
 }
 
-export type CalendarEvent = { title: string; startsAt: string; endsAt?: string | null; location?: string; description?: string; url?: string };
+export type CalendarEvent = { title: string; startsAt: string; endsAt?: string | null; location?: string; description?: string; url?: string; timezone?: string | null };
 
 export function calendarEventLink(event: CalendarEvent, provider: "google" | "outlook") {
   const end = event.endsAt ?? new Date(new Date(event.startsAt).getTime() + 3600000).toISOString();
@@ -255,7 +258,9 @@ export async function addCalendarEvent(event: CalendarEvent, provider: string) {
 
 export function CalendarDialog({ event, onClose }: { event: CalendarEvent; onClose: () => void }) {
   const { language } = useLanguage();
-  return <div className="dialog-backdrop"><section className="content-dialog" role="dialog" aria-modal="true" aria-label={language === "tr" ? "Takvimime ekle" : "Add to calendar"}><h2>{language === "tr" ? "Takvimime ekle" : "Add to calendar"}</h2><p>{event.title} · GMT/UTC</p><div className="share-dialog-actions"><a className="secondary-action" href={calendarEventLink(event, "google")} target="_blank" rel="noopener noreferrer">Google Calendar</a><a className="secondary-action" href={calendarEventLink(event, "outlook")} target="_blank" rel="noopener noreferrer">Outlook</a><button className="secondary-action" onClick={() => void openCalendarEvent(event)}>Apple / iCal (.ics)</button><button className="secondary-action" onClick={onClose}>{language === "tr" ? "Kapat" : "Close"}</button></div></section></div>;
+  // 07/11 #52: kapatma sağ üstteki × ikonu veya siyah alan; başlıkta "GMT/UTC:+3" gibi saat dilimi farkı.
+  const offset = formatTimeZoneOffset(event.timezone || "UTC", event.startsAt).replace(/^GMT/, "GMT/UTC:");
+  return <div className="emotion-modal" role="dialog" aria-modal="true" aria-label={language === "tr" ? "Takvimime ekle" : "Add to calendar"} onMouseDown={(mouse) => { if (mouse.target === mouse.currentTarget) onClose(); }}><div><button aria-label={language === "tr" ? "Kapat" : "Close"} onClick={onClose} type="button">×</button><h2><CalendarDays size={21}/>{language === "tr" ? "Takvimime ekle" : "Add to calendar"}</h2><p>{event.title} · {offset}</p><div className="share-dialog-actions"><a className="secondary-action" href={calendarEventLink(event, "google")} target="_blank" rel="noopener noreferrer">Google Calendar</a><a className="secondary-action" href={calendarEventLink(event, "outlook")} target="_blank" rel="noopener noreferrer">Outlook</a><button className="secondary-action" onClick={() => void openCalendarEvent(event)} type="button">Apple / iCal (.ics)</button></div></div></div>;
 }
 
 async function openCalendarEvent(event: CalendarEvent) {

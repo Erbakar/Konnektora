@@ -33,10 +33,8 @@ import { formatEventDateRange, formatTimeZoneOffset, localizeCityName, localizeC
 import { getServiceErrorMessage, getServiceErrorPresentation } from "../lib/serviceErrors";
 import { NotFoundPage } from "./NotFoundPage";
 import {
-  confirmEventPayment,
   archiveMyEvent,
   createBlock,
-  createEventPayment,
   getContentNotification,
   getEvent,
   getUserSession,
@@ -165,15 +163,6 @@ export function EventDetailPage() {
     void queryClient.invalidateQueries({ queryKey: ["interaction-stats", "event", event?.id] });
     void queryClient.invalidateQueries({ queryKey: ["event-participants-preview", event?.id] });
   }
-  const paymentMutation = useMutation({
-    mutationFn: async () => {
-      const intent = await createEventPayment(event!.id, crypto.randomUUID());
-      return confirmEventPayment(
-        intent.id,
-        `pm_sandbox_${crypto.randomUUID()}`,
-      );
-    },
-  });
   const blockMutation = useMutation({
     mutationFn: () => createBlock("event", event!.id),
     onSuccess: () => {
@@ -300,7 +289,9 @@ export function EventDetailPage() {
             {user ? <button aria-pressed={notificationQuery.data?.enabled} disabled={notificationMutation.isPending} onClick={() => setNotificationOpen(true)}><Bell size={18}/>{notificationQuery.data?.enabled ? language === "tr" ? "Bildirimleri kapat" : "Turn off notifications" : language === "tr" ? "Bildirimleri aç" : "Turn on notifications"}</button> : null}
             <button onClick={() => setCalendarOpen(true)}><CalendarDays size={18}/>{language === "tr" ? "Takvimime ekle" : "Add to calendar"}</button>
             {ticketTypesQuery.data?.length ? <button onClick={() => setTicketPickerOpen(true)}><CreditCard size={18}/>{language === "tr" ? "Biletleri gör" : "View tickets"}</button> : null}
-            {user && event.price > 0 ? <button disabled={paymentMutation.isPending || paymentMutation.isSuccess} onClick={() => paymentMutation.mutate()}><CreditCard size={18}/>{paymentMutation.isSuccess ? language === "tr" ? "Ödeme tamamlandı" : "Payment complete" : paymentMutation.isPending ? language === "tr" ? "Ödeniyor…" : "Processing…" : language === "tr" ? "Bilet al" : "Get ticket"}</button> : null}
+            {/* 07/11 #51: "Bilet al" kaldırıldı; bilet "Biletleri gör" penceresinden seçilip alınır. */}
+            {/* 07/11 #51: Etkileşim istatistikleri, Check-in kontrolünün üstünde */}
+            <Link to={user ? `/stats/event/${event.id}` : `/login?next=${encodeURIComponent(`/stats/event/${event.id}`)}`}><BarChart3 size={18}/>{language === "tr" ? "Etkileşim istatistikleri" : "Interaction analytics"}</Link>
             {canManage ? <button onClick={() => {
               if (Date.now() > eventCutoff) {
                 setActionNotice({ kind: "error", message: language === "tr" ? "Bitmiş bir etkinlik için check-in kontrolü yapamazsınız. Bunda bir sorun olduğunu düşünüyorsanız Etkinlik Düzenle sayfasındaki etkinlik bitiş zamanını güncelleyerek tekrar deneyin." : "You cannot run check-in for an event that has ended. Update the event end time if this is incorrect." });
@@ -310,7 +301,6 @@ export function EventDetailPage() {
             }} type="button"><UserCheck size={18}/>{language === "tr" ? "Check-in kontrolü" : "Check-in control"}</button> : null}
             {canManage ? <Link to={`/events/create?edit=${event.id}`}><Pencil size={18}/>{language === "tr" ? "Etkinliği düzenle" : "Edit event"}</Link> : null}
             {canManage ? <button disabled={archiveMutation.isPending} onClick={() => window.confirm(language === "tr" ? "Etkinlik silinsin mi? Satılmış tüm biletler otomatik olarak iade edilecek ve bu işlem geri alınamayacaktır." : "Delete this event? All sold tickets will be refunded automatically and this action cannot be undone.") && archiveMutation.mutate()}><Trash2 size={18}/>{language === "tr" ? "Etkinliği sil" : "Delete event"}</button> : null}
-            <Link to={user ? `/stats/event/${event.id}` : `/login?next=${encodeURIComponent(`/stats/event/${event.id}`)}`}><BarChart3 size={18}/>{language === "tr" ? "Etkileşim istatistikleri" : "Interaction analytics"}</Link>
             {user && !canManage ? <button onClick={() => setReportOpen((current) => !current)}><Flag size={18}/>{language === "tr" ? "Etkinliği rapor et" : "Report event"}</button> : null}
             {user && !canManage ? <button disabled={blockMutation.isPending} onClick={() => blockMutation.mutate()}><Ban size={18}/>{language === "tr" ? "Etkinliği engelle" : "Block event"}</button> : null}
           </div>
@@ -410,11 +400,6 @@ export function EventDetailPage() {
             ) : null}
           </div>
         </div>
-      ) : null}
-      {paymentMutation.isError ? (
-        <p className="form-error">
-          {language === "tr" ? "Ödeme tamamlanamadı. Lütfen ödeme bilgilerini kontrol edin." : "Payment could not be completed. Please check your payment details."}
-        </p>
       ) : null}
       <ReportDialog onClose={() => setReportOpen(false)} open={reportOpen} targetId={event.id} targetType="event"/>
       {attendMutation.data ? (
@@ -539,7 +524,7 @@ export function EventDetailPage() {
         canManage={canManage}
       />
       {recommendedEvents.length ? <section className="admin-form event-recommendations"><div className="section-header compact"><div><h2>{language === "tr" ? "İlginizi çekebilecek diğer etkinlikler" : "Other events you may like"}</h2><p>{language === "tr" ? "Ortak ilgi alanları, konum, organizatör ve popülerliğe göre seçildi." : "Selected by shared interests, location, organiser and popularity."}</p></div></div><div className="event-grid recommendation-carousel">{recommendedEvents.map((item) => <EventCard event={item} key={item.id}/>)}</div></section> : null}
-      {calendarOpen ? <CalendarDialog event={{ title: event.title, startsAt: event.startsAt, endsAt: event.endsAt, location: [event.locationName, event.locationAddress, event.city, event.country].filter(Boolean).join(", "), description: event.description, url: new URL(`/events/${event.slug}`, window.location.origin).toString() }} onClose={() => setCalendarOpen(false)}/> : null}
+      {calendarOpen ? <CalendarDialog event={{ title: event.title, startsAt: event.startsAt, endsAt: event.endsAt, location: [event.locationName, event.locationAddress, event.city, event.country].filter(Boolean).join(", "), description: event.description, url: new URL(`/events/${event.slug}`, window.location.origin).toString(), timezone: event.timezone }} onClose={() => setCalendarOpen(false)}/> : null}
       <NotificationDialog
         calendar={{ title: event.title, startsAt: event.startsAt, endsAt: event.endsAt, location: [event.locationName, event.locationAddress, event.city, event.country].filter(Boolean).join(", "), description: event.description, url: new URL(`/events/${event.slug}`, window.location.origin).toString() }}
         open={notificationOpen}

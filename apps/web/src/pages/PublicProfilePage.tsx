@@ -22,7 +22,9 @@ import {
   Share2,
   ThumbsDown,
   UserCheck,
+  Plus,
   UserPlus,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -457,8 +459,9 @@ export function PublicProfilePage() {
           ) : null}
         </div>
         <div className="profile-sidebar-facts" aria-label={t("Profil bilgileri", "Profile information")}>
-          {profile.accountType === "individual" && profile.birthDate ? (
-            <span>{t(`${ageFrom(profile.birthDate)} yaşında`, `${ageFrom(profile.birthDate)} years old`)}</span>
+          {profile.accountType === "individual" && (profile.birthDate || profile.gender === "female" || profile.gender === "male") ? (
+            /* 07/11 #44: yaşın ardından (yetki varsa) cinsiyet; "Belirtmek istemiyorum" seçilmişse gösterilmez. */
+            <span>{[profile.birthDate ? t(`${ageFrom(profile.birthDate)} yaşında`, `${ageFrom(profile.birthDate)} years old`) : null, profile.gender === "female" ? t("Kadın", "Female") : profile.gender === "male" ? t("Erkek", "Male") : null].filter(Boolean).join(", ")}</span>
           ) : null}
           {(profile.accountType === "individual" || (!profile.address && !profile.district)) && (profile.city || profile.country) ? (
             <span>
@@ -683,13 +686,16 @@ export function PublicProfilePage() {
                 <h2 id="add-profile-tag-title">{t("Profile etiket ekle", "Add a Tag to Profile")}</h2>
                 <p className="eyebrow">{t("Adım 1: Bir etiket seç veya yaz", "Step 1: Select or write a tag")}</p>
               </div>
-              <button onClick={() => setTagDialogOpen(false)} type="button">
-                {t("Kapat", "Close")}
+              {/* 07/11 #63: "Kapat" butonu yerine standart sağ üst kapat ikonu */}
+              <button aria-label={t("Kapat", "Close")} className="dialog-close-icon" onClick={() => setTagDialogOpen(false)} type="button">
+                <X size={20}/>
               </button>
             </div>
             <p>
               {addedTagCount === 0
-                ? t("Sevdiğiniz kahve, müzik grubu, film; hatta sevmediğiniz alerjinize kadar her şey birer etiket olabilir.", "A coffee, band or film you love—even an allergy you dislike—can become a tag.")
+                ? profile.relationship.isSelf
+                  ? t("Sevdiğiniz kahve, müzik grubu, film; hatta sevmediğiniz alerjinize kadar her şey birer etiket olabilir.", "A coffee, band or film you love—even an allergy you dislike—can become a tag.")
+                  : t("Onun sevdiği kahve çeşidi veya müzik grubu veya sizi anlatan bir şarkı; bir film repliği; hatta sevmediği veya kararsız kaldığı bir konuya dair bize onu anlatan bir etiket tanımla.", "Their favourite coffee or band, a song about the two of you, a film quote, or even something they dislike or feel undecided about: define a tag that tells us about them.")
                 : addedTagCount === 1
                   ? t("Sevdiğimiz bir kitap, şarkı adı, özlü söz, unutamadığınız bir tarih… Hadi ama yaratıcı olun.", "Try a favourite book, song, quote or an unforgettable date. Be creative.")
                   : addedTagCount === 2
@@ -752,9 +758,10 @@ export function PublicProfilePage() {
                 <legend>{t("Adım 2: Bu etiket için hissedilen duyguyu seç", "Step 2: Choose a felt emotion for this tag")}</legend>
                 {(
                   [
-                    ["like", t("Beğeniyorum", "Like")],
-                    ["ok", t("Nötr", "Neutral")],
-                    ["dislike", t("Beğenmiyorum", "Dislike")],
+                    // 07/11 #61, #62: kendi profilinde "Kararsızım", başkasının profilinde 3. tekil şahıs.
+                    ["like", profile.relationship.isSelf ? t("Beğeniyorum", "Like") : t("Beğeniyor", "Likes")],
+                    ["ok", profile.relationship.isSelf ? t("Kararsızım", "Undecided") : t("Kararsız", "Undecided")],
+                    ["dislike", profile.relationship.isSelf ? t("Beğenmiyorum", "Dislike") : t("Beğenmiyor", "Dislikes")],
                   ] as const
                 ).map(([value, label]) => (
                   <label key={value}>
@@ -827,6 +834,8 @@ export function PublicProfilePage() {
           >
             {t("Organizatör", "Organiser")}
           </button>
+          {/* 07/11 #64: kendi profilinde masaüstünde sekme çubuğunun en sağında bağlantı */}
+          {profile.relationship.isSelf ? <Link className="profile-tab-create-link" to="/events/create"><Plus size={15}/>{t("etkinlik oluştur", "create event")}</Link> : null}
         </nav>
         <div className="discovery-results">
           {profile.events
@@ -872,6 +881,8 @@ export function PublicProfilePage() {
           >
             {t("Organizatör", "Organiser")}
           </button>
+          {/* 07/11 #65 */}
+          {profile.relationship.isSelf ? <Link className="profile-tab-create-link" to="/places?create=1"><Plus size={15}/>{t("mekân oluştur", "create place")}</Link> : null}
         </nav>
         <div className="discovery-results">
           {profile.places

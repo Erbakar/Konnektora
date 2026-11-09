@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createUserTag } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
 
-export function TagPicker({ tags, name = "tagIds", initialIds = [], recommendedIds = [], label = "Etiketler" }: { tags: Tag[]; name?: string; initialIds?: string[]; recommendedIds?: string[]; label?: string }) {
+export function TagPicker({ tags, name = "tagIds", initialIds = [], recommendedIds = [], label = "Etiketler", optional = false }: { tags: Tag[]; name?: string; initialIds?: string[]; recommendedIds?: string[]; label?: string; optional?: boolean }) {
   const { language } = useLanguage();
   const client = useQueryClient();
   const [query, setQuery] = useState("");
@@ -37,7 +37,7 @@ export function TagPicker({ tags, name = "tagIds", initialIds = [], recommendedI
     setQuery("");
   };
   return <fieldset className="tag-fieldset tag-picker">
-    <legend>{label} ({language === "tr" ? "en fazla 10" : "up to 10"})</legend>
+    <legend>{label} ({language === "tr" ? "en fazla 10" : "up to 10"}){optional ? <span className="optional-hint"> {language === "tr" ? "(opsiyonel)" : "(optional)"}</span> : null}</legend>
     {selected.length ? <div className="tag-picker-selected">{selected.map((tag) => <span key={tag.id}>#{tag.name}<button aria-label={language === "tr" ? `${tag.name} etiketini kaldır` : `Remove ${tag.name} tag`} onClick={() => setSelectedIds((ids) => ids.filter((id) => id !== tag.id))} type="button"><X size={13}/></button><input name={name} type="hidden" value={tag.id}/></span>)}</div> : null}
     <input aria-label={language === "tr" ? "Etiket ara veya oluştur" : "Search or create a tag"} disabled={selectedIds.length >= 10} onChange={(event) => setQuery(event.target.value)} placeholder={language === "tr" ? "Var olan veya yeni bir etiket girin…" : "Enter an existing or new tag…"} type="search" value={query}/>
     {recommendedIds.length && !query ? <small>{language === "tr" ? "Profiline göre önerilen etiketler önce gösteriliyor; seçmeden etkinliğe eklenmez." : "Tags suggested for your profile appear first and are not added until you select them."}</small> : null}

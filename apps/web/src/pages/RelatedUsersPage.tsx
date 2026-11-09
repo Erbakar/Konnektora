@@ -1,5 +1,5 @@
 import { FollowStar, MemberCompatibility, MemberSignalsProvider } from "../components/MemberSignals";
-import { getMembership } from "../lib/api";
+import { getInviteAssessment, getMembership } from "../lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BadgeCheck,
@@ -34,6 +34,7 @@ import {
 } from "../lib/api";
 import { getUserSession } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
+import { memberLocationLabel } from "../lib/formats";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
 export function RelatedUsersPage({
@@ -121,6 +122,19 @@ export function RelatedUsersPage({
           : listTagRelatedUsers(target.data!.id),
     enabled: Boolean(target.data),
   });
+  const matchIds = useMemo(() => [...new Set((users.data ?? []).map((user) => user.id).filter((id) => id !== session?.id))].sort(), [session?.id, users.data]);
+  // 07/11 #49, #50: eşleşme puanı yalnız etkinlik/mekân yöneticilerine (kurucu, organizatör) gösterilir.
+  const matchScores = useQuery({
+    queryKey: ["related-match-scores", kind, target.data?.id, matchIds.join(",")],
+    enabled: Boolean(kind !== "tag" && target.data?.canManage && target.data?.id && matchIds.length),
+    retry: false,
+    queryFn: async () => {
+      const rows: Awaited<ReturnType<typeof getInviteAssessment>> = [];
+      for (let index = 0; index < matchIds.length; index += 100) rows.push(...await getInviteAssessment(kind as "event" | "place", target.data!.id, matchIds.slice(index, index + 100)));
+      return new Map(rows.map((row) => [row.id, row.score]));
+    },
+  });
+  const matchLabel = kind === "place" ? t("Mekânla eşleşme puanı", "Place match score") : t("Etkinlik eşleşme puanı", "Event match score");
   const title = target.data?.title;
   const back = `/${kind === "event" ? "events" : kind === "place" ? "places" : "tags"}/${slug}`;
   const following = useQuery({
@@ -471,11 +485,11 @@ export function RelatedUsersPage({
               {user.birthDate ? (
                 <small>{ageFrom(user.birthDate)} {t("yaşında", "years old")}</small>
               ) : null}
-              <MemberCompatibility id={user.id} commonTagCount={user.commonTagCount}/>
+              <MemberCompatibility id={user.id} commonTagCount={user.commonTagCount} matchScore={matchScores.data?.get(user.id)} matchLabel={matchLabel}/>
               {user.city || user.country ? (
-                <small>
-                  <MapPin size={13} />
-                  {[user.city, user.country].filter(Boolean).join(", ")}
+                <small className="related-user-location">
+                  <MapPin size={14} />
+                  {memberLocationLabel(user.city, user.country, language)}
                 </small>
               ) : null}
               {user.checkedIn ? (

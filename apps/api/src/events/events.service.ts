@@ -3,7 +3,7 @@ import { assessInvitees } from "../common/invite-assessment";
 import { actorLabel, isUndiscoverable, notifyEntityCreated, notifyEntityChanges, notifyUserActivity, notifyMembershipInvite, recordActivity } from "../notifications/activity-events";
 import { ticketSalesEligibility, ticketSalesRequirement } from "../common/ticket-sales-eligibility";
 import { invitePhone, invitePhoneVariants } from "../common/invite-phone";
-import { privacyContext } from "../common/privacy-context";
+import { privacyContext, visibleLocation } from "../common/privacy-context";
 import { consumeQuota, paidCorporateEvent, quotaLock } from "../common/usage-quota";
 import { publicName } from "../common/public-name";
 import { reverseStoredPayment } from "../finance/payment-ledger";
@@ -930,7 +930,7 @@ export class EventsService {
             birthDate: true,
             status: true, profileVerifiedAt: true,
             uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
-            accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true, demographicsAudience: true, locationAudience: true } },
+            accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true, demographicsAudience: true, locationAudience: true, addressAudience: true } },
             interestTags: { select: { tagId: true } },
           },
         },
@@ -942,8 +942,7 @@ export class EventsService {
       name: publicName(participant.user),
       isProvisional: participant.user.status === "invited",
       username: participant.user.username,
-      city: actor?.id === participant.user.id ? participant.user.city : null,
-      country: actor?.id === participant.user.id ? participant.user.country : null,
+      ...visibleLocation(participant.user),
       gender: privacyContext.getStore()?.advancedFilters ? (actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.gender : null) : null,
       birthDate: privacyContext.getStore()?.advancedFilters ? (actor?.id === participant.user.id || participant.user.privacySettings?.demographicsAudience === "everybody" ? participant.user.birthDate : null) : null,
       profileVerifiedAt: participant.user.profileVerifiedAt,

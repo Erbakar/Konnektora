@@ -223,7 +223,6 @@ export class DiscoveryService {
       initialActivityEvents,
       initialActivityPlaces,
       activityTags,
-      initialActivityUsers,
       eventJoins,
       placeJoins,
     ] = await Promise.all([
@@ -241,12 +240,6 @@ export class DiscoveryService {
       }),
       this.prisma.tag.findMany({
         where: { status: "active", ...dateWhere },
-        orderBy: { createdAt: "desc" },
-        take: 15,
-      }),
-      this.prisma.user.findMany({
-        where: { ...userWhere, ...localWhere, ...dateWhere },
-        select: userSelect,
         orderBy: { createdAt: "desc" },
         take: 15,
       }),
@@ -275,7 +268,6 @@ export class DiscoveryService {
     ]);
     let activityEvents = initialActivityEvents;
     let activityPlaces = initialActivityPlaces;
-    let activityUsers = initialActivityUsers;
     if (!activityEvents.length && Object.keys(localWhere).length)
       activityEvents = await this.prisma.event.findMany({
         include: eventActivityRelations,
@@ -287,13 +279,6 @@ export class DiscoveryService {
       activityPlaces = await this.prisma.place.findMany({
         include: activityRelations,
         where: { status: "active", ...dateWhere },
-        orderBy: { createdAt: "desc" },
-        take: 15,
-      });
-    if (!activityUsers.length && Object.keys(localWhere).length)
-      activityUsers = await this.prisma.user.findMany({
-        where: { ...userWhere, ...dateWhere },
-        select: userSelect,
         orderBy: { createdAt: "desc" },
         take: 15,
       });
@@ -316,19 +301,14 @@ export class DiscoveryService {
         occurredAt: item.createdAt,
         ownerId: item.createdById,
       })),
-      ...activityUsers.map((item) => ({
-        ...this.userItem(item),
-        action: "Topluluğa katıldı",
-        occurredAt: item.createdAt,
-        ownerId: item.id,
-      })),
+      // 07/11 #58: "Topluluğa katıldı" akış kartı iptal edildi.
       ...eventJoins.filter(item => item.user.status !== "invited" && audienceAllows(item.userId, item.user.privacySettings?.eventAudience ?? "everybody")).map((item) => ({
         ...this.eventItem(item.event),
         action: "Etkinliğe katıldı",
         occurredAt: item.createdAt,
         ownerId: item.userId,
       })),
-      ...placeJoins.filter(item => item.user.status !== "invited" && audienceAllows(item.userId, item.user.privacySettings?.placeAudience ?? "everybody")).map((item) => ({
+      ...placeJoins.filter(item => item.user.status !== "invited" && item.userId !== item.place.createdById && audienceAllows(item.userId, item.user.privacySettings?.placeAudience ?? "everybody")).map((item) => ({
         ...this.placeItem(item.place),
         action: "Mekâna katıldı",
         occurredAt: item.createdAt,

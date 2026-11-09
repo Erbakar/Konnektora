@@ -1,6 +1,6 @@
 import { notifyTagModeration } from "../notifications/moderation-activity";
 import { notifyUserActivity, notifyComment } from "../notifications/activity-events";
-import { privacyContext } from "../common/privacy-context";
+import { privacyContext, visibleLocation } from "../common/privacy-context";
 import { publicName } from "../common/public-name";
 import {
   ConflictException,
@@ -176,7 +176,7 @@ export class TagsService {
       birthDate: true,
       profileVerifiedAt: true,
       uploadedMedia: { where: { contentType: "user", status: "active", isProfilePicture: true }, select: { url: true }, take: 1 },
-      accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true, demographicsAudience: true, locationAudience: true } },
+      accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true, demographicsAudience: true, locationAudience: true, addressAudience: true } },
       interestTags: { select: { tagId: true } },
     } as const;
     const [interests, posts, viewerInterests] = await Promise.all([
@@ -204,8 +204,7 @@ export class TagsService {
       id: member.id,
       name: publicName(member),
       username: member.username,
-      city: viewerId === member.id ? member.city : null,
-      country: viewerId === member.id ? member.country : null,
+      ...visibleLocation(member),
       gender: privacyContext.getStore()?.advancedFilters ? (viewerId === member.id || member.privacySettings?.demographicsAudience === "everybody" ? member.gender : null) : null,
       birthDate: privacyContext.getStore()?.advancedFilters ? (viewerId === member.id || member.privacySettings?.demographicsAudience === "everybody" ? member.birthDate : null) : null,
       profileVerifiedAt: member.profileVerifiedAt,

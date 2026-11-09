@@ -19,3 +19,12 @@ export function audienceAllows(ownerId: string | undefined, audience: string, co
   if (!ownerId || !context?.viewerId) return false;
   return audience === "following" ? context.following.has(ownerId) : audience === "network" && context.network.has(ownerId);
 }
+/**
+ * Kart/listelerde gösterilecek konum (07/11 #42, #43, #45): ülke herkese görünür;
+ * şehir bireysel hesapta "Profil ayarlarımda kayıtlı şehri kim görebilir?" (locationAudience),
+ * kurumsal hesapta "Profil ayarlarımda kayıtlı adresimi kim görebilir?" (addressAudience) tercihine göre.
+ */
+export function visibleLocation(user: { id: string; accountType?: string | null; city?: string | null; country?: string | null; privacySettings?: { locationAudience?: string | null; addressAudience?: string | null } | null }, context = privacyContext.getStore()) {
+  const audience = user.accountType === "corporate" ? user.privacySettings?.addressAudience : user.privacySettings?.locationAudience;
+  return { city: audienceAllows(user.id, audience ?? "everybody", context) ? user.city ?? null : null, country: user.country ?? null };
+}

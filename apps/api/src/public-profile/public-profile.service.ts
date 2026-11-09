@@ -209,7 +209,8 @@ export class PublicProfileService {
       website: this.canView(privacy.websiteAudience ?? "everybody", relationship) ? profile.website : null,
       city: this.canView(privacy.locationAudience ?? "everybody", relationship) ? profile.city : null,
       region: this.canView(privacy.locationAudience ?? "everybody", relationship) ? profile.region : null,
-      country: this.canView(privacy.locationAudience ?? "everybody", relationship) ? profile.country : null,
+      // 07/11 #45: şehir gizli olsa da ülke bilgisi her zaman gösterilir.
+      country: profile.country,
       district: this.canView(privacy.addressAudience ?? "everybody", relationship) ? profile.district : null,
       address: this.canView(privacy.addressAudience ?? "everybody", relationship) ? profile.address : null,
       gender: this.canView(privacy.demographicsAudience ?? "everybody", relationship) ? profile.gender : null,

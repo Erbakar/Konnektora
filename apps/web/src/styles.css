@@ -14502,3 +14502,25 @@ button.follow-star { width: 25px; height: 25px; min-width: 25px; min-height: 25p
 .content-comments .content-poll .content-poll-actions .primary-action { width: auto; }
 .admin-form .checkin-search input:focus, .admin-form .checkin-search input:focus-visible { border: 0; box-shadow: none; outline: 0; background: transparent; }
 .admin-form .checkin-search:focus-within { border-color: #1d6545; box-shadow: 0 0 0 3px rgba(29, 101, 69, .14); }
+
+/* 07/11 #41–#102 */
+@media (min-width: 901px) {
+  .corp-profile-menu > div { min-width: 300px; }
+  .corp-profile-menu > div > :where(a, button) { white-space: nowrap; }
+}
+.add-profile-tag-dialog .dialog-close-icon { align-items: center; background: transparent; border: 0; border-radius: 999px; color: var(--ink, #10231f); cursor: pointer; display: inline-flex; height: 36px; justify-content: center; margin-left: auto; padding: 0; width: 36px; }
+.add-profile-tag-dialog .dialog-close-icon:hover { background: #eef6f1; }
+/* #60: adım geri butonu stili ve son adımda Geri + Yayınla aynı satırda, bilet bağlantısının altında */
+.event-step-actions > button:not(.primary-action) { align-items: center; background: #fff; border: 1px solid var(--line, #dce7df); border-radius: 10px; color: var(--ink, #10231f); cursor: pointer; display: inline-flex; font-weight: 600; gap: 6px; min-height: 42px; padding: 0 18px; }
+.event-step-actions > button:not(.primary-action):hover { background: #eef6f1; border-color: #b9d6c4; }
+.event-step-actions.event-step-actions-final { justify-content: flex-start; flex-wrap: wrap; }
+.event-step-actions.event-step-actions-final .primary-action { width: auto; }
+/* #64, #65: profil Etkinlikler/Mekânlar sekme çubuğunun en sağında, buton değil bağlantı (yalnız masaüstü) */
+.discovery-tabs .profile-tab-create-link { align-items: center; color: var(--brand, #1d6545); display: none; font-size: 14px; font-weight: 600; gap: 4px; margin-left: auto; text-decoration: none; white-space: nowrap; }
+.discovery-tabs .profile-tab-create-link:hover { text-decoration: underline; }
+@media (min-width: 901px) { .discovery-tabs .profile-tab-create-link { display: inline-flex; } }
+/* #100.2, #102.2: etiket başlığı diğer label'larla aynı hizada ve eşit aralıkta */
+.tag-fieldset.tag-picker { border: 0; border-radius: 0; margin: 4px 0 0; padding: 0; }
+.tag-fieldset.tag-picker > legend { color: #4a554f; float: left; font-size: 14px; font-weight: 700; margin: 0 0 6px; padding: 0; width: 100%; }
+.tag-fieldset.tag-picker > legend + * { clear: both; }
+.optional-hint { color: var(--muted, #66736c); font-weight: 500; }

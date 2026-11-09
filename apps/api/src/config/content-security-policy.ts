@@ -12,6 +12,7 @@ export const contentSecurityPolicyDirectives = {
     "https://accounts.google.com/gsi/",
     "https://www.facebook.com",
     "https://www.youtube-nocookie.com",
+    "https://www.youtube.com",
     "https://w.soundcloud.com",
   ],
   connectSrc: [
