@@ -22,7 +22,8 @@ it("#73 closes the report form and shows a confirmation with a rules link",async
 });
 it("#82 offers logo variants, logoart and a typography guide",()=>{
  mount(<PressKitPage/>);
- const links=screen.getAllByRole("link",{name:"SVG indir"});expect(links).toHaveLength(5);
+ const links=screen.getAllByRole("link",{name:"SVG indir"});expect(links).toHaveLength(10); // 07/11 #94: +5 yeni logoart
+ expect(screen.getAllByRole("link",{name:"PNG indir (yüksek çözünürlük)"})).toHaveLength(10);
  expect(links.every(link=>link.hasAttribute("download"))).toBe(true);
  expect(screen.getByRole("heading",{name:"Font ve stil"})).toBeVisible();
 });
