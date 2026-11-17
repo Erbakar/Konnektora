@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, BarChart3, Lightbulb, ListOrdered, Radar, Share2, Ticket, TrendingUp, Users, WalletCards } from "lucide-react";
+import { ArrowLeft, BarChart3, Clock, Lightbulb, ListOrdered, Meh, Radar, Share2, ThumbsDown, ThumbsUp, Ticket, TrendingUp, Trophy, Users, WalletCards } from "lucide-react";
 import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { getInteractionStats, getPublicProfileById, getTagStats, listTags, getPlaceAnalyticsReferences } from "../lib/api";
-import { analyticsSeries } from "../lib/analyticsSeries";
+import { getInteractionStats, getPublicProfileById, getTagStats, getTagStatsOrigin, listTags, getPlaceAnalyticsReferences } from "../lib/api";
+import { analyticsSeries, fillDailySeries } from "../lib/analyticsSeries";
 import { useLanguage } from "../lib/i18n";
-import { ChartPanel, DensityHeatmap, FunnelChart, PeriodRankedList, PeriodTotalsChart, PieWithLegend, SegmentTabs, SourceDonut, TitleSelect, sentimentColors } from "../components/StatsCharts";
+import { ChartPanel, DensityHeatmap, FunnelChart, PeriodRankedList, PeriodTotalsChart, PieWithLegend, SegmentTabs, SourceDonut, TimeSeriesChart, TitleSelect, checkinSlots, sentimentColors } from "../components/StatsCharts";
 
 type Stats = Record<string, number>;
 type EntityRef = { name: string; to: string; metricKey?: string; kind: "tag" | "event" | "place" | "user" };
@@ -14,7 +14,7 @@ const StatsLinks = createContext<EntityRef[]>([]);
 const metricName = (value: string) => value.toLocaleLowerCase("tr-TR").replace(/ı/g, "i").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 function LinkedMetric({ label, prefix, metricKey }: { label: string; prefix?: string; metricKey: string }) {
   const refs = useContext(StatsLinks);
-  const kind = prefix?.toLowerCase().includes("interest") ? "tag" : prefix === "fullEvent_" || prefix === "emptyEvent_" ? "event" : undefined;
+  const kind = prefix?.toLowerCase().includes("interest") ? "tag" : prefix === "fullEvent_" || prefix === "emptyEvent_" || prefix === "popularEvent_" ? "event" : undefined;
   const matches = refs.filter(ref => ref.metricKey ? ref.metricKey === metricKey : kind && ref.kind === kind && metricName(ref.name) === metricName(label));
   const reference = new Set(matches.map(ref => ref.to)).size === 1 ? matches[0] : undefined;
   if (reference) return <Link to={reference.to}>{reference.name}</Link>;
@@ -73,6 +73,7 @@ const labels: Record<string, string> = {
   dislikeLast24h: "Olumsuz · son 24 saat", dislikeLast7d: "Olumsuz · son 7 gün", dislikeLast30d: "Olumsuz · son 30 gün", dislikeLast12m: "Olumsuz · son 12 ay",
   pastEvents: "Geçmiş etkinlik", averageTicketPriceUsd: "Ortalama bilet fiyatı (USD)",
   profileExchanges: "QR/NFC profil takası", profileExchangers: "Profil takası yapan kişi", profileExchangeRate: "Profil takası yapanların oranı", profileExchangesPerPerson: "Kişi başına profil takası",
+  kendisi: "Kendisi yapıştırdı", bir_baskasi: "Bir başkası yapıştırdı", belirtmek_istemiyor: "Belirtmek istemiyor", erkekler: "Erkekler", kadinlar: "Kadınlar",
 };
 
 const labelsEn: Record<string, string> = {
@@ -112,6 +113,7 @@ const labelsEn: Record<string, string> = {
   dislikeLast24h: "Negative · 24 hours", dislikeLast7d: "Negative · 7 days", dislikeLast30d: "Negative · 30 days", dislikeLast12m: "Negative · 12 months",
   pastEvents: "Past events", averageTicketPriceUsd: "Average ticket price (USD)",
   profileExchanges: "QR/NFC profile exchanges", profileExchangers: "People who exchanged profiles", profileExchangeRate: "Profile exchange rate", profileExchangesPerPerson: "Profile exchanges per person",
+  kendisi: "Added by themselves", bir_baskasi: "Added by someone else", belirtmek_istemiyor: "Prefer not to say", erkekler: "Men", kadinlar: "Women",
 };
 
 const overviewKeys: Record<string, string[]> = {
@@ -183,11 +185,11 @@ function StatsSection({ title, description, icon, children }: { title: string; d
   </section>;
 }
 
-function MetricGrid({ entries }: { entries: Array<[string, number]> }) {
+function MetricGrid({ entries, extra }: { entries: Array<[string, number]>; extra?: ReactNode }) {
   const { language } = useLanguage();
   return <div className="stats-metric-grid">{entries.map(([key, value]) => <article key={key}>
     <span>{prettyKey(key, language)}</span><strong>{displayValue(key, value, language)}</strong>
-  </article>)}</div>;
+  </article>)}{extra}</div>;
 }
 
 function BarList({ entries, prefix }: { entries: Array<[string, number]>; prefix?: string }) {
@@ -264,30 +266,64 @@ function DemographicsPanel({ data, targetType }: { data: Stats; targetType: stri
 }
 
 /** Halka grafik paneli; birden fazla kaynak varsa başlık açılır menüdür. */
-function SourcesPanel({ data, groups, description }: { data: Stats; groups: Array<{ prefix: string; title: [string, string]; center: [string, string] }>; description?: [string, string] }) {
+function SourcesPanel({ data, groups, description, heading }: { data: Stats; groups: Array<{ prefix: string; title: [string, string]; center: [string, string]; description?: [string, string] }>; description?: [string, string]; heading?: [string, string] }) {
   const { language } = useLanguage();
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const available = groups.filter((group) => grouped(data, group.prefix).length);
   const [selected, setSelected] = useState(available[0]?.prefix ?? "");
   if (!available.length) return null;
   const active = available.find((group) => group.prefix === selected) ?? available[0]!;
-  return <ChartPanel description={description ? t(...description) : undefined} title={available.length > 1 ? <TitleSelect label={t("Grafik", "Chart")} onChange={setSelected} options={available.map((group) => ({ value: group.prefix, label: t(...group.title) }))} value={active.prefix}/> : t(...active.title)}>
+  // 17/11 #72: grafiğin altındaki açıklama seçili başlığa göre değişir.
+  const activeDescription = active.description ?? description;
+  return <ChartPanel className={heading ? "stats-headed-panel" : ""} description={activeDescription ? t(...activeDescription) : undefined} title={available.length > 1 ? <>{heading ? <span className="stats-panel-eyebrow">{t(...heading)}</span> : null}<TitleSelect label={heading ? t(...heading) : t("Grafik", "Chart")} onChange={setSelected} options={available.map((group) => ({ value: group.prefix, label: t(...group.title) }))} value={active.prefix}/></> : t(...active.title)}>
     <SourceDonut centerLabel={t(...active.center)} entries={sliceEntries(grouped(data, active.prefix), active.prefix, language, 7)} label={t(...active.title)}/>
   </ChartPanel>;
 }
 
 const interestPeriodOptions = (t: (tr: string, en: string) => string) => [{ key: "7d", label: t("Son 1 hafta", "Last week") }, { key: "30d", label: t("Son 1 ay", "Last month") }, { key: "90d", label: t("Son 3 ay", "Last 3 months") }, { key: "180d", label: t("Son 6 ay", "Last 6 months") }];
 
-/** #89–#91: başlığı açılır menü (kitle) olan, dönem filtreli ilgi alanları tablosu. */
+/** 17/11 #111–#113: bir önceki eş döneme göre değişim; "-%25", "+%33" biçiminde. */
+export function changeLabel(current: number, previous: number, language: "tr" | "en") {
+  if (!previous) return current > 0 ? (language === "tr" ? "yeni" : "new") : "—";
+  const change = Math.round((current - previous) / previous * 100);
+  return change > 0 ? `+%${change}` : change < 0 ? `-%${Math.abs(change)}` : "%0";
+}
+
+/**
+ * #89–#91: başlığı açılır menü (kitle) olan, dönem filtreli ilgi alanları tablosu.
+ * 17/11 #111–#113: her satırda etiketin kazandırdığı TL (tüm zamanlar) ile beğenen / kararsız / beğenmeyen sayıları ve önceki döneme göre değişim.
+ */
 function AudienceInterestsPanel({ data, audiences }: { data: Stats; audiences: Array<{ prefix: string; label: [string, string] }> }) {
   const { language } = useLanguage();
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
+  const locale = language === "tr" ? "tr-TR" : "en-GB";
   const [selected, setSelected] = useState(audiences[0]!.prefix);
   const periods = interestPeriodOptions(t);
+  const [period, setPeriod] = useState(periods[0]!.key);
   const active = audiences.find((item) => item.prefix === selected) ?? audiences[0]!;
-  if (!audiences.some((item) => periods.some((period) => grouped(data, `${item.prefix}${period.key}_`).length))) return null;
-  return <ChartPanel description={t("Seçili kitlenin bu dönemde profiline en çok yapıştırdığı ilgi alanları", "Interests the selected audience added to their profiles most in this period")} title={<TitleSelect label={t("Kitle", "Audience")} onChange={setSelected} options={audiences.map((item) => ({ value: item.prefix, label: t(...item.label) }))} value={active.prefix}/>}>
-    <PeriodRankedList groups={Object.fromEntries(periods.map((period) => [period.key, grouped(data, `${active.prefix}${period.key}_`)]))} key={active.prefix} periods={periods} renderLabel={(key) => <LinkedMetric label={prettyKey(key, language)} metricKey={`${active.prefix}_${key}`} prefix={`${active.prefix}_`}/>}/>
+  const rows = grouped(data, `${active.prefix}${period}_`);
+  const sentiments = [{ key: "Like", label: t("Beğenen", "Liked"), icon: <ThumbsUp aria-hidden size={15}/>, tone: "like" }, { key: "Ok", label: t("Kararsız", "Undecided"), icon: <Meh aria-hidden size={15}/>, tone: "ok" }, { key: "Dislike", label: t("Beğenmeyen", "Disliked"), icon: <ThumbsDown aria-hidden size={15}/>, tone: "dislike" }];
+  return <ChartPanel className="stats-interest-panel" description={t("Seçili dönemde profile yapıştırılan ilgi alanları. TL tutarı, etiketi profilinde taşıyan kullanıcıların tüm zamanlarda yaptığı bilet ödemeleridir; yüzdeler bir önceki eş uzunluktaki döneme göre değişimdir.", "Interests added to profiles in the selected period. The TRY amount is all-time ticket spend by members carrying the tag; percentages compare with the previous period of equal length.")} title={<TitleSelect label={t("Kitle", "Audience")} onChange={setSelected} options={audiences.map((item) => ({ value: item.prefix, label: t(...item.label) }))} value={active.prefix}/>}>
+    <SegmentTabs label={t("Dönem", "Period")} onChange={setPeriod} options={periods.map((item) => ({ value: item.key, label: item.label }))} value={period}/>
+    {rows.length ? <div className="stats-table-wrap"><table className="stats-table stats-interest-table"><thead><tr><th>{t("Etiket", "Tag")}</th><th>{t("Kazandırdığı (TL)", "Earned (TRY)")}</th>{sentiments.map((item) => <th key={item.key}>{item.label}</th>)}</tr></thead><tbody>{rows.map(([key]) => <tr key={key}>
+      <td><LinkedMetric label={prettyKey(key, language)} metricKey={`${active.prefix}_${key}`} prefix={`${active.prefix}_`}/></td>
+      <td>{(data[`${active.prefix}Revenue_${key}`] ?? 0).toLocaleString(locale, { maximumFractionDigits: 2 })} TL</td>
+      {sentiments.map((item) => {
+        const current = data[`${active.prefix}${item.key}${period}_${key}`] ?? 0;
+        const change = changeLabel(current, data[`${active.prefix}${item.key}Prev${period}_${key}`] ?? 0, language);
+        return <td aria-label={`${item.label}: ${current} (${change})`} data-tone={item.tone} key={item.key}><span className="stats-interest-count">{item.icon}<b>{current.toLocaleString(locale)}</b></span> <small data-trend={change.startsWith("+") || change === "yeni" || change === "new" ? "up" : change.startsWith("-") ? "down" : "flat"}>{change}</small></td>;
+      })}
+    </tr>)}</tbody></table></div> : <p className="stats-empty">{t("Bu dönemde veri yok.", "No data for this period.")}</p>}
+  </ChartPanel>;
+}
+
+/** 17/11 #108: profil sahibinin kurduğu etkinliklerden en popüler 10'u; başlık açılır menü, Son 1/3/12 ay sekmeleri. */
+function PopularEventsPanel({ data, periods }: { data: Stats; periods: Array<{ key: string; label: string }> }) {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
+  const [mode, setMode] = useState<"Attendees" | "Capacity">("Attendees");
+  return <ChartPanel className="stats-headed-panel" description={mode === "Attendees" ? t("Kurucusu olduğun, seçili dönemde gerçekleşen etkinlikler; katılım kararı veren ve check-in yapan kişi sayısına göre.", "Events you founded that took place in the selected period, by people who accepted or checked in.") : t("Kurucusu olduğun, seçili dönemde gerçekleşen etkinlikler; tanımlı bilet kapasitesine göre.", "Events you founded that took place in the selected period, by defined ticket capacity.")} title={<><span className="stats-panel-eyebrow"><Trophy aria-hidden size={15}/> {t("En popüler etkinlikler", "Most popular events")}</span><TitleSelect label={t("En popüler etkinlikler", "Most popular events")} onChange={setMode} options={[{ value: "Attendees", label: t("Katılımcı sayısına göre top 10 popüler etkinlikler", "Top 10 popular events by attendees") }, { value: "Capacity", label: t("Bilet kapasitesine göre top 10 popüler etkinlikler", "Top 10 popular events by ticket capacity") }]} value={mode}/></>}>
+    <PeriodRankedList emptyText={t("Bu dönemde gerçekleşen etkinlik yok.", "No events took place in this period.")} groups={Object.fromEntries(periods.map((period) => [period.key, grouped(data, `popular${mode}${period.key}_`)]))} key={mode} periods={periods} renderLabel={(key) => <LinkedMetric label={prettyKey(key, language)} metricKey={`popularEvent_${key}`} prefix="popularEvent_"/>}/>
   </ChartPanel>;
 }
 
@@ -304,15 +340,19 @@ function CommonInterestsPanel({ data }: { data: Stats }) {
   </ChartPanel>;
 }
 
-/** #75: Bilet adı · satılan · doluluk · gelir. */
+/**
+ * #75: Bilet adı · satılan · doluluk · gelir. 17/11: Konnektora'da satılmak üzere tanımlanan her bilet türü için bir kart;
+ * hiç yoksa tablo yerine bilgilendirme metni.
+ */
 function TicketTypeTable({ data }: { data: Stats }) {
   const { language } = useLanguage();
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
-  const names = [...new Set([...grouped(data, "ticketTypeSold_"), ...grouped(data, "ticketTypeOccupancy_"), ...grouped(data, "ticketTypeRevenue_")].map(([key]) => key))];
-  if (!names.length) return null;
-  const rows = names.map((name) => ({ name, sold: data[`ticketTypeSold_${name}`] ?? 0, occupancy: data[`ticketTypeOccupancy_${name}`], revenue: data[`ticketTypeRevenue_${name}`] ?? 0 })).sort((a, b) => b.sold - a.sold);
+  const rows = grouped(data, "ticketTypeKonnektora_").map(([name]) => ({ name, sold: data[`ticketTypeSold_${name}`] ?? 0, occupancy: data[`ticketTypeOccupancy_${name}`], revenue: data[`ticketTypeRevenue_${name}`] ?? 0 })).sort((a, b) => b.sold - a.sold);
   return <ChartPanel title={t("Satılan bilet türü", "Tickets sold by type")}>
-    <div className="stats-table-wrap"><table className="stats-table"><thead><tr><th>{t("Bilet adı", "Ticket")}</th><th>{t("Satılan", "Sold")}</th><th>{t("Doluluk", "Occupancy")}</th><th>{t("Toplam gelir", "Revenue")}</th></tr></thead><tbody>{rows.map((row) => <tr key={row.name}><td>{prettyKey(row.name, language)}</td><td>{row.sold.toLocaleString(language === "tr" ? "tr-TR" : "en-GB")}</td><td>{row.occupancy === undefined ? "—" : `%${row.occupancy}`}</td><td>{displayValue("ticketRevenue", row.revenue, language)}</td></tr>)}</tbody></table></div>
+    {rows.length ? <div className="stats-ticket-cards">{rows.map((row) => <article aria-label={prettyKey(row.name, language)} key={row.name}>
+      <h3><Ticket aria-hidden size={17}/> {prettyKey(row.name, language)}</h3>
+      <dl><div><dt>{t("Satılan bilet", "Sold")}</dt><dd>{row.sold.toLocaleString(language === "tr" ? "tr-TR" : "en-GB")}</dd></div><div><dt>{t("Kapasite doluluk oranı", "Occupancy")}</dt><dd>{row.occupancy === undefined ? "—" : `%${row.occupancy}`}</dd></div><div><dt>{t("Toplam bilet geliri", "Revenue")}</dt><dd>{displayValue("ticketRevenue", row.revenue, language)}</dd></div></dl>
+    </article>)}</div> : <p className="stats-empty">{t("Bu etkinlik için Konnektora'da satılan bir bilet tanımlanmamıştır.", "No tickets sold on Konnektora are defined for this event.")}</p>}
   </ChartPanel>;
 }
 
@@ -327,11 +367,17 @@ export function InteractionStatsPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [analyticsRequest] = useState(() => crypto.randomUUID());
+  // 17/11 #108: profil sahibinin etkinlik adları ve bağlantıları (popüler etkinlikler listesi için).
+  const profileEvents = useRef<EntityRef[]>([]);
   const stats = useQuery({
     queryKey: ["interaction-stats-page", targetType, targetId],
     queryFn: async () => {
       if (targetType === "tag") return getTagStats(targetId);
-      if (targetType === "user") return (await getPublicProfileById(targetId, analyticsRequest)).stats ?? {};
+      if (targetType === "user") {
+        const profile = await getPublicProfileById(targetId, analyticsRequest);
+        profileEvents.current = (profile.events ?? []).map((event) => ({ name: event.title, to: event.href, kind: "event" as const }));
+        return profile.stats ?? {};
+      }
       if (targetType === "event" || targetType === "place") return getInteractionStats(targetType, targetId);
       throw new Error("Desteklenmeyen istatistik türü.");
     },
@@ -341,11 +387,11 @@ export function InteractionStatsPage() {
   });
   const references = useQuery({
     queryKey: ["stats-entity-references", targetType, targetId],
-    enabled: Boolean(stats.data && (targetType === "place" || Object.keys(stats.data).some(key => /interest_|Interest_|Interest\d/.test(key)))),
+    enabled: Boolean(stats.data && (targetType === "place" || targetType === "user" || Object.keys(stats.data).some(key => /interest_|Interest_|Interest\d/.test(key)))),
     queryFn: async () => {
       if (targetType === "place") return getPlaceAnalyticsReferences(targetId);
       const data = stats.data ?? {};
-      const refs: EntityRef[] = [];
+      const refs: EntityRef[] = targetType === "user" ? [...profileEvents.current] : [];
       if (Object.keys(data).some(key => /interest_|Interest_|Interest\d/.test(key))) {
         const tags = await listTags();
         refs.push(...tags.map(tag => ({ name: tag.name, to: `/tags/${tag.slug}`, kind: "tag" as const })));
@@ -353,11 +399,14 @@ export function InteractionStatsPage() {
       return refs;
     },
   });
+  // 17/11 #116: etiketin nasıl oluşturulduğu.
+  const origin = useQuery({ queryKey: ["tag-stats-origin", targetId], enabled: Boolean(targetType === "tag" && stats.data), queryFn: () => getTagStatsOrigin(targetId), retry: false, refetchOnWindowFocus: false });
   const title = targetType === "event" ? t("Etkinlik", "Event") : targetType === "place" ? t("Mekân", "Place") : targetType === "tag" ? t("İlgi alanı", "Interest") : t("Profil", "Profile");
   // 07/11 #96: "Geri dön" yerine "%ad% etiketine/mekânına/etkinliğine geri dön".
   const targetName = searchParams.get("name")?.trim().slice(0, 160) || "";
   const backPath = safeBackPath(searchParams.get("back"));
-  const backLabel = targetName && targetType !== "user" ? targetType === "tag" ? t(`${targetName} etiketine geri dön`, `Back to the ${targetName} tag`) : targetType === "place" ? t(`${targetName} mekânına geri dön`, `Back to the ${targetName} place`) : t(`${targetName} etkinliğine geri dön`, `Back to the ${targetName} event`) : t("Geri dön", "Go back");
+  // 17/11 #106: profilde "%kullanıcı adı% kullanıcısına geri dön".
+  const backLabel = targetName && targetType === "user" ? t(`${targetName} kullanıcısına geri dön`, `Back to ${targetName}`) : targetName ? targetType === "tag" ? t(`${targetName} etiketine geri dön`, `Back to the ${targetName} tag`) : targetType === "place" ? t(`${targetName} mekânına geri dön`, `Back to the ${targetName} place`) : t(`${targetName} etkinliğine geri dön`, `Back to the ${targetName} event`) : t("Geri dön", "Go back");
   const data = stats.data ?? {};
   const periodLabels = { "24h": t("24 Saat", "24 hours"), "7d": t("7 Gün", "7 days"), "30d": t("30 Gün", "30 days"), "90d": t("90 Gün", "90 days"), "12m": t("12 Ay", "12 months") };
   const overview = (overviewKeys[targetType] ?? []).filter((key) => data[key] !== undefined).map((key) => [key, data[key]] as [string, number]);
@@ -374,16 +423,34 @@ export function InteractionStatsPage() {
         ? [{ key: "views", label: t("Görüntülenme", "Views"), color: "#3b82f6", values: { "24h": data.viewsLast24h, "7d": data.viewsLast7d, "30d": data.viewsLast30d, "12m": data.viewsLast12m } }, { key: "comments", label: t("Post ve yorum", "Posts and comments"), color: "#8b5cf6", values: { "24h": data.commentsLast24h, "7d": data.commentsLast7d, "30d": data.commentsLast30d, "12m": data.commentsLast12m } }]
         : [];
   const periodKeys = (targetType === "user" ? ["7d", "30d", "90d"] : ["24h", "7d", "30d", "12m"]) as Array<keyof typeof periodLabels>;
+  // 17/11 #66, #80, #85, #114: API zaman serisi gönderiyorsa (tsNow) grafik seçili sekmeye göre saat / gün / tarih / ay kovalarıyla çizilir.
+  const hasSeries = data.tsNow !== undefined;
+  const mainSeries = targetType === "tag"
+    ? [{ key: "like", label: t("Beğenenler", "Likes"), color: sentimentColors.like }, { key: "ok", label: t("Kararsız", "Undecided"), color: sentimentColors.ok }, { key: "dislike", label: t("Beğenmeyenler", "Dislikes"), color: sentimentColors.dislike }]
+    : targetType === "place"
+      ? [{ key: "views", label: t("Görüntülenme", "Views"), color: "#3b82f6" }, { key: "comments", label: t("Post ve yorum", "Posts and comments"), color: "#8b5cf6" }, { key: "members", label: t("Mekâna üye olmak", "New members"), color: "#22c55e" }, { key: "inviteShare", label: t("Davet ve paylaşım", "Invitations and shares"), color: "#f59e0b" }]
+      : targetType === "user"
+        ? [{ key: "views", label: t("Profil görüntülenme sayısı", "Profile views"), color: "#3b82f6" }, { key: "followers", label: t("Profil takipçi sayısı", "New followers"), color: "#22c55e" }, { key: "postEngagement", label: t("Postlarına aldığı yorum ve beğeni", "Comments and likes on posts"), color: "#8b5cf6" }, { key: "commentLikes", label: t("Yorumlarına aldığı beğeni", "Likes on comments"), color: "#f97316" }]
+        : [];
+  const tagActivitySeries = [{ key: "views", label: t("Görüntülenme", "Views"), color: "#3b82f6" }, { key: "interest", label: t("Yeni ilgi", "New interest"), color: "#22c55e" }, { key: "comments", label: t("Post ve yorum", "Posts and comments"), color: "#8b5cf6" }, { key: "commentLikes", label: t("Post-yorum beğeni", "Post and comment likes"), color: "#f97316" }];
+  const seriesCharted = (key: string) => hasSeries && (targetType === "tag" ? /^(interest|like|ok|dislike|views|comments)Last(24h|7d|30d|12m)$/.test(key) : targetType === "place" ? /^(views|comments)Last(24h|7d|30d|12m)$/.test(key) : targetType === "user" ? /^(profileViews|followers)Last(7d|30d|90d)$/.test(key) : false);
   const chartedSeries = periodSeries.filter((item) => Object.values(item.values).some((value) => value !== undefined));
   const chartedKeys = new Set(chartedSeries.length ? (targetType === "tag" ? ["like", "ok", "dislike"].flatMap((name) => ["24h", "7d", "30d", "12m"].map((period) => `${name}Last${period}`)) : targetType === "user" ? ["profileViews", "followers"].flatMap((name) => ["7d", "30d", "90d"].map((period) => `${name}Last${period}`)) : ["views", "comments"].flatMap((name) => ["24h", "7d", "30d", "12m"].map((period) => `${name}Last${period}`))) : []);
-  const sourceGroups = targetType === "event"
-    ? [{ prefix: "decision_", title: ["Katılım kararı zamanı", "Participation decision time"] as [string, string], center: ["Karar", "Decisions"] as [string, string] }, { prefix: "source_", title: ["Keşif kaynakları", "Discovery sources"] as [string, string], center: ["Keşif", "Discovery"] as [string, string] }, { prefix: "checkInHour_", title: ["Check-in saatleri", "Check-in times"] as [string, string], center: ["Check-in", "Check-ins"] as [string, string] }, { prefix: "shareChannel_", title: ["Paylaşım kanalları", "Share channels"] as [string, string], center: ["Paylaşım", "Shares"] as [string, string] }]
+  // 17/11 #72: her başlığın kendi açıklaması.
+  type SourceGroup = { prefix: string; title: [string, string]; center: [string, string]; description: [string, string] };
+  const discoveryGroup: SourceGroup = { prefix: "source_", title: ["Keşif kaynakları", "Discovery sources"], center: ["Keşif", "Discovery"], description: ["Kullanıcıların bu içeriği hangi kanaldan keşfettiği", "Channels through which people discovered this content"] };
+  const shareGroup: SourceGroup = { prefix: "shareChannel_", title: ["Paylaşım kanalları", "Share channels"], center: ["Paylaşım", "Shares"], description: ["Bu içeriğin hangi kanallarda paylaşıldığı", "Channels where this content was shared"] };
+  const checkInDescription: [string, string] = ["Katılımcıların check-in yaptığı saat aralıkları", "Time ranges in which attendees checked in"];
+  const sourceGroups: SourceGroup[] = targetType === "event"
+    ? [{ prefix: "decision_", title: ["Katılım kararı zamanı", "Participation decision time"], center: ["Karar", "Decisions"], description: ["Katılımcıların katılım kararını etkinlikten ne kadar önce verdiği", "How long before the event attendees decided to join"] }, discoveryGroup, { prefix: "checkInHour_", title: ["Check-in saatleri", "Check-in times"], center: ["Check-in", "Check-ins"], description: checkInDescription }, shareGroup]
     : targetType === "place"
-      ? [{ prefix: "source_", title: ["Keşif kaynakları", "Discovery sources"] as [string, string], center: ["Keşif", "Discovery"] as [string, string] }, { prefix: "hour_", title: ["Check-in saatleri", "Check-in times"] as [string, string], center: ["Check-in", "Check-ins"] as [string, string] }, { prefix: "shareChannel_", title: ["Paylaşım kanalları", "Share channels"] as [string, string], center: ["Paylaşım", "Shares"] as [string, string] }]
-      : [{ prefix: "source_", title: ["Keşif kaynakları", "Discovery sources"] as [string, string], center: ["Keşif", "Discovery"] as [string, string] }, { prefix: "shareChannel_", title: ["Paylaşım kanalları", "Share channels"] as [string, string], center: ["Paylaşım", "Shares"] as [string, string] }];
-  const interestAudiences = targetType === "user" ? [{ prefix: "followerInterest", label: ["Takipçi ilgi alanları", "Follower interests"] as [string, string] }, { prefix: "visitorInterest", label: ["Ziyaretçi ilgi alanları", "Visitor interests"] as [string, string] }]
-    : targetType === "event" ? [{ prefix: "attendeeInterest", label: ["Katılımcılar ilgi alanları", "Attendee interests"] as [string, string] }, { prefix: "visitorInterest", label: ["Ziyaretçiler ilgi alanları", "Visitor interests"] as [string, string] }]
-      : targetType === "place" ? [{ prefix: "memberInterest", label: ["Üyeler ilgi alanları", "Member interests"] as [string, string] }, { prefix: "visitorInterest", label: ["Ziyaretçiler ilgi alanları", "Visitor interests"] as [string, string] }] : [];
+      ? [discoveryGroup, { prefix: "hour_", title: ["Check-in saatleri", "Check-in times"], center: ["Check-in", "Check-ins"], description: checkInDescription }, shareGroup]
+      : [discoveryGroup, shareGroup];
+  // 17/11 #115: "Etiket yapıştırılma" halka grafiği.
+  const stickGroups: SourceGroup[] = [{ prefix: "stickBy_", title: ["Etiketi kim profiline yapıştırdı", "Who added the tag to the profile"], center: ["Profil", "Profiles"], description: ["Etiketi profiline kendisi ekleyenler ile başkasının teklifini kabul ederek ekleyenler", "Members who added the tag themselves versus by accepting someone else's suggestion"] }, { prefix: "suggestGender_", title: ["Kimler daha çok ekleme teklifi ediyor", "Who suggests the tag more"], center: ["Teklif", "Suggestions"], description: ["Bu etiketi başkasının profiline teklif eden kullanıcıların cinsiyet dağılımı", "Gender distribution of members who suggested this tag for someone else's profile"] }];
+  const interestAudiences: Array<{ prefix: string; label: [string, string] }> = targetType === "user" ? [{ prefix: "followerInterest", label: ["Takipçi ilgi alanları", "Follower interests"] }, { prefix: "visitorInterest", label: ["Ziyaretçi ilgi alanları", "Visitor interests"] }, { prefix: "eventAttendeeInterest", label: ["Etkinliklerimin katılımcılarını değerlendir", "Evaluate my events' attendees"] }, { prefix: "eventProgramInterest", label: ["Etkinliklerimin programları ve etiketlerini değerlendir", "Evaluate my events' programmes and tags"] }]
+    : targetType === "event" ? [{ prefix: "attendeeInterest", label: ["Katılımcılar ilgi alanları", "Attendee interests"] }, { prefix: "visitorInterest", label: ["Ziyaretçiler ilgi alanları", "Visitor interests"] }, { prefix: "programInterest", label: ["Etkinlik programı ve etiketlerini değerlendir", "Evaluate the event programme and tags"] }]
+      : targetType === "place" ? [{ prefix: "memberInterest", label: ["Üyeler ilgi alanları", "Member interests"] }, { prefix: "visitorInterest", label: ["Ziyaretçiler ilgi alanları", "Visitor interests"] }, { prefix: "placeTagInterest", label: ["Mekân etiketlerini değerlendir", "Evaluate the place tags"] }] : [];
   const monthPeriods = [{ key: "1m", label: t("Son 1 ay", "Last month") }, { key: "3m", label: t("Son 3 ay", "Last 3 months") }, { key: "12m", label: t("Son 12 ay", "Last 12 months") }];
   const hasPeriodEventLists = Object.keys(data).some((key) => /^(fullEvent|emptyEvent)(1m|3m|12m)_/.test(key));
   const socialKeys = ["profileExchanges", "profileExchangers", "profileExchangeRate", "profileExchangesPerPerson"].filter((key) => data[key] !== undefined);
@@ -397,9 +464,13 @@ export function InteractionStatsPage() {
     (targetType === "place" && key.startsWith("hour_")) ||
     (targetType === "place" && hasPeriodEventLists && /^(fullEvent|emptyEvent)_/.test(key)) ||
     /^(fullEvent|emptyEvent|fullEventTag)(1m|3m|12m)_/.test(key) ||
-    /^(attendee|visitor|member|follower)Interest(7d|30d|90d|180d)_/.test(key) ||
+    /^(attendee|visitor|member|follower|program|placeTag|eventAttendee|eventProgram)Interest((Like|Ok|Dislike)(Prev)?)?(7d|30d|90d|180d)_/.test(key) ||
+    /^(attendee|visitor|member|follower|program|placeTag|eventAttendee|eventProgram)InterestRevenue_/.test(key) ||
+    /^(ts|checkinHeat|stickBy|suggestGender|ticketTypeKonnektora)_/.test(key) || key === "tsNow" ||
+    /^popular(Attendees|Capacity)(1m|3m|12m)_/.test(key) ||
+    seriesCharted(key) ||
     chartedKeys.has(key);
-  const otherTrends = trendKeys.filter((key) => data[key] !== undefined && !chartedKeys.has(key)).map((key) => [key, data[key]] as [string, number]);
+  const otherTrends = trendKeys.filter((key) => data[key] !== undefined && !chartedKeys.has(key) && !seriesCharted(key)).map((key) => [key, data[key]] as [string, number]);
   const distributions = distributionPrefixes.map((prefix) => ({ prefix, entries: Object.entries(data).filter(([key]) => key.startsWith(prefix) && !replaced(key)).sort((a, b) => b[1] - a[1]) })).filter((group) => group.entries.length);
   const used = new Set([...overview, ...money, ...conversions, ...funnel].map(([key]) => key));
   for (const group of distributions) for (const [key] of group.entries) used.add(key);
@@ -414,6 +485,9 @@ export function InteractionStatsPage() {
   const hasMetrics = Object.keys(data).length > 0;
   const lineup = grouped(data, "lineupClick_");
   const density = Object.fromEntries(Object.entries(data).filter(([key]) => key.startsWith("density_")));
+  const originText = origin.data ? origin.data.mode === "self" && origin.data.username ? t(`${origin.data.username} kendi profiline ekleyerek`, `${origin.data.username}, by adding it to their own profile`) : origin.data.mode === "other" && origin.data.username ? t(`${origin.data.username} başkasının profilinde`, `${origin.data.username}, on someone else's profile`) : origin.data.username ? t(`${origin.data.username} tarafından, profil dışında (etkinlik veya mekân etiketi olarak)`, `By ${origin.data.username}, outside a profile (as an event or place tag)`) : t("Oluşturan kullanıcı kaydı yok", "No creator on record") : null;
+  const originBox = targetType === "tag" && originText ? <article className="stats-origin-box"><span>{t("Nasıl oluşturuldu", "How it was created")}</span><strong>{originText}</strong></article> : null;
+  const checkinPanel = (titleText: string, descriptionText: string) => <ChartPanel description={descriptionText} title={<><Clock size={19}/> {titleText}</>}><DensityHeatmap data={data} emptyText={t("Henüz check-in kaydı yok.", "No check-ins recorded yet.")} prefix="checkinHeat" slots={checkinSlots}/></ChartPanel>;
 
   return <StatsLinks.Provider value={references.data ?? []}><section className="page interaction-stats-page">
     {backPath ? <Link className="secondary-action stats-back" to={backPath}><ArrowLeft size={18}/>{backLabel}</Link> : <button className="secondary-action stats-back" onClick={() => navigate(-1)} type="button"><ArrowLeft size={18}/>{backLabel}</button>}<header className="section-header stats-page-header"><div><p className="eyebrow">{t("Analiz merkezi", "Analytics centre")}</p><h1>{targetName ? `${targetName} · ` : ""}{title} {t("istatistikleri", "analytics")}</h1><p>{t("Topluluk, erişim, dönüşüm ve gelir metriklerinin güncel görünümü.", "A current view of community, reach, conversion and revenue metrics.")}</p></div></header>
@@ -424,7 +498,8 @@ export function InteractionStatsPage() {
       <AnalyticsVisuals entries={Object.entries(data)} language={language}/>
       <StatsSection title={t("Genel bakış", "Overview")} description={t("En önemli performans göstergeleri", "The most important performance indicators")} icon={<BarChart3 size={21}/>}><MetricGrid entries={overview}/></StatsSection>
       {funnel.length > 1 ? <ChartPanel description={t("İlk temastan gerçek katılıma kadar kullanıcı akışı", "The user journey from first contact to real participation")} title={t("Dönüşüm hunisi", "Conversion funnel")}><FunnelChart steps={funnel.map(([key, value]) => ({ key, label: prettyKey(key, language), value }))}/></ChartPanel> : null}
-      {chartedSeries.length ? <ChartPanel description={t("Bu dönemler birbiriyle örtüşür; her nokta o dönemin toplamıdır. Bir noktanın üzerine gelince o dönemin değerleri görünür.", "These periods overlap; each point is the total for that period. Hover a point to see that period's values.")} title={targetType === "tag" ? t("Yeni değerlendirmelerin dönemlere göre değişimi", "New ratings by period") : t("Dönem toplamları", "Period totals")}><PeriodTotalsChart periods={periodKeys.map((key) => ({ key, label: periodLabels[key] }))} series={chartedSeries.map((item) => ({ ...item, values: item.values as Record<string, number | undefined> }))}/></ChartPanel> : null}
+      {hasSeries && mainSeries.length ? <ChartPanel description={t("Sekmeye göre son 24 saatin saatleri, son 7 günün günleri, son 30 günün tarihleri veya son 12 ayın ayları gösterilir. Bir noktanın üzerine gelince o dilimin değerleri görünür.", "Depending on the tab, the chart shows the hours of the last 24 hours, the days of the last week, the dates of the last 30 days or the months of the last year. Hover a point to see that slot's values.")} title={targetType === "tag" ? t("Yeni değerlendirmelerin dönemlere göre değişimi", "New ratings by period") : t("Dönem toplamları", "Period totals")}><TimeSeriesChart data={data} series={mainSeries}/></ChartPanel> : chartedSeries.length ? <ChartPanel description={t("Bu dönemler birbiriyle örtüşür; her nokta o dönemin toplamıdır. Bir noktanın üzerine gelince o dönemin değerleri görünür.", "These periods overlap; each point is the total for that period. Hover a point to see that period's values.")} title={targetType === "tag" ? t("Yeni değerlendirmelerin dönemlere göre değişimi", "New ratings by period") : t("Dönem toplamları", "Period totals")}><PeriodTotalsChart periods={periodKeys.map((key) => ({ key, label: periodLabels[key] }))} series={chartedSeries.map((item) => ({ ...item, values: item.values as Record<string, number | undefined> }))}/></ChartPanel> : null}
+      {hasSeries && targetType === "tag" ? <ChartPanel description={t("Görüntülenme, yeni ilgi, post ve yorumlar ile bunların aldığı beğenilerin seçili döneme göre değişimi", "Views, new interest, posts and comments and the likes they received over the selected period")} title={t("Diğer dönem toplamları", "Other period totals")}><TimeSeriesChart data={data} series={tagActivitySeries}/></ChartPanel> : null}
       {otherTrends.length ? <StatsSection title={chartedSeries.length ? t("Diğer dönem toplamları", "Other period totals") : t("Dönem toplamları", "Period totals")} description={t("Bu dönemler birbiriyle örtüşür; günlük değişim değildir.", "These periods overlap; they are not daily changes.")} icon={<TrendingUp size={21}/>}><BarList entries={otherTrends}/></StatsSection> : null}
       {conversions.length ? <StatsSection title={t("Dönüşüm ve etkileşim", "Conversion and engagement")} icon={<TrendingUp size={21}/>}><MetricGrid entries={conversions}/></StatsSection> : null}
       {money.length ? <StatsSection title={t("Bilet ve gelir", "Tickets and revenue")} description={t("Satış, komisyon, organizatör geliri ve iade özeti", "Sales, commission, organiser revenue and refund summary")} icon={<WalletCards size={21}/>}><MetricGrid entries={money}/></StatsSection> : null}
@@ -433,18 +508,25 @@ export function InteractionStatsPage() {
         <DemographicsPanel data={data} targetType={targetType}/>
         <SourcesPanel data={data} description={["Kullanıcıların içeriği keşfettiği ve paylaştığı kanallar", "Channels where people discovered and shared this content"]} groups={sourceGroups}/>
       </div>
+      {targetType === "tag" ? <SourcesPanel data={data} groups={stickGroups} heading={["Etiket yapıştırılma", "Tag adoption"]}/> : null}
       {targetType === "tag" ? <CommonInterestsPanel data={data}/> : null}
       {interestAudiences.length ? <AudienceInterestsPanel audiences={interestAudiences} data={data}/> : null}
       {targetType === "event" && lineup.length ? <ChartPanel description={t("Etkinlik programında ziyaretçilerin en çok tıkladığı satırlar", "Programme rows visitors clicked most")} title={<><ListOrdered size={19}/> {t("Line-up'ta en çok tıklananlar", "Most clicked line-up items")}</>}><BarList entries={lineup.map(([key, value]) => [`lineupClick_${key}`, value])} prefix="lineupClick_"/></ChartPanel> : null}
-      {targetType === "place" && Object.keys(density).length ? <ChartPanel description={t("Mekândaki etkinliklerde satılan biletlere göre gün ve saat yoğunluğu (en yoğun dilim %100)", "Day and time density by tickets sold for events at this place (busiest slot = 100%)")} title={<><Radar size={19}/> {t("Mekân yoğunluğu", "Place density")}</>}><DensityHeatmap data={density}/></ChartPanel> : null}
-      {targetType === "place" && monthPeriods.some((period) => grouped(data, `fullEvent${period.key}_`).length || grouped(data, `emptyEvent${period.key}_`).length) ? <div className="stats-chart-grid">
-        <ChartPanel title={t("En dolu etkinlikler", "Fullest events")}><PeriodRankedList groups={Object.fromEntries(monthPeriods.map((period) => [period.key, grouped(data, `fullEvent${period.key}_`)]))} periods={monthPeriods} renderLabel={(key) => <LinkedMetric label={prettyKey(key, language)} metricKey={`fullEvent_${key}`} prefix="fullEvent_"/>} valueSuffix="%"/></ChartPanel>
-        <ChartPanel title={t("En boş etkinlikler", "Emptiest events")}><PeriodRankedList groups={Object.fromEntries(monthPeriods.map((period) => [period.key, [...grouped(data, `emptyEvent${period.key}_`)].reverse()]))} periods={monthPeriods} renderLabel={(key) => <LinkedMetric label={prettyKey(key, language)} metricKey={`emptyEvent_${key}`} prefix="emptyEvent_"/>} valueSuffix="%"/></ChartPanel>
+      {targetType === "place" ? <ChartPanel description={t("Mekândaki etkinliklerde satılan biletlere göre gün ve saat yoğunluğu (en yoğun dilim %100)", "Day and time density by tickets sold for events at this place (busiest slot = 100%)")} title={<><Radar size={19}/> {t("Mekân yoğunluğu", "Place density")}</>}><DensityHeatmap data={density}/></ChartPanel> : null}
+      {targetType === "place" ? checkinPanel(t("Mekândaki etkinliklerde ortalama check-in saatleri", "Average check-in times at this place's events"), t("Mekândaki etkinliklere yapılan check-in'lerin haftanın gün ve saatlerine göre dağılımı (en yoğun dilim %100)", "Check-ins at events in this place by weekday and hour (busiest slot = 100%)")) : null}
+      {targetType === "user" ? <ChartPanel description={t("Kurucusu olduğun etkinliklerde satılan biletlere (bilet yoksa katılımcılara) göre gün ve saat yoğunluğu (en yoğun dilim %100)", "Day and time density of events you founded, by tickets sold or attendees (busiest slot = 100%)")} title={<><Radar size={19}/> {t("Etkinliklerinin yoğunluğu", "Density of your events")}</>}><DensityHeatmap data={density} emptyText={t("Yoğunluk için henüz etkinlik katılımı yok.", "No event participation for density yet.")}/></ChartPanel> : null}
+      {targetType === "user" ? checkinPanel(t("Kurucusu olduğu etkinliklerde ortalama check-in saatleri", "Average check-in times at founded events"), t("Kurucusu olduğun etkinliklere yapılan check-in'lerin haftanın gün ve saatlerine göre dağılımı (en yoğun dilim %100)", "Check-ins at events you founded by weekday and hour (busiest slot = 100%)")) : null}
+      {targetType === "tag" ? checkinPanel(t("Bu etikete sahip etkinliklerde ortalama check-in zamanı", "Average check-in time at events with this tag"), t("Bu etiketi taşıyan etkinliklere yapılan check-in'lerin haftanın gün ve saatlerine göre dağılımı (en yoğun dilim %100)", "Check-ins at events carrying this tag by weekday and hour (busiest slot = 100%)")) : null}
+      {targetType === "user" ? <PopularEventsPanel data={data} periods={monthPeriods}/> : null}
+      {/* 17/11 #82, #83: bu bölümler veri olmasa da her zaman görünür. */}
+      {targetType === "place" ? <div className="stats-chart-grid">
+        <ChartPanel description={t("Seçili dönemde gerçekleşen etkinlikler, doluluk oranına göre", "Events that took place in the selected period, by occupancy")} title={t("En dolu etkinlikler", "Fullest events")}><PeriodRankedList emptyText={t("Bu dönemde doluluk oranı hesaplanabilen, gerçekleşmiş etkinlik yok.", "No past events with a measurable occupancy in this period.")} groups={Object.fromEntries(monthPeriods.map((period) => [period.key, grouped(data, `fullEvent${period.key}_`)]))} periods={monthPeriods} renderLabel={(key) => <LinkedMetric label={prettyKey(key, language)} metricKey={`fullEvent_${key}`} prefix="fullEvent_"/>} valueSuffix="%"/></ChartPanel>
+        <ChartPanel description={t("Seçili dönemde gerçekleşen etkinlikler, en düşük doluluk oranına göre", "Events that took place in the selected period, by lowest occupancy")} title={t("En boş etkinlikler", "Emptiest events")}><PeriodRankedList emptyText={t("Bu dönemde doluluk oranı hesaplanabilen, gerçekleşmiş etkinlik yok.", "No past events with a measurable occupancy in this period.")} groups={Object.fromEntries(monthPeriods.map((period) => [period.key, [...grouped(data, `emptyEvent${period.key}_`)].reverse()]))} periods={monthPeriods} renderLabel={(key) => <LinkedMetric label={prettyKey(key, language)} metricKey={`emptyEvent_${key}`} prefix="emptyEvent_"/>} valueSuffix="%"/></ChartPanel>
       </div> : null}
-      {targetType === "place" && monthPeriods.some((period) => grouped(data, `fullEventTag${period.key}_`).length) ? <ChartPanel description={t("Seçili dönemin en dolu 5 etkinliğinde en sık kullanılan etiketler", "Tags used most across the period's five fullest events")} title={t("En dolu geçen etkinliklerin ortak etiketleri", "Common tags of the fullest events")}><PeriodRankedList groups={Object.fromEntries(monthPeriods.map((period) => [period.key, grouped(data, `fullEventTag${period.key}_`)]))} periods={monthPeriods} renderLabel={(key) => <LinkedMetric label={prettyKey(key, language)} metricKey={`interest_${key}`} prefix="interest_"/>}/></ChartPanel> : null}
+      {targetType === "place" ? <ChartPanel description={t("Seçili dönemin en dolu 5 etkinliğinde en sık kullanılan etiketler", "Tags used most across the period's five fullest events")} title={t("En dolu geçen etkinliklerin ortak etiketleri", "Common tags of the fullest events")}><PeriodRankedList emptyText={t("Bu dönemin en dolu etkinliklerinde ortak etiket yok.", "No common tags among this period's fullest events.")} groups={Object.fromEntries(monthPeriods.map((period) => [period.key, grouped(data, `fullEventTag${period.key}_`)]))} periods={monthPeriods} renderLabel={(key) => <LinkedMetric label={prettyKey(key, language)} metricKey={`interest_${key}`} prefix="interest_"/>}/></ChartPanel> : null}
       {socialKeys.length ? <StatsSection description={targetType === "place" ? t("Mekândaki etkinliklerde QR veya NFC ile yapılan profil takasları", "Profile exchanges via QR or NFC at events in this place") : t("Etkinlik süresince QR veya NFC ile yapılan profil takasları", "Profile exchanges via QR or NFC during the event")} icon={<Share2 size={21}/>} title={t("Sosyalleşme analizi", "Socialisation analysis")}><MetricGrid entries={socialKeys.map((key) => [key, data[key]!] as [string, number])}/>{grouped(data, "exchangeMethod_").length ? <p className="stats-chart-note">{grouped(data, "exchangeMethod_").map(([method, value]) => `${method.toUpperCase()}: ${value}`).join(" · ")}</p> : null}</StatsSection> : null}
       {distributions.length ? <div className="stats-distribution-grid">{distributions.map((group) => <StatsSection key={group.prefix} title={(language === "tr" ? distributionTitles : distributionTitlesEn)[group.prefix] ?? prettyKey(group.prefix, language)} icon={group.prefix.startsWith("ticket") ? <Ticket size={20}/> : <Users size={20}/>}><BarList entries={group.entries} prefix={group.prefix}/></StatsSection>)}</div> : null}
-      {remaining.length ? <StatsSection title={t("Diğer ölçümler", "Other metrics")} icon={<BarChart3 size={20}/>}><MetricGrid entries={remaining}/></StatsSection> : null}
+      {remaining.length || originBox ? <StatsSection title={t("Diğer ölçümler", "Other metrics")} icon={<BarChart3 size={20}/>}><MetricGrid entries={remaining} extra={originBox}/></StatsSection> : null}
       <StatsSection title={t("Veriye dayalı içgörüler", "Data-driven insights")} description={t("Aşağıdaki öneriler yalnızca bu sayfadaki ölçümlerden türetilir.", "The recommendations below are derived only from the metrics on this page.")} icon={<Lightbulb size={21}/>}><div className="stats-insights">{insights.map((insight) => <p key={insight}><LinkedInsight text={insight}/></p>)}</div></StatsSection>
       <aside className="stats-unmeasured"><strong>{t("Ölçüm kapsamı", "Measurement scope")}</strong><p>{t("Konnektora içindeki liste ve arama gösterimleri, detay görüntülemeleri ve paylaşım kanalları gerçek etkileşimlerden kaydedilir. Harici arama motorlarının gösterim sayısı ve cihazlar arası kullanıcı eşleştirmesi tutulmadığı için bu alanlarda tahmini veya örnek rakam gösterilmez.", "Listing and search impressions, detail views and share channels inside Konnektora are recorded from real interactions. External search-engine impression counts and cross-device identity matching are not stored, so no estimated or sample figures are shown for those areas.")}</p></aside>
     </> : null}
@@ -452,7 +534,11 @@ export function InteractionStatsPage() {
 }
 
 function AnalyticsVisuals({ entries, language }: { entries: Array<[string, number]>; language: "tr" | "en" }) {
-  const { counts, pie, pieKind, daily, dailyKind } = analyticsSeries(Object.fromEntries(entries));
+  const stats = Object.fromEntries(entries);
+  const { counts, pie, pieKind, daily: measuredDaily, dailyKind } = analyticsSeries(stats);
+  // 17/11 #103, #104, #107: ölçüm olmayan günler sıfırla doldurulur; zaman çizgisi her zaman çizilir.
+  const daily = fillDailySeries(measuredDaily, dailyKind, stats.tsNow ? stats.tsNow * 1000 : Date.now());
+  const measuredDays = daily.filter(([, value]) => value > 0);
   const max = Math.max(...daily.map(([, value]) => value), 1);
   const total = pie.reduce((sum, [, value]) => sum + value, 0);
   let cursor = 0;
@@ -471,6 +557,6 @@ function AnalyticsVisuals({ entries, language }: { entries: Array<[string, numbe
     <article aria-label={t("Çubuk grafik", "Bar chart")}><h2>{t("Etkileşim sayıları", "Interaction counts")}</h2><BarList entries={counts}/></article>
     {/* Keşif kaynakları artık ayrı halka grafikte; burada yalnız beğeni/kararsız/beğenmeme dağılımı. */}
     {pieKind === "sentiment" ? <article aria-label={t("Pasta grafik", "Pie chart")}><h2>{t("İlgi dağılımı", "Interest distribution")}</h2>{total > 0 ? <><div className="stats-donut" role="img" aria-label={pie.map(([key, value]) => `${prettyKey(key, language)}: ${value}`).join(", ")} style={{ background: `conic-gradient(${stops})` }}><span>{total.toLocaleString(language === "tr" ? "tr-TR" : "en-GB")}</span></div><ul className="stats-chart-legend">{pie.map(([key, value], index) => <li key={key}><i style={{ background: colors[index % colors.length] }}/>{prettyKey(key, language)}: {value} ({Math.round(value / total * 100)}%)</li>)}</ul></> : <p>{t("Dağılım için henüz veri yok.", "No distribution data yet.")}</p>}</article> : null}
-    <article aria-label={t("Çizgi grafik", "Line chart")}><h2>{dailyKind === "ticketOrders" ? t("Günlük bilet siparişleri (UTC)", "Daily ticket orders (UTC)") : t("Günlük görüntülenmeler (UTC)", "Daily views (UTC)")}</h2>{daily.length > 1 ? <><svg className="stats-line-chart" role="img" aria-label={daily.map(([date, value]) => `${date}: ${value}`).join(", ")} viewBox="0 0 100 100"><polyline fill="none" points={points} stroke="#21724e" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/></svg><ul className="stats-chart-legend">{daily.map(([date, value]) => <li key={date}>{date}: {value}</li>)}</ul></> : <p>{t("Zaman çizgisi için en az iki güne ait ölçüm gerekli.", "A time series requires measurements on at least two days.")}</p>}</article>
+    <article aria-label={t("Çizgi grafik", "Line chart")}><h2>{dailyKind === "ticketOrders" ? t("Günlük bilet siparişleri (UTC)", "Daily ticket orders (UTC)") : t("Günlük görüntülenmeler (UTC)", "Daily views (UTC)")}</h2>{daily.length > 1 ? <><svg className="stats-line-chart" role="img" aria-label={daily.map(([date, value]) => `${date}: ${value}`).join(", ")} viewBox="0 0 100 100"><polyline fill="none" points={points} stroke="#21724e" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/></svg><p className="stats-daily-range"><span>{daily[0]![0]}</span><span>{daily[daily.length - 1]![0]}</span></p>{measuredDays.length ? <ul className="stats-chart-legend">{measuredDays.map(([date, value]) => <li key={date}>{date}: {value}</li>)}</ul> : <p className="stats-chart-note">{dailyKind === "ticketOrders" ? t("Bu aralıkta bilet siparişi yok.", "No ticket orders in this range.") : t("Son 30 günde görüntülenme kaydı yok; ölçüm geldikçe çizgi güncellenir.", "No views in the last 30 days; the line updates as measurements arrive.")}</p>}</> : <p>{t("Zaman çizgisi için en az iki güne ait ölçüm gerekli.", "A time series requires measurements on at least two days.")}</p>}</article>
   </section>;
 }

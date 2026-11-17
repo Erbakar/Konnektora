@@ -4,7 +4,7 @@ import { actorLabel, isUndiscoverable, notifyEntityCreated, notifyEntityChanges,
 import { ticketSalesEligibility, ticketSalesRequirement } from "../common/ticket-sales-eligibility";
 import { invitePhone, invitePhoneVariants } from "../common/invite-phone";
 import { privacyContext, visibleLocation } from "../common/privacy-context";
-import { periodInterestMetrics, socializationMetrics } from "../common/analytics-extras";
+import { dailyCountMetrics, periodInterestMetrics, socializationMetrics, spendByPayerTry } from "../common/analytics-extras";
 import { consumeQuota, paidCorporateEvent, quotaLock } from "../common/usage-quota";
 import { publicName } from "../common/public-name";
 import { reverseStoredPayment } from "../finance/payment-ledger";
@@ -348,7 +348,7 @@ export class EventsService {
     }
     const exists = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, startsAt: true, endsAt: true, lineup: true },
+      select: { id: true, startsAt: true, endsAt: true, lineup: true, tags: { select: { tag: { select: { name: true, status: true } } } } },
     });
     if (!exists) throw new NotFoundException("Etkinlik bulunamadı.");
     const [participants, participantDetails, comments, reactions, ratingRows, views, detailViews, viewSources, sharesByChannel, ticketOrders, orderDetails, refunds, ticketTypes, payments] = await Promise.all([
@@ -403,7 +403,7 @@ export class EventsService {
         take: 50_000,
       }),
       this.prisma.ticketRefund.aggregate({ where: { eventId }, _count: { _all: true }, _sum: { amount: true } }),
-      this.prisma.eventTicketType.findMany({ where: { eventId }, select: { id: true, name: true, capacity: true, soldCount: true, price: true } }),
+      this.prisma.eventTicketType.findMany({ where: { eventId }, select: { id: true, name: true, capacity: true, soldCount: true, price: true, salesPlatform: true } }),
       this.prisma.paymentTransaction.aggregate({ where: { eventId, status: { in: ["succeeded", "partially_refunded", "refunded"] } }, _sum: { grossAmount: true, platformFee: true, netAmount: true, refundedAmount: true } }),
     ]);
     const count = (status: string) =>
@@ -429,7 +429,7 @@ export class EventsService {
       else decisionBuckets.etkinlik_gunu += 1;
     }
     const participantIds = participantDetails.map((item) => item.userId);
-    const [eventScans, lineupActions, detailViewers] = await Promise.all([
+    const [eventScans, lineupActions, detailViewers, recentViews, eventPayments] = await Promise.all([
       participantIds.length ? this.prisma.memberScan.findMany({
         where: {
           createdAt: { gte: exists.startsAt, lte: exists.endsAt ?? new Date(exists.startsAt.getTime() + 86_400_000) },
@@ -440,6 +440,9 @@ export class EventsService {
       }) : [],
       this.prisma.contentAction.groupBy({ by: ["action"], where: { targetType: "event", targetId: eventId, action: { startsWith: "lineup_" } }, _count: { _all: true } }),
       this.prisma.contentView.findMany({ where: { targetType: "event", targetId: eventId, kind: "detail", userId: { not: null } }, select: { userId: true }, distinct: ["userId"], take: 20_000 }),
+      // 17/11 #103: günlük görüntülenme çizgisi; #111: etiketlerin kazandırdığı TL.
+      this.prisma.contentView.findMany({ where: { targetType: "event", targetId: eventId, kind: "detail", createdAt: { gte: new Date(now.getTime() - 31 * 86_400_000) } }, select: { createdAt: true }, take: 100_000 }),
+      this.prisma.paymentTransaction.findMany({ where: { eventId, status: { in: ["succeeded", "partially_refunded"] } }, select: { payerId: true, grossAmount: true, refundedAmount: true, currency: true }, take: 100_000 }),
     ]);
     const socialConnections = eventScans.length;
     // 07/11 #73: line-up'ta en çok tıklananlar (ContentAction "lineup_<sıra>").
@@ -451,15 +454,23 @@ export class EventsService {
     }
     // 07/11 #75: bilet türüne göre kapasite doluluk oranı.
     const ticketTypeOccupancy = Object.fromEntries(ticketTypes.filter((ticket) => ticket.capacity > 0).map((ticket) => [ticket.name, Math.round(ticket.soldCount / ticket.capacity * 100)]));
-    const [attendeeInterests, visitorInterests] = await Promise.all([
-      periodInterestMetrics(this.prisma, "attendeeInterest", participantIds),
-      periodInterestMetrics(this.prisma, "visitorInterest", detailViewers.map((row) => row.userId)),
+    const spendByUser = await spendByPayerTry(eventPayments);
+    const visitorIds = detailViewers.map((row) => row.userId);
+    // 17/11 #111: "Etkinlik programı ve etiketlerini değerlendir" — line-up maddeleri ve etkinlik etiketleri.
+    const programTags = [...lineupItems.map((item) => item?.title?.trim() ?? ""), ...(exists.tags ?? []).filter((item) => item.tag.status === "active").map((item) => item.tag.name)];
+    const [attendeeInterests, visitorInterests, programInterests] = await Promise.all([
+      periodInterestMetrics(this.prisma, "attendeeInterest", participantIds, { spendByUser }),
+      periodInterestMetrics(this.prisma, "visitorInterest", visitorIds, { spendByUser }),
+      periodInterestMetrics(this.prisma, "programInterest", [...participantIds, ...visitorIds], { spendByUser, fixedTags: programTags }),
     ]);
+    // 17/11 #75: Konnektora'da satılmak üzere tanımlanan bilet türleri.
+    const konnektoraTicketTypes = ticketTypes.filter((ticket) => ticket.salesPlatform === "konnektora");
     const acceptedTotal = accepted + attended;
     const shares = sharesByChannel.reduce((sum, item) => sum + item._count._all, 0);
     const ticketTypeSold = distributionSum(orderDetails.map((order) => [order.ticketType.name, order.quantity] as const));
     // 07/11 #75: sipariş kaydı olmayan (kapıda/harici) satışlar için bilet türünün satılan adedi esas alınır.
     for (const ticket of ticketTypes) if (ticket.soldCount > (ticketTypeSold[ticket.name] ?? 0)) ticketTypeSold[ticket.name] = ticket.soldCount;
+    for (const ticket of konnektoraTicketTypes) ticketTypeSold[ticket.name] ??= 0;
     const ticketTypeRevenue = distributionSum(orderDetails.map((order) => [order.ticketType.name, Number(order.totalAmount)] as const));
     const ticketSaleDay = distributionCount(orderDetails.map((order) => (order.purchasedAt ?? order.createdAt).toISOString().slice(0, 10)));
     const ticketSaleHour = distributionCount(orderDetails.map((order) => hourBucket(order.purchasedAt ?? order.createdAt)));
@@ -517,6 +528,9 @@ export class EventsService {
       ...socializationMetrics(eventScans, participantDetails.filter((item) => item.checkedInAt).map((item) => item.userId).concat(attended ? [] : participantIds)),
       ...attendeeInterests,
       ...visitorInterests,
+      ...programInterests,
+      ...prefixMetrics("ticketTypeKonnektora", Object.fromEntries(konnektoraTicketTypes.map((ticket) => [ticket.name, 1]))),
+      ...dailyCountMetrics("viewsDay", recentViews.map((row) => row.createdAt), now),
       performanceScore: Math.min(100, Math.round(((detailViews ? acceptedTotal / detailViews : 0) * 40 + (acceptedTotal ? attended / acceptedTotal : 0) * 40 + (detailViews ? (comments + reactions) / detailViews : 0) * 20) * 100)),
     };
   }

@@ -12,11 +12,14 @@ describe("PublicProfileService", () => {
   const contentComment = { groupBy: jest.fn(), findMany: jest.fn(), count: jest.fn() };
   const contentReaction = { findMany: jest.fn() };
   const contentView = { count: jest.fn(), findMany: jest.fn(), groupBy: jest.fn() };
-  const contentShare = { groupBy: jest.fn() };
+  const contentShare = { groupBy: jest.fn(), count: jest.fn().mockResolvedValue(0) };
   const contentAction = { groupBy: jest.fn() };
   const privateMessage = { count: jest.fn() };
   const memberScan = { count: jest.fn() };
-  const service = new PublicProfileService({ user, userBlock, userFollow, userInterestTag, mediaFile, event, place, contentComment, contentReaction, contentView, contentShare, contentAction, privateMessage, memberScan } as never);
+  const postComment = { findMany: jest.fn() };
+  const postLike = { findMany: jest.fn() };
+  const paymentTransaction = { findMany: jest.fn() };
+  const service = new PublicProfileService({ user, userBlock, userFollow, userInterestTag, mediaFile, event, place, contentComment, contentReaction, contentView, contentShare, contentAction, privateMessage, memberScan, postComment, postLike, paymentTransaction } as never);
   const ownerId = "11111111-1111-4111-8111-111111111111";
   const viewerId = "22222222-2222-4222-8222-222222222222";
   const tag = { id: "33333333-3333-4333-8333-333333333333", name: "AI", slug: "ai", description: null, categoryId: null, status: "active", usageCount: 2 };
@@ -44,6 +47,34 @@ describe("PublicProfileService", () => {
     contentComment.count.mockResolvedValue(0);
     privateMessage.count.mockResolvedValue(0);
     memberScan.count.mockResolvedValue(0);
+    postComment.findMany.mockResolvedValue([]);
+    postLike.findMany.mockResolvedValue([]);
+    paymentTransaction.findMany.mockResolvedValue([]);
+  });
+
+  it("profil istatistiklerinde zaman serisi, günlük görüntülenme, popüler etkinlikler ve check-in ısı haritası üretir (17/11 #85, #107, #108, #109, #113)", async () => {
+    const recent = new Date(Date.now() - 5 * 60_000);
+    const lastWeek = new Date(Date.now() - 6 * 86_400_000);
+    const owned = (title: string, attendees: number, capacity: number) => ({ id: title, title, startsAt: lastWeek, timezone: "Europe/Istanbul", capacity: null, lineup: [{ title: "Daft Punk" }], tags: [{ tag: { name: "Elektronik", status: "active" } }], participants: Array.from({ length: attendees }, (_, index) => ({ status: "attended", userId: `${title}-${index}`, checkedInAt: new Date("2026-11-13T18:30:00.000Z") })), ticketTypeRecords: [{ soldCount: attendees, capacity }], payments: [], ticketRefunds: [] });
+    event.findMany.mockImplementation(async (query: { where: { createdById?: string } }) => query.where.createdById ? [owned("Caz Gecesi", 3, 50), owned("Açılış", 5, 20)] : []);
+    contentView.findMany.mockResolvedValue([{ createdAt: recent, userId: viewerId, user: null }]);
+    userFollow.findMany.mockImplementation(async (query: { where: { followingId?: string }; select?: { createdAt?: boolean } }) => query.where.followingId === ownerId && query.select?.createdAt ? [{ createdAt: recent, followerId: viewerId, follower: { birthDate: null, gender: null, city: null, country: null, preferredLanguage: null, interestTags: [] } }] : []);
+    postComment.findMany.mockResolvedValue([{ createdAt: recent }]);
+    postLike.findMany.mockResolvedValue([{ createdAt: recent }, { createdAt: recent }]);
+    contentComment.findMany.mockResolvedValue([{ id: "c1" }]);
+    contentReaction.findMany.mockImplementation(async (query: { where: { reaction?: unknown } }) => query.where.reaction === "like" ? [{ createdAt: recent }] : []);
+    contentShare.count.mockResolvedValue(0);
+    userInterestTag.findMany.mockResolvedValue([]);
+    const result = await service.getById(ownerId, viewerId, "admin");
+    const stats = result.stats as Record<string, number>;
+    expect(stats).toMatchObject({ ts_views_24h_23: 1, ts_followers_7d_6: 1, ts_postEngagement_30d_29: 3, ts_commentLikes_12m_11: 1 });
+    expect(Object.keys(stats).filter((key) => key.startsWith("viewsDay_"))).toHaveLength(1);
+    expect(stats).toMatchObject({ popularAttendees1m_acilis: 5, popularAttendees1m_caz_gecesi: 3, popularCapacity12m_caz_gecesi: 50, popularCapacity3m_acilis: 20 });
+    expect(stats).toMatchObject({ checkinHeat_cum_20: 8, eventProgramInterest7d_daft_punk: 0, eventProgramInterest30d_elektronik: 0 });
+    expect(Object.keys(stats).some((key) => key.startsWith("density_"))).toBe(true);
+    expect(Object.values(stats).every((value) => typeof value === "number" && value >= 0)).toBe(true);
+    userFollow.findMany.mockResolvedValue([]);
+    event.findMany.mockResolvedValue([]);
   });
 
   it("returns public identity and common interests", async () => {

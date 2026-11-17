@@ -1,0 +1,31 @@
+/* 17/11 istatistik sayfaları (#66–#117): zaman serisi, bilet kartları, ilgi alanı tablosu, popüler etkinlikler. */
+.stats-series-chart .stats-period-svg .axis-x { font-size: 11px; }
+.stats-daily-range { color: #6a786f; display: flex; font-size: 12px; justify-content: space-between; margin: 4px 0 0; }
+.stats-panel-eyebrow { align-items: center; color: #6a786f; display: flex; font-size: 13px; font-weight: 700; gap: 6px; letter-spacing: .02em; margin-bottom: 4px; text-transform: uppercase; }
+.stats-headed-panel .stats-title-select { display: block; max-width: 100%; }
+.stats-headed-panel .stats-title-select select { max-width: 100%; text-overflow: ellipsis; }
+.stats-ticket-cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.stats-ticket-cards article { background: linear-gradient(145deg, #f8fbf9, #edf6f1); border: 1px solid #e0ebe4; border-radius: 16px; display: grid; gap: 12px; padding: 16px 18px; }
+.stats-ticket-cards h3 { align-items: center; color: #164630; display: flex; font-size: 17px; gap: 8px; margin: 0; overflow-wrap: anywhere; }
+.stats-ticket-cards dl { display: grid; gap: 8px; margin: 0; }
+.stats-ticket-cards dl div { align-items: baseline; display: flex; gap: 12px; justify-content: space-between; }
+.stats-ticket-cards dt { color: #64736a; font-size: 14px; }
+.stats-ticket-cards dd { color: #164630; font-size: 18px; font-weight: 700; margin: 0; white-space: nowrap; }
+.stats-interest-panel .stats-segment { margin-bottom: 12px; }
+.stats-interest-table { min-width: 620px; }
+.stats-interest-table td { vertical-align: middle; white-space: nowrap; }
+.stats-interest-table td:first-child { overflow-wrap: anywhere; white-space: normal; }
+.stats-interest-count { align-items: center; display: inline-flex; gap: 5px; vertical-align: middle; }
+.stats-interest-table td[data-tone="like"] .stats-interest-count { color: #3b82f6; }
+.stats-interest-table td[data-tone="ok"] .stats-interest-count { color: #8b5cf6; }
+.stats-interest-table td[data-tone="dislike"] .stats-interest-count { color: #f97316; }
+.stats-interest-table td b { color: #23382d; }
+.stats-interest-table small { border-radius: 999px; color: #6a786f; display: inline-block; font-size: 12px; font-weight: 700; margin-left: 4px; min-width: 44px; padding: 2px 7px; text-align: center; }
+.stats-interest-table small[data-trend="up"] { background: #e7f6ec; color: #17693f; }
+.stats-interest-table small[data-trend="down"] { background: #fdeceb; color: #b3261e; }
+.stats-origin-box strong { font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
+.stats-metric-grid .stats-origin-box { grid-column: span 2; }
+@media (max-width: 640px) {
+  .stats-metric-grid .stats-origin-box { grid-column: 1 / -1; }
+  .stats-ticket-cards { grid-template-columns: 1fr; }
+}

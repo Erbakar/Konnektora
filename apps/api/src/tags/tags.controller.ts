@@ -64,6 +64,12 @@ export class TagsController {
     return this.tagsService.getPublicStats(tagId, user);
   }
 
+  @Get("tags/:tagId/stats/origin")
+  @UseGuards(JwtAuthGuard)
+  statsOrigin(@Param("tagId") tagId: string, @CurrentUser() user: User) {
+    return this.tagsService.getStatsOrigin(tagId, user);
+  }
+
   @Get("tags/:tagId/related-users")
   @UseGuards(OptionalJwtAuthGuard)
   relatedUsers(@Param("tagId") tagId: string, @CurrentUser() user?: User) {

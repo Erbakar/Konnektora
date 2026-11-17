@@ -2,7 +2,7 @@ import { assessInvitees } from "../common/invite-assessment";
 import { actorLabel, notifyEntityCreated, notifyEntityChanges, notifyUserActivity, isUndiscoverable, notifyMembershipInvite } from "../notifications/activity-events";
 import { invitePhone, invitePhoneVariants } from "../common/invite-phone";
 import { privacyContext, visibleLocation } from "../common/privacy-context";
-import { densityMetrics, periodInterestMetrics, socializationMetrics } from "../common/analytics-extras";
+import { checkinHeatmapMetrics, dailyCountMetrics, densityMetrics, periodInterestMetrics, socializationMetrics, spendByPayerTry, timeSeriesMetrics } from "../common/analytics-extras";
 import { publicName } from "../common/public-name";
 import { analyticsReference, uniqueAnalyticsReferences } from "../analytics/references";
 import {
@@ -216,7 +216,7 @@ export class PlacesService {
     if (actor) await this.ensureCanViewAnalytics(placeId, actor);
     const place = await this.prisma.place.findUnique({
       where: { id: placeId },
-      select: { id: true, followerCount: true, inviteCount: true },
+      select: { id: true, followerCount: true, inviteCount: true, tags: { select: { tag: { select: { name: true, status: true } } } } },
     });
     if (!place) throw new NotFoundException("Mekân bulunamadı.");
     const [members, memberDetails, placeCheckedIn, comments, reactions, ratingRows, views, detailViews, viewSources, sharesByChannel, events, eventDetails, ticketSummary, paymentSummary, refundSummary] = await Promise.all([
@@ -225,6 +225,7 @@ export class PlacesService {
         where: { placeId, status: "accepted" },
         select: {
           checkedInAt: true,
+          createdAt: true,
           userId: true,
           user: {
             select: {
@@ -259,7 +260,7 @@ export class PlacesService {
       this.prisma.contentShare.groupBy({ by: ["channel"], where: { targetType: "place", targetId: placeId }, _count: { _all: true } }),
       this.prisma.event.count({ where: { placeId, status: "published" } }),
       this.prisma.event.findMany({ where: { placeId, status: "published" }, select: {
-        id: true, title: true, startsAt: true, timezone: true, tags: { select: { tag: { select: { name: true, status: true } } } },
+        id: true, title: true, startsAt: true, timezone: true, capacity: true, tags: { select: { tag: { select: { name: true, status: true } } } },
         createdBy: { select: { id: true, username: true, name: true } },
         participants: { where: { status: "attended" }, select: { userId: true, checkedInAt: true, user: { select: { username: true, name: true, preferredLanguage: true } } } },
         ticketTypeRecords: { select: { capacity: true, soldCount: true, price: true } },
@@ -286,11 +287,15 @@ export class PlacesService {
     // 07/11 #84: mekândaki etkinliklerde (etkinlik süresince) QR/NFC profil takası.
     const eventWindows = eventDetails.map((event) => ({ gte: event.startsAt, lte: new Date(event.startsAt.getTime() + extraDay) }));
     const placeAttendeeIds = [...new Set(eventDetails.flatMap((event) => event.participants.map((participant) => participant.userId)))];
-    const [placeScans, detailViewers, viewTimes, commentTimes] = await Promise.all([
+    const [placeScans, detailViewers, viewTimes, commentTimes, invitationTimes, shareTimes, placePayments] = await Promise.all([
       placeAttendeeIds.length && eventWindows.length ? this.prisma.memberScan.findMany({ where: { OR: eventWindows.slice(0, 200).map((createdAt) => ({ createdAt })), AND: [{ OR: [{ scannerId: { in: placeAttendeeIds } }, { memberId: { in: placeAttendeeIds } }] }] }, select: { scannerId: true, memberId: true, method: true }, take: 100_000 }) : [],
       this.prisma.contentView.findMany({ where: { targetType: "place", targetId: placeId, kind: "detail", userId: { not: null } }, select: { userId: true }, distinct: ["userId"], take: 20_000 }),
       this.prisma.contentView.findMany({ where: { targetType: "place", targetId: placeId, kind: "detail", createdAt: { gte: since(365) } }, select: { createdAt: true }, take: 100_000 }),
       this.prisma.contentComment.findMany({ where: { targetType: "place", targetId: placeId, status: "active", createdAt: { gte: since(365) } }, select: { createdAt: true }, take: 100_000 }),
+      // 17/11 #80: "Davet ve paylaşım" serisi; #112: etiketlerin kazandırdığı TL.
+      this.prisma.placeInvitation.findMany({ where: { placeId, createdAt: { gte: since(366) } }, select: { createdAt: true }, take: 100_000 }),
+      this.prisma.contentShare.findMany({ where: { targetType: "place", targetId: placeId, createdAt: { gte: since(366) } }, select: { createdAt: true }, take: 100_000 }),
+      this.prisma.paymentTransaction.findMany({ where: { event: { placeId }, status: { in: ["succeeded", "partially_refunded"] } }, select: { payerId: true, grossAmount: true, refundedAmount: true, currency: true }, take: 100_000 }),
     ]);
     // 07/11 #80: dönem toplamları (görüntülenme, yorum).
     const within = (rows: Array<{ createdAt: Date }>, days: number) => rows.filter((row) => extraNow.getTime() - row.createdAt.getTime() <= days * extraDay).length;
@@ -299,7 +304,9 @@ export class PlacesService {
     const eventOccupancy = eventDetails.map((event) => {
       const eventCapacity = event.ticketTypeRecords.reduce((sum, ticket) => sum + ticket.capacity, 0);
       const eventSold = event.ticketTypeRecords.reduce((sum, ticket) => sum + ticket.soldCount, 0);
-      return { event, sold: eventSold, rate: eventCapacity > 0 ? Math.round(eventSold / eventCapacity * 100) : event._count.participants > 0 ? null : 0 };
+      // 17/11 #82: bilet tanımlanmamış ama katılımcı kapasitesi olan etkinliklerde doluluk = katılımcı / kapasite.
+      const seats = event.capacity ?? 0;
+      return { event, sold: eventSold, rate: eventCapacity > 0 ? Math.round(eventSold / eventCapacity * 100) : seats > 0 ? Math.min(100, Math.round(event._count.participants / seats * 100)) : event._count.participants > 0 ? null : 0 };
     });
     const density = densityMetrics(eventOccupancy.map((row) => ({ startsAt: row.event.startsAt, timezone: row.event.timezone, weight: row.sold || row.event._count.participants })));
     const periodLists: Record<string, number> = {};
@@ -312,9 +319,13 @@ export class PlacesService {
       for (const row of fullest) for (const item of row.event.tags) if (item.tag.status === "active") tagCounts.set(item.tag.name, (tagCounts.get(item.tag.name) ?? 0) + 1);
       Object.assign(periodLists, placePrefixMetrics(`fullEventTag${label}`, Object.fromEntries([...tagCounts.entries()].filter(([, count]) => count > 0).sort((a, b) => b[1] - a[1]).slice(0, 10))));
     }
-    const [memberInterests, visitorInterests] = await Promise.all([
-      periodInterestMetrics(this.prisma, "memberInterest", memberIds),
-      periodInterestMetrics(this.prisma, "visitorInterest", detailViewers.map((row) => row.userId)),
+    const spendByUser = await spendByPayerTry(placePayments);
+    const visitorIds = detailViewers.map((row) => row.userId);
+    const [memberInterests, visitorInterests, placeTagInterests] = await Promise.all([
+      periodInterestMetrics(this.prisma, "memberInterest", memberIds, { spendByUser }),
+      periodInterestMetrics(this.prisma, "visitorInterest", visitorIds, { spendByUser }),
+      // 17/11 #112: "Mekân etiketlerini değerlendir" — mekânın etiketleri, üyeler ve ziyaretçiler üzerinden.
+      periodInterestMetrics(this.prisma, "placeTagInterest", [...memberIds, ...visitorIds], { spendByUser, fixedTags: (place.tags ?? []).filter((item) => item.tag.status === "active").map((item) => item.tag.name) }),
     ]);
     const capacity = ticketSummary._sum.capacity ?? 0;
     const sold = ticketSummary._sum.soldCount ?? 0;
@@ -420,6 +431,13 @@ export class PlacesService {
       ...socializationMetrics(placeScans, placeAttendeeIds),
       ...memberInterests,
       ...visitorInterests,
+      ...placeTagInterests,
+      // 17/11 #80: dönem sekmelerine göre zaman serileri (görüntülenme, post ve yorum, mekâna üye olmak, davet ve paylaşım).
+      ...timeSeriesMetrics({ views: viewTimes.map((row) => row.createdAt), comments: commentTimes.map((row) => row.createdAt), members: memberDetails.map((row) => row.createdAt), inviteShare: [...invitationTimes, ...shareTimes].map((row) => row.createdAt) }, extraNow),
+      // 17/11 #104: günlük görüntülenme çizgisi.
+      ...dailyCountMetrics("viewsDay", viewTimes.map((row) => row.createdAt), extraNow),
+      // 17/11 #105: mekândaki etkinliklerde check-in gün × saat dağılımı.
+      ...checkinHeatmapMetrics(eventDetails.flatMap((event) => event.participants.map((participant) => ({ at: participant.checkedInAt, timezone: event.timezone })))),
       performanceScore: Math.min(100, Math.round(((detailViews ? members / detailViews : 0) * 35 + (members ? totalVisitors / members : 0) * 35 + (capacity ? sold / capacity : 0) * 30) * 100)),
     };
   }

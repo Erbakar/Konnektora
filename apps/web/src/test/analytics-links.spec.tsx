@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InteractionStatsPage } from "../pages/InteractionStatsPage";
 import { LanguageProvider } from "../lib/i18n";
-const api = vi.hoisted(() => ({ getInteractionStats: vi.fn(), getPlaceAnalyticsReferences: vi.fn(), listTags: vi.fn(), getTagStats: vi.fn(), getPublicProfileById: vi.fn() }));
+const api = vi.hoisted(() => ({ getInteractionStats: vi.fn(), getPlaceAnalyticsReferences: vi.fn(), listTags: vi.fn(), getTagStats: vi.fn(), getTagStatsOrigin: vi.fn(), getPublicProfileById: vi.fn() }));
 vi.mock("../lib/api", () => api);
 afterEach(cleanup);
 describe("Analytics reference links", () => {
