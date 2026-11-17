@@ -1,7 +1,7 @@
 import { notifyTagModeration } from "../notifications/moderation-activity";
 import { notifyUserActivity, notifyComment } from "../notifications/activity-events";
 import { privacyContext, visibleLocation } from "../common/privacy-context";
-import { toUsd, usdRates } from "../common/analytics-extras";
+import { checkinHeatmapMetrics, timeSeriesMetrics, toUsd, usdRates } from "../common/analytics-extras";
 import { publicName } from "../common/public-name";
 import {
   ConflictException,
@@ -315,8 +315,9 @@ export class TagsService {
           event: {
             select: {
               startsAt: true,
+              timezone: true,
               currency: true,
-              participants: { select: { status: true } },
+              participants: { select: { status: true, checkedInAt: true } },
               ticketTypeRecords: { where: { status: "active" }, select: { soldCount: true, price: true } },
               payments: { where: { status: "succeeded" }, select: { grossAmount: true } },
               ticketRefunds: { select: { amount: true } },
@@ -336,8 +337,17 @@ export class TagsService {
         _count: { _all: true },
       }),
       this.prisma.tag.count({ where: { status: "active", usageCount: { gt: currentTag?.usageCount ?? 0 } } }),
-      this.prisma.contentComment.findMany({ where: { targetType: "tag", targetId: tagId, status: "active" }, select: { createdAt: true }, take: 20_000 }),
+      this.prisma.contentComment.findMany({ where: { targetType: "tag", targetId: tagId, status: "active" }, select: { id: true, createdAt: true }, take: 20_000 }),
     ]);
+    // 17/11 #114: post ve yorumların aldığı beğeniler; #115: etiketi profile kimin yapıştırdığı ve kimlerin teklif ettiği.
+    const [commentLikes, tagSuggestions] = await Promise.all([
+      commentDetails.length ? this.prisma.contentReaction.findMany({ where: { targetType: "tag_comment", targetId: { in: commentDetails.map((item) => item.id) }, reaction: "like", createdAt: { gte: new Date(now.getTime() - 366 * day) } }, select: { createdAt: true }, take: 100_000 }) : [],
+      this.prisma.profileTagSuggestion.findMany({ where: { tagId }, select: { targetUserId: true, status: true, suggestedBy: { select: { gender: true } } }, take: 50_000 }),
+    ]);
+    const suggestedTargets = new Set(tagSuggestions.filter((item) => item.status === "accepted").map((item) => item.targetUserId));
+    const stuckByOther = interestDetails.filter((item) => suggestedTargets.has(item.user.id)).length;
+    const suggestGender = { belirtmek_istemiyor: 0, erkekler: 0, kadinlar: 0 };
+    for (const item of tagSuggestions) suggestGender[item.suggestedBy?.gender === "male" ? "erkekler" : item.suggestedBy?.gender === "female" ? "kadinlar" : "belirtmek_istemiyor"] += 1;
     const sentimentCount = (sentiment: string) => sentiments.find((item) => item.sentiment === sentiment)?._count._all ?? 0;
     const likes = sentimentCount("like");
     const ok = sentimentCount("ok");
@@ -472,7 +482,42 @@ export class TagsService {
       ...sentimentMetrics("dislike"),
       ...tagPrefix("source", Object.fromEntries(viewSources.map((item) => [item.source || "direct", item._count._all]))),
       ...tagPrefix("shareChannel", Object.fromEntries(sharesByChannel.map((item) => [item.channel, item._count._all]))),
+      // 17/11 #66, #114: dönem sekmelerine göre gerçek zaman serileri.
+      ...timeSeriesMetrics({
+        like: interestDetails.filter((item) => item.sentiment === "like").map((item) => item.createdAt),
+        ok: interestDetails.filter((item) => item.sentiment === "ok").map((item) => item.createdAt),
+        dislike: interestDetails.filter((item) => item.sentiment === "dislike").map((item) => item.createdAt),
+        views: viewDetails.map((item) => item.createdAt),
+        interest: interestDetails.map((item) => item.createdAt),
+        comments: commentDetails.map((item) => item.createdAt),
+        commentLikes: commentLikes.map((item) => item.createdAt),
+      }, now),
+      // 17/11 #115: "Etiket yapıştırılma" halka grafiği.
+      stickBy_kendisi: interestDetails.length - stuckByOther,
+      stickBy_bir_baskasi: stuckByOther,
+      ...tagPrefix("suggestGender", suggestGender),
+      // 17/11 #117: bu etikete sahip etkinliklerde check-in gün × saat dağılımı.
+      ...checkinHeatmapMetrics(taggedEvents.flatMap((item) => item.event.participants.map((participant) => ({ at: participant.checkedInAt, timezone: item.event.timezone })))),
     };
+  }
+
+  /**
+   * 17/11 #116: etiketin nasıl oluşturulduğu. Oluşturan kullanıcının bu etiketle ilk işlemi başkasının profiline
+   * öneri ise "other", kendi profiline ekleme ise "self"; ikisi de yoksa (etkinlik/mekân etiketi, yönetici) "unknown".
+   */
+  async getStatsOrigin(tagId: string, user: User) {
+    await this.ensureTagVisible(tagId, user.id);
+    const tag = await this.prisma.tag.findUnique({ where: { id: tagId }, select: { createdAt: true, createdBy: { select: { id: true, username: true, name: true } } } });
+    if (!tag?.createdBy) return { mode: "unknown" as const, username: null };
+    const creator = tag.createdBy;
+    const [own, suggestion] = await Promise.all([
+      this.prisma.userInterestTag.findUnique({ where: { userId_tagId: { userId: creator.id, tagId } }, select: { createdAt: true } }),
+      this.prisma.profileTagSuggestion.findFirst({ where: { tagId, suggestedById: creator.id }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+    ]);
+    const username = creator.username ?? creator.name;
+    if (suggestion && (!own || suggestion.createdAt.getTime() <= own.createdAt.getTime())) return { mode: "other" as const, username };
+    if (own) return { mode: "self" as const, username };
+    return { mode: "unknown" as const, username };
   }
 
   async toggleCommentLike(commentId: string, userId: string) {

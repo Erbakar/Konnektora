@@ -9099,6 +9099,15 @@ export function getTagStats(tagId: string): Promise<Record<string, number>> {
     { auth: "user" },
   );
 }
+
+/** 17/11 #116: etiketin nasıl oluşturulduğu (kendi profiline ekleyerek / başkasının profilinde). */
+export function getTagStatsOrigin(tagId: string): Promise<{ mode: "self" | "other" | "unknown"; username: string | null }> {
+  return requestJson(
+    `/tags/${tagId}/stats/origin`,
+    z.object({ mode: z.enum(["self", "other", "unknown"]), username: z.string().nullable() }),
+    { auth: "user" },
+  );
+}
 export function likeTagComment(commentId: string): Promise<{ liked: boolean }> {
   return requestJson(
     `/tags/comments/${commentId}/like`,

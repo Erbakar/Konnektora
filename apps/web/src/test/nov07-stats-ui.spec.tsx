@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { InteractionStatsPage } from "../pages/InteractionStatsPage";
 import { LanguageProvider } from "../lib/i18n";
 
-const api = vi.hoisted(() => ({ getInteractionStats: vi.fn(), getPlaceAnalyticsReferences: vi.fn(), listTags: vi.fn(), getTagStats: vi.fn(), getPublicProfileById: vi.fn() }));
+const api = vi.hoisted(() => ({ getInteractionStats: vi.fn(), getPlaceAnalyticsReferences: vi.fn(), listTags: vi.fn(), getTagStats: vi.fn(), getTagStatsOrigin: vi.fn().mockResolvedValue({ mode: "unknown", username: null }), getPublicProfileById: vi.fn() }));
 vi.mock("../lib/api", () => api);
 afterEach(cleanup);
 
@@ -44,11 +44,12 @@ describe("07/11 istatistik grafikleri", () => {
   });
 
   it("etkinlikte line-up tıklamaları ve bilet türü doluluğunu tabloyla gösterir (#73, #75)", async () => {
-    api.getInteractionStats.mockResolvedValue({ views: 10, detailViews: 5, lineupClick_dj_ada: 7, ticketTypeSold_genel_giris: 220, ticketTypeOccupancy_genel_giris: 83, ticketTypeRevenue_genel_giris: 8800 });
+    api.getInteractionStats.mockResolvedValue({ views: 10, detailViews: 5, lineupClick_dj_ada: 7, ticketTypeSold_genel_giris: 220, ticketTypeOccupancy_genel_giris: 83, ticketTypeRevenue_genel_giris: 8800, ticketTypeKonnektora_genel_giris: 1 });
     renderStats("/stats/event/e1");
     expect(await screen.findByRole("heading", { name: "Line-up'ta en çok tıklananlar" })).toBeVisible();
     expect(screen.getByText("Dj Ada")).toBeVisible();
-    const row = screen.getByRole("row", { name: /Genel Giris/ });
+    // 17/11 #75: tablo yerine Konnektora'da satılan her bilet türü için kart.
+    const row = screen.getByRole("article", { name: "Genel Giris" });
     expect(within(row).getByText("%83")).toBeVisible();
     expect(within(row).getByText("8.800 TRY")).toBeVisible();
   });

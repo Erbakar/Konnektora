@@ -66,6 +66,76 @@ export function PeriodTotalsChart({ periods, series, note }: { periods: Array<{ 
   </div>;
 }
 
+export type SeriesPeriod = "24h" | "7d" | "30d" | "12m";
+const HOUR_MS = 3_600_000; const DAY_MS = 86_400_000;
+/** Gün ve ay kovaları Türkiye saatine (UTC+3) hizalanır; API'deki analytics-extras.seriesBucketStarts ile aynıdır. */
+const SERIES_TZ_OFFSET = 3 * HOUR_MS;
+const SERIES_TZ = "Europe/Istanbul";
+
+export function seriesBucketStarts(period: SeriesPeriod, now: number) {
+  if (period === "24h") { const last = Math.floor(now / HOUR_MS) * HOUR_MS; return Array.from({ length: 24 }, (_, index) => last - (23 - index) * HOUR_MS); }
+  if (period === "12m") { const local = new Date(now + SERIES_TZ_OFFSET); return Array.from({ length: 12 }, (_, index) => Date.UTC(local.getUTCFullYear(), local.getUTCMonth() - (11 - index), 1) - SERIES_TZ_OFFSET); }
+  const count = period === "7d" ? 7 : 30;
+  const last = Math.floor((now + SERIES_TZ_OFFSET) / DAY_MS) * DAY_MS - SERIES_TZ_OFFSET;
+  return Array.from({ length: count }, (_, index) => last - (count - 1 - index) * DAY_MS);
+}
+
+/** Eksen etiketi: 24 saat → "14:00", 7 gün → "Sal", 30 gün → "17.11", 12 ay → "Kas". `long` ipucu kutusundaki tam hâlidir. */
+export function seriesBucketLabel(period: SeriesPeriod, start: number, language: "tr" | "en", long = false) {
+  const locale = language === "tr" ? "tr-TR" : "en-GB";
+  const date = new Date(start);
+  const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(locale, { timeZone: SERIES_TZ, ...options }).format(date);
+  if (period === "24h") { const hour = `${format({ hour: "2-digit", hourCycle: "h23" }).replace(/\D/g, "").padStart(2, "0")}:00`; return long ? `${format({ day: "numeric", month: "long" })} ${hour}` : hour; }
+  if (period === "7d") return long ? format({ day: "numeric", month: "long", weekday: "long" }) : format({ weekday: "short" });
+  if (period === "30d") return long ? format({ day: "numeric", month: "long", weekday: "long" }) : `${format({ day: "2-digit" })}${language === "tr" ? "." : "/"}${format({ month: "2-digit" })}`;
+  return long ? format({ month: "long", year: "numeric" }) : format({ month: "short" });
+}
+
+/**
+ * 17/11 #66, #80, #85, #114: seçili sekmeye göre kovalanan gerçek zaman serisi. 24 saat → son 24 saatin saatleri,
+ * 7 gün → son haftanın günleri, 30 gün → son 30 günün tarihleri, 12 ay → son 12 ayın adları.
+ * Veri: `ts_<seri>_<dönem>_<sıra>` ve kovaların hizalandığı an `tsNow` (epoch saniye).
+ */
+export function TimeSeriesChart({ data, series, note }: { data: Record<string, number>; series: Array<{ key: string; label: string; color: string }>; note?: string }) {
+  const { language } = useLanguage();
+  const t = (tr: string, en: string) => language === "tr" ? tr : en;
+  const periods: Array<{ key: SeriesPeriod; label: string }> = [{ key: "24h", label: t("24 Saat", "24 hours") }, { key: "7d", label: t("7 Gün", "7 days") }, { key: "30d", label: t("30 Gün", "30 days") }, { key: "12m", label: t("12 Ay", "12 months") }];
+  const [period, setPeriod] = useState<SeriesPeriod>("24h");
+  const [hover, setHover] = useState<number | null>(null);
+  if (!series.length) return null;
+  const starts = seriesBucketStarts(period, (data.tsNow ?? Math.floor(Date.now() / 1000)) * 1000);
+  const count = starts.length;
+  const valuesOf = (key: string) => starts.map((_, index) => data[`ts_${key}_${period}_${index}`] ?? 0);
+  const rows = series.map((item) => ({ ...item, values: valuesOf(item.key) }));
+  const niceMax = niceCeiling(Math.max(1, ...rows.flatMap((item) => item.values)));
+  const width = 640; const height = 240; const left = 40; const right = 16; const top = 12; const bottom = 30;
+  const x = (index: number) => left + index * (width - left - right) / (count - 1);
+  const y = (value: number) => top + (1 - value / niceMax) * (height - top - bottom);
+  const ticks = [...new Set([0, 0.25, 0.5, 0.75, 1].map((ratio) => Math.round(niceMax * ratio)))];
+  const step = count <= 12 ? 1 : Math.ceil(count / 8);
+  const band = (width - left - right) / (count - 1);
+  const active = hover !== null && hover < count ? hover : null;
+  return <div className="stats-period-chart stats-series-chart">
+    <SegmentTabs label={t("Dönem", "Period")} onChange={(value) => { setPeriod(value); setHover(null); }} options={periods.map((item) => ({ value: item.key, label: item.label }))} value={period}/>
+    <div className="stats-period-cards">{rows.map((item) => <article key={item.key} style={{ "--tone": item.color } as CSSProperties}><span><i/>{item.label}</span><strong>{fmt(item.values.reduce((sum, value) => sum + value, 0), language, 0)}</strong></article>)}</div>
+    <div className="stats-line-wrap">
+      <svg aria-label={rows.map((item) => `${item.label}: ${starts.map((start, index) => `${seriesBucketLabel(period, start, language)} ${item.values[index]}`).join(", ")}`).join("; ")} className="stats-period-svg" onMouseLeave={() => setHover(null)} role="img" viewBox={`0 0 ${width} ${height}`}>
+        {ticks.map((tick) => <g key={tick}><line className="grid" x1={left} x2={width - right} y1={y(tick)} y2={y(tick)}/><text className="axis" textAnchor="end" x={left - 6} y={y(tick) + 4}>{fmt(tick, language, 0)}</text></g>)}
+        {starts.map((start, index) => (count - 1 - index) % step === 0 ? <text className="axis axis-x" key={start} textAnchor="middle" x={x(index)} y={height - 8}>{seriesBucketLabel(period, start, language)}</text> : null)}
+        {active !== null ? <line className="guide" x1={x(active)} x2={x(active)} y1={top} y2={height - bottom}/> : null}
+        {rows.map((item) => <g key={item.key}>
+          <polyline fill="none" points={item.values.map((value, index) => `${x(index)},${y(value)}`).join(" ")} stroke={item.color} strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}/>
+          {item.values.map((value, index) => count <= 12 || value > 0 || active === index ? <circle cx={x(index)} cy={y(value)} fill={item.color} key={index} r={active === index ? 5 : count <= 12 ? 4 : 3}/> : null)}
+        </g>)}
+        {starts.map((start, index) => <rect fill="transparent" height={height - top - bottom + 10} key={start} onFocus={() => setHover(index)} onMouseEnter={() => setHover(index)} tabIndex={0} width={band} x={x(index) - band / 2} y={top}><title>{seriesBucketLabel(period, start, language, true)}</title></rect>)}
+      </svg>
+      {active !== null ? <div className="stats-tooltip" role="status" style={{ left: `${Math.min(84, Math.max(16, x(active) / width * 100))}%` }}><strong>{seriesBucketLabel(period, starts[active]!, language, true)}</strong>{rows.map((item) => <span key={item.key}><i style={{ background: item.color }}/>{item.label}<b>{fmt(item.values[active] ?? 0, language, 0)}</b></span>)}</div> : null}
+    </div>
+    <ul className="stats-chart-legend">{rows.map((item) => <li key={item.key}><i style={{ background: item.color }}/>{item.label}</li>)}</ul>
+    {note ? <p className="stats-chart-note">{note}</p> : null}
+  </div>;
+}
+
 function niceCeiling(value: number) {
   const magnitude = 10 ** Math.floor(Math.log10(Math.max(1, value)));
   for (const step of [1, 2, 2.5, 5, 10]) if (value <= step * magnitude) return step * magnitude;
@@ -148,35 +218,37 @@ export function FunnelChart({ steps }: { steps: Array<{ key: string; label: stri
 
 const dayOrder = ["pzt", "sal", "car", "per", "cum", "cmt", "paz"] as const;
 const dayLabels = { tr: ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"], en: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] };
-const slots = [12, 14, 16, 18, 20, 22];
+const densitySlots = [12, 14, 16, 18, 20, 22];
+/** 17/11 #105, #109, #117: check-in ısı haritasının 2 saatlik dilimleri (00:00–22:00). */
+export const checkinSlots = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
 
-/** #81: gün × saat yoğunluk haritası (en yoğun hücre %100). */
-export function DensityHeatmap({ data }: { data: Record<string, number> }) {
+/** #81: gün × saat yoğunluk haritası (en yoğun hücre %100). `prefix`/`slots` ile check-in ısı haritası olarak da kullanılır. */
+export function DensityHeatmap({ data, prefix = "density", slots = densitySlots, emptyText }: { data: Record<string, number>; prefix?: string; slots?: number[]; emptyText?: string }) {
   const { language } = useLanguage();
-  const max = Math.max(0, ...Object.values(data));
-  if (!max) return <p className="stats-empty">{language === "tr" ? "Yoğunluk için henüz bilet satışı yok." : "No ticket sales for density yet."}</p>;
+  const max = Math.max(0, ...Object.entries(data).filter(([key]) => key.startsWith(`${prefix}_`)).map(([, value]) => value));
+  if (!max) return <p className="stats-empty">{emptyText ?? (language === "tr" ? "Yoğunluk için henüz bilet satışı yok." : "No ticket sales for density yet.")}</p>;
   const level = (value: number) => value <= 0 ? 0 : Math.min(5, Math.ceil(value / max * 5));
   return <div className="stats-heatmap">
     <div className="stats-heatmap-scale"><span>{language === "tr" ? "Düşük yoğunluk" : "Low density"}</span><span className="scale">{[1, 2, 3, 4, 5].map((step) => <i data-level={step} key={step}/>)}</span><span>{language === "tr" ? "Yüksek" : "High"}</span></div>
     <div className="stats-heatmap-grid" role="table">
       <div role="row"><span role="columnheader"/>{dayLabels[language].map((day) => <span key={day} role="columnheader">{day}</span>)}</div>
-      {slots.map((slot) => <div key={slot} role="row"><span role="rowheader">{`${slot}:00`}</span>{dayOrder.map((day, index) => {
-        const value = data[`density_${day}_${slot}`] ?? 0;
+      {slots.map((slot) => <div key={slot} role="row"><span role="rowheader">{`${String(slot).padStart(2, "0")}:00`}</span>{dayOrder.map((day, index) => {
+        const value = data[`${prefix}_${day}_${slot}`] ?? 0;
         const share = Math.round(value / max * 100);
-        return <span data-level={level(value)} key={day} role="cell" title={`${dayLabels[language][index]} ${slot}:00 · ${fmt(value, language, 0)}`}>{value ? `${share}%` : "—"}</span>;
+        return <span data-level={level(value)} key={day} role="cell" title={`${dayLabels[language][index]} ${String(slot).padStart(2, "0")}:00 · ${fmt(value, language, 0)}`}>{value ? `${share}%` : "—"}</span>;
       })}</div>)}
     </div>
   </div>;
 }
 
 /** Dönem filtreli sıralı liste (#82, #83, #89–#91). */
-export function PeriodRankedList({ periods, groups, renderLabel, valueSuffix = "" }: { periods: Array<{ key: string; label: string }>; groups: Record<string, Array<[string, number]>>; renderLabel: (key: string) => ReactNode; valueSuffix?: string }) {
+export function PeriodRankedList({ periods, groups, renderLabel, valueSuffix = "", emptyText }: { periods: Array<{ key: string; label: string }>; groups: Record<string, Array<[string, number]>>; renderLabel: (key: string) => ReactNode; valueSuffix?: string; emptyText?: string }) {
   const { language } = useLanguage();
   const [period, setPeriod] = useState(periods[0]?.key ?? "");
   const rows = groups[period] ?? [];
   const max = Math.max(1, ...rows.map(([, value]) => value));
   return <div className="stats-ranked">
     <SegmentTabs label={language === "tr" ? "Dönem" : "Period"} onChange={setPeriod} options={periods.map((item) => ({ value: item.key, label: item.label }))} value={period}/>
-    {rows.length ? <div className="stats-bar-list">{rows.map(([key, value]) => <div className="stats-bar-row" key={key}><div><span>{renderLabel(key)}</span><strong>{fmt(value, language)}{valueSuffix}</strong></div><span className="stats-bar-track"><span style={{ "--bar-width": `${value / max * 100}%` } as CSSProperties}/></span></div>)}</div> : <p className="stats-empty">{language === "tr" ? "Bu dönemde veri yok." : "No data for this period."}</p>}
+    {rows.length ? <div className="stats-bar-list">{rows.map(([key, value]) => <div className="stats-bar-row" key={key}><div><span>{renderLabel(key)}</span><strong>{fmt(value, language)}{valueSuffix}</strong></div><span className="stats-bar-track"><span style={{ "--bar-width": `${value / max * 100}%` } as CSSProperties}/></span></div>)}</div> : <p className="stats-empty">{emptyText ?? (language === "tr" ? "Bu dönemde veri yok." : "No data for this period.")}</p>}
   </div>;
 }

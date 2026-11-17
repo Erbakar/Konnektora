@@ -410,7 +410,7 @@ export function PublicProfilePage() {
                       ? t("Bildirimleri kapat", "Turn off notifications")
                       : t("Bildirim ayarla", "Set a notification")}
                   </button> : null}
-                  <Link to={`/stats/user/${profile.id}`}>
+                  <Link to={`/stats/user/${profile.id}?${new URLSearchParams({ name: publicUsername(profile.username) ? profile.username! : profile.name, back: publicUsername(profile.username) ? `/users/${encodeURIComponent(profile.username!)}` : `/users/id/${profile.id}` })}`}>
                     <BarChart3 size={18} />
                     {t("Etkileşim istatistikleri", "Interaction statistics")}
                   </Link>
@@ -445,7 +445,7 @@ export function PublicProfilePage() {
                 <MoreVertical size={20} />
               </summary>
               <div>
-                <Link to={`/stats/user/${profile.id}`}>
+                <Link to={`/stats/user/${profile.id}?${new URLSearchParams({ name: publicUsername(profile.username) ? profile.username! : profile.name, back: publicUsername(profile.username) ? `/users/${encodeURIComponent(profile.username!)}` : `/users/id/${profile.id}` })}`}>
                   <BarChart3 size={18}/> {t("Etkileşim istatistikleri", "Interaction statistics")}
                 </Link>
                 <Link to="/settings">
