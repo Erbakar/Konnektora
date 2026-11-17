@@ -1,0 +1,207 @@
+/* 17/10 test turu — gönderi / mesaj yazma alanı (#10, #18, #22, #23, #25, #26). */
+
+/* Ortak: yalnızca ikon görünen düğmelerde metin ekran okuyucuya kalır. */
+.composer-media-label { white-space: nowrap; }
+
+/* #25 (yapı): başlık içeriği tek satır kutusunda hizalanır; masaüstü görünümü aynıdır. */
+.poll-composer-legend { align-items: center; display: inline-flex; gap: 7px; }
+.poll-composer-remove-label { display: none; }
+
+/* #22.1: "Yeni konuşma" önerilerinde profil resmi ile kullanıcı adı arasında boşluk. */
+.message-search-results .message-user-result { column-gap: 12px; }
+
+/* #22.2: karşı taraf özel mesaj almak istemiyorsa yazma alanı pasif görünür. */
+.message-closed-notice {
+  align-items: center;
+  background: #f6f3e9;
+  border-top: 1px solid #e6dfc8;
+  color: #5d5430;
+  display: flex;
+  font-size: 14px;
+  font-weight: 650;
+  gap: 8px;
+  margin: 0;
+  padding: 11px 14px;
+}
+.message-closed-notice svg { flex: 0 0 auto; }
+.advanced-composer.is-closed { background: #f6f7f5; }
+.advanced-composer.is-closed > :where(textarea, button, .composer-tips) { opacity: 0.5; }
+.advanced-composer.is-closed :where(textarea, button) { cursor: not-allowed; }
+.advanced-composer.is-closed .composer-tips { pointer-events: none; }
+
+/* #22.3 / #23: taslak sorusu. */
+.draft-leave-dialog { max-width: 460px; }
+.draft-leave-dialog h2, .draft-leave-dialog p { margin: 0; }
+
+/* ───────── Masaüstü (≥701px) ───────── */
+@media (min-width: 701px) {
+  /* #26.2: İlgi Alanı Detay ve Postahane'de medya düğmesi, Etkinlik / Mekân Detay'daki ikon + bağlantı görünümünde. */
+  .tag-post-composer .tag-composer-media,
+  .advanced-composer > button.message-media-action {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    color: #2b664d;
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 750;
+    gap: 6px;
+    min-height: 0;
+    padding: 0;
+    transform: none;
+    width: auto;
+  }
+  .tag-post-composer .tag-composer-media svg,
+  .advanced-composer > button.message-media-action svg { color: #2b664d; flex: 0 0 auto; }
+  .tag-post-composer .tag-composer-media:hover,
+  .advanced-composer > button.message-media-action:hover { background: transparent; box-shadow: none; transform: none; }
+  .tag-post-composer .tag-composer-media:hover .composer-media-label,
+  .advanced-composer > button.message-media-action:not(:disabled):hover .composer-media-label { text-decoration: underline; text-underline-offset: 3px; }
+  .tag-post-composer > div { column-gap: 18px; }
+  .advanced-composer { column-gap: 18px; }
+}
+
+/* ───────── Mobil (≤700px) ───────── */
+@media (max-width: 700px) {
+  /* #26.2 / #26.3: mobilde İlgi Alanı düğmesi aynı kalır; Postahane medya düğmesi onun tasarımını kullanır. */
+  .tag-post-composer .tag-composer-media .composer-media-label,
+  .advanced-composer > button.message-media-action .composer-media-label {
+    border: 0;
+    clip: rect(0 0 0 0);
+    height: 1px;
+    margin: -1px;
+    max-width: none;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+  }
+  .advanced-composer > button.message-media-action {
+    align-items: center;
+    background: #e7eee5;
+    border: 0;
+    border-radius: var(--radius-sm, 6px);
+    color: #19201d;
+    display: inline-flex;
+    justify-content: center;
+    min-height: var(--action-height, 44px);
+    min-width: 44px;
+    padding: 0 var(--action-padding-inline, 14px);
+    position: relative;
+  }
+
+  /* #26.1: Etkinlik / Mekân Detay — Gönder'in sağında sakin, parmak ucuna uygun ikon düğmeleri, ardından İpuçları. */
+  .content-comments > form.content-post-composer {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .content-comments > form.content-post-composer > textarea { flex: 0 0 100%; }
+  .content-comments > form.content-post-composer > .primary-action { flex: 0 0 auto; }
+  .content-comments > form.content-post-composer > .composer-link {
+    align-items: center;
+    background: #f1f5f2;
+    border: 1px solid #d8e3dc;
+    border-radius: 12px;
+    color: #2b664d;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 44px;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0;
+    position: relative;
+    text-decoration: none;
+    width: 44px;
+  }
+  .content-comments > form.content-post-composer > .composer-link svg { height: 21px; width: 21px; }
+  .content-comments > form.content-post-composer > .composer-link > span {
+    border: 0;
+    clip: rect(0 0 0 0);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+  .content-comments > form.content-post-composer > .comment-poll-toggle.active {
+    background: #dcebe2;
+    border-color: #2b664d;
+  }
+  .content-comments > form.content-post-composer > .composer-tips { margin-left: 4px; }
+  .content-comments > form.content-post-composer > .composer-tips > summary {
+    align-items: center;
+    display: inline-flex;
+    min-height: 44px;
+    padding: 0 6px;
+  }
+  .content-comments > form.content-post-composer > .composer-tips[open] { flex: 1 1 100%; margin-left: 0; }
+  .content-comments > form.content-post-composer > :where(.poll-composer, .form-error, .comment-media-count) { flex: 0 0 100%; }
+
+  /* #25: "Anket ayarları" başlığındaki kapatma düğmesi hizalı ve "Vazgeç" etiketli. */
+  .poll-composer legend { align-items: center; }
+  .poll-composer-legend { flex-wrap: wrap; row-gap: 6px; }
+  .poll-composer legend .poll-composer-remove {
+    align-items: center;
+    align-self: center;
+    background: #fff;
+    border: 1px solid #d8e3dc;
+    border-radius: 999px;
+    color: #405149;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    gap: 5px;
+    line-height: 1;
+    margin-left: 10px;
+    min-height: 36px;
+    padding: 0 12px 0 9px;
+    position: static;
+    transform: none;
+    vertical-align: middle;
+  }
+  .poll-composer legend .poll-composer-remove svg { display: block; flex: 0 0 auto; }
+  .poll-composer-remove-label { display: inline; }
+
+  /* #10: YouTube / SoundCloud oynatıcıları mobilde tam genişlikte ve oynatılabilir yükseklikte. */
+  .embedded-media {
+    aspect-ratio: auto;
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    max-width: none;
+    width: 100%;
+  }
+  .embedded-media > a { flex: 0 0 auto; }
+  .embedded-media > iframe,
+  .embedded-media > .youtube-preview {
+    aspect-ratio: 16 / 9;
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 200px;
+    width: 100%;
+  }
+  .embedded-media.embedded-audio { height: auto; }
+  .embedded-media.embedded-audio > iframe { aspect-ratio: auto; height: 166px; min-height: 166px; }
+  /* Gönderi satırında avatar sütununun altına taşarak satırın tam genişliğini kullanır (36px avatar + 12px boşluk). */
+  .content-comments .admin-list-row > div > .embedded-media {
+    margin-left: -48px;
+    margin-top: 18px;
+    width: calc(100% + 48px);
+  }
+  /* Özel mesaj: oynatıcı içeren balon konuşma alanının tam genişliğine açılır. */
+  .message-bubble:has(.embedded-media) {
+    box-sizing: border-box;
+    justify-self: stretch;
+    max-width: 100%;
+    width: 100%;
+  }
+  .message-bubble .embedded-media { margin-top: 6px; }
+}

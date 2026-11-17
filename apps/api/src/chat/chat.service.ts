@@ -197,7 +197,19 @@ export class ChatService {
     if (block) throw new ForbiddenException("Engellenen kullanıcılarla mesajlaşma görüntülenemez.");
   }
 
-  private async ensureMessagingAllowed(senderId: string, recipientId: string) {
+  /**
+   * 17/10 #22: Postahane, yazma alanını baştan pasifleştirebilsin diye izleyicinin bu kullanıcıya
+   * mesaj gönderip gönderemeyeceğini bildirir. Gönderimdeki sunucu denetimiyle aynı kuralı kullanır.
+   */
+  async messagingPermission(userId: string, peerId: string): Promise<{ canMessage: boolean; reason: "self" | "unavailable" | "blocked" | "privacy" | null }> {
+    if (userId === peerId) return { canMessage: false, reason: "self" };
+    const peer = await this.prisma.user.findUnique({ where: { id: peerId }, select: { id: true, status: true } });
+    if (!peer || peer.status !== UserStatus.active) return { canMessage: false, reason: "unavailable" };
+    const reason = await this.messagingRestriction(userId, peerId);
+    return { canMessage: reason === null, reason };
+  }
+
+  private async messagingRestriction(senderId: string, recipientId: string): Promise<"blocked" | "privacy" | null> {
     const [block, privacy] = await Promise.all([
       this.prisma.userBlock.findFirst({
         where: { targetType: "user", OR: [{ userId: senderId, targetId: recipientId }, { userId: recipientId, targetId: senderId }] },
@@ -205,18 +217,24 @@ export class ChatService {
       }),
       this.prisma.privacySettings.findUnique({ where: { userId: recipientId }, select: { messageAudience: true } })
     ]);
-    if (block) throw new ForbiddenException("Engellenen kullanıcılarla mesajlaşılamaz.");
+    if (block) return "blocked";
     const audience = privacy?.messageAudience ?? "everybody";
-    if (audience === "everybody") return;
+    if (audience === "everybody") return null;
     const direct = await this.prisma.userFollow.findMany({ where: { followerId: recipientId }, select: { followingId: true } });
-    if (audience === "following" && direct.some((follow) => follow.followingId === senderId)) return;
+    if (audience === "following" && direct.some((follow) => follow.followingId === senderId)) return null;
     if (audience === "network" && direct.length) {
       const secondDegree = await this.prisma.userFollow.findFirst({
         where: { followerId: { in: direct.map((follow) => follow.followingId) }, followingId: senderId }, select: { followerId: true }
       });
-      if (secondDegree) return;
+      if (secondDegree) return null;
     }
-    throw new ForbiddenException("Alıcının mesaj gizlilik ayarı bu mesaja izin vermiyor.");
+    return "privacy";
+  }
+
+  private async ensureMessagingAllowed(senderId: string, recipientId: string) {
+    const reason = await this.messagingRestriction(senderId, recipientId);
+    if (reason === "blocked") throw new ForbiddenException("Engellenen kullanıcılarla mesajlaşılamaz.");
+    if (reason === "privacy") throw new ForbiddenException("Alıcının mesaj gizlilik ayarı bu mesaja izin vermiyor.");
   }
 
   private stripRelations<T extends { sender?: unknown; recipient?: unknown }>(message: T) {

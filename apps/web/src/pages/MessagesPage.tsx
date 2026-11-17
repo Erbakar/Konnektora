@@ -33,12 +33,15 @@ import {
 import { ReportDialog } from "../components/ReportDialog";
 import { EmbeddedMedia } from "../components/EmbeddedMedia";
 import { ComposerTips } from "../components/ComposerTips";
+import { DraftLeaveGuard } from "../components/DraftLeaveGuard";
+import { useComposerDraft } from "../lib/composerDrafts";
 import type { PrivateChatMessage } from "@konnektora/shared";
 import {
   createBlock,
   deleteConversation,
   deletePrivateMessage,
   editPrivateMessage,
+  getMessagingPermission,
   getTyping,
   getUserSession,
   listConversationMessages,
@@ -347,9 +350,20 @@ function MessageThread({
   language: "tr" | "en";
 }) {
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
-  const [body, setBody] = useState("");
+  // 17/10 #22.3: gönderilmemiş mesaj, konuşmaya özel taslak olarak saklanır.
+  const [draft, setDraft, clearDraft] = useComposerDraft(currentUserId, "message", peer.id);
+  const [editBody, setEditBody] = useState("");
+  // 17/10 #22.2: karşı tarafın gizlilik ayarı izin vermiyorsa yazma alanı baştan pasiftir.
+  const permission = useQuery({
+    queryKey: ["message-permission", currentUserId, peer.id],
+    queryFn: () => getMessagingPermission(peer.id),
+    staleTime: 30_000,
+  });
+  const messagingClosed = permission.data?.canMessage === false;
   const [replyTo, setReplyTo] = useState<PrivateChatMessage | null>(null);
   const [editing, setEditing] = useState<PrivateChatMessage | null>(null);
+  const body = editing ? editBody : draft;
+  const setBody = editing ? setEditBody : setDraft;
   const [attachments, setAttachments] = useState<File[]>([]);
   const [menu, setMenu] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -390,12 +404,13 @@ function MessageThread({
       for (const [index, attachment] of attachments.entries()) {
         last = await sendPrivateMessage(peer.id, index === 0 ? body : "", { replyToId: index === 0 ? replyTo?.id : undefined, attachment });
         setAttachments(items => items.filter(file => file !== attachment));
-        if (index === 0) { setBody(""); setReplyTo(null); }
+        if (index === 0) { clearDraft(); setReplyTo(null); }
       }
       return last!;
     },
+    onError: () => { void permission.refetch(); },
     onSuccess: () => {
-      setBody("");
+      clearDraft();
       setReplyTo(null);
       setAttachments([]);
       stickToBottom.current = true;
@@ -405,7 +420,7 @@ function MessageThread({
   const edit = useMutation({
     mutationFn: () => editPrivateMessage(editing!.id, body),
     onSuccess: () => {
-      setBody("");
+      setEditBody("");
       setEditing(null);
       onChanged();
     },
@@ -473,7 +488,7 @@ function MessageThread({
   }
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!body.trim() && !attachments.length) return;
+    if (messagingClosed || (!body.trim() && !attachments.length)) return;
     if (editing) edit.mutate();
     else send.mutate();
   }
@@ -568,7 +583,7 @@ function MessageThread({
             onEdit={() => {
               setEditing(message);
               setReplyTo(null);
-              setBody(message.body);
+              setEditBody(message.body);
             }}
             onDelete={() =>
               window.confirm(t("Mesaj silinsin mi?", "Delete this message?")) && remove.mutate(message.id)
@@ -613,8 +628,8 @@ function MessageThread({
           <button
             onClick={() => {
               setReplyTo(null);
+              if (editing) setEditBody("");
               setEditing(null);
-              setBody("");
             }}
           >
             <X size={17} />
@@ -649,10 +664,11 @@ function MessageThread({
         </div>
       ) : null}
       {send.isError || edit.isError ? <p className="form-error" role="alert">{t("Gönderim tamamlanamadı. Gönderilen mesajları kontrol edip kalan dosyalarla yeniden deneyin.", "Sending could not finish. Check sent messages and retry the remaining files.")}</p> : null}
-      <form className="message-composer advanced-composer" onSubmit={submit}>
+      {messagingClosed ? <p className="message-closed-notice" role="status"><Ban aria-hidden="true" size={17}/>{t("Bu kullanıcı özel mesaj almak istemiyor.", "This member does not want to receive private messages.")}</p> : null}
+      <form aria-disabled={messagingClosed || undefined} className={`message-composer advanced-composer${messagingClosed ? " is-closed" : ""}`} onSubmit={submit}>
         <input
           ref={fileRef}
-          disabled={send.isPending || edit.isPending}
+          disabled={send.isPending || edit.isPending || messagingClosed}
           hidden
           multiple
           type="file"
@@ -673,12 +689,13 @@ function MessageThread({
           value={body}
           onChange={(event) => type(event.target.value)}
           maxLength={5000}
+          disabled={messagingClosed}
           placeholder={t("Bir mesaj yaz…", "Write a message…")}
           rows={3}
         />
         <button
           className="primary-action"
-          disabled={send.isPending || edit.isPending}
+          disabled={send.isPending || edit.isPending || messagingClosed}
         >
           <Send size={18} />
           <span>{t("Gönder", "Send")}</span>
@@ -686,13 +703,22 @@ function MessageThread({
         <button
           className="message-media-action"
           type="button"
+          aria-label={t("Fotoğraf/video ekle", "Add photo/video")}
+          disabled={messagingClosed}
           title={t("Fotoğraf/video ekle", "Add photo/video")}
           onClick={() => fileRef.current?.click()}
         >
-          <ImagePlus size={20} aria-label={t("Fotoğraf/video ekle", "Add photo/video")}/>
+          <ImagePlus size={20} aria-hidden="true"/>
+          <span className="composer-media-label">{t("Resim / video ekle", "Add photo / video")}</span>
         </button>
         <ComposerTips />
       </form>
+      <DraftLeaveGuard
+        active={!editing && !messagingClosed && Boolean(draft.trim()) && !send.isPending}
+        isLeaving={({ currentLocation, nextLocation }) => currentLocation.pathname !== nextLocation.pathname || new URLSearchParams(nextLocation.search).get("peer") !== peer.id}
+        kind="message"
+        onDiscard={clearDraft}
+      />
     </>
   );
 }
