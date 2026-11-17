@@ -18,6 +18,7 @@ import { publicSiteHref } from "./lib/domains";
 import { LanguageProvider, useLanguage } from "./lib/i18n";
 import "./styles.css";
 import "./styles/nov17-backoffice.css";
+import "./styles/nov17-share.css";
 
 const chunkReloadKey = "konnektora:chunk-reload";
 const chunkLoadErrorPattern =

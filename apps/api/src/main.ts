@@ -12,6 +12,7 @@ import { injectSocialPreview } from "./social-preview/social-preview-html";
 import { SocialPreviewService } from "./social-preview/social-preview.service";
 import { AppModule } from "./app.module";
 import { contentSecurityPolicyDirectives } from "./config/content-security-policy";
+import { permissionsPolicyHeader } from "./config/permissions-policy";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -30,6 +31,11 @@ async function bootstrap() {
       directives: contentSecurityPolicyDirectives,
     }
   }));
+  // 17/10 #15: kamera (fotoğraf doğrulama, QR okuyucu) kendi kaynağımızda açıkça izinli; diğer özellikler tarayıcı varsayılanında kalır.
+  app.use((_request: Request, response: Response, next: NextFunction) => {
+    response.setHeader("Permissions-Policy", permissionsPolicyHeader);
+    next();
+  });
   app.use((request: Request, response: Response, next: NextFunction) => {
     const requestId = request.header("x-request-id")?.slice(0, 100) || randomUUID();
     response.setHeader("x-request-id", requestId);

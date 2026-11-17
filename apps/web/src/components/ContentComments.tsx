@@ -63,7 +63,7 @@ export function ContentComments({
   title: string;
   organizerId?: string | null;
   canManage?: boolean;
-  shareContext?: { title: string; location?: string; date?: string; tags?: string[]; icon?: string };
+  shareContext?: { title: string; location?: string; date?: string; tags?: string[]; icon?: string; instagramCaption?: (post: { author: string; body: string }) => string };
 }) {
   const { language } = useLanguage();
   const user = getUserSession();
@@ -396,7 +396,7 @@ function CommentActions({
   canManage: boolean;
   canAddGuest: boolean;
   onChanged: () => void;
-  shareContext?: { title: string; location?: string; date?: string; tags?: string[]; icon?: string };
+  shareContext?: { title: string; location?: string; date?: string; tags?: string[]; icon?: string; instagramCaption?: (post: { author: string; body: string }) => string };
 }) {
   const { language } = useLanguage();
   const [banned, setBanned] = useState(false);
@@ -594,6 +594,7 @@ function CommentActions({
         targetType="post"
         title={comment.body.trim().slice(0, 120) || (language === "tr" ? "Konnektora postu" : "Konnektora post")}
         text={[`${comment.author?.username ? `@${comment.author.username}` : comment.author?.name ?? ""}${shareContext ? ` · ${shareContext.title}${shareContext.icon ? ` ${shareContext.icon}` : ""}` : ""}`, `“${comment.body.trim()}”`, shareContext?.location ? `📍 ${shareContext.location}` : "", shareContext?.date ? `📅 ${shareContext.date}` : "", shareContext?.tags?.slice(0, 4).map((tag) => `#${tag}`).join(" "), language === "tr" ? "🌎 Konnektora’da gönderiyi gör →" : "🌎 See the post on Konnektora →"].filter(Boolean).join("\n")}
+        instagramText={shareContext?.instagramCaption?.({ author: comment.author?.username ? `@${comment.author.username}` : comment.author?.name ?? "", body: comment.body })}
         url={`${window.location.href.split("#")[0]}#post-${comment.id}`}
       />
     </>
