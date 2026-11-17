@@ -481,7 +481,14 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
 
     await userEvent.type(screen.getByRole("textbox", { name: "Ad soyad" }), "Ada Yılmaz");
     await userEvent.type(screen.getByRole("textbox", { name: "E-posta" }), "ada@example.com");
-    expect(screen.getByRole("textbox", { name: "Şehir" })).toHaveValue("İstanbul");
+    // 17/10 #24: şehir alanı Türkiye'nin 81 ilini listeler (ilçeleri değil); ülke varsayılanı Türkiye'dir.
+    const city = screen.getByRole("combobox", { name: "Şehir" });
+    expect(city).toHaveValue("İstanbul");
+    expect(within(city).getAllByRole("option")).toHaveLength(82);
+    expect(within(city).getByRole("option", { name: "Ankara" })).toBeInTheDocument();
+    expect(within(city).queryByRole("option", { name: "Kadıköy" })).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Ülke" })).toHaveValue("Türkiye");
+    expect(screen.getByRole("textbox", { name: "Motivasyon mektubu" })).toHaveAttribute("placeholder", "Neden şehrinin Konnektora küratörü olmak istediğini ve nasıl bir küratör olabileceğini bize anlat…");
     await userEvent.type(screen.getByRole("textbox", { name: "Motivasyon mektubu" }), "Şehrimde nitelikli topluluk etkinlikleri düzenlemek ve yerel ağı büyütmek istiyorum.");
     const cvUrl = screen.getByRole("textbox", { name: "Özgeçmiş bağlantısı (LinkedIn, Instagram profiliniz vb. linki)" });
     expect(cvUrl).toHaveAttribute("type", "url");

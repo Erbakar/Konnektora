@@ -1,3 +1,4 @@
+import { visibleEventWhere } from "../common/event-visibility";
 import { actorLabel, isUndiscoverable, notifyMembershipInvite } from "../notifications/activity-events";
 import { ticketSalesEligibility, ticketSalesRequirement } from "../common/ticket-sales-eligibility";
 import { ticketAmounts } from "../finance/ticket-pricing";
@@ -28,13 +29,15 @@ export class TicketsService {
     private readonly sms: SmsService,
   ) {}
 
-  listEventTypes(eventId: string) { return this.prisma.eventTicketType.findMany({ where: { eventId, status: { not: "inactive" } }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }).then((items) => items.map(this.presentType)); }
+  async listEventTypes(eventId: string, viewer?: User) { return this.prisma.eventTicketType.findMany({ where: { eventId, status: { not: "inactive" }, event: await visibleEventWhere(this.prisma, viewer) }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }).then((items) => items.map(this.presentType)); }
   async createType(eventId: string, input: ManageTicketTypeDto, actor: User) { await this.ensureManager(eventId, actor.id); await this.validatePlatform(input, actor); const type = await this.prisma.eventTicketType.create({ data: { eventId, ...this.typeData(input) } }); return this.presentType(type); }
   async updateType(eventId: string, id: string, input: ManageTicketTypeDto, actor: User) { await this.ensureManager(eventId, actor.id); await this.validatePlatform(input, actor); const existing = await this.prisma.eventTicketType.findFirst({ where: { id, eventId } }); if (!existing) throw new NotFoundException("Bilet türü bulunamadı."); if (input.capacity < existing.soldCount) throw new BadRequestException("Kapasite satılmış bilet sayısından düşük olamaz."); const type = await this.prisma.eventTicketType.update({ where: { id }, data: this.typeData(input) }); return this.presentType(type); }
 
   async purchase(ticketTypeId: string, quantity: number, buyer: User) {
-    const type = await this.prisma.eventTicketType.findUnique({ where: { id: ticketTypeId }, include: { event: { select: { id: true, title: true, slug: true, status: true, createdById: true, startsAt: true, endsAt: true, format: true, locationName: true, locationAddress: true, city: true, country: true, liveUrl: true } } } });
+    const type = await this.prisma.eventTicketType.findUnique({ where: { id: ticketTypeId }, include: { event: { select: { id: true, title: true, slug: true, status: true, visibility: true, createdById: true, startsAt: true, endsAt: true, format: true, locationName: true, locationAddress: true, city: true, country: true, liveUrl: true } } } });
     if (!type || type.event.status !== "published" || type.status !== "active") throw new NotFoundException("Satıştaki bilet bulunamadı.");
+    // 17/10 #14: gizli etkinliğin biletini yalnız etkinliği görebilenler satın alabilir.
+    if (type.event.visibility === "hidden" && !await this.prisma.event.findFirst({ where: { id: type.event.id, AND: [await visibleEventWhere(this.prisma, buyer)] }, select: { id: true } })) throw new NotFoundException("Satıştaki bilet bulunamadı.");
     if (type.salesPlatform === "external") throw new BadRequestException("Bu bilet dış satış platformundan alınmalıdır.");
     const now = new Date();
     if (type.saleStartsAt && type.saleStartsAt > now) throw new BadRequestException("Bilet satışı henüz başlamadı.");

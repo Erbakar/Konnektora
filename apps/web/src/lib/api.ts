@@ -8106,7 +8106,7 @@ function parseEventFormat(value?: string): Event["format"] {
 }
 
 function parseEventVisibility(value?: string): Event["visibility"] {
-  return value === "approval_required" || value === "invite_only"
+  return value === "approval_required" || value === "invite_only" || value === "hidden"
     ? value
     : "open";
 }
@@ -10267,6 +10267,15 @@ export function createAdminEvent(input: AdminEventInput): Promise<Event> {
 
 export function createUserEvent(input: AdminEventInput): Promise<Event> {
   return requestJson("/events", eventSchema, {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** 17/10 #29: kaynak etkinlikten yeni bir etkinlik oluşturur (katılımcılar ve satılmış biletler kopyalanmaz). */
+export function copyMyEvent(sourceId: string, input: AdminEventInput): Promise<Event> {
+  return requestJson(`/events/${sourceId}/copy`, eventSchema, {
     auth: "user",
     method: "POST",
     body: JSON.stringify(input),

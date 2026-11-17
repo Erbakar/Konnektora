@@ -18,6 +18,7 @@ import { ApiHttpError, getUserSession, USER_SESSION_CHANGED_EVENT } from "./lib/
 import { publicSiteHref } from "./lib/domains";
 import { LanguageProvider, useLanguage } from "./lib/i18n";
 import "./styles.css";
+import "./styles/nov17-events.css";
 
 const chunkReloadKey = "konnektora:chunk-reload";
 const chunkLoadErrorPattern =

@@ -1,3 +1,4 @@
+import { visibleEventWhere } from "../common/event-visibility";
 import { audienceAllows } from "../common/privacy-context";
 import { additionalActivities, activityRelations, eventActivityRelations } from "./activity-cards";
 import { publicName } from "../common/public-name";
@@ -34,6 +35,8 @@ export class DiscoveryService {
         : null,
       this.blockedUserIds(userId),
     ]);
+    // 17/10 #14: gizli etkinlikler akış ve keşif kartlarına yalnız ilgili kişiler için girer.
+    const visibleEvents = { AND: [await visibleEventWhere(this.prisma, userId)] };
     const city = query.city?.trim() || viewer?.city || undefined;
     const country = query.country?.trim() || viewer?.country || undefined;
     const userWhere = {
@@ -148,6 +151,7 @@ export class DiscoveryService {
           status: "published",
           startsAt: { gte: new Date() },
           ...localWhere,
+          ...visibleEvents,
         },
         orderBy: { startsAt: "asc" },
         take: 8,
@@ -197,7 +201,7 @@ export class DiscoveryService {
           ? Promise.resolve([])
           : this.prisma.event.findMany({
         include: eventActivityRelations,
-              where: { status: "published", startsAt: { gte: new Date() } },
+              where: { status: "published", startsAt: { gte: new Date() }, ...visibleEvents },
               orderBy: { startsAt: "asc" },
               take: 8,
             }),
@@ -228,7 +232,7 @@ export class DiscoveryService {
     ] = await Promise.all([
       this.prisma.event.findMany({
         include: eventActivityRelations,
-        where: { status: "published", ...localWhere, ...dateWhere },
+        where: { status: "published", ...localWhere, ...dateWhere, ...visibleEvents },
         orderBy: { createdAt: "desc" },
         take: 15,
       }),
@@ -247,7 +251,7 @@ export class DiscoveryService {
         where: {
           status: { in: ["accepted", "attended"] },
           ...dateWhere,
-          event: { status: "published", ...localWhere },
+          event: { status: "published", ...localWhere, ...visibleEvents },
           ...(blockedIds.length ? { userId: { notIn: blockedIds } } : {}),
         },
         include: { event: { include: eventActivityRelations }, user: { select: userSelect } },
@@ -271,7 +275,7 @@ export class DiscoveryService {
     if (!activityEvents.length && Object.keys(localWhere).length)
       activityEvents = await this.prisma.event.findMany({
         include: eventActivityRelations,
-        where: { status: "published", ...dateWhere },
+        where: { status: "published", ...dateWhere, ...visibleEvents },
         orderBy: { createdAt: "desc" },
         take: 15,
       });
@@ -326,7 +330,7 @@ export class DiscoveryService {
     return {
       popularMembers: popularMembers.map((item) => this.userItem(item)),
       newMembers: newMembers.map((item) => this.userItem(item)),
-      localEvents: localEvents.map((item) => this.eventItem(item)),
+      localEvents: localEvents.map((item) => this.eventItem(item, true)),
       trendingTags: trendingTags.map((item) => this.tagItem(item)),
       popularPlaces: popularPlaces.map((item) => this.placeItem(item)),
       activeUserCount,
@@ -367,6 +371,7 @@ export class DiscoveryService {
         include: eventActivityRelations,
         where: {
           status: "published",
+          AND: [await visibleEventWhere(this.prisma, userId)],
           OR: [{ title: contains }, { summary: contains }, { city: contains }],
         },
         orderBy: { startsAt: "asc" },
@@ -459,7 +464,9 @@ export class DiscoveryService {
     startsAt: Date;
     endsAt?: Date | null;
     locationName?: string | null;
-  }) {
+  }, venueFirst = false) {
+    // 26/09 #2: "Yakınındaki etkinlikler" kartlarında varsa mekân adı, yoksa şehir gösterilir.
+    const location = venueFirst ? event.place?.name?.trim() || event.locationName?.trim() || event.city : event.city;
     return {
       tags: event.tags?.map(t => t.tag) ?? [],
       place: event.place ?? null,
@@ -473,7 +480,7 @@ export class DiscoveryService {
       subtitle: event.summary,
       href: `/events/${event.slug}`,
       imageUrl: event.coverImageUrl,
-      meta: `${event.city ?? "Online"} · ${event.startsAt.toISOString()}`,
+      meta: `${location ?? "Online"} · ${event.startsAt.toISOString()}`,
     };
   }
   private placeItem(place: {

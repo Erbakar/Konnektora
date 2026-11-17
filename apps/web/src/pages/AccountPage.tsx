@@ -10,7 +10,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import type {
   AccountType,
@@ -38,6 +38,7 @@ import { ProfileVerificationPanel } from "../components/ProfileVerificationPanel
 import { PushNotificationControl } from "../components/PushNotificationControl";
 import { RichText } from "../components/RichText";
 import { LocationPicker } from "../components/LocationPicker";
+import { eventCopyPrefill } from "../lib/eventCopy";
 import { CountryCityFields } from "../components/CountryCityFields";
 import { ContentMediaGallery } from "../components/ContentMediaGallery";
 import { TagPicker } from "../components/TagPicker";
@@ -59,6 +60,8 @@ import {
   confirmPhoneVerification,
   clearUserSession,
   createUserEvent,
+  copyMyEvent,
+  listContentMedia,
   createUserTag,
   createTagComment,
   deactivateAccount,
@@ -223,16 +226,23 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   });
   const editingEventId = eventCreator ? searchParams.get("edit") : null;
   const editingEvent = myEventsQuery.data?.find((item) => item.id === editingEventId);
+  // 17/10 #29: "Etkinliği kopyala" — kaynak etkinlikle ön doldurulmuş, tarihleri boş yeni etkinlik formu.
+  const copyingEventId = eventCreator && !editingEventId ? searchParams.get("copy") : null;
+  const copySource = myEventsQuery.data?.find((item) => item.id === copyingEventId);
+  const copyPrefill = useMemo(() => (copySource ? eventCopyPrefill(copySource) : undefined), [copySource]);
+  const formEvent = editingEvent ?? copyPrefill;
+  const copySourceMedia = useQuery({ queryKey: ["content-media", "event", copySource?.id, "copy"], queryFn: () => listContentMedia("event", copySource!.id), enabled: Boolean(copySource) });
+  const copySourceHasImage = Boolean(copySource?.coverImageUrl) || Boolean(copySourceMedia.data?.some((item) => item.type === "image"));
   const editingManagers = useQuery({queryKey:["event-participants",editingEventId,"editor"],queryFn:()=>listEventParticipants(editingEventId!,"user"),enabled:Boolean(editingEvent)});
   useEffect(() => {
-    if (!editingEvent) return;
-    setEventFormat(editingEvent.format);
-    setSelectedEventPlaceId(editingEvent.placeId ?? "");
-    setEventStartsAt(toDateTimeLocal(editingEvent.startsAt));
-    setLineupRows((editingEvent.lineup?.length ? editingEvent.lineup : [{ type: "session" as const }]).map((item) => ({ id: crypto.randomUUID(), type: item.type === "heading" || item.type === "subheading" ? item.type : "session" })));
-    setEventTicketCount(Math.max(1, editingEvent.ticketTypes?.length ?? 0));
-    setTicketSalesPlatforms(editingEvent.ticketTypes?.map((ticket) => ticket.salesPlatform ?? "door") ?? ["door"]);
-  }, [editingEvent]);
+    if (!formEvent) return;
+    setEventFormat(formEvent.format);
+    setSelectedEventPlaceId(formEvent.placeId ?? "");
+    setEventStartsAt(formEvent.startsAt ? toDateTimeLocal(formEvent.startsAt) : "");
+    setLineupRows((formEvent.lineup?.length ? formEvent.lineup : [{ type: "session" as const }]).map((item) => ({ id: crypto.randomUUID(), type: item.type === "heading" || item.type === "subheading" ? item.type : "session" })));
+    setEventTicketCount(Math.max(1, formEvent.ticketTypes?.length ?? 0));
+    setTicketSalesPlatforms(formEvent.ticketTypes?.map((ticket) => ticket.salesPlatform ?? "door") ?? ["door"]);
+  }, [formEvent]);
   const myPlacesQuery = useQuery({ queryKey: ["my-places", user?.id], queryFn: listMyPlaces, enabled: user?.status === "active" });
   const selectedEventPlace = myPlacesQuery.data?.find((place) => place.id === selectedEventPlaceId);
   const interestsQuery = useQuery({
@@ -445,7 +455,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       void _mediaFiles;
       await Promise.all(eventMediaUploadPromises.current);
       const savedId = editingEvent?.id ?? savedEventRef.current?.id;
-      const created = savedId ? await updateMyEvent(savedId, eventInput) : await createUserEvent(eventInput);
+      // 17/10 #29: kopyalama her zaman YENİ etkinlik oluşturur; kaynak etkinliğe yazılmaz.
+      const created = savedId ? await updateMyEvent(savedId, eventInput) : copySource ? await copyMyEvent(copySource.id, eventInput) : await createUserEvent(eventInput);
       savedEventRef.current = created;
       await Promise.all([
         ...managerUsernames.map((username) =>
@@ -458,7 +469,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         ...(!editingEvent && eventMediaUpload.total ? [claimPendingEventMedia(created.id, eventMediaBatchId).then(async claimed => {
           const ordered = pendingEventMediaRef.current.map(item => item.id);
           const ids = [...ordered, ...claimed.map(item => item.id).filter(id => !ordered.includes(id))];
-          if (ids.length && pendingEventMediaRef.current[0]?.type === "image") await reorderContentMedia("event", created.id, ids);
+          if (!copySource && ids.length && pendingEventMediaRef.current[0]?.type === "image") await reorderContentMedia("event", created.id, ids);
         })] : []),
       ]);
       return created;
@@ -468,6 +479,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
         tone: "success",
         message: editingEvent
           ? t("Etkinlik güncellendi.", "Event updated.")
+          : copySource
+          ? t("Etkinlik kopyalandı ve yeni etkinlik olarak yayınlandı.", "Event copied and published as a new event.")
           : t(
               "Etkinlik yayınlandı ve herkese açık listede görünür.",
               "Event published and visible in the public listing.",
@@ -783,7 +796,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       return;
     }
     // 07/11 #100: yeni etkinlikte en az 1 resim zorunlu (ilk resim etkinlik avatarı olur).
-    if (!editingEvent && !pendingEventMediaRef.current.some((item) => item.type === "image")) {
+    if (!editingEvent && !copySourceHasImage && !pendingEventMediaRef.current.some((item) => item.type === "image")) {
       setEventStep(3);
       setNotice({ tone: "error", message: t("En az 1 resim yüklemelisin. İlk resim etkinlik avatarı olur.", "Upload at least 1 image. The first image becomes the event avatar.") });
       return;
@@ -1047,6 +1060,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               ? user
                 ? editingEvent
                   ? t("Etkinliği düzenle", "Edit event")
+                  : copySource
+                  ? t("Etkinliği kopyala", "Copy event")
                   : t("Etkinlik oluştur", "Create event")
                 : t(
                     "Etkinlik oluşturmak için giriş yap",
@@ -2042,7 +2057,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
             </section>
             <form
               className="admin-form event-create-form"
-              key={editingEvent?.id ?? "new-event"}
+              key={editingEvent?.id ?? (copySource ? `copy-${copySource.id}` : "new-event")}
               noValidate
               onSubmit={handleEventSubmit}
             >
@@ -2050,12 +2065,16 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 <h1>
                   {editingEvent
                     ? t("Etkinliği düzenle", "Edit event")
+                    : copySource
+                    ? t("Etkinliği kopyala", "Copy event")
                     : t("Etkinlik oluştur", "Create event")}
                 </h1>
               ) : (
                 <h2>
                   {editingEvent
                     ? t("Etkinliği düzenle", "Edit event")
+                    : copySource
+                    ? t("Etkinliği kopyala", "Copy event")
                     : t("Etkinlik oluştur", "Create event")}
                 </h2>
               )}
@@ -2080,7 +2099,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 <label>
                   {t("Başlık", "Title")}
                   <input
-                    defaultValue={editingEvent?.title}
+                    defaultValue={formEvent?.title}
                     name="title"
                     placeholder="Community Breakfast"
                     required
@@ -2090,7 +2109,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                 <label>
                   {t("Açıklama", "Description")}
                   <textarea
-                    defaultValue={editingEvent?.description}
+                    defaultValue={formEvent?.description}
                     name="description"
                     required
                     minLength={10}
@@ -2103,12 +2122,12 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     <select
                       key={`${profileQuery.data?.city}-${profileQuery.data?.country}`}
                       name="timezone"
-                      defaultValue={editingEvent?.timezone ?? profileTimezone(
+                      defaultValue={formEvent?.timezone ?? profileTimezone(
                         profileQuery.data?.city,
                         profileQuery.data?.country,
                       )}
                     >
-                      {editingEvent?.timezone && !timezoneOptions.some(item => item.value === editingEvent.timezone) ? <option value={editingEvent.timezone}>{editingEvent.timezone}</option> : null}
+                      {formEvent?.timezone && !timezoneOptions.some(item => item.value === formEvent.timezone) ? <option value={formEvent.timezone}>{formEvent.timezone}</option> : null}
                       {timezoneOptions.map((item) => (
                         <option key={item.value} value={item.value}>
                           {item.label}
@@ -2129,7 +2148,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       name="startsAt"
                       required
                       type="datetime-local"
-                      defaultValue={editingEvent?.startsAt ? toDateTimeLocal(editingEvent.startsAt) : ""}
+                      defaultValue={formEvent?.startsAt ? toDateTimeLocal(formEvent.startsAt) : ""}
                       onBlur={(event) => {
                         setEventStartsAt(event.currentTarget.value);
                         const form = event.currentTarget.form;
@@ -2152,7 +2171,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   <label>
                     <span>{t("Bitiş", "End")}<span className="optional-hint"> {t("(opsiyonel)", "(optional)")}</span></span>
                     <input
-                      defaultValue={editingEvent?.endsAt ? toDateTimeLocal(editingEvent.endsAt) : ""}
+                      defaultValue={formEvent?.endsAt ? toDateTimeLocal(formEvent.endsAt) : ""}
                       min={eventStartsAt || new Date().toISOString().slice(0, 16)}
                       name="endsAt"
                       onFocus={(event) => { if (!event.currentTarget.value && eventStartsAt) event.currentTarget.value = eventStartsAt; }}
@@ -2179,16 +2198,17 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   </label>
                   <label>
                     {t("Katılım tipi", "Participation type")}
-                    <select name="visibility" defaultValue={editingEvent?.visibility ?? "open"}>
+                    <select name="visibility" defaultValue={formEvent?.visibility ?? "open"}>
                       <option value="open">{t("Herkese açık", "Open to everyone")}</option>
                       <option value="approval_required">
                         {t("Onay gerekli", "Approval required")}
                       </option>
                       <option value="invite_only">{t("Sadece davetli", "Invite only")}</option>
+                      <option value="hidden">{t("Gizli - sadece davetliler görebilir", "Hidden - only invitees can see it")}</option>
                     </select>
                   </label>
                 </div>
-                <TagPicker initialIds={editingEvent?.tags.map((tag) => tag.id)} label={t("Etkinlik etiketleri", "Event tags")} optional recommendedIds={interestTagIds} tags={tags}/>
+                <TagPicker initialIds={formEvent?.tags.map((tag) => tag.id)} label={t("Etkinlik etiketleri", "Event tags")} optional recommendedIds={interestTagIds} tags={tags}/>
                 <div className="event-step-actions">
                   <button
                     className="primary-action"
@@ -2205,17 +2225,17 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   <div className="form-grid">
                     <label>
                       {t("Mekân adı", "Place name")}
-                      <input key={selectedEventPlace?.id ?? "custom-place-name"} defaultValue={selectedEventPlace?.name ?? editingEvent?.locationName ?? ""} name="locationName" />
+                      <input key={selectedEventPlace?.id ?? "custom-place-name"} defaultValue={selectedEventPlace?.name ?? formEvent?.locationName ?? ""} name="locationName" />
                     </label>
                     <label>{t("Var olan mekânlarımdan seç", "Choose from my existing places")}<select name="placeId" onChange={(event) => setSelectedEventPlaceId(event.currentTarget.value)} value={selectedEventPlaceId}><option value="">{t("Mekân seçilmedi", "No place selected")}</option>{myPlacesQuery.data?.map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}</select></label>
-                    <div className="location-fields-group" key={selectedEventPlace?.id ?? "custom-location"}><CountryCityFields addressFields defaultRegion={selectedEventPlace?.region ?? editingEvent?.region} defaultPostalCode={selectedEventPlace?.postalCode ?? editingEvent?.postalCode} defaultCity={selectedEventPlace?.city ?? editingEvent?.city ?? profileQuery.data?.city} defaultCountry={selectedEventPlace?.country ?? editingEvent?.country ?? profileQuery.data?.country}/><LocationPicker addressName="locationAddress" defaultAddress={selectedEventPlace?.address ?? editingEvent?.locationAddress ?? ""} defaultLatitude={selectedEventPlace?.latitude ?? editingEvent?.latitude} defaultLongitude={selectedEventPlace?.longitude ?? editingEvent?.longitude}/></div>
+                    <div className="location-fields-group" key={selectedEventPlace?.id ?? "custom-location"}><CountryCityFields addressFields defaultRegion={selectedEventPlace?.region ?? formEvent?.region} defaultPostalCode={selectedEventPlace?.postalCode ?? formEvent?.postalCode} defaultCity={selectedEventPlace?.city ?? formEvent?.city ?? profileQuery.data?.city} defaultCountry={selectedEventPlace?.country ?? formEvent?.country ?? profileQuery.data?.country}/><LocationPicker addressName="locationAddress" defaultAddress={selectedEventPlace?.address ?? formEvent?.locationAddress ?? ""} defaultLatitude={selectedEventPlace?.latitude ?? formEvent?.latitude} defaultLongitude={selectedEventPlace?.longitude ?? formEvent?.longitude}/></div>
                   </div>
                 ) : null}
                 {eventFormat !== "offline" ? (
                   <label>
                     {t("Canlı yayın URL'si", "Live stream URL")}
                     <input
-                      defaultValue={editingEvent?.liveUrl ?? ""}
+                      defaultValue={formEvent?.liveUrl ?? ""}
                       name="liveUrl"
                       required
                       type="url"
@@ -2244,6 +2264,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               </div>
               <div data-event-step="3" hidden={eventStep !== 3}>
                 {editingEvent ? <ContentMediaGallery targetType="event" targetId={editingEvent.id} canManage coverImageUrl={editingEvent.coverImageUrl}/> : null}
+                {copySource ? <><p className="event-copy-note">{t("Kaynak etkinliğin görselleri yeni etkinliğe kopyalanır. İstersen aşağıdan yeni görsel de ekleyebilirsin; katılımcılar ve satılmış biletler kopyalanmaz.", "The source event's media is copied to the new event. You can add more below; participants and sold tickets are not copied.")}</p>{copySourceMedia.data?.length ? <div className="event-copy-media" aria-label={t("Kopyalanacak görseller", "Media to be copied")}>{copySourceMedia.data.map((item) => item.type === "video" ? <video key={item.id} muted src={resolveMediaUrl(item.url)}/> : <img alt="" key={item.id} src={resolveMediaUrl(item.url)}/>)}</div> : null}</> : null}
                 {!editingEvent && pendingEventMedia.length ? <div className="pending-media-grid">{pendingEventMedia.map((item, index) => <article key={item.id} draggable onDragStart={() => setDraggedEventMedia(item.id)} onDragOver={event => event.preventDefault()} onDrop={() => { if (draggedEventMedia) movePendingMedia(draggedEventMedia, item.id); setDraggedEventMedia(null); }}>
                   {item.type === "video" ? <video controls src={resolveMediaUrl(item.url)}/> : <img alt="" src={resolveMediaUrl(item.url)}/>}
                   <span>{index + 1}{index === 0 ? t(" · Etkinlik afişi", " · Event poster") : ""}</span>
@@ -2352,7 +2373,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                         <label>
                           {t("Başlık", "Title")}
                           <input
-                            defaultValue={editingEvent?.lineup?.[index]?.title ?? ""}
+                            defaultValue={formEvent?.lineup?.[index]?.title ?? ""}
                             name="lineupTitle"
                             placeholder={
                               row.type === "heading"
@@ -2368,7 +2389,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                             <span>{t("Başlangıç", "Start")}<span className="optional-hint"> {t("(opsiyonel)", "(optional)")}</span></span>
                             <input
                               name="lineupStartsAt"
-                              defaultValue={editingEvent?.lineup?.[index]?.startsAt ? toDateTimeLocal(editingEvent.lineup[index]!.startsAt!) : ""}
+                              defaultValue={formEvent?.lineup?.[index]?.startsAt ? toDateTimeLocal(formEvent.lineup[index]!.startsAt!) : ""}
                               type="datetime-local"
                             />
                           </label>
@@ -2457,16 +2478,16 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     <div className="form-grid">
                       <label>
                         {t("Bilet adı", "Ticket name")}
-                        <input defaultValue={editingEvent?.ticketTypes?.[index]?.name ?? ""} name="ticketName" />
+                        <input defaultValue={formEvent?.ticketTypes?.[index]?.name ?? ""} name="ticketName" />
                       </label>
                       <label>
                         {t("Açıklama", "Description")}
-                        <input defaultValue={editingEvent?.ticketTypes?.[index]?.description ?? ""} name="ticketDescription" />
+                        <input defaultValue={formEvent?.ticketTypes?.[index]?.description ?? ""} name="ticketDescription" />
                       </label>
                       <label>
                         {t("Fiyat", "Price")}
                         <input
-                          defaultValue={editingEvent?.ticketTypes?.[index]?.price ?? ""}
+                          defaultValue={formEvent?.ticketTypes?.[index]?.price ?? ""}
                           min="0"
                           name="ticketPrice"
                           step="0.01"
@@ -2475,7 +2496,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       </label>
                       <label>
                         {t("Para birimi", "Currency")}
-                        <select defaultValue={editingEvent?.ticketTypes?.[index]?.currency ?? "TRY"} name="ticketCurrency">
+                        <select defaultValue={formEvent?.ticketTypes?.[index]?.currency ?? "TRY"} name="ticketCurrency">
                           {[
                             "TRY",
                             "USD",
@@ -2512,37 +2533,37 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       {restrictedTicketPlatformIndex === index ? createPortal(<div className="dialog-backdrop"><section className="content-dialog" role="dialog" aria-modal="true" aria-label={t("Bilet satış koşulları", "Ticket sales requirements")}><h2>{t("Bilet satış koşulları", "Ticket sales requirements")}</h2><p>{t("Sadece kurumsal üyeler; vergi, bankacılık ayarlarını girmiş ve KYB/KYC sürecini tamamlamış kurumlar Konnektora’da bilet satışı yapabilir. Bu ayarları tamamlamak için Ayarlar Merkezini ziyaret ediniz.", "Only corporate members with completed tax and banking settings and approved KYB/KYC can sell tickets on Konnektora. Visit the Settings Centre to complete these requirements.")}</p><div className="row-actions"><Link to="/settings/business" className="primary-action">{t("Ayarlar Merkezi", "Settings Centre")}</Link><button type="button" className="secondary-action" onClick={()=>setRestrictedTicketPlatformIndex(null)}>{t("Kapat", "Close")}</button></div></section></div>,document.body) : null}
                       {ticketSalesPlatforms[index] === "external" ? <label>
                         {t("Dış satış URL'si", "External sales URL")}
-                        <input defaultValue={editingEvent?.ticketTypes?.[index]?.externalSalesUrl ?? ""} name="ticketExternalSalesUrl" placeholder="https://" required type="url" />
+                        <input defaultValue={formEvent?.ticketTypes?.[index]?.externalSalesUrl ?? ""} name="ticketExternalSalesUrl" placeholder="https://" required type="url" />
                       </label> : <input name="ticketExternalSalesUrl" type="hidden" value=""/>}
                       {ticketSalesPlatforms[index] === "konnektora" ? <>
                         <label>
                           {t("Kontenjan", "Capacity")}
-                          <input defaultValue={editingEvent?.ticketTypes?.[index]?.capacity ?? ""} min="1" name="ticketCapacity" type="number" />
+                          <input defaultValue={formEvent?.ticketTypes?.[index]?.capacity ?? ""} min="1" name="ticketCapacity" type="number" />
                         </label>
                         <label>
                           {t("Kişi başına maksimum bilet", "Maximum tickets per person")}
-                          <input defaultValue={editingEvent?.ticketTypes?.[index]?.perUserLimit ?? ""} max="20" min="1" name="ticketPerUserLimit" type="number" />
+                          <input defaultValue={formEvent?.ticketTypes?.[index]?.perUserLimit ?? ""} max="20" min="1" name="ticketPerUserLimit" type="number" />
                         </label>
                       </> : <><input name="ticketCapacity" type="hidden" value=""/><input name="ticketPerUserLimit" type="hidden" value=""/></>}
                       {editingEvent ? <label>{t("Bilet durumu", "Ticket status")}<select defaultValue={editingEvent.ticketTypes?.[index]?.status ?? "active"} name="ticketStatus" onChange={(event) => { const previous = editingEvent.ticketTypes?.[index]?.status ?? "active"; if (event.currentTarget.value !== previous && !window.confirm(event.currentTarget.value === "inactive" ? t("Bu bilet pasif yapılsın mı? Yeni satışlarda listelenmeyecek, mevcut biletler iptal edilmeyecek.", "Make this ticket inactive? It will disappear from new sales without cancelling existing tickets.") : t("Bu bilet yeniden aktif yapılsın mı? Satış koşulları uygunsa tekrar listelenecek.", "Reactivate this ticket? It will be listed again when its sales conditions are met."))) event.currentTarget.value = previous; }}><option value="active">{t("Aktif", "Active")}</option><option value="inactive">{t("Pasif", "Inactive")}</option></select></label> : <input name="ticketStatus" type="hidden" value="active"/>}
                       {ticketSalesPlatforms[index] === "konnektora" ? <>
                         <label>
                           {t("Satış başlangıcı", "Sales start")}
-                          <input defaultValue={editingEvent?.ticketTypes?.[index]?.saleStartsAt ? toDateTimeLocal(editingEvent.ticketTypes[index]!.saleStartsAt!) : ""} name="ticketSaleStartsAt" type="datetime-local" />
+                          <input defaultValue={formEvent?.ticketTypes?.[index]?.saleStartsAt ? toDateTimeLocal(formEvent.ticketTypes[index]!.saleStartsAt!) : ""} name="ticketSaleStartsAt" type="datetime-local" />
                         </label>
                         <label>
                           {t("Satış bitişi", "Sales end")}
-                          <input defaultValue={editingEvent?.ticketTypes?.[index]?.saleEndsAt ? toDateTimeLocal(editingEvent.ticketTypes[index]!.saleEndsAt!) : ""} name="ticketSaleEndsAt" type="datetime-local" />
+                          <input defaultValue={formEvent?.ticketTypes?.[index]?.saleEndsAt ? toDateTimeLocal(formEvent.ticketTypes[index]!.saleEndsAt!) : ""} name="ticketSaleEndsAt" type="datetime-local" />
                         </label>
                       </> : <><input name="ticketSaleStartsAt" type="hidden" value=""/><input name="ticketSaleEndsAt" type="hidden" value=""/></>}
                       <label>
                         {t("Gate açılışı", "Gate opens")}
-                        <input defaultValue={editingEvent?.ticketTypes?.[index]?.gateOpensAt ? toDateTimeLocal(editingEvent.ticketTypes[index]!.gateOpensAt!) : ""} name="ticketGateOpensAt" type="datetime-local" />
+                        <input defaultValue={formEvent?.ticketTypes?.[index]?.gateOpensAt ? toDateTimeLocal(formEvent.ticketTypes[index]!.gateOpensAt!) : ""} name="ticketGateOpensAt" type="datetime-local" />
                       </label>
                       <label>
                         {t("Gate kapanışı", "Gate closes")}
                         <input
-                          defaultValue={editingEvent?.ticketTypes?.[index]?.gateClosesAt ? toDateTimeLocal(editingEvent.ticketTypes[index]!.gateClosesAt!) : ""}
+                          defaultValue={formEvent?.ticketTypes?.[index]?.gateClosesAt ? toDateTimeLocal(formEvent.ticketTypes[index]!.gateClosesAt!) : ""}
                           name="ticketGateClosesAt"
                           type="datetime-local"
                         />
@@ -2579,6 +2600,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                   >
                     {editingEvent
                       ? t("Etkinliği güncelle", "Update event")
+                      : copySource
+                      ? t("Etkinliği kopyala", "Copy event")
                       : t("Etkinlik yayınla", "Publish event")}
                   </button>
                 </div>

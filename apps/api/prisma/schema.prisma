@@ -48,6 +48,7 @@ enum EventVisibility {
   open
   approval_required
   invite_only
+  hidden
 }
 
 enum EventParticipantStatus {

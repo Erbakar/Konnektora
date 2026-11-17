@@ -4074,6 +4074,7 @@ function EventAdminPanel({
               <option value="open">Open</option>
               <option value="approval_required">Approval required</option>
               <option value="invite_only">Invite only</option>
+              <option value="hidden">Gizli - sadece davetliler görebilir</option>
             </select>
           </label>
           <label>

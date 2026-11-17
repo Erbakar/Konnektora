@@ -14,6 +14,8 @@ with zipfile.ZipFile(io.BytesIO(fetch('cities15000.zip'))) as z:
   if country in admins and region in admins[country]:admins[country][region]['cities'].append(c[1])
 out=Path('apps/web/public/data/regions')
 for country,rows in admins.items():
+ # 17/10 #13: TR.json elle doğrulanmış 81 il / 973 ilçe listesidir; GeoNames verisiyle ezilmez.
+ if country=='TR':continue
  values=[{'code':code,'name':row['name'],'cities':sorted(set(row['cities']))} for code,row in rows.items()]
  (out/(country+'.json')).write_text(json.dumps(sorted(values,key=lambda x:x['name']),ensure_ascii=False,separators=(',',':')))
 print('Countries:',len(admins))

@@ -513,7 +513,7 @@ export function HomePage() {
             <Link
               className="corp-city-card"
               key={city.name}
-              to={`/curators?city=${encodeURIComponent(index === popularCities.length - 1 ? "" : city.name)}`}
+              to={index === popularCities.length - 1 ? "/curators?city=" : `/curators?city=${encodeURIComponent(city.name)}&country=${encodeURIComponent(city.country)}`}
             >
               <MapPin size={18} />
               <strong>

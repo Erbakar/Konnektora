@@ -8,6 +8,7 @@ describe("23/10 #1 persisted comment likes", () => {
       mediaFile: { findMany: jest.fn().mockResolvedValue([]) },
       contentReaction: { findMany: jest.fn().mockResolvedValue([{ targetId: "reply" }]) },
       contentPoll: { findMany: jest.fn().mockResolvedValue([]) },
+      event: { count: jest.fn().mockResolvedValue(0) },
     };
     const service = new ContentService(prisma as never);
     const result = await service.listComments(ReportTargetType.event, "event", "viewer");
