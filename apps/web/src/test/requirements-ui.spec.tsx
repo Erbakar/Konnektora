@@ -288,11 +288,18 @@ describe("157 maddelik listenin kritik web davranışları", () => {
     expect(document.querySelector(".corp-topbar-actions > .language-switch")).not.toBeInTheDocument();
     expect(document.querySelector(".corp-nav")?.textContent).not.toContain("Diğer");
     await userEvent.click(screen.getByLabelText("Profil menüsünü aç"));
-    expect(screen.getAllByRole("link", { name: "Üye kartı" }).some((link) => link.getAttribute("href") === "/identity")).toBe(true);
+    expect(screen.getAllByRole("link", { name: "Üye kartı (QR / NFC)" }).some((link) => link.getAttribute("href") === "/identity")).toBe(true);
     expect(screen.getAllByRole("link", { name: "Biletlerim" }).some((link) => link.getAttribute("href") === "/tickets")).toBe(true);
     const mobileMenu = document.querySelector(".corp-mobile-menu-panel");
     for (const path of ["/feed", "/events", "/places", "/tags", "/messages"]) expect(mobileMenu?.querySelector(`a[href="${path}"]`)).not.toBeInTheDocument();
     expect(mobileMenu?.querySelector('a[href="/community"]')?.textContent).toContain("Üyeler ve Listeler");
+    // 17/10 #27: tablette "Üyeler" tab bar'da Mesajlar'dan önce; hamburger'deki giriş tablette gizlenir.
+    expect(mobileMenu?.querySelector('a[href="/community"]')).toHaveClass("nav-hide-on-tablet");
+    const tabBarLinks = [...document.querySelectorAll<HTMLAnchorElement>(".mobile-tab-bar > a")];
+    expect(tabBarLinks.map((link) => link.getAttribute("href"))).toEqual(["/feed", "/tags", "/events", "/places", "/community", "/messages"]);
+    expect(tabBarLinks[4]).toHaveClass("nav-tablet-only");
+    expect(tabBarLinks[4]?.textContent).toBe("Üyeler");
+    expect(tabBarLinks.filter((link) => link.classList.contains("nav-tablet-only"))).toHaveLength(1);
 
     scrollTo.mockClear();
     await userEvent.click(screen.getAllByRole("link", { name: /Etkinlikler/ })[0]!);

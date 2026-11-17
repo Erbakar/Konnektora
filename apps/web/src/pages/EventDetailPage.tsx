@@ -52,6 +52,7 @@ import {
   recordContentAction,
 } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
+import { eventInstagramCaption, eventPostInstagramCaption } from "../lib/shareCaptions";
 
 export function EventDetailPage() {
   const { language } = useLanguage();
@@ -518,7 +519,7 @@ export function EventDetailPage() {
         </a>
       ) : null}
       <ContentComments
-        shareContext={{ title: event.title, location: event.place?.name ?? event.locationName ?? event.city ?? "", date: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", timeZone: event.timezone }).format(new Date(event.startsAt)), tags: event.tags.slice().sort((a, b) => b.usageCount - a.usageCount).map(tag => tag.name), icon: "🎪" }}
+        shareContext={{ title: event.title, location: event.place?.name ?? event.locationName ?? event.city ?? "", date: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", timeZone: event.timezone }).format(new Date(event.startsAt)), tags: event.tags.slice().sort((a, b) => b.usageCount - a.usageCount).map(tag => tag.name), icon: "🎪", instagramCaption: (post) => eventPostInstagramCaption({ ...post, eventTitle: event.title, venue: event.place?.name ?? event.locationName, city: event.place?.city ?? event.city, startsAt: event.startsAt, timezone: event.timezone }, language) }}
         targetId={event.id}
         targetType="event"
         title={language === "tr" ? "Etkinlik yorumları" : "Event posts and comments"}
@@ -543,6 +544,8 @@ export function EventDetailPage() {
         targetType="event"
         title={event.title}
         text={[`🎪 ${event.title}`, `📍 ${event.place?.name ?? event.locationName ?? event.city ?? ""}`, `📅 ${new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", timeZone: event.timezone }).format(new Date(event.startsAt))}`, event.tags.slice().sort((a, b) => b.usageCount - a.usageCount).slice(0, 4).map((tag) => `#${tag.name}`).join(" "), "🌎 Konnektora →"].filter(Boolean).join("\n")}
+        instagramText={eventInstagramCaption({ title: event.title, venue: event.place?.name ?? event.locationName ?? event.city, startsAt: event.startsAt, timezone: event.timezone, tags: event.tags.slice().sort((a, b) => b.usageCount - a.usageCount).map((tag) => tag.name) }, language)}
+        instagramImageUrl={event.coverImageUrl ? resolveMediaUrl(event.coverImageUrl) : null}
         storyDetails={{
           startsAt: event.startsAt,
           endsAt: event.endsAt,

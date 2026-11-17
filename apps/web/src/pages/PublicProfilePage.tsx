@@ -59,6 +59,7 @@ import {
 import { businessLabel, companyTypes } from "../lib/businessLabels";
 import { ThinkingIcon } from "../components/ThinkingIcon";
 import { useLanguage } from "../lib/i18n";
+import { profileInstagramCaption } from "../lib/shareCaptions";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
 function ageFrom(value: string | Date) {
@@ -524,6 +525,8 @@ export function PublicProfilePage() {
         targetType="user"
         title={profile.name}
         text={[`🤡 ${publicUsername(profile.username) ? `@${profile.username}` : profile.name}`, [profile.city, profile.country].filter(Boolean).join(" · "), profile.interests.filter((interest) => interest.sentiment === "like").slice(0, 10).map((interest) => `#${interest.tag.name}`).join(" "), `✨ ${profile.followerCount} ${t("üye takip ediyor", "members follow")}`, t("Seni bağlayan ortak noktaları bul.", "Find what connects you."), t("🌎 Konnektora’da profili gör →", "🌎 View page on Konnektora →")].filter(Boolean).join("\n")}
+        instagramText={profileInstagramCaption({ displayName: publicUsername(profile.username) ? `@${profile.username}` : profile.name, city: profile.city, country: profile.country, likedTags: profile.interests.filter((interest) => interest.sentiment === "like").map((interest) => interest.tag.name), followerCount: profile.followerCount }, language)}
+        instagramImageUrl={profilePhoto ? resolveMediaUrl(profilePhoto.url) : null}
         url={new URL(publicUsername(profile.username) ? `/users/${encodeURIComponent(profile.username!)}` : `/users/id/${profile.id}`, window.location.origin).toString()}
       />
       {galleryIndex != null ? <MediaViewer alt={`${profile.name} profil medyası`} items={profile.media} index={galleryIndex} onChange={setGalleryIndex} onClose={() => setGalleryIndex(null)} actions={{
@@ -541,9 +544,9 @@ export function PublicProfilePage() {
           to={userId ? `/users/id/${profile.id}/mutualism` : `/users/${profile.username}/mutualism`}
         >
           <strong>{profile.mutualism.total > 0
-            ? t(`${profile.mutualism.total} ortak noktanız var`, `You have ${profile.mutualism.total} things in common`)
+            ? <><span className="mutualism-line">{t(`${profile.mutualism.total} ortak`, `You have ${profile.mutualism.total} things`)}</span>{" "}<span className="mutualism-line">{t("noktanız var", "in common")}</span></>
             : t("Eşleşen sonuç bulunamadı.", "No matching shared signal was found.")}</strong>
-          <span className="mutualism-link-label"><svg className="mutualism-attention" aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="12" r="6"/><circle cx="16" cy="12" r="6"/></svg>{t("Mutualizm analizini gör →", "View mutualism analysis →")}</span>
+          <span className="mutualism-link-label"><svg className="mutualism-attention" aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="12" r="6"/><circle cx="16" cy="12" r="6"/></svg><span className="mutualism-link-text"><span className="mutualism-line">{t("Mutualizm", "View mutualism")}</span>{" "}<span className="mutualism-line">{t("analizini gör →", "analysis →")}</span></span></span>
         </Link>
       ) : null}
       <ReportDialog onClose={() => setReportOpen(false)} open={reportOpen} targetId={profile.id} targetType="user"/>

@@ -209,6 +209,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     tone: "success" | "error";
     message: string;
   } | null>(null);
+  // 17/10 #11: giriş başarılı olduktan sonra hedef sayfa yüklenene kadar eski "Üye alanı" görünümü gösterilmez.
+  const [postLoginRedirect, setPostLoginRedirect] = useState(false);
   useEffect(() => {
     if (initialMode === "login" && user?.status === "active" && user.onboardingCompleted !== false && !eventCreator) navigate("/feed", { replace: true });
   }, [eventCreator, initialMode, navigate, user]);
@@ -308,6 +310,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     onSuccess: (response) => {
       setUserSession(response);
       setUser(response.user);
+      setPostLoginRedirect(true);
       void queryClient.invalidateQueries({
         queryKey: ["profile-interests", response.user.id],
       });
@@ -1036,6 +1039,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
   }
 
   if (user?.status === "pending" || (user?.status === "active" && user.role === "user" && user.onboardingCompleted === false)) return <Navigate replace to="/onboarding" />;
+  if (postLoginRedirect || (initialMode === "login" && !eventCreator && user?.status === "active" && user.onboardingCompleted !== false)) return <div className="page route-loading app-loading-screen" data-testid="post-login-redirect" role="status"><div className="loading-mark" aria-hidden="true"/><strong>{t("Sayfa yükleniyor…", "Loading page…")}</strong><span>{t("İçerik hazırlanıyor", "Preparing content")}</span></div>;
 
   return (
     <section className={`page account-page${eventCreator ? " event-create-only" : ""}${eventCreator && !user ? " event-create-unauthenticated" : ""}`}>
@@ -1321,6 +1325,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
               onSuccess={(response) => {
                 setUserSession(response);
                 setUser(response.user);
+                setPostLoginRedirect(true);
                 setNotice({
                   tone: "success",
                   message: t(

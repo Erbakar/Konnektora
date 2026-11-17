@@ -229,7 +229,7 @@ export function AppLayout() {
             <NavLink to="/notifications" onClick={() => setMenuOpen(false)}><Bell size={18}/>{t("notifications")}{unreadNotifications ? <b className="notification-count">{unreadNotifications}</b> : null}</NavLink>
             <NavLink to="/search" onClick={() => setMenuOpen(false)}><Search size={18}/>{t("search")}</NavLink>
             <NavLink to="/identity" onClick={() => setMenuOpen(false)}><QrCode size={18}/>{t("memberId")}</NavLink>
-            <NavLink to="/community" onClick={() => setMenuOpen(false)}><Users size={18}/>{t("membersAndLists")}</NavLink>
+            <NavLink className={({ isActive }) => `nav-hide-on-tablet${isActive ? " active" : ""}`} to="/community" onClick={() => setMenuOpen(false)}><Users size={18}/>{t("membersAndLists")}</NavLink>
             <NavLink to="/tickets" onClick={() => setMenuOpen(false)}><Ticket size={18}/>{t("myTickets")}</NavLink>
             <NavLink to="/contacts" onClick={() => setMenuOpen(false)}><Users size={18}/>{t("findFriends")}</NavLink>
             <NavLink to="/settings" onClick={() => setMenuOpen(false)}><Settings size={18}/>{t("settingsCenter")}</NavLink>
@@ -248,6 +248,8 @@ export function AppLayout() {
         <NavLink to="/tags"><Tag size={20}/><span>{t("tags")}</span></NavLink>
         <NavLink to="/events"><CalendarDays size={20}/><span>{t("events")}</span></NavLink>
         <NavLink to="/places"><MapPin size={20}/><span>{t("places")}</span></NavLink>
+        {/* 17/10 #27: yalnız tablet (761–1100 px) — "Üyeler" sekmesi Mesajlar'dan önce; masaüstü ve mobilde gizli. */}
+        <NavLink className={({ isActive }) => `nav-tablet-only${isActive ? " active" : ""}`} to="/community"><Users size={20}/><span>{t("members")}</span></NavLink>
         <NavLink to="/messages"><MessageCircle size={20}/><span>{t("messages")}</span>{conversationsQuery.data?.totalUnread ? <b>{conversationsQuery.data.totalUnread}</b> : null}</NavLink>
         <button aria-label={t("menuOpen")} aria-expanded={menuOpen} aria-controls="corp-mobile-menu" onClick={() => setMenuOpen(open => !open)} type="button"><Menu size={20}/><span>{t("menu")}</span></button>
         </> : <><NavLink to="/"><Home size={20}/><span>{t("home")}</span></NavLink><NavLink to="/events"><CalendarDays size={20}/><span>{t("events")}</span></NavLink><NavLink to="/places"><MapPin size={20}/><span>{t("places")}</span></NavLink><NavLink to="/tags"><Tag size={20}/><span>{t("tags")}</span></NavLink><button aria-label={t("menuOpen")} aria-expanded={menuOpen} aria-controls="corp-mobile-menu" onClick={() => setMenuOpen(open => !open)} type="button"><Menu size={20}/><span>{t("menu")}</span></button></>}

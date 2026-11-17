@@ -58,6 +58,7 @@ import {
 } from "../lib/api";
 import { ThinkingIcon } from "../components/ThinkingIcon";
 import { useLanguage } from "../lib/i18n";
+import { tagInstagramCaption, tagPostInstagramCaption } from "../lib/shareCaptions";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
 export function TagsPage() {
@@ -452,7 +453,7 @@ export function TagsPage() {
         <h2>{t("Profiline ekleyen kişiler", "People who added it to their profile")}</h2>
         <div><span className="attendee-avatar-stack">{(relatedUsers.data ?? []).slice(0, 8).map((member) => <Link key={member.id} title={t(`${member.name} profilini aç`, `Open ${member.name}'s profile`)} to={userProfilePath(member)}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/tags/${tag.slug}/users`}><strong>{t(`${relatedUsers.data?.length ?? tag.usageCount} kullanıcının tümünü göster`, `Show all ${relatedUsers.data?.length ?? tag.usageCount} users`)}</strong></Link></div>
       </section>
-      {relatedEvents.data?.total ? <Link className="tag-related-events-notice" to={`/events?tag=${encodeURIComponent(tag.slug)}`}>{t(`${relatedEvents.data.total} ilişkili etkinlik bulundu.`, `${relatedEvents.data.total} related events found.`)}</Link> : null}
+      {relatedEvents.data?.total ? <Link className="tag-related-events-notice" to={`/events?tag=${encodeURIComponent(tag.slug)}`}>{t(`${relatedEvents.data.total} ilişkili güncel etkinlik bulundu.`, `${relatedEvents.data.total} related upcoming events found.`)}</Link> : null}
       <section className="admin-form">
 
         <div className="section-header compact">
@@ -462,7 +463,7 @@ export function TagsPage() {
           <span>{t(`${comments.data?.length ?? 0} sonuç`, `${comments.data?.length ?? 0} results`)}</span>
         </div>
         <details className="collapsed-filter-panel tag-detail-filters">
-          <summary><SlidersHorizontal size={17}/> {t("Gönderileri filtrele", "Filter posts")}</summary>
+          <summary><SlidersHorizontal size={17}/> {t("Gönderilerde ara & filtrele", "Search & filter posts")}</summary>
           <div className="feed-tabs">
           {(["all", "popular", "following", "photo", "video"] as const).map(
             (value) => (
@@ -666,7 +667,7 @@ export function TagsPage() {
 
 ✨ ${sharedPost.likes} ${t("kişi bu gönderiyi beğendi.", "people like this post.")}
 
-🌎 ${t("Konnektora’da gönderiyi gör →", "See this post on Konnektora →")}` : ""} url={new URL(`/tags/${tag.slug}#post-${sharedPost?.id ?? ""}`, window.location.origin).toString()}/>
+🌎 ${t("Konnektora’da gönderiyi gör →", "See this post on Konnektora →")}` : ""} instagramText={sharedPost ? tagPostInstagramCaption({ author: sharedPost.author, body: sharedPost.body, tagName: tag.name, likeCount: sharedPost.likes }, language) : undefined} url={new URL(`/tags/${tag.slug}#post-${sharedPost?.id ?? ""}`, window.location.origin).toString()}/>
       <NotificationDialog
         open={notificationOpen}
         onClose={() => setNotificationOpen(false)}
@@ -688,6 +689,7 @@ export function TagsPage() {
 ${t("Bu ilgi alanına bağlı etkinlikleri, mekânları ve insanları keşfet.", "Discover events, places & people connected to this interest.")}
 
 🌎 Konnektora →`}
+        instagramText={tagInstagramCaption({ name: tag.name, memberCount: tag.usageCount }, language)}
         url={new URL(`/tags/${tag.slug}`, window.location.origin).toString()}
       />
     </section>
