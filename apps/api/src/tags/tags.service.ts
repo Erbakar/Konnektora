@@ -1,3 +1,4 @@
+import { notHiddenEventWhere } from "../common/event-visibility";
 import { notifyTagModeration } from "../notifications/moderation-activity";
 import { notifyUserActivity, notifyComment } from "../notifications/activity-events";
 import { privacyContext, visibleLocation } from "../common/privacy-context";
@@ -95,7 +96,7 @@ export class TagsService {
     const tags = await this.prisma.tag.findMany({
       where,
       orderBy: [{ usageCount: "desc" }, { name: "asc" }],
-      include: { _count: { select: { events: { where: { event: { status: "published", startsAt: { gte: new Date() } } } }, places: { where: { place: { status: "active" } } } } } },
+      include: { _count: { select: { events: { where: { event: { status: "published", startsAt: { gte: new Date() }, ...notHiddenEventWhere } } }, places: { where: { place: { status: "active" } } } } } },
     });
     return tags.map(({ _count, ...tag }) => ({ ...tag, eventCount: _count.events, placeCount: _count.places }));
   }

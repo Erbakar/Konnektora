@@ -1,3 +1,4 @@
+import { hiddenEventAccessWhere } from "../common/event-visibility";
 import type { Prisma } from "@prisma/client";
 import type { PrismaService } from "../prisma/prisma.service";
 import { publicName } from "../common/public-name";
@@ -82,7 +83,7 @@ export async function additionalActivities(db: PrismaService, viewerId: string |
       const event = revision.event;
       result.push({ id: event.id, activityId: `event-tags-${revision.id}`, kind: "event", title: event.title, href: `/events/${event.slug}`, subtitle: event.summary ?? null, imageUrl: event.coverImageUrl, meta: event.startsAt.toISOString(), startsAt: event.startsAt, endsAt: event.endsAt, city: event.city, locationName: event.locationName, action: "Takip ettiğiniz etiket etkinliğe eklendi", occurredAt: revision.createdAt, ownerId: null, actor: null, place: event.place, tags: added.map(t => t.tag), canManageContent: false });
     }
-    const joinedEvents = await db.event.findMany({ where: { status: "published", participants: { some: { userId: viewerId, status: { in: ["accepted", "attended"] } } } }, include: { ...eventActivityRelations, ticketTypeRecords: { where: { status: "active" } } }, orderBy: { updatedAt: "desc" }, take: 60 });
+    const joinedEvents = await db.event.findMany({ where: { status: "published", AND: [hiddenEventAccessWhere(viewerId)], participants: { some: { userId: viewerId, status: { in: ["accepted", "attended"] } } } }, include: { ...eventActivityRelations, ticketTypeRecords: { where: { status: "active" } } }, orderBy: { updatedAt: "desc" }, take: 60 });
     const inRange = (date: Date) => date.getTime() <= Date.now() && (!dates.gte || date >= new Date(String(dates.gte))) && (!dates.lte || date <= new Date(String(dates.lte)));
     for (const event of joinedEvents) {
       const base = { id: event.id, kind: "event" as const, title: event.title, href: `/events/${event.slug}`, subtitle: null, imageUrl: event.coverImageUrl, meta: event.startsAt.toISOString(), startsAt: event.startsAt, endsAt: event.endsAt, city: event.city, locationName: event.locationName, ownerId: null, actor: null, place: event.place, tags: event.tags.map(t => t.tag), canManageContent: false };

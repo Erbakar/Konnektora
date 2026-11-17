@@ -17,6 +17,7 @@ import {
   submitCuratorApplication,
 } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
+import { CountryCityFields, normalizeCountry, turkishProvinceName } from "../components/CountryCityFields";
 
 export function CuratorsPage() {
   const { language } = useLanguage();
@@ -31,6 +32,10 @@ export function CuratorsPage() {
     retry: false,
   });
   const apply = useMutation({ mutationFn: submitCuratorApplication });
+  // 17/10 #24: "Şehir" alanı ilçeleri değil şehirleri (Türkiye için 81 il) listeler; varsayılan ülke Türkiye'dir.
+  const requestedCity = params.get("city") ?? "";
+  const requestedCountry = params.get("country") ? normalizeCountry(params.get("country")!) : turkishProvinceName(requestedCity) || !requestedCity ? "Türkiye" : "";
+  const defaultCity = requestedCountry === "Türkiye" ? turkishProvinceName(requestedCity) ?? "" : requestedCity;
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
@@ -164,19 +169,8 @@ export function CuratorsPage() {
                 required
               />
             </label>
-            <div>
-              <label>
-                {t("Şehir", "City")}
-                <input
-                  name="city"
-                  defaultValue={params.get("city") ?? ""}
-                  required
-                />
-              </label>
-              <label>
-                {t("Ülke", "Country")}
-                <input name="country" />
-              </label>
+            <div className="curator-location-fields">
+              <CountryCityFields defaultCountry={requestedCountry} defaultCity={defaultCity} requiredCity />
             </div>
             <label>
               {t("Motivasyon mektubu", "Motivation letter")}
@@ -184,7 +178,7 @@ export function CuratorsPage() {
                 name="motivation"
                 required
                 minLength={50}
-                placeholder={t("Neden şehrinin Konnektora küratörü olmak istediğini anlat…", "Tell us why you want to become your city's Konnektora curator…")}
+                placeholder={t("Neden şehrinin Konnektora küratörü olmak istediğini ve nasıl bir küratör olabileceğini bize anlat…", "Tell us why you want to become your city's Konnektora curator and what kind of curator you could be…")}
               />
             </label>
             <label>

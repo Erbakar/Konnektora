@@ -1,3 +1,4 @@
+import { hiddenEventAccessWhere, notHiddenEventWhere } from "../common/event-visibility";
 import { assessInvitees } from "../common/invite-assessment";
 import { actorLabel, notifyEntityCreated, notifyEntityChanges, notifyUserActivity, isUndiscoverable, notifyMembershipInvite } from "../notifications/activity-events";
 import { invitePhone, invitePhoneVariants } from "../common/invite-phone";
@@ -1153,10 +1154,10 @@ export class PlacesService {
       _count: {
         select: {
           members: { where: { status: "accepted" } },
-          events: { where: { status: "published", startsAt: { gte: new Date() } } },
+          events: { where: { status: "published", startsAt: { gte: new Date() }, ...notHiddenEventWhere } },
         },
       },
-      ...(includeEvents ? { events: { where: { status: EventStatus.published }, orderBy: { startsAt: "desc" as const }, take: 20, include: { tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } }, participants: { where: { status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] } }, select: { id: true } } } } } : {}),
+      ...(includeEvents ? { events: { where: { status: EventStatus.published, AND: [hiddenEventAccessWhere(viewerId)] }, orderBy: { startsAt: "desc" as const }, take: 20, include: { tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } }, participants: { where: { status: { in: [EventParticipantStatus.accepted, EventParticipantStatus.attended] } }, select: { id: true } } } } } : {}),
     } as const;
   }
 

@@ -22,6 +22,7 @@ import {
   EventVisibility,
   OwnedTicketStatus,
   Prisma,
+  ReportTargetType,
   TicketOrderStatus,
   User,
 } from "@prisma/client";
@@ -29,6 +30,7 @@ import { hash } from "bcryptjs";
 import { createHash, randomBytes, randomInt, randomUUID } from "crypto";
 import { AuthService } from "../auth/auth.service";
 import { toSlug } from "../common/slug";
+import { isInvitationOnlyVisibility, visibleEventWhere } from "../common/event-visibility";
 import { MailService } from "../mail/mail.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -63,6 +65,9 @@ export class EventsService {
           : { gte: new Date(Date.now() - 1000 * 60 * 60 * 24) },
     };
     const andFilters: Prisma.EventWhereInput[] = [];
+    // 17/10 #14: gizli etkinlikler yalnız ilgili kişilere, admin ve küratöre listelenir.
+    const hiddenAccess = await visibleEventWhere(this.prisma, userId);
+    if (Object.keys(hiddenAccess).length) andFilters.push(hiddenAccess);
     const nearInterestTagIds = new Set(
       query.scope === "near" && userId
         ? ((await this.prisma.userInterestTag.findMany({ where: { userId, sentiment: { in: ["like", "ok"] } }, select: { tagId: true }, take: 100 })) ?? []).map((item) => item.tagId)
@@ -110,9 +115,11 @@ export class EventsService {
       where.tags = { some: { tag: { slug: query.tag, status: "active" } } };
     }
 
-    if (query.city) {
-      where.city = { equals: query.city, mode: "insensitive" };
-    }
+    // 17/10 #12-13: Türkiye adreslerinde il "region", ilçe "city" alanında tutulur; şehir filtresi ikisini de arar.
+    const cityFilter: Prisma.EventWhereInput | null = query.city
+      ? { OR: [{ city: { equals: query.city, mode: "insensitive" } }, { region: { equals: query.city, mode: "insensitive" } }] }
+      : null;
+    if (cityFilter) andFilters.push(cityFilter);
 
     if (query.country) {
       where.country = { equals: query.country, mode: "insensitive" };
@@ -149,12 +156,17 @@ export class EventsService {
 
     if (query.scope === "popular" && (query.city || query.country)) {
       const localCount = await this.prisma.event.count({ where });
+      const dropCityFilter = () => {
+        const remaining = andFilters.filter((filter) => filter !== cityFilter);
+        if (remaining.length) where.AND = remaining;
+        else delete where.AND;
+      };
       if (!localCount && query.city) {
-        delete where.city;
+        dropCityFilter();
         if (query.country) where.country = { equals: query.country, mode: "insensitive" };
       }
       if (!await this.prisma.event.count({ where })) {
-        delete where.city;
+        dropCityFilter();
         delete where.country;
       }
     }
@@ -269,6 +281,8 @@ export class EventsService {
           ...(publicCode ? [{ slug: { endsWith: `-${publicCode}` } }] : []),
         ],
         status: "published",
+        // 17/10 #14: gizli etkinliğin detayına yetkisi olmayanlar erişemez (404).
+        AND: [await visibleEventWhere(this.prisma, userId)],
         NOT: [
           { id: { in: blocked("event") } },
           { createdById: { in: blocked("user") } },
@@ -632,6 +646,31 @@ export class EventsService {
     return this.mapEvent(event);
   }
 
+  /**
+   * 17/10 #29 — "Etkinliği kopyala": kaynak etkinlikten YENİ bir etkinlik oluşturur.
+   * Katılımcılar, davetler ve satılmış biletler kopyalanmaz; kaynak etkinlik değişmez.
+   * Yalnız kurucu, organizatör/yöneticiler, admin ve küratör kopyalayabilir.
+   */
+  async copyEvent(sourceId: string, input: CreateEventDto, user: User) {
+    if (!(await this.canManageParticipants(sourceId, user, true))) throw new ForbiddenException("Bu etkinliği kopyalama yetkiniz yok.");
+    const source = await this.prisma.event.findUnique({ where: { id: sourceId }, select: { id: true, coverImageUrl: true } });
+    if (!source) throw new NotFoundException("Etkinlik bulunamadı.");
+    const created = await this.createEvent(input, user.id);
+    const media = await this.prisma.mediaFile.findMany({
+      where: { contentType: ReportTargetType.event, contentId: sourceId, status: "active" },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: { url: true, type: true },
+    });
+    if (media.length) {
+      await this.prisma.mediaFile.createMany({
+        data: media.map((item, sortOrder) => ({ url: item.url, type: item.type, contentType: ReportTargetType.event, contentId: created.id, uploadedById: user.id, sortOrder })),
+      });
+    }
+    const coverImageUrl = created.coverImageUrl ?? source.coverImageUrl ?? media.find((item) => item.type === "image")?.url ?? null;
+    if (coverImageUrl && coverImageUrl !== created.coverImageUrl) await this.prisma.event.update({ where: { id: created.id }, data: { coverImageUrl } });
+    return { ...created, coverImageUrl };
+  }
+
   async listMyTickets(userId: string) {
     const participants = await this.prisma.eventParticipant.findMany({
       where: {
@@ -928,7 +967,7 @@ export class EventsService {
 
   async listRelatedUsers(eventId: string, actor?: User) {
     const event = await this.prisma.event.findFirst({
-      where: { id: eventId, status: "published" },
+      where: { id: eventId, status: "published", AND: [await visibleEventWhere(this.prisma, actor)] },
       select: {
         id: true,
         createdById: true,
@@ -1009,7 +1048,7 @@ export class EventsService {
     }
 
     if (
-      event.visibility === "invite_only" &&
+      isInvitationOnlyVisibility(event.visibility) &&
       existing?.status !== EventParticipantStatus.invited &&
       existing?.status !== EventParticipantStatus.accepted &&
       !(existing?.status === EventParticipantStatus.not_attending && ["organizer", "manager"].includes(existing.role)) && event.createdById !== userId

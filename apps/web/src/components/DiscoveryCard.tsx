@@ -51,7 +51,7 @@ export function DiscoveryCard({ item, hideSubtitle = false, standard = false }: 
     <article className={`event-card${item.kind === "place" ? " place-card" : ""}`} ref={cardRef}>
       <Link className={`event-card-media${item.imageUrl ? "" : " event-card-media-fallback"}`} onClick={() => rememberContentSource(item.kind, item.id)} to={item.href}>
         {item.imageUrl ? <img alt="" src={resolveMediaUrl(item.imageUrl)}/> : item.kind === "event" ? <CalendarDays aria-hidden="true" size={34}/> : <MapPin aria-hidden="true" size={34}/>}
-        <span className="event-card-visibility-badge">{item.visibility ? (language === "tr" ? { open: "Herkese açık", approval_required: "Onay gerekli", invite_only: "Sadece davetli" } : { open: "Open to everyone", approval_required: "Approval required", invite_only: "Invite only" })[item.visibility] : kindLabel}</span>
+        <span className="event-card-visibility-badge">{item.visibility ? (language === "tr" ? { open: "Herkese açık", approval_required: "Onay gerekli", invite_only: "Sadece davetli", hidden: "Gizli" } : { open: "Open to everyone", approval_required: "Approval required", invite_only: "Invite only", hidden: "Hidden" })[item.visibility] : kindLabel}</span>
       </Link>
       <div><h3><Link onClick={() => rememberContentSource(item.kind, item.id)} to={item.href}>{item.title}</Link></h3>{!hideSubtitle && subtitle ? <p>{subtitle}</p> : null}</div>
       <div className="event-details">

@@ -9,12 +9,17 @@ describe("Public social previews", () => {
   it("uses the event cover and canonical route and excludes invite-only events", async () => {
     prisma.event.findFirst.mockResolvedValue({ title: "Sunset", slug: "sunset", description: "Music", startsAt: new Date("2026-10-08T18:00:00Z"), city: "İstanbul", country: "Türkiye", coverImageUrl: "/uploads/id.webp", place: { name: "Sahil" }, tags: [{ tag: { name: "caz" } }] });
     const preview = await service.get("event", "sunset", "https://konnektora.com/api");
-    expect(prisma.event.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { slug: "sunset", status: "published", visibility: { not: "invite_only" } } }));
+    expect(prisma.event.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { slug: "sunset", status: "published", visibility: { notIn: ["invite_only", "hidden"] } } }));
     expect(preview).toMatchObject({ image: "https://konnektora.com/api/uploads/id.webp", path: "/events/sunset" });
     expect(preview.description).toContain("Sahil");
     expect(preview.description).toContain("#caz");
     prisma.event.findFirst.mockResolvedValue(null);
     await expect(service.get("event", "secret", "https://konnektora.com/api")).rejects.toBeInstanceOf(NotFoundException);
+  });
+  it("17/10 #14: never builds a social preview for a hidden event", async () => {
+    prisma.event.findFirst.mockResolvedValue(null);
+    await expect(service.get("event", "gizli", "https://konnektora.com/api")).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.event.findFirst.mock.calls[0][0].where.visibility.notIn).toContain("hidden");
   });
   it("does not disclose private names, company names or location in the profile preview", async () => {
     prisma.user.findFirst.mockResolvedValue({ id: "person", username: "ada", name: "Private Name", companyName: "Private Business", accountType: "corporate", city: "Private City", country: "Private Country", followerCount: 12, privacySettings: { profileNameAudience: "only_me", locationAudience: "friends", businessAudience: "only_me" }, uploadedMedia: [{ url: "/uploads/avatar.png" }], interestTags: [{ tag: { name: "caz" } }] });

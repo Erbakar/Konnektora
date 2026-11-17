@@ -68,6 +68,8 @@ export const eventVisibilitySchema = z.enum([
   "open",
   "approval_required",
   "invite_only",
+  // 17/10 #14: "Gizli - sadece davetliler görebilir".
+  "hidden",
 ]);
 export const tagStatusSchema = z.enum(["active", "hidden", "archived"]);
 export const userRoleSchema = z.enum([
@@ -265,7 +267,7 @@ export const memberScanSchema = z.object({
 });
 export const memberScansSchema = z.array(memberScanSchema);
 export const discoveryItemSchema = z.object({
-  visibility: z.enum(["open", "approval_required", "invite_only"]).optional(),
+  visibility: z.enum(["open", "approval_required", "invite_only", "hidden"]).optional(),
   kind: z.enum(["user", "tag", "event", "place"]),
   id: z.string().uuid(),
   title: z.string(),

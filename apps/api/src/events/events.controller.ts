@@ -66,6 +66,13 @@ export class EventsController {
     return this.eventsService.createEvent(body, user.id);
   }
 
+  /** 17/10 #29: kaynak etkinlikten yeni bir etkinlik oluşturur; kaynak değişmez. */
+  @Post("events/:id/copy")
+  @UseGuards(JwtAuthGuard)
+  copyEvent(@Param("id") id: string, @Body() body: CreateEventDto, @CurrentUser() user: User) {
+    return this.eventsService.copyEvent(id, body, user);
+  }
+
   @Get("me/events")
   @UseGuards(JwtAuthGuard)
   listMyEvents(@CurrentUser() user: User) {

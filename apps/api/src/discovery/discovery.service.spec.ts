@@ -34,6 +34,37 @@ describe("DiscoveryService", () => {
     expect(result.activeUserCount).toBe(3);
   });
 
+  it("17/10 #14: keeps hidden events out of the feed and search unless the viewer may see them", async () => {
+    const hiddenAccess = { OR: [{ visibility: { not: "hidden" } }, { createdById: "viewer-id" }, { participants: { some: { userId: "viewer-id", status: { not: "banned" } } } }, { invitations: { some: { inviteeId: "viewer-id" } } }, { ownedTickets: { some: { ownerId: "viewer-id" } } }] };
+    await service.feed("viewer-id");
+    expect(event.findMany.mock.calls.length).toBeGreaterThan(0);
+    // Her etkinlik sorgusu ya gizli filtresini taşır ya da zaten yalnız "open" + izleyicinin kendi etkinlikleriyle sınırlıdır.
+    for (const [args] of event.findMany.mock.calls) {
+      if (JSON.stringify(args.where).includes('"visibility":"open"')) continue;
+      expect(args.where.AND).toEqual([hiddenAccess]);
+    }
+    expect(eventParticipant.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ event: expect.objectContaining({ AND: [hiddenAccess] }) }) }));
+    event.findMany.mockClear();
+    await service.search("gizli");
+    expect(event.findMany.mock.calls[0][0].where.AND).toEqual([{ OR: [{ visibility: { not: "hidden" } }] }]);
+    event.findMany.mockClear();
+    user.findUnique.mockResolvedValue({ city: "Istanbul", country: "Türkiye", role: "curator" });
+    await service.search("gizli", "viewer-id");
+    expect(event.findMany.mock.calls[0][0].where.AND).toEqual([{}]);
+  });
+
+  it("26/09 #2: nearby event cards show the venue name and fall back to the city", async () => {
+    const base = { summary: "s", coverImageUrl: null, startsAt: new Date("2027-01-01T18:00:00Z"), tags: [] };
+    event.findMany.mockResolvedValueOnce([
+      { ...base, id: "1", title: "Venue", slug: "venue", city: "Kadıköy", place: { name: "Moda Sahnesi", slug: "moda" }, locationName: "Eski ad" },
+      { ...base, id: "2", title: "Named", slug: "named", city: "Kadıköy", place: null, locationName: "Sahil" },
+      { ...base, id: "3", title: "City", slug: "city", city: "Kadıköy", place: null, locationName: null },
+      { ...base, id: "4", title: "Online", slug: "online", city: null, place: null, locationName: null },
+    ]);
+    const result = await service.feed("viewer-id");
+    expect(result.localEvents.map((item) => item.meta?.split(" · ")[0])).toEqual(["Moda Sahnesi", "Sahil", "Kadıköy", "Online"]);
+  });
+
   it("removes location constraints for the global trend scope", async () => {
     await service.feed("viewer-id", { scope: "global" });
     expect(tag.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { status: "active" } }));

@@ -15,7 +15,8 @@ it("#26–27 exposes editable curator rates and saves the selected country throu
  fireEvent.click(await screen.findByRole("button",{name:"Anlaşma ve hareketler"}));
  const form = screen.getByRole("button",{name:"Yeni anlaşma sürümünü kaydet"}).closest("form")!;
  expect(within(form).getByLabelText("Ülke").tagName).toBe("SELECT"); expect(within(form).getByLabelText("Şehir").tagName).toBe("SELECT"); expect(within(form).getByLabelText("Eyalet / bölge").tagName).toBe("SELECT");
- fireEvent.change(within(form).getByLabelText("Ülke"),{target:{value:"Türkiye"}}); fireEvent.change(within(form).getByLabelText("Şehir"),{target:{value:"İstanbul"}});
+ // 17/10 #12: Türkiye seçilince il "Şehir" (bölge alanı), ilçe "İlçe" olarak sorulur; il bazlı bölge tüm ilçeleri kapsar.
+ fireEvent.change(within(form).getByLabelText("Ülke"),{target:{value:"Türkiye"}}); expect(within(form).getByLabelText("İlçe").tagName).toBe("SELECT"); fireEvent.change(within(form).getByLabelText("Şehir"),{target:{value:"İstanbul"}});
  const rate=within(form).getByLabelText("Bilet komisyonu (%)"); expect(rate).toHaveValue(30); fireEvent.change(rate,{target:{value:"25"}}); fireEvent.submit(form);
- await waitFor(()=>expect(api.saveCuratorAgreement).toHaveBeenCalledWith("curator",expect.objectContaining({territories:[{country:"Türkiye",city:"İstanbul",region:""}],rates:expect.objectContaining({ticket_commission:25})})));
+ await waitFor(()=>expect(api.saveCuratorAgreement).toHaveBeenCalledWith("curator",expect.objectContaining({territories:[{country:"Türkiye",city:"",region:"İstanbul"}],rates:expect.objectContaining({ticket_commission:25})})));
 });

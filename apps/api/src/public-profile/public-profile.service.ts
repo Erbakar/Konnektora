@@ -1,3 +1,4 @@
+import { visibleEventWhere } from "../common/event-visibility";
 import { compatibilityScores } from "../common/compatibility";
 import { effectivePlan } from "../plans/plan-runtime";
 import { consumeQuota } from "../common/usage-quota";
@@ -45,10 +46,12 @@ export class PublicProfileService {
       if (viewerId === profile.id) await this.prisma.$transaction(tx => consumeQuota(tx, { ...profile, role: profile.role }, "profile", analyticsRequest));
     }
     const canViewStats = Boolean(analyticsRequest) || ["admin", "super_admin", "curator"].includes(viewerRole ?? "") || viewerId === profile.id && canUseAdvancedAnalytics({ ...profile, role: viewerRole ?? "user" });
+    // 17/10 #14: gizli etkinlikler profil sayfasında yalnız görmeye yetkili izleyiciye listelenir.
+    const visibleEvents = await visibleEventWhere(this.prisma, viewerId ? { id: viewerId, role: viewerRole ?? "user" } : null);
     const [media, ownInterests, events, places, profileViews, authoredComments, sentMessages, profileViewDetails, followerDetails, connectionDetails, ownedEventStats, scans, profileViewSources, profileSharesByChannel, profileActions] = await Promise.all([
       this.prisma.mediaFile.findMany({ where: { contentType: "user", contentId: profile.id, status: "active" }, select: { id: true, url: true, type: true, sortOrder: true, isProfilePicture: true }, orderBy: { sortOrder: "asc" }, take: 50 }),
       viewerId ? this.prisma.userInterestTag.findMany({ where: { userId: viewerId }, select: { tagId: true, sentiment: true } }) : [],
-      this.canView(privacy.eventAudience, relationship) ? this.prisma.event.findMany({ where: { status: "published", OR: [{ createdById: profile.id }, { participants: { some: { userId: profile.id, status: { in: ["accepted", "attended"] } } } }] }, orderBy: { startsAt: "desc" }, take: 24, include: { _count: { select: { participants: { where: { status: { in: ["accepted", "attended"] } } } } } } }) : [],
+      this.canView(privacy.eventAudience, relationship) ? this.prisma.event.findMany({ where: { status: "published", AND: [visibleEvents], OR: [{ createdById: profile.id }, { participants: { some: { userId: profile.id, status: { in: ["accepted", "attended"] } } } }] }, orderBy: { startsAt: "desc" }, take: 24, include: { _count: { select: { participants: { where: { status: { in: ["accepted", "attended"] } } } } } } }) : [],
       this.canView(privacy.placeAudience, relationship) ? this.prisma.place.findMany({ where: { status: "active", OR: [{ createdById: profile.id }, { members: { some: { userId: profile.id, status: "accepted" } } }] }, orderBy: { followerCount: "desc" }, take: 24 }) : [],
       canViewStats ? this.prisma.contentView.count({ where: { targetType: "user", targetId: profile.id, kind: "detail" } }) : 0,
       canViewStats ? this.prisma.contentComment.count({ where: { authorId: profile.id, status: "active" } }) : 0,
