@@ -35,6 +35,12 @@ export class ChatController {
     catch (error) { if (file) await removeDurableUpload(file.path).catch(() => undefined); throw error; }
   }
 
+  /** 17/10 #22: izleyici bu kullanıcıya özel mesaj gönderebilir mi? */
+  @Get("conversations/:peerId/permission")
+  permission(@Param("peerId") peerId: string, @CurrentUser() user: User) {
+    return this.chatService.messagingPermission(user.id, peerId);
+  }
+
   @Patch("conversations/:peerId/read")
   markRead(@Param("peerId") peerId: string, @CurrentUser() user: User) {
     return this.chatService.markRead(user.id, peerId);

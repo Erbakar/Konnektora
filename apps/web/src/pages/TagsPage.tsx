@@ -30,6 +30,8 @@ import { userProfilePath } from "../components/UserIdentityLink";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
 import { ReportDialog } from "../components/ReportDialog";
 import { ComposerTips } from "../components/ComposerTips";
+import { DraftLeaveGuard } from "../components/DraftLeaveGuard";
+import { useComposerDraft } from "../lib/composerDrafts";
 import { EmbeddedMedia } from "../components/EmbeddedMedia";
 import { GuestListAction } from "../components/GuestListAction";
 import { formatPostDateTime } from "../lib/formats";
@@ -90,6 +92,8 @@ export function TagsPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [sharedPost, setSharedPost] = useState<{ id: string; body: string; author: string; likes: number } | null>(null);
   const [selectedTagMedia, setSelectedTagMedia] = useState<File[]>([]);
+  // 17/10 #23: ilgi alanı gönderi taslağı kullanıcıya ve ilgi alanına özel saklanır.
+  const [postDraft, setPostDraft, clearPostDraft] = useComposerDraft(user?.id, "tag", slug);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
   const tags = useQuery({
     queryKey: ["tags", slug ? "detail" : directoryFilters],
@@ -499,7 +503,7 @@ export function TagsPage() {
               if (input.value.trim() || selectedTagMedia.length)
                 post.mutate(
                   { body: input.value.trim(), files: selectedTagMedia },
-                  { onSuccess: () => form.reset() },
+                  { onSuccess: () => { form.reset(); clearPostDraft(); } },
                 );
             }}
           >
@@ -507,14 +511,17 @@ export function TagsPage() {
               name="body"
               minLength={1}
               maxLength={2000}
+              value={postDraft}
+              onChange={(event) => setPostDraft(event.target.value)}
               placeholder={(comments.data?.length ?? 0) === 0 ? t(`#${tag.name} hakkında ilk yorumu yazan sen ol…`, `Be the first to post about #${tag.name}…`) : t(`#${tag.name} hakkında bir şey yaz…`, `Write something about #${tag.name}…`)}
             />
             <div>
               <button className="primary-action" disabled={post.isPending}>
                 {t("Yayınla", "Publish")}
               </button>
-              <label className="secondary-action">
+              <label className="secondary-action tag-composer-media">
                 <ImagePlus aria-label={t("Resim/video ekle", "Add image/video")} size={20}/>
+                <span aria-hidden="true" className="composer-media-label">{t("Resim / video ekle", "Add photo / video")}</span>
                 <input
                   accept="image/*,video/mp4,video/webm"
                   hidden
@@ -525,6 +532,7 @@ export function TagsPage() {
                 />
               </label>
               <ComposerTips/>
+              <DraftLeaveGuard active={Boolean(postDraft.trim()) && !post.isPending} kind="post" onDiscard={clearPostDraft} />
               {selectedTagMedia.length ? <span className="comment-media-count">{t(`${selectedTagMedia.filter((file) => file.type.startsWith("image/")).length} resim, ${selectedTagMedia.filter((file) => file.type.startsWith("video/")).length} video seçildi`, `${selectedTagMedia.filter((file) => file.type.startsWith("image/")).length} images, ${selectedTagMedia.filter((file) => file.type.startsWith("video/")).length} videos selected`)} {post.isPending ? <LoaderCircle className="spin" size={15}/> : null}</span> : null}
             </div>
           </form>

@@ -1608,6 +1608,12 @@ function getMockResponse<T>(
     return schema.parse({ typing: false });
   if (
     pathname.startsWith("/me/conversations/") &&
+    pathname.endsWith("/permission") &&
+    method === "GET"
+  )
+    return schema.parse({ canMessage: true, reason: null });
+  if (
+    pathname.startsWith("/me/conversations/") &&
     pathname.endsWith("/typing") &&
     method === "POST"
   )
@@ -8662,6 +8668,14 @@ export function getTyping(peerId: string): Promise<{ typing: boolean }> {
   return requestJson(
     `/me/conversations/${peerId}/typing`,
     z.object({ typing: z.boolean() }),
+    { auth: "user" },
+  );
+}
+/** 17/10 #22: karşı tarafın gizlilik ayarı izleyicinin mesaj göndermesine izin veriyor mu? */
+export function getMessagingPermission(peerId: string): Promise<{ canMessage: boolean; reason: "self" | "unavailable" | "blocked" | "privacy" | null }> {
+  return requestJson(
+    `/me/conversations/${peerId}/permission`,
+    z.object({ canMessage: z.boolean(), reason: z.enum(["self", "unavailable", "blocked", "privacy"]).nullable() }),
     { auth: "user" },
   );
 }
