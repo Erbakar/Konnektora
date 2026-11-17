@@ -1,0 +1,265 @@
+/* 17/10 #1-#2 — Backoffice başlığı, ana navigasyon, yan menü ve dashboard sayaçları. */
+
+/* /admin altında son kullanıcı başlığı ve mobil gezinme gizlenir (AppLayout `hidden` ekler). */
+.corp-topbar[hidden],
+.corp-mobile-menu[hidden],
+.mobile-tab-bar[hidden] {
+  display: none !important;
+}
+
+.backoffice-shell {
+  background: #f1f4f1;
+  min-height: 100vh;
+}
+
+.backoffice-header {
+  align-items: center;
+  background: #ffffff;
+  border-bottom: 1px solid #e3e8e2;
+  display: flex;
+  gap: 28px;
+  min-height: 72px;
+  padding: 0 clamp(16px, 3vw, 40px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.backoffice-brand {
+  align-items: flex-start;
+  color: #10231f;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 2px;
+  text-decoration: none;
+}
+
+.backoffice-brand img {
+  display: block;
+  height: 30px;
+  width: auto;
+}
+
+.backoffice-brand span {
+  color: #b42318;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 2.4px;
+  line-height: 1;
+}
+
+.backoffice-main-nav {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.backoffice-main-link {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 8px 8px 0 0;
+  color: #44524b;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  gap: 7px;
+  min-height: 44px;
+  padding: 10px 13px 7px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.backoffice-main-link:hover {
+  background: #f2f6f3;
+  color: #10231f;
+}
+
+.backoffice-main-link.active {
+  background: #e7f3ec;
+  border-bottom-color: #1d6545;
+  color: #103c2c;
+  font-weight: 800;
+}
+
+.backoffice-main-link:focus-visible,
+.backoffice-sidebar-link:focus-visible,
+.backoffice-counter-row:focus-visible,
+.backoffice-brand:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.backoffice-logout {
+  color: #6b7280;
+  margin-left: auto;
+}
+
+.backoffice-logout:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.backoffice-badge {
+  background: #dc2626;
+  border-radius: 999px;
+  color: #ffffff;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.5;
+  min-width: 20px;
+  padding: 0 6px;
+  text-align: center;
+}
+
+/* ── Yan menü ── */
+
+.admin-layout--no-sidebar {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.backoffice-sidebar {
+  padding-top: 10px;
+}
+
+.backoffice-sidebar-link {
+  justify-content: space-between;
+  line-height: 1.3;
+  margin-top: 2px;
+  text-decoration: none;
+}
+
+.backoffice-sidebar-link .backoffice-badge {
+  margin-left: auto;
+}
+
+.backoffice-sidebar-link.nested {
+  font-size: 13px;
+  padding-left: 22px;
+}
+
+.backoffice-sidebar-group {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 8px 0 8px 10px;
+}
+
+.backoffice-sidebar-group-label {
+  color: rgba(255, 255, 255, 0.72);
+  display: block;
+  font-size: 12.5px;
+  font-weight: 750;
+  padding: 6px 10px 4px 12px;
+}
+
+/* ── Dashboard sayaçları ── */
+
+.backoffice-counter-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.backoffice-counter-card {
+  background: #ffffff;
+  border: 1px solid #dfe5dc;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 16px 10px;
+}
+
+.backoffice-counter-card > header {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.backoffice-counter-card h2 {
+  color: #0f1f14;
+  font-size: 15px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.backoffice-counter-card > header strong {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.backoffice-counter-row {
+  align-items: center;
+  border-top: 1px solid #edf1ec;
+  color: #33423a;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 46px;
+  padding: 8px 4px;
+  text-decoration: none;
+}
+
+.backoffice-counter-row:hover {
+  background: #f6f9f6;
+}
+
+.backoffice-counter-row strong {
+  color: #0f1f14;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.backoffice-counter-card strong.pending {
+  color: #dc2626;
+}
+
+/* ── Gömülü eski sayfalar ── */
+
+.admin-kyc-page--embedded > header,
+.notification-operations-page--embedded > header {
+  margin-top: 0;
+}
+
+.admin-kyc-page--embedded h2,
+.notification-operations-page--embedded h2 {
+  margin: 4px 0;
+}
+
+@media (max-width: 900px) {
+  .backoffice-header {
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    padding-bottom: 0;
+    padding-top: 10px;
+    position: static;
+  }
+
+  .backoffice-main-nav {
+    flex-basis: 100%;
+  }
+
+  .backoffice-logout {
+    margin-left: 0;
+  }
+
+  .backoffice-sidebar {
+    max-height: 280px;
+    overflow-y: auto;
+  }
+
+  .backoffice-shell .admin-layout {
+    min-height: 0;
+  }
+}

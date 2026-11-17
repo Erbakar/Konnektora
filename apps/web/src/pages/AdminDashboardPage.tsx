@@ -1,26 +1,25 @@
 import { CountryCityFields } from "../components/CountryCityFields";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Activity,
   AlertTriangle,
   CalendarCheck,
   Check,
   ClipboardCheck,
-  FileText,
   Key,
-  LayoutDashboard,
-  LogOut,
   Megaphone,
   MessageSquare,
   Plus,
   ShieldCheck,
-  Tags,
   Users,
   X
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AdminFinancePanel } from "../components/AdminFinancePanel";
+import { AdminFinancePanel, type AdminFinanceView } from "../components/AdminFinancePanel";
+import { BackofficeDashboard, BackofficeHeader, BackofficeSidebar } from "../components/BackofficeNavigation";
+import { type BackofficeSection, backofficeMainFor, backofficeSectionTitle, resolveBackofficeSection } from "../lib/backofficeNav";
+import { AdminKycPage } from "./AdminKycPage";
+import { AdminNotificationOperationsPage } from "./AdminNotificationOperationsPage";
 import { RichText } from "../components/RichText";
 import { AnnouncementPopup } from "../components/AnnouncementPopup";
 import { PasswordInput } from "../components/FormInputs";
@@ -49,7 +48,7 @@ import {
   deleteAdminCmsCategory,
   deleteAdminFaq,
   getAdminReportGroup,
-  getAdminDashboard,
+  getAdminBackofficeSummary,
   getAdminMessage,
   getAdminToken,
   getAdminTag,
@@ -134,99 +133,21 @@ import type {
   UserMessageType
 } from "@konnektora/shared";
 
-type AdminSection =
-  | "dashboard"
-  | "users"
-  | "roles"
-  | "activity-logs"
-  | "events"
-  | "places"
-  | "media"
-  | "posts"
-  | "comments"
-  | "private-messages"
-  | "tags"
-  | "report-rules"
-  | "reports"
-  | "messages"
-  | "cms"
-  | "email-tokens"
-  | "finance";
-
-const NAV_GROUPS: Array<{
-  label: string;
-  items: Array<{ id: AdminSection; label: string; Icon: React.ElementType }>;
-}> = [
-  {
-    label: "Genel",
-    items: [{ id: "dashboard", label: "Dashboard", Icon: LayoutDashboard }]
-  },
-  {
-    label: "Kullanıcılar",
-    items: [
-      { id: "users", label: "Üye Yönetimi", Icon: Users },
-      { id: "roles", label: "Rol / Yetkiler", Icon: ShieldCheck },
-      { id: "activity-logs", label: "User activity log", Icon: Activity }
-    ]
-  },
-  {
-    label: "İçerik",
-    items: [
-      { id: "events", label: "Etkinlikler", Icon: CalendarCheck },
-      { id: "places", label: "Mekanlar", Icon: LayoutDashboard },
-      { id: "media", label: "Medya", Icon: FileText },
-      { id: "posts", label: "Post'lar", Icon: FileText },
-      { id: "comments", label: "Yorumlar", Icon: MessageSquare },
-      { id: "tags", label: "İlgi Alanları", Icon: Tags }
-    ]
-  },
-  {
-    label: "Moderasyon",
-    items: [
-      { id: "report-rules", label: "Kural yönetimi", Icon: ShieldCheck },
-      { id: "reports", label: "Şikayetler", Icon: AlertTriangle },
-      { id: "private-messages", label: "Özel Mesajlar", Icon: MessageSquare },
-      { id: "messages", label: "Kullanıcı Mesajları", Icon: MessageSquare }
-    ]
-  },
-  {
-    label: "Muhasebe & Finans",
-    items: [{ id: "finance", label: "Muhasebe & Finans", Icon: FileText }]
-  },
-  {
-    label: "CMS",
-    items: [
-      { id: "cms", label: "CMS / SSS / Duyurular", Icon: FileText },
-      { id: "email-tokens", label: "Email Tokenları", Icon: Key }
-    ]
-  }
-];
-
-const SECTION_TITLES: Record<AdminSection, string> = {
-  dashboard: "Dashboard",
-  users: "Üye Yönetimi",
-  roles: "Rol / Yetkiler",
-  "activity-logs": "User activity log",
-  events: "Etkinlikler",
-  places: "Mekanlar",
-  media: "Medya",
-  posts: "Post'lar",
-  comments: "Yorumlar",
-  "private-messages": "Özel Mesajlar",
-  tags: "İlgi Alanları",
-  "report-rules": "Kural yönetimi",
-  reports: "Şikayetler",
-  messages: "Kullanıcı Mesajları",
-  cms: "CMS / SSS / Duyurular / Politikalar",
-  "email-tokens": "Email Tokenları",
-  finance: "Muhasebe & Finans"
-};
-
-const ADMIN_SECTIONS = new Set<AdminSection>(Object.keys(SECTION_TITLES) as AdminSection[]);
-
-function isAdminSection(value: string | null): value is AdminSection {
-  return value !== null && ADMIN_SECTIONS.has(value as AdminSection);
-}
+const FINANCE_VIEWS: ReadonlySet<BackofficeSection> = new Set<AdminFinanceView>([
+  "held-events",
+  "curator-agreements",
+  "curator-revenue",
+  "curator-payouts",
+  "curator-ledger",
+  "customer-accounts",
+  "customer-transactions",
+  "customer-plan-usage",
+  "customer-payouts",
+  "invoices",
+  "plans",
+  "plan-gifts",
+  "platform-income"
+]);
 
 const REPORT_TARGET_OPTIONS: Array<{ value: ReportTargetType; label: string }> = [
   { value: "post", label: "Gönderi" },
@@ -261,6 +182,12 @@ const USER_MESSAGE_TYPE_META: Record<UserMessageType, { label: string; descripti
     description: "Hata, öneri, şikayet, reklam, iş birliği ve diğer iletişim talepleri.",
     categories: ["Hata", "Oneriler", "Sikayet", "Reklam", "Is birligi", "Diger"]
   }
+};
+
+const DATA_DELETION_MESSAGE_META = {
+  label: "Veri silme talepleri",
+  description: "Veri silme formundan gelen talepler. Yanıt süresi 30 gündür; okundu durumu talebin tamamlandığını göstermez.",
+  categories: [] as string[]
 };
 
 const CMS_CATEGORY_TYPE_OPTIONS: Array<{ value: CmsCategory["type"]; label: string; description: string }> = [
@@ -330,33 +257,32 @@ const GENDER_OPTIONS = ["Erkek", "Kadin", "Belirtilmemis"];
 
 export function AdminDashboardPage() {
   const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [token, setToken] = useState(() => getAdminToken());
   const [loginError, setLoginError] = useState<string | null>(null);
-  const sectionParam = searchParams.get("section");
-  const activeSection: AdminSection = isAdminSection(sectionParam) ? sectionParam : "dashboard";
+  const activeSection = resolveBackofficeSection(searchParams.get("section"));
+  const activeMain = backofficeMainFor(activeSection);
   const [eventNotice, setEventNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [reportGroupScope, setReportGroupScope] = useState<"active" | "old">("active");
   const [selectedReportGroup, setSelectedReportGroup] = useState<{ targetType: ReportTargetType; targetId: string } | null>(null);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
 
-  function setActiveSection(section: AdminSection) {
-    const nextParams = new URLSearchParams(searchParams);
-
-    if (section === "dashboard") {
-      nextParams.delete("section");
-    } else {
-      nextParams.set("section", section);
-    }
-
-    setSearchParams(nextParams);
-  }
-
-  const dashboardQuery = useQuery({
-    queryKey: ["admin-dashboard"],
-    queryFn: getAdminDashboard,
-    enabled: Boolean(token)
+  const summaryQuery = useQuery({
+    queryKey: ["admin-backoffice-summary"],
+    queryFn: getAdminBackofficeSummary,
+    enabled: Boolean(token),
+    refetchInterval: 60_000
   });
+
+  // Rozetler ve dashboard sayaçları, panelin herhangi bir yerindeki başarılı işlemden sonra tazelenir.
+  useEffect(() => {
+    return queryClient.getMutationCache().subscribe((event) => {
+      if (event.type === "updated" && event.action.type === "success") {
+        void queryClient.invalidateQueries({ queryKey: ["admin-backoffice-summary"] });
+      }
+    });
+  }, [queryClient]);
+
   const eventsQuery = useQuery({
     queryKey: ["admin-events"],
     queryFn: listAdminEvents,
@@ -722,6 +648,8 @@ export function AdminDashboardPage() {
 
   if (!token) {
     return (
+      <div className="backoffice-shell">
+      <BackofficeHeader />
       <section className="page admin-login-page">
         <div>
           <p className="eyebrow">Admin</p>
@@ -753,10 +681,10 @@ export function AdminDashboardPage() {
           </button>
         </form>
       </section>
+      </div>
     );
   }
 
-  const dashboard = dashboardQuery.data;
   const tags = tagsQuery.data ?? [];
   const tagDetail = tagDetailQuery.data ?? null;
   const events = eventsQuery.data ?? [];
@@ -771,205 +699,32 @@ export function AdminDashboardPage() {
   const activeAdminAnnouncements = activeAdminAnnouncementsQuery.data ?? [];
   const policies = policiesQuery.data ?? [];
 
-  const openReports = reports.filter((r) => r.status === "open").length;
-
   return (
-    <div className="admin-layout">
+    <div className="backoffice-shell">
+      <BackofficeHeader activeMain={activeMain} onLogout={handleLogout} summary={summaryQuery.data} />
       <AnnouncementPopup announcements={activeAdminAnnouncements}/>
-      <aside className="admin-sidebar">
-        <div className="admin-sidebar-header">
-          <span className="admin-sidebar-title">
-            <LayoutDashboard size={16} />
-            Admin Paneli
-          </span>
-          <button className="admin-logout-btn" onClick={handleLogout} title="Çıkış yap" type="button">
-            <LogOut size={16} />
-          </button>
-        </div>
-        <nav className="admin-nav">
-          {NAV_GROUPS.map((group) => (
-            <div className="admin-nav-group" key={group.label}>
-              <span className="admin-nav-group-label">{group.label}</span>
-              {group.items.map(({ id, label, Icon }) => (
-                <button
-                  aria-current={activeSection === id ? "page" : undefined}
-                  className={`admin-nav-btn${activeSection === id ? " active" : ""}`}
-                  key={id}
-                  onClick={() => setActiveSection(id)}
-                  type="button"
-                >
-                  <Icon size={15} />
-                  {label}
-                  {id === "reports" && openReports > 0 ? (
-                    <span className="admin-nav-badge">{openReports}</span>
-                  ) : null}
-                </button>
-              ))}
-            </div>
-          ))}
-        </nav>
-      </aside>
+    <div className={`admin-layout${activeMain ? "" : " admin-layout--no-sidebar"}`}>
+      {activeMain ? <BackofficeSidebar activeSection={activeSection} main={activeMain} summary={summaryQuery.data} /> : null}
 
       <div className="admin-content">
         <div className="admin-content-header">
-          <h1>{SECTION_TITLES[activeSection]}</h1>
+          <h1>{backofficeSectionTitle(activeSection)}</h1>
           {isMockApiMode ? <span className="status-pill status-requested">Demo modu</span> : null}
         </div>
 
-        {activeSection === "finance" ? <AdminFinancePanel/> : null}
         {activeSection === "dashboard" && (
-          <div className="dashboard-sections">
-            {(dashboard?.publishedEvents ?? 0) === 0 && tags.length === 0 && events.length === 0 ? (
-              <div className="admin-getting-started">
-                <p className="admin-getting-started-title">Başlangıç kılavuzu — ilk 3 adım</p>
-                <div className="admin-getting-started-steps">
-                  <button className="admin-getting-started-step" onClick={() => setActiveSection("tags")} type="button">
-                    <span className="step-num">1</span>
-                    <div>
-                      <strong>İlgi alanı tag'leri oluştur</strong>
-                      <p>Etkinliklerde kullanmak için önce tag'leri tanımla.</p>
-                    </div>
-                  </button>
-                  <button className="admin-getting-started-step" onClick={() => setActiveSection("events")} type="button">
-                    <span className="step-num">2</span>
-                    <div>
-                      <strong>İlk etkinliği ekle</strong>
-                      <p>Etkinliği oluştur ve Published olarak kaydet.</p>
-                    </div>
-                  </button>
-                  <button className="admin-getting-started-step" onClick={() => setActiveSection("cms")} type="button">
-                    <span className="step-num">3</span>
-                    <div>
-                      <strong>CMS içeriklerini doldur</strong>
-                      <p>SSS, duyurular ve politika sayfalarını ekle.</p>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="metric-grid">
-              <MetricCard icon={<CalendarCheck size={24} />} label="Yayınlanan etkinlikler" value={dashboard?.publishedEvents ?? 0} />
-              <MetricCard icon={<CalendarCheck size={24} />} label="Yaklaşan etkinlikler" value={dashboard?.upcomingEvents ?? 0} />
-              <MetricCard icon={<Tags size={24} />} label="Aktif tag'ler" value={dashboard?.activeTags ?? 0} />
-              <MetricCard icon={<CalendarCheck size={24} />} label="Taslak etkinlikler" value={dashboard?.draftEvents ?? 0} />
-              <MetricCard icon={<AlertTriangle size={24} />} label="Açık şikayetler" value={openReports} />
-              <MetricCard icon={<Megaphone size={24} />} label="Aktif duyurular" value={announcements.filter((a) => a.status === "active").length} />
-              <MetricCard icon={<LayoutDashboard size={24} />} label="Mekanlar" value={placesQuery.data?.length ?? 0} />
-              <MetricCard icon={<FileText size={24} />} label="Medya" value={mediaQuery.data?.length ?? 0} />
-              <MetricCard icon={<MessageSquare size={24} />} label="Yorumlar" value={commentsQuery.data?.length ?? 0} />
-              <MetricCard icon={<MessageSquare size={24} />} label="Özel mesajlar" value={privateMessagesQuery.data?.length ?? 0} />
-            </div>
-
-            <p className="admin-dashboard-subtitle">Modüller</p>
-            <div className="dashboard-module-grid">
-              <DashboardModuleCard
-                Icon={Users}
-                label="Üye Yönetimi"
-                onClick={() => setActiveSection("users")}
-                stats={[
-                  { label: "Rol grupları", value: roleGroups.length }
-                ]}
-              />
-              <DashboardModuleCard
-                Icon={ShieldCheck}
-                label="Rol / Yetkiler"
-                onClick={() => setActiveSection("roles")}
-                stats={[
-                  { label: "Gruplar", value: roleGroups.length },
-                  { label: "Aktif", value: roleGroups.filter((rg) => rg.status === "active").length }
-                ]}
-              />
-              <DashboardModuleCard
-                Icon={CalendarCheck}
-                label="Etkinlikler"
-                onClick={() => setActiveSection("events")}
-                stats={[
-                  { label: "Yayınlanan", value: dashboard?.publishedEvents ?? 0 },
-                  { label: "Taslak", value: dashboard?.draftEvents ?? 0 },
-                  { label: "Yaklaşan", value: dashboard?.upcomingEvents ?? 0 }
-                ]}
-              />
-              <DashboardModuleCard
-                Icon={Tags}
-                label="İlgi Alanları"
-                onClick={() => setActiveSection("tags")}
-                stats={[
-                  { label: "Toplam tag", value: tags.length },
-                  { label: "Aktif", value: tags.filter((t) => t.status === "active").length },
-                  { label: "Arşiv", value: tags.filter((t) => t.status === "archived").length }
-                ]}
-              />
-              <DashboardModuleCard
-                Icon={LayoutDashboard}
-                label="Mekanlar"
-                onClick={() => setActiveSection("places")}
-                stats={[{ label: "Toplam", value: placesQuery.data?.length ?? 0 }]}
-              />
-              <DashboardModuleCard
-                Icon={FileText}
-                label="Medya"
-                onClick={() => setActiveSection("media")}
-                stats={[{ label: "Toplam", value: mediaQuery.data?.length ?? 0 }]}
-              />
-              <DashboardModuleCard
-                Icon={MessageSquare}
-                label="Yorumlar"
-                onClick={() => setActiveSection("comments")}
-                stats={[{ label: "Toplam", value: commentsQuery.data?.length ?? 0 }]}
-              />
-              <DashboardModuleCard
-                Icon={MessageSquare}
-                label="Özel Mesajlar"
-                onClick={() => setActiveSection("private-messages")}
-                stats={[
-                  { label: "Toplam", value: privateMessagesQuery.data?.length ?? 0 },
-                  { label: "Aktif", value: privateMessagesQuery.data?.filter((message) => message.status === "active").length ?? 0 }
-                ]}
-              />
-              <DashboardModuleCard
-                danger={openReports > 0}
-                Icon={AlertTriangle}
-                label="Şikayetler"
-                onClick={() => setActiveSection("reports")}
-                stats={[
-                  { label: "Açık", value: openReports, danger: openReports > 0 },
-                  { label: "İnceleniyor", value: reports.filter((r) => r.status === "reviewing").length },
-                  { label: "Kurallar", value: reportRules.length }
-                ]}
-              />
-              <DashboardModuleCard
-                Icon={FileText}
-                label="CMS / SSS / Duyurular"
-                onClick={() => setActiveSection("cms")}
-                stats={[
-                  { label: "Kategoriler", value: cmsCategories.length },
-                  { label: "SSS", value: faqs.length },
-                  { label: "Duyurular", value: announcements.length },
-                  { label: "Politikalar", value: policies.length }
-                ]}
-              />
-              <DashboardModuleCard
-                Icon={Key}
-                label="Email Tokenları"
-                onClick={() => setActiveSection("email-tokens")}
-                stats={[
-                  { label: "Akış tipi", value: 3 },
-                  { label: "Durum", value: "Aktif" }
-                ]}
-              />
-              <DashboardModuleCard
-                Icon={MessageSquare}
-                label="Bildirim Operasyonu"
-                onClick={() => { window.location.href = "/admin/notifications"; }}
-                stats={[
-                  { label: "Kanallar", value: 2 },
-                  { label: "Teslimat", value: "İzleniyor" }
-                ]}
-              />
-            </div>
-          </div>
+          <BackofficeDashboard
+            error={summaryQuery.isError ? summaryQuery.error : undefined}
+            onRetry={() => void summaryQuery.refetch()}
+            summary={summaryQuery.data}
+          />
         )}
+
+        {FINANCE_VIEWS.has(activeSection) ? <AdminFinancePanel key={activeSection} view={activeSection as AdminFinanceView} /> : null}
+
+        {activeSection === "kyc" && <AdminKycPage embedded />}
+
+        {activeSection === "notification-deliveries" && <AdminNotificationOperationsPage embedded />}
 
         {activeSection === "users" && (
           <UserAdminPanel roleGroups={roleGroups} />
@@ -1107,10 +862,15 @@ export function AdminDashboardPage() {
           />
         )}
 
-        {activeSection === "messages" && <UserMessagesAdminPanel />}
+        {activeSection === "messages-faq" && <UserMessagesAdminPanel fixedType="faq" key={activeSection} />}
+        {activeSection === "messages-write-to-us" && <UserMessagesAdminPanel dataDeletion="exclude" fixedType="write_to_us" key={activeSection} />}
+        {activeSection === "messages-account-freeze" && <UserMessagesAdminPanel fixedType="account_freeze" key={activeSection} />}
+        {activeSection === "messages-data-deletion" && <UserMessagesAdminPanel dataDeletion="only" fixedType="write_to_us" key={activeSection} />}
 
-        {activeSection === "cms" && (
+        {CMS_VIEWS[activeSection] ? (
           <CmsAdminPanel
+            key={activeSection}
+            view={CMS_VIEWS[activeSection]}
             announcements={announcements}
             categories={cmsCategories}
             faqs={faqs}
@@ -1136,44 +896,12 @@ export function AdminDashboardPage() {
             onUpdateFaq={(id, data) => updateFaqMutation.mutate({ id, data })}
             policies={policies}
           />
-        )}
+        ) : null}
 
         {activeSection === "email-tokens" && <EmailTokenInfoPanel />}
       </div>
     </div>
-  );
-}
-
-function DashboardModuleCard({
-  danger,
-  Icon,
-  label,
-  onClick,
-  stats
-}: {
-  danger?: boolean;
-  Icon: React.ElementType;
-  label: string;
-  onClick: () => void;
-  stats: Array<{ label: string; value: number | string; danger?: boolean }>;
-}) {
-  return (
-    <button className={`dashboard-module-card${danger ? " dashboard-module-card--alert" : ""}`} onClick={onClick} type="button">
-      <div className="dashboard-module-header">
-        <span className="dashboard-module-icon">
-          <Icon size={18} />
-        </span>
-        <h3>{label}</h3>
-      </div>
-      <div className="dashboard-module-stats">
-        {stats.map((stat) => (
-          <div className="dashboard-stat" key={stat.label}>
-            <span className={`dashboard-stat-value${stat.danger ? " danger" : ""}`}>{stat.value}</span>
-            <span className="dashboard-stat-label">{stat.label}</span>
-          </div>
-        ))}
-      </div>
-    </button>
+    </div>
   );
 }
 
@@ -1339,6 +1067,22 @@ const policyTypes: Array<{ value: PolicyType; label: string; defaultTitle: strin
   }
 ];
 
+export type CmsAdminView = "faq-categories" | "write-to-us-categories" | "announcements" | "policies";
+
+const CMS_VIEWS: Partial<Record<BackofficeSection, CmsAdminView>> = {
+  "cms-faq-categories": "faq-categories",
+  "cms-write-to-us-categories": "write-to-us-categories",
+  "cms-announcements": "announcements",
+  "cms-policies": "policies"
+};
+
+const CMS_VIEW_TITLES: Record<CmsAdminView, string> = {
+  "faq-categories": "Sık Sorulan Sorular kategorileri",
+  "write-to-us-categories": "Write to Us kategorileri",
+  announcements: "Duyuru yönetimi",
+  policies: "Yasal Politika Sayfaları"
+};
+
 export function CmsAdminPanel({
   announcements,
   categories,
@@ -1353,8 +1097,11 @@ export function CmsAdminPanel({
   onUpdateAnnouncement,
   onUpdateCategory,
   onUpdateFaq,
-  policies
+  policies,
+  view
 }: {
+  /** 17/10 #1 madde 4.5: verilirse yalnız ilgili CMS alt kategorisi gösterilir; verilmezse tümü. */
+  view?: CmsAdminView;
   announcements: Announcement[];
   categories: CmsCategory[];
   faqs: Faq[];
@@ -1436,7 +1183,10 @@ export function CmsAdminPanel({
   const faqCategories = categories.filter((category) => category.type === "faq");
   const activeFaqCategories = faqCategories.filter((category) => category.status === "active");
   const writeToUsCategories = categories.filter((category) => category.type === "write_to_us");
-  const visibleCategories = categories.filter(
+  const viewCategoryType: CmsCategory["type"] | null =
+    view === "faq-categories" ? "faq" : view === "write-to-us-categories" ? "write_to_us" : null;
+  const scopedCategories = viewCategoryType ? categories.filter((category) => category.type === viewCategoryType) : categories;
+  const visibleCategories = scopedCategories.filter(
     (category) =>
       (!categoryFilters.type || category.type === categoryFilters.type) &&
       (!categoryFilters.q ||
@@ -1454,26 +1204,26 @@ export function CmsAdminPanel({
   return (
     <section className="admin-panel">
       <div className="section-header compact">
-        <h2>CMS / SSS</h2>
+        <h2>{view ? CMS_VIEW_TITLES[view] : "CMS / SSS"}</h2>
         <span>
           {categories.length} kategori · {faqs.length} SSS · {announcements.length} duyuru · {policies.length} politika
         </span>
       </div>
-      <p className="admin-section-desc">
+      {view ? null : <p className="admin-section-desc">
         SSS kategorilerini ve sorularını ekle, site duyurularını yönet, yasal politika sayfalarını düzenle. Önce kategori oluştur, ardından o kategoriye SSS ekle.
-      </p>
+      </p>}
 
       {/* ── 1. Kategoriler ── */}
-      <div className="admin-subsection">
+      {!view || viewCategoryType ? <div className="admin-subsection">
         <div className="admin-subsection-header">
-          <h3>İçerik Kategorileri</h3>
-          <span>{categories.length} kategori</span>
+          <h3>{viewCategoryType ? CMS_CATEGORY_TYPE_LABELS[viewCategoryType] : "İçerik Kategorileri"}</h3>
+          <span>{scopedCategories.length} kategori</span>
         </div>
         <div className="admin-create-section">
           <span className="admin-create-section-label"><Plus size={11} /> Yeni kategori</span>
           <form className="admin-form" onSubmit={handleCategorySubmit}>
             <div className="admin-form-grid">
-              <label>
+              {viewCategoryType ? <input name="type" type="hidden" value={viewCategoryType} /> : <label>
                 Kategori türü
                 <select name="type" defaultValue="faq" required>
                   {CMS_CATEGORY_TYPE_OPTIONS.map((option) => (
@@ -1482,7 +1232,7 @@ export function CmsAdminPanel({
                     </option>
                   ))}
                 </select>
-              </label>
+              </label>}
               <label>
                 Kategori adı
                 <input name="name" placeholder="Örn. Account, Events, Hata, Reklam..." required minLength={2} />
@@ -1493,7 +1243,7 @@ export function CmsAdminPanel({
               <textarea name="description" placeholder="Bu kategori hangi konuları kapsar? (opsiyonel)" rows={2} />
             </label>
             <div className="profile-tag-row">
-              {CMS_CATEGORY_TYPE_OPTIONS.map((option) => (
+              {CMS_CATEGORY_TYPE_OPTIONS.filter((option) => !viewCategoryType || option.value === viewCategoryType).map((option) => (
                 <span key={option.value}>
                   {option.label}: {option.description}
                 </span>
@@ -1507,14 +1257,14 @@ export function CmsAdminPanel({
         </div>
         <div className="admin-manage-section-label">
           <span>Mevcut kategoriler</span>
-          <span>{visibleCategories.length} / {categories.length} kayıt</span>
+          <span>{visibleCategories.length} / {scopedCategories.length} kayıt</span>
         </div>
         <div className="guest-invite-form">
           <label>
             Kategori arama
             <input value={categoryFilters.q} onChange={(event) => setCategoryFilters((current) => ({ ...current, q: event.target.value }))} placeholder="Kategori adı veya açıklama" />
           </label>
-          <label>
+          {viewCategoryType ? null : <label>
             Tür filtresi
             <select value={categoryFilters.type} onChange={(event) => setCategoryFilters((current) => ({ ...current, type: event.target.value }))}>
               <option value="">Tümü</option>
@@ -1524,12 +1274,12 @@ export function CmsAdminPanel({
                 </option>
               ))}
             </select>
-          </label>
+          </label>}
         </div>
-        {categories.length === 0 ? (
+        {scopedCategories.length === 0 ? (
           <div className="admin-empty-state">
             <strong>Henüz kategori yok</strong>
-            <p>SSS eklemeden önce en az bir kategori oluşturman gerekiyor.</p>
+            <p>{viewCategoryType === "write_to_us" ? "Aktif kategoriler kullanıcıların “Bize yazın” formunda gösterilir." : "SSS eklemeden önce en az bir kategori oluşturman gerekiyor."}</p>
           </div>
         ) : (
           <div className="admin-list">
@@ -1565,10 +1315,10 @@ export function CmsAdminPanel({
             ))}
           </div>
         )}
-      </div>
+      </div> : null}
 
       {/* ── 2. SSS ── */}
-      <div className="admin-subsection">
+      {!view || view === "faq-categories" ? <div className="admin-subsection">
         <div className="admin-subsection-header">
           <h3>Sık Sorulan Sorular</h3>
           <span>{faqs.length} soru</span>
@@ -1662,9 +1412,9 @@ export function CmsAdminPanel({
             )}
           </>
         )}
-      </div>
+      </div> : null}
 
-      <div className="admin-subsection">
+      {view ? null : <div className="admin-subsection">
         <div className="admin-subsection-header">
           <h3>Write to us Kategorileri</h3>
           <span>{writeToUsCategories.length} kategori</span>
@@ -1709,10 +1459,10 @@ export function CmsAdminPanel({
             <p>Yukarıdaki kategori formundan türü “Write to us kategorisi” seçerek ilk kaydı ekleyin.</p>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* ── 3. Duyurular ── */}
-      <div className="admin-subsection">
+      {!view || view === "announcements" ? <div className="admin-subsection">
         <div className="admin-subsection-header">
           <h3>Duyurular</h3>
           <span>{announcements.length} duyuru</span>
@@ -1827,10 +1577,10 @@ export function CmsAdminPanel({
             ))}
           </div>
         )}
-      </div>
+      </div> : null}
 
       {/* ── 4. Politika sayfaları ── */}
-      <div className="admin-subsection">
+      {!view || view === "policies" ? <div className="admin-subsection">
         <div className="admin-subsection-header">
           <h3>Yasal Politika Sayfaları</h3>
           <span>{policies.length} / {policyTypes.length} dolduruldu</span>
@@ -1877,7 +1627,7 @@ export function CmsAdminPanel({
             );
           })}
         </div>
-      </div>
+      </div> : null}
     </section>
   );
 }
@@ -2085,14 +1835,24 @@ function RichTextTextarea({
   );
 }
 
-function UserMessagesAdminPanel() {
+/**
+ * 17/10 #1 madde 4.2: `fixedType` verildiğinde yalnız o mesaj kutusu gösterilir (tür sekmeleri gizlenir).
+ * Veri silme talepleri Write to us kutusundan `dataDeletion` ile ayrılır.
+ */
+export function UserMessagesAdminPanel({
+  dataDeletion,
+  fixedType
+}: {
+  dataDeletion?: "only" | "exclude";
+  fixedType?: UserMessageType;
+} = {}) {
   const queryClient = useQueryClient();
-  const [type, setType] = useState<UserMessageType>("faq");
+  const [type, setType] = useState<UserMessageType>(fixedType ?? "faq");
   const [filters, setFilters] = useState({ q: "", status: "", category: "", page: 1 });
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
-  const meta = USER_MESSAGE_TYPE_META[type];
+  const meta = dataDeletion === "only" ? DATA_DELETION_MESSAGE_META : USER_MESSAGE_TYPE_META[type];
   const messagesQuery = useQuery({
-    queryKey: ["admin-user-messages", type, filters],
+    queryKey: ["admin-user-messages", type, filters, dataDeletion ?? "all"],
     queryFn: () => {
       const params = new URLSearchParams();
 
@@ -2106,6 +1866,10 @@ function UserMessagesAdminPanel() {
 
       if (filters.category) {
         params.set("category", filters.category);
+      }
+
+      if (dataDeletion) {
+        params.set("dataDeletion", dataDeletion);
       }
 
       params.set("page", String(filters.page));
@@ -2148,11 +1912,11 @@ function UserMessagesAdminPanel() {
   return (
     <section className="admin-panel">
       <div className="section-header compact">
-        <h2>Kullanıcılardan Mesajlar</h2>
+        <h2>{fixedType ? meta.label : "Kullanıcılardan Mesajlar"}</h2>
         <span>{messagesQuery.isLoading ? "Yükleniyor" : `${messageList?.total ?? 0} mesaj`}</span>
       </div>
       <p className="admin-section-desc">{meta.description}</p>
-      <div aria-label="Mesaj türü" className="segmented-control user-message-tabs" role="tablist">
+      {fixedType ? null : <div aria-label="Mesaj türü" className="segmented-control user-message-tabs" role="tablist">
         {(Object.keys(USER_MESSAGE_TYPE_META) as UserMessageType[]).map((item) => (
           <button
             aria-selected={type === item}
@@ -2165,7 +1929,7 @@ function UserMessagesAdminPanel() {
             {USER_MESSAGE_TYPE_META[item].label}
           </button>
         ))}
-      </div>
+      </div>}
       <form className="guest-invite-form" onSubmit={handleFilterSubmit}>
         <label>
           Arama
@@ -2263,7 +2027,7 @@ function UserMessageRow({
         <span>
           {message.name} · {message.email} · {message.createdAt ? new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(message.createdAt)) : "Tarih yok"}
         </span>
-        {message.category === DATA_DELETION_CATEGORY ? <DataRequestDeadline createdAt={message.createdAt} /> : null}
+        {message.category?.startsWith(DATA_DELETION_CATEGORY) ? <DataRequestDeadline createdAt={message.createdAt} /> : null}
       </div>
       <span className={`status-pill status-${message.status === "unread" ? "open" : "resolved"}`}>
         {message.status === "unread" ? "Okunmadı" : "Okundu"}
@@ -2333,7 +2097,7 @@ function UserMessageDetail({
         <strong>Kullanıcı mesajı</strong>
         <p className="form-help"><RichText text={message.body} /></p>
       </div>
-      {message.category === DATA_DELETION_CATEGORY ? <div className="admin-list-item">
+      {message.category?.startsWith(DATA_DELETION_CATEGORY) ? <div className="admin-list-item">
         <strong>Veri silme talebi · {message.id}</strong>
         <DataRequestDeadline createdAt={message.createdAt} />
         <p className="form-help">Hesap sahipliğini kayıtlı e-posta üzerinden doğrulayın, kapsamı belirleyin ve sonucu kullanıcıya iletin. Okundu durumu silme veya yanıt işleminin tamamlandığını göstermez. Şifre veya kimlik belgesi istemeyin; doğrulanmamış taleple hiçbir veriyi silmeyin.</p>

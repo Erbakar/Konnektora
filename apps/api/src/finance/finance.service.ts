@@ -219,7 +219,11 @@ export class FinanceService {
 
   listAdminTransactions() { return this.prisma.paymentTransaction.findMany({ take: 200, orderBy: { createdAt: "desc" }, include: { event: { select: { id: true, title: true, slug: true } }, payer: { select: { id: true, name: true } }, payee: { select: { id: true, name: true } } } }); }
   listAdminAccounts() { return this.prisma.financialAccount.findMany({ take: 200, orderBy: { updatedAt: "desc" }, include: { user: { select: { id: true, name: true, email: true, accountType: true } } } }); }
-  listAdminPayouts() { return this.prisma.payout.findMany({ take: 200, orderBy: { requestedAt: "desc" }, include: { user: { select: { id: true, name: true, email: true } } } }); }
+  /** 17/10 #1: `isCurator`, backoffice'te küratör ve müşteri para çekme taleplerini ayırır. */
+  async listAdminPayouts() {
+    const payouts = await this.prisma.payout.findMany({ take: 200, orderBy: { requestedAt: "desc" }, include: { user: { select: { id: true, name: true, email: true, _count: { select: { curatorAgreements: true } } } } } });
+    return payouts.map(({ user, ...payout }) => ({ ...payout, isCurator: (user._count?.curatorAgreements ?? 0) > 0, user: { id: user.id, name: user.name, email: user.email } }));
+  }
   updateKyc(userId: string, status: KycStatus) { return this.prisma.financialAccount.update({ where: { userId }, data: { kycStatus: status } }); }
   async updatePayout(id: string, status: PayoutStatus) {
     if (status === PayoutStatus.paid) requireSandboxEnvironment();

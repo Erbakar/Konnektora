@@ -959,6 +959,28 @@ export const adminDashboardSchema = z.object({
   upcomingEvents: z.number().int().nonnegative(),
 });
 
+/** 17/10 #1-#2: Backoffice başlık rozetleri ve dashboard sayaçları. */
+export const adminBackofficeSummarySchema = z.object({
+  openReports: z.number().int().nonnegative(),
+  openReportGroups: z.number().int().nonnegative(),
+  messages: z.object({
+    faq: z.number().int().nonnegative(),
+    writeToUs: z.number().int().nonnegative(),
+    accountFreeze: z.number().int().nonnegative(),
+    dataDeletion: z.number().int().nonnegative(),
+  }),
+  openMessages: z.number().int().nonnegative(),
+  pendingKyc: z.number().int().nonnegative(),
+  heldEvents: z.object({
+    expired: z.number().int().nonnegative(),
+    notExpired: z.number().int().nonnegative(),
+  }),
+  activeAnnouncements: z.number().int().nonnegative(),
+  customerPayoutRequests: z.number().int().nonnegative(),
+  curatorPayoutRequests: z.number().int().nonnegative(),
+  pendingFinanceRequests: z.number().int().nonnegative(),
+});
+
 export const adminUserSchema = z.object({
   region: z.string().nullable().optional(), postalCode: z.string().nullable().optional(),
   id: z.string().uuid(),
@@ -1686,6 +1708,7 @@ export type CorporateKycDocument = z.infer<typeof corporateKycDocumentSchema>;
 export type BeneficialOwner = z.infer<typeof beneficialOwnerSchema>;
 export type EventList = z.infer<typeof eventListSchema>;
 export type AdminDashboard = z.infer<typeof adminDashboardSchema>;
+export type AdminBackofficeSummary = z.infer<typeof adminBackofficeSummarySchema>;
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
 export type EventParticipant = z.infer<typeof eventParticipantSchema>;
 export type ContentReport = z.infer<typeof contentReportSchema>;
