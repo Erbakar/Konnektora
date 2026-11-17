@@ -16,6 +16,11 @@ export class AdminController {
     return this.adminService.getDashboard();
   }
 
+  @Get("backoffice-summary")
+  getBackofficeSummary() {
+    return this.adminService.getBackofficeSummary();
+  }
+
   @Get("users")
   @RequirePermissions("users.manage")
   listUsers(@Query() query: AdminUserQueryDto) {

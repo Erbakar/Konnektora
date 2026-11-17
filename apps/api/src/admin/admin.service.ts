@@ -1,9 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, User, UserStatus } from "@prisma/client";
+import { KycStatus, PaymentStatus, PayoutStatus, Prisma, ReportStatus, User, UserMessageStatus, UserMessageType, UserStatus } from "@prisma/client";
 import { AuthService } from "../auth/auth.service";
 import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { AdminActivityLogQueryDto, AdminUserActionDto, AdminUserQueryDto, CreateAdminRoleGroupDto, UpdateAdminRoleGroupDto, UpdateAdminUserDto } from "./admin.dto";
+
+const DATA_DELETION_CATEGORY_PREFIX = "Veri silme talebi";
+const HELD_EVENT_RELEASE_DELAY_MS = 72 * 60 * 60 * 1000;
 
 @Injectable()
 export class AdminService {
@@ -31,6 +34,82 @@ export class AdminService {
       draftEvents,
       activeTags,
       upcomingEvents
+    };
+  }
+
+  /**
+   * 17/10 #1-#2: Backoffice başlığı, yan menü rozetleri ve dashboard sayaçları.
+   * Yalnız "değerlendirilmeyi bekleyen" iş yükünü sayar; liste verisi döndürmez.
+   */
+  async getBackofficeSummary(now = new Date()) {
+    const activeReports = { status: { in: [ReportStatus.open, ReportStatus.reviewing] } };
+    const unread = { status: UserMessageStatus.unread };
+    const dataDeletion = { category: { startsWith: DATA_DELETION_CATEGORY_PREFIX } };
+    const notDataDeletion = { OR: [{ category: null }, { NOT: dataDeletion }] };
+    const held: Prisma.EventWhereInput = {
+      OR: [
+        { platformRevenues: { some: { held: true } } },
+        { payments: { some: { releasedAt: null, status: { in: [PaymentStatus.succeeded, PaymentStatus.partially_refunded] } } } },
+        { curatorLedger: { some: { held: true } } }
+      ]
+    };
+    // Blokeli gelir, etkinlik bitişinden 72 saat sonra onaya açılır (FinanceService.listHeldEvents ile aynı kural).
+    const releasableBefore = new Date(now.getTime() - HELD_EVENT_RELEASE_DELAY_MS);
+    const pendingPayout = { status: PayoutStatus.pending };
+    const liveAnnouncement = {
+      status: "active",
+      publishAt: { lte: now },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
+    };
+
+    const [
+      openReports,
+      openReportGroups,
+      faqMessages,
+      writeToUsMessages,
+      accountFreezeMessages,
+      dataDeletionMessages,
+      pendingKyc,
+      heldExpired,
+      heldTotal,
+      activeAnnouncements,
+      curatorPayouts,
+      pendingPayouts
+    ] = await Promise.all([
+      this.prisma.contentReport.count({ where: activeReports }),
+      this.prisma.contentReport.groupBy({ by: ["targetType", "targetId"], where: activeReports }),
+      this.prisma.userMessage.count({ where: { ...unread, type: UserMessageType.faq } }),
+      this.prisma.userMessage.count({ where: { ...unread, type: UserMessageType.write_to_us, ...notDataDeletion } }),
+      this.prisma.userMessage.count({ where: { ...unread, type: UserMessageType.account_freeze } }),
+      this.prisma.userMessage.count({ where: { ...unread, type: UserMessageType.write_to_us, ...dataDeletion } }),
+      this.prisma.corporateKycApplication.count({ where: { status: KycStatus.pending } }),
+      this.prisma.event.count({ where: { AND: [held, { endsAt: { lte: releasableBefore } }] } }),
+      this.prisma.event.count({ where: held }),
+      this.prisma.announcement.count({ where: liveAnnouncement }),
+      this.prisma.payout.count({ where: { ...pendingPayout, user: { curatorAgreements: { some: {} } } } }),
+      this.prisma.payout.count({ where: pendingPayout })
+    ]);
+
+    const messages = {
+      faq: faqMessages,
+      writeToUs: writeToUsMessages,
+      accountFreeze: accountFreezeMessages,
+      dataDeletion: dataDeletionMessages
+    };
+    const heldEvents = { expired: heldExpired, notExpired: Math.max(heldTotal - heldExpired, 0) };
+    const customerPayoutRequests = Math.max(pendingPayouts - curatorPayouts, 0);
+
+    return {
+      openReports,
+      openReportGroups: openReportGroups.length,
+      messages,
+      openMessages: messages.faq + messages.writeToUs + messages.accountFreeze + messages.dataDeletion,
+      pendingKyc,
+      heldEvents,
+      activeAnnouncements,
+      customerPayoutRequests,
+      curatorPayoutRequests: curatorPayouts,
+      pendingFinanceRequests: pendingKyc + heldEvents.expired + heldEvents.notExpired + customerPayoutRequests + curatorPayouts
     };
   }
 
