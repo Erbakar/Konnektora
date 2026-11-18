@@ -1,6 +1,7 @@
 import { normalizeMediaFile } from "./mediaPolicy";
 import { walletHeader, setWalletGrant, clearWalletGrant } from "./wallet-session";
 import {
+  adminBackofficeSummarySchema,
   adminDashboardSchema,
   adminActivityLogListSchema,
   adminManagedUserDetailSchema,
@@ -76,6 +77,7 @@ import {
   userMessageListSchema,
   userMessageSchema,
   userBlocksSchema,
+  type AdminBackofficeSummary,
   type AdminDashboard,
   type AdminActivityLog,
   type AdminComment,
@@ -1608,6 +1610,12 @@ function getMockResponse<T>(
     return schema.parse({ typing: false });
   if (
     pathname.startsWith("/me/conversations/") &&
+    pathname.endsWith("/permission") &&
+    method === "GET"
+  )
+    return schema.parse({ canMessage: true, reason: null });
+  if (
+    pathname.startsWith("/me/conversations/") &&
     pathname.endsWith("/typing") &&
     method === "POST"
   )
@@ -2119,6 +2127,10 @@ function getMockResponse<T>(
 
   if (pathname === "/admin/dashboard" && method === "GET") {
     return schema.parse(getMockDashboard());
+  }
+
+  if (pathname === "/admin/backoffice-summary" && method === "GET") {
+    return schema.parse(getMockBackofficeSummary());
   }
 
   if (pathname === "/admin/activity-logs" && method === "GET") {
@@ -3292,6 +3304,7 @@ function listMockUserMessages(
 ): UserMessageList {
   const status = params.get("status");
   const category = params.get("category");
+  const dataDeletion = params.get("dataDeletion");
   const q = params.get("q")?.toLowerCase().trim();
   const page = Math.max(Number(params.get("page") || "1"), 1);
   const pageSize = Math.min(
@@ -3304,6 +3317,8 @@ function listMockUserMessages(
         message.type === type &&
         (!status || message.status === status) &&
         (!category || message.category === category) &&
+        (!dataDeletion ||
+          Boolean(message.category?.startsWith("Veri silme talebi")) === (dataDeletion === "only")) &&
         (!q ||
           [message.name, message.email, message.phone ?? "", message.body]
             .join(" ")
@@ -7670,6 +7685,30 @@ function getMockDashboard(): AdminDashboard {
   };
 }
 
+function getMockBackofficeSummary(): AdminBackofficeSummary {
+  const unread = getStoredUserMessages().filter((message) => message.status === "unread");
+  const isDataDeletion = (message: UserMessage) => Boolean(message.category?.startsWith("Veri silme talebi"));
+  const messages = {
+    faq: unread.filter((message) => message.type === "faq").length,
+    writeToUs: unread.filter((message) => message.type === "write_to_us" && !isDataDeletion(message)).length,
+    accountFreeze: unread.filter((message) => message.type === "account_freeze").length,
+    dataDeletion: unread.filter((message) => message.type === "write_to_us" && isDataDeletion(message)).length,
+  };
+
+  return {
+    openReports: 0,
+    openReportGroups: 0,
+    messages,
+    openMessages: messages.faq + messages.writeToUs + messages.accountFreeze + messages.dataDeletion,
+    pendingKyc: 0,
+    heldEvents: { expired: 0, notExpired: 0 },
+    activeAnnouncements: 0,
+    customerPayoutRequests: 0,
+    curatorPayoutRequests: 0,
+    pendingFinanceRequests: 0,
+  };
+}
+
 function createMockTag(input: { name: string; description?: string }): Tag {
   const tags = getStoredTags();
   const slug = uniqueSlug(input.name, []);
@@ -8106,7 +8145,7 @@ function parseEventFormat(value?: string): Event["format"] {
 }
 
 function parseEventVisibility(value?: string): Event["visibility"] {
-  return value === "approval_required" || value === "invite_only"
+  return value === "approval_required" || value === "invite_only" || value === "hidden"
     ? value
     : "open";
 }
@@ -8665,6 +8704,14 @@ export function getTyping(peerId: string): Promise<{ typing: boolean }> {
     { auth: "user" },
   );
 }
+/** 17/10 #22: karşı tarafın gizlilik ayarı izleyicinin mesaj göndermesine izin veriyor mu? */
+export function getMessagingPermission(peerId: string): Promise<{ canMessage: boolean; reason: "self" | "unavailable" | "blocked" | "privacy" | null }> {
+  return requestJson(
+    `/me/conversations/${peerId}/permission`,
+    z.object({ canMessage: z.boolean(), reason: z.enum(["self", "unavailable", "blocked", "privacy"]).nullable() }),
+    { auth: "user" },
+  );
+}
 export function updateConversationPreference(
   peerId: string,
   input: { pinned?: boolean; muted?: boolean; archived?: boolean },
@@ -9096,6 +9143,15 @@ export function getTagStats(tagId: string): Promise<Record<string, number>> {
   return requestJson(
     `/tags/${tagId}/stats`,
     z.record(z.number().nonnegative()),
+    { auth: "user" },
+  );
+}
+
+/** 17/11 #116: etiketin nasıl oluşturulduğu (kendi profiline ekleyerek / başkasının profilinde). */
+export function getTagStatsOrigin(tagId: string): Promise<{ mode: "self" | "other" | "unknown"; username: string | null }> {
+  return requestJson(
+    `/tags/${tagId}/stats/origin`,
+    z.object({ mode: z.enum(["self", "other", "unknown"]), username: z.string().nullable() }),
     { auth: "user" },
   );
 }
@@ -9599,6 +9655,10 @@ export function acceptInvite(input: {
 
 export function getAdminDashboard(): Promise<AdminDashboard> {
   return requestJson("/admin/dashboard", adminDashboardSchema, { auth: true });
+}
+
+export function getAdminBackofficeSummary(): Promise<AdminBackofficeSummary> {
+  return requestJson("/admin/backoffice-summary", adminBackofficeSummarySchema, { auth: true });
 }
 
 export function listAdminActivityLogs(params?: URLSearchParams) {
@@ -10267,6 +10327,15 @@ export function createAdminEvent(input: AdminEventInput): Promise<Event> {
 
 export function createUserEvent(input: AdminEventInput): Promise<Event> {
   return requestJson("/events", eventSchema, {
+    auth: "user",
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** 17/10 #29: kaynak etkinlikten yeni bir etkinlik oluşturur (katılımcılar ve satılmış biletler kopyalanmaz). */
+export function copyMyEvent(sourceId: string, input: AdminEventInput): Promise<Event> {
+  return requestJson(`/events/${sourceId}/copy`, eventSchema, {
     auth: "user",
     method: "POST",
     body: JSON.stringify(input),
@@ -11094,7 +11163,7 @@ export function respondPlaceInvite(
 
 const adminFinanceUserSchema = z.object({ id: z.string().uuid(), name: z.string(), email: z.string() });
 const adminFinanceAccountSchema = financeDashboardSchema.shape.account.extend({ user: adminFinanceUserSchema.extend({ accountType: z.string() }) });
-const adminFinancePayoutSchema = financeDashboardSchema.shape.payouts.element.extend({ user: adminFinanceUserSchema });
+const adminFinancePayoutSchema = financeDashboardSchema.shape.payouts.element.extend({ user: adminFinanceUserSchema, isCurator: z.boolean().optional() });
 export function listAdminFinanceAccounts() { return requestJson("/admin/finance/accounts", z.array(adminFinanceAccountSchema), { auth: "admin" }); }
 export function listAdminFinancePayouts() { return requestJson("/admin/finance/payouts", z.array(adminFinancePayoutSchema), { auth: "admin" }); }
 export function listAdminFinanceTransactions() { return requestJson("/admin/finance/transactions", financeDashboardSchema.shape.transactions, { auth: "admin" }); }

@@ -47,7 +47,7 @@ export function PollComposer({ draft, onChange, onRemove, kind, tr }: { draft: P
   const maxOptions = Math.max(2, filled);
   return (
     <fieldset className="poll-composer">
-      <legend><BarChart3 size={17}/>{tr ? "Anket ayarları" : "Poll settings"}<button type="button" className="poll-composer-remove" aria-label={tr ? "Anketi kaldır" : "Remove poll"} onClick={onRemove}><X size={16}/></button></legend>
+      <legend><span className="poll-composer-legend"><BarChart3 size={17}/>{tr ? "Anket ayarları" : "Poll settings"}<button type="button" className="poll-composer-remove" aria-label={tr ? "Anketi kaldır" : "Remove poll"} onClick={onRemove}><X size={16}/><span className="poll-composer-remove-label">{tr ? "Vazgeç" : "Cancel"}</span></button></span></legend>
       <label>{tr ? "Soru başlığı" : "Question"}<input maxLength={300} required value={draft.question} onChange={(event) => set({ question: event.target.value })} placeholder={tr ? "Örn. Bir sonraki buluşma hangi gün olsun?" : "e.g. Which day should we meet next?"}/></label>
       <div className="poll-composer-options">
         <span>{tr ? "Seçenekler" : "Options"}</span>

@@ -1,5 +1,6 @@
 import { notifyComment, notifyProfileMediaAdded } from "../notifications/activity-events";
 import { publicName } from "../common/public-name";
+import { visibleEventWhere } from "../common/event-visibility";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { ReportTargetType, User } from "@prisma/client";
 import { removeDurableUpload } from "../media-storage/durable-storage";
@@ -118,7 +119,9 @@ export class ContentService {
       ...(media.sortOrder === 0 && targetType === ReportTargetType.event ? [this.prisma.event.update({ where: { id: targetId }, data: { coverImageUrl: nextCover } })] : []),
       ...(media.sortOrder === 0 && targetType === ReportTargetType.place ? [this.prisma.place.update({ where: { id: targetId }, data: { coverImageUrl: nextCover } })] : []),
     ]);
-    if (media.url.startsWith("/uploads/")) await removeDurableUpload(resolve(process.cwd(), media.url.slice(1))).catch(() => undefined);
+    // 17/10 #29: kopyalanan etkinlikler kaynak etkinliğin dosyalarını paylaşır; başka albümde kullanılan dosya silinmez.
+    const sharedElsewhere = await this.prisma.mediaFile.count({ where: { url: media.url, status: "active", id: { not: mediaId } } });
+    if (media.url.startsWith("/uploads/") && !sharedElsewhere) await removeDurableUpload(resolve(process.cwd(), media.url.slice(1))).catch(() => undefined);
     return this.listMedia(targetType, targetId);
   }
 
@@ -234,7 +237,16 @@ export class ContentService {
     return media;
   }
 
+  /** 17/10 #14: gizli etkinliklerin gönderi ve medya albümü yalnız etkinliği görebilenlere açılır. */
+  async canViewEvent(eventId: string, viewer?: string | { id: string; role?: string | null } | null) {
+    const hiddenAccess = await visibleEventWhere(this.prisma, viewer);
+    if (!Object.keys(hiddenAccess).length) return true;
+    return !(await this.prisma.event.count({ where: { id: eventId, visibility: "hidden", NOT: hiddenAccess } }));
+  }
+
   async listComments(targetType: ReportTargetType, targetId: string, viewerId?: string) {
+    // 17/10 #14: gizli etkinliğin gönderileri, etkinliği göremeyenlere dönmez.
+    if (targetType === ReportTargetType.event && !(await this.canViewEvent(targetId, viewerId))) return [];
     const comments = await this.prisma.contentComment.findMany({
       where: { status: "active", targetType, targetId, parentId: null },
       orderBy: [{ createdAt: "desc" }],

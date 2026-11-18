@@ -30,7 +30,9 @@ export function EventCard({ event, displayTitle, nearby = false }: { event: Even
       ? country || city || locationFallback
       : city || venue || country || locationFallback;
   const location = nearby && event.format !== "online" ? venue || city || locationFallback : event.format === "online" ? onlineLabel : event.format === "hybrid" ? `${onlineLabel} & ${hybridLocation}` : offlineLocation;
-  const visibility = event.visibility === "invite_only"
+  const visibility = event.visibility === "hidden"
+    ? language === "tr" ? "Gizli" : "Hidden"
+    : event.visibility === "invite_only"
     ? language === "tr" ? "Sadece davetli" : "Invite only"
     : event.visibility === "approval_required"
       ? language === "tr" ? "Onay gerekli" : "Approval required"

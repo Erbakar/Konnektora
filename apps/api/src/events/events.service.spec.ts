@@ -2,6 +2,7 @@ jest.mock("../common/invite-assessment",()=>({assessInvitees:jest.fn().mockResol
 jest.mock("../notifications/activity-events", () => ({ actorLabel: jest.requireActual("../notifications/activity-events").actorLabel, notifyEntityCreated: jest.fn().mockResolvedValue(undefined), notifyEntityChanges: jest.fn().mockResolvedValue(undefined), notifyUserActivity: jest.fn().mockResolvedValue(undefined), notifyEventAvailability: jest.fn().mockResolvedValue(undefined), isUndiscoverable: jest.fn().mockResolvedValue(false), notifyRegistration: jest.fn().mockResolvedValue(undefined), notifyMembershipInvite: jest.fn().mockResolvedValue(undefined), notifyComment: jest.fn().mockResolvedValue(undefined), recordActivity: jest.fn().mockResolvedValue(undefined) }));
 import { BadRequestException, ConflictException, ForbiddenException } from "@nestjs/common";
 import { EventParticipantRole, EventParticipantStatus } from "@prisma/client";
+import { hiddenEventAccessWhere } from "../common/event-visibility";
 import { EventsService } from "./events.service";
 
 describe("EventsService", () => {
@@ -607,6 +608,7 @@ describe("EventsService", () => {
 
     const call = prisma.event.findMany.mock.calls[0][0];
     expect(call.where.AND).toEqual([
+      hiddenEventAccessWhere(actor.id),
       {
         OR: [
           { title: { contains: "startup", mode: "insensitive" } },
@@ -1113,5 +1115,123 @@ describe("EventsService", () => {
         }),
       }),
     );
+  });
+
+  describe("17/10 #14 hidden events", () => {
+    it("lists hidden events only to people who may see them and to admins/curators", async () => {
+      const { service, prisma } = createService();
+      prisma.event.count.mockResolvedValue(0);
+      prisma.event.findMany.mockResolvedValue([]);
+
+      await service.listPublicEvents({});
+      expect(prisma.event.findMany.mock.calls[0][0].where.AND).toEqual([{ OR: [{ visibility: { not: "hidden" } }] }]);
+
+      prisma.user.findUnique.mockResolvedValue({ role: "user" });
+      await service.listPublicEvents({}, actor.id);
+      expect(prisma.event.findMany.mock.calls[1][0].where.AND).toEqual([hiddenEventAccessWhere(actor.id)]);
+
+      prisma.user.findUnique.mockResolvedValue({ role: "curator" });
+      await service.listPublicEvents({}, "curator-1");
+      expect(prisma.event.findMany.mock.calls[2][0].where.AND).toBeUndefined();
+    });
+
+    it("matches the city filter against both the district and the province", async () => {
+      const { service, prisma } = createService();
+      prisma.event.count.mockResolvedValue(0);
+      prisma.event.findMany.mockResolvedValue([]);
+      await service.listPublicEvents({ city: "İstanbul" });
+      const where = prisma.event.findMany.mock.calls[0][0].where;
+      expect(where.city).toBeUndefined();
+      expect(where.AND).toContainEqual({ OR: [{ city: { equals: "İstanbul", mode: "insensitive" } }, { region: { equals: "İstanbul", mode: "insensitive" } }] });
+    });
+
+    it("returns 404 for a hidden event detail when the viewer has no access", async () => {
+      const { service, prisma } = createService();
+      prisma.event.findFirst.mockResolvedValue(null);
+      await expect(service.getPublicEvent("gizli-etkinlik")).rejects.toThrow("Etkinlik bulunamadı.");
+      expect(prisma.event.findFirst.mock.calls[0][0].where.AND).toEqual([{ OR: [{ visibility: { not: "hidden" } }] }]);
+
+      prisma.user.findUnique.mockResolvedValue({ role: "user" });
+      await expect(service.getPublicEvent("gizli-etkinlik", actor.id)).rejects.toThrow("Etkinlik bulunamadı.");
+      expect(prisma.event.findFirst.mock.calls[1][0].where.AND).toEqual([hiddenEventAccessWhere(actor.id)]);
+
+      prisma.user.findUnique.mockResolvedValue({ role: "admin" });
+      await expect(service.getPublicEvent("gizli-etkinlik", "admin-1")).rejects.toThrow("Etkinlik bulunamadı.");
+      expect(prisma.event.findFirst.mock.calls[2][0].where.AND).toEqual([{}]);
+    });
+
+    it("does not expose the related-user list of a hidden event", async () => {
+      const { service, prisma } = createService();
+      prisma.event.findFirst.mockResolvedValue(null);
+      await expect(service.listRelatedUsers("event-1", actor as never)).rejects.toThrow("Etkinlik bulunamadı.");
+      expect(prisma.event.findFirst.mock.calls[0][0].where).toMatchObject({ id: "event-1", status: "published", AND: [hiddenEventAccessWhere(actor.id)] });
+    });
+
+    it("only lets invited users join a hidden event", async () => {
+      const { service, prisma } = createService();
+      prisma.event.findUnique.mockResolvedValue({ id: "event-1", status: "published", visibility: "hidden", capacity: null });
+      prisma.eventParticipant.findUnique.mockResolvedValue(null);
+      await expect(service.requestAttendance("event-1", actor.id)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.eventParticipant.upsert).not.toHaveBeenCalled();
+
+      prisma.eventParticipant.findUnique.mockResolvedValue({ status: EventParticipantStatus.invited });
+      prisma.eventParticipant.upsert.mockResolvedValue({ status: EventParticipantStatus.accepted });
+      await service.requestAttendance("event-1", actor.id);
+      expect(prisma.eventParticipant.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: { status: EventParticipantStatus.accepted } }));
+    });
+  });
+
+  describe("17/10 #29 copy event", () => {
+    const input = { title: "Haftalık Caz Gecesi", description: "Her hafta tekrarlanan caz gecesi.", startsAt: "2027-02-01T18:00:00.000Z", format: "offline", ticketTypes: [{ name: "Genel", price: 100, currency: "TRY", capacity: 50 }] };
+    const arrange = () => {
+      const context = createService();
+      const prisma = context.prisma as any;
+      prisma.mediaFile = { findMany: jest.fn().mockResolvedValue([{ url: "/uploads/a.webp", type: "image" }, { url: "/uploads/b.mp4", type: "video" }]), createMany: jest.fn() };
+      prisma.eventTag.findMany.mockResolvedValue([]);
+      prisma.event.create.mockResolvedValue({ id: "copy-1", slug: "haftalik-caz-gecesi-2", title: input.title, price: 0, startsAt: new Date(input.startsAt), endsAt: null, coverImageUrl: null, tags: [], createdBy: null });
+      return { ...context, prisma };
+    };
+
+    it("creates a NEW event for the founder, copies the media album and leaves the source untouched", async () => {
+      const { service, prisma } = arrange();
+      prisma.event.findUnique.mockImplementation(async ({ where }: any) => where.id === "source-1" ? { id: "source-1", createdById: actor.id, coverImageUrl: "/uploads/a.webp" } : null);
+
+      const created = await service.copyEvent("source-1", input as never, actor as never);
+
+      expect(created).toMatchObject({ id: "copy-1", coverImageUrl: "/uploads/a.webp" });
+      const data = prisma.event.create.mock.calls[0][0].data;
+      expect(data.createdBy).toEqual({ connect: { id: actor.id } });
+      // Yalnız kopyalayan kişi organizatör olarak eklenir; kaynak katılımcıları taşınmaz.
+      expect(data.participants).toEqual({ create: { userId: actor.id, role: EventParticipantRole.organizer, status: EventParticipantStatus.accepted } });
+      expect(data.ticketTypeRecords.create).toEqual([expect.objectContaining({ name: "Genel", capacity: 50, gateOpensAt: null, gateClosesAt: null, saleStartsAt: null, saleEndsAt: null })]);
+      expect(data.ticketTypeRecords.create[0]).not.toHaveProperty("soldCount");
+      expect(prisma.mediaFile.createMany).toHaveBeenCalledWith({ data: [
+        { url: "/uploads/a.webp", type: "image", contentType: "event", contentId: "copy-1", uploadedById: actor.id, sortOrder: 0 },
+        { url: "/uploads/b.mp4", type: "video", contentType: "event", contentId: "copy-1", uploadedById: actor.id, sortOrder: 1 },
+      ] });
+      // Kaynak etkinliğe hiçbir yazma yapılmaz.
+      expect(prisma.event.update.mock.calls.every(([args]: any) => args.where.id === "copy-1")).toBe(true);
+      expect(prisma.event.update).toHaveBeenCalledWith({ where: { id: "copy-1" }, data: { coverImageUrl: "/uploads/a.webp" } });
+      expect(prisma.eventParticipant.upsert).not.toHaveBeenCalled();
+    });
+
+    it("allows organisers, admins and curators but rejects ordinary members", async () => {
+      const { service, prisma } = arrange();
+      prisma.event.findUnique.mockResolvedValue({ id: "source-1", createdById: "someone-else", coverImageUrl: null });
+      prisma.eventParticipant.findUnique.mockResolvedValue(null);
+      await expect(service.copyEvent("source-1", input as never, actor as never)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.event.create).not.toHaveBeenCalled();
+
+      prisma.eventParticipant.findUnique.mockResolvedValue({ role: EventParticipantRole.organizer, status: EventParticipantStatus.accepted });
+      await expect(service.copyEvent("source-1", input as never, actor as never)).resolves.toMatchObject({ id: "copy-1" });
+      for (const role of ["admin", "curator"]) await expect(service.copyEvent("source-1", input as never, { ...actor, id: `${role}-1`, role } as never)).resolves.toMatchObject({ id: "copy-1" });
+      expect(prisma.event.create).toHaveBeenCalledTimes(3);
+    });
+
+    it("returns 404 when the source event does not exist", async () => {
+      const { service, prisma } = arrange();
+      prisma.event.findUnique.mockResolvedValue(null);
+      await expect(service.copyEvent("missing", input as never, { ...actor, role: "admin" } as never)).rejects.toThrow("Etkinlik bulunamadı.");
+    });
   });
 });

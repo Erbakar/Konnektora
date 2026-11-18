@@ -11,13 +11,17 @@ import {
   RouterProvider,
   useRouteError,
 } from "react-router-dom";
-import { AdminRouteGuard } from "./components/AdminRouteGuard";
 import { AppLayout } from "./components/AppLayout";
 import { ServiceFeedback } from "./components/ServiceFeedback";
 import { ApiHttpError, getUserSession, USER_SESSION_CHANGED_EVENT } from "./lib/api";
 import { publicSiteHref } from "./lib/domains";
 import { LanguageProvider, useLanguage } from "./lib/i18n";
 import "./styles.css";
+import "./styles/nov17-backoffice.css";
+import "./styles/nov17-share.css";
+import "./styles/nov17-composer.css";
+import "./styles/nov17-stats.css";
+import "./styles/nov17-events.css";
 
 const chunkReloadKey = "konnektora:chunk-reload";
 const chunkLoadErrorPattern =
@@ -155,16 +159,6 @@ const StorePage = lazy(() =>
 const CuratorsPage = lazy(() =>
   import("./pages/CuratorsPage").then((module) => ({
     default: module.CuratorsPage,
-  })),
-);
-const AdminKycPage = lazy(() =>
-  import("./pages/AdminKycPage").then((module) => ({
-    default: module.AdminKycPage,
-  })),
-);
-const AdminNotificationOperationsPage = lazy(() =>
-  import("./pages/AdminNotificationOperationsPage").then((module) => ({
-    default: module.AdminNotificationOperationsPage,
   })),
 );
 const CorporateKycPage = lazy(() =>
@@ -365,11 +359,9 @@ const router = createBrowserRouter([
           { path: "reset-password", element: <ResetPasswordPage /> },
           { path: "accept-invite", element: <AcceptInvitePage /> },
           { path: "admin", element: <AdminDashboardPage /> },
-          { path: "admin/kyc", element: <AdminRouteGuard><AdminKycPage /></AdminRouteGuard> },
-          {
-            path: "admin/notifications",
-            element: <AdminRouteGuard><AdminNotificationOperationsPage /></AdminRouteGuard>,
-          },
+          // 17/10 #1: bu ekranlar artık backoffice yan menüsünün birer bölümü.
+          { path: "admin/kyc", element: <Navigate replace to="/admin?section=kyc" /> },
+          { path: "admin/notifications", element: <Navigate replace to="/admin?section=notification-deliveries" /> },
         ],
       },
       { path: "privacy", element: <PolicyPage type="privacy" /> },

@@ -1,0 +1,40 @@
+/* 17/10 test maddeleri — etkinlik / adres alanı (#12, #13, #14, #24, #29). */
+
+/* #24: Küratör başvuru formunda ülke + şehir seçimi mevcut input stiliyle aynı görünür. */
+.curator-application select {
+  background: #fff;
+  border: 1px solid #557565;
+  border-radius: 10px;
+  color: inherit;
+  font: inherit;
+  padding: 11px;
+  width: 100%;
+}
+.curator-application .curator-location-fields > small,
+.curator-application .curator-location-fields > button {
+  grid-column: 1 / -1;
+}
+
+/* #29: "Etkinliği kopyala" ekranındaki bilgi notu ve kaynak görsel önizlemesi. */
+.event-copy-note {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  border-left: 3px solid currentColor;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+}
+.event-copy-media {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+.event-copy-media img,
+.event-copy-media video {
+  border-radius: 8px;
+  height: 72px;
+  object-fit: cover;
+  width: 96px;
+}

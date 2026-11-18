@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsEmail, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
+import { IsEmail, IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from "class-validator";
 import { UserMessageStatus, UserMessageType } from "@prisma/client";
 
 export class CreateUserMessageDto {
@@ -55,6 +55,11 @@ export class AdminMessageQueryDto {
   @IsString()
   @MaxLength(120)
   category?: string;
+
+  /** 17/10 #1: "Veri silme talepleri" ayrı bir backoffice kutusudur; `only` yalnız onları, `exclude` kalanları listeler. */
+  @IsOptional()
+  @IsIn(["only", "exclude"])
+  dataDeletion?: "only" | "exclude";
 
   @IsOptional()
   @Type(() => Number)

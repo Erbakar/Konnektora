@@ -4,6 +4,7 @@ import { BadgeCheck, Camera, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { getProfileVerification, submitProfileVerification } from "../lib/api";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
+import { CameraAccessError, cameraErrorMessage, openCamera } from "../lib/camera";
 import { useLanguage } from "../lib/i18n";
 
 const challenges = [
@@ -52,14 +53,7 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
   async function startCamera() {
     setError("");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "user",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
+      const stream = await openCamera();
       streamRef.current = stream;
       setCameraOpen(true);
       requestAnimationFrame(() => {
@@ -68,10 +62,9 @@ export function ProfileVerificationPanel({ userId }: { userId: string }) {
           void videoRef.current.play();
         }
       });
-    } catch {
-      setError(
-        t("Kamera açılamadı. Tarayıcı kamera iznini kontrol et.", "The camera could not be opened. Check your browser permission."),
-      );
+    } catch (reason) {
+      // 17/10 #15: izin reddi, kamera yokluğu ve politika engeli ayrı ayrı açıklanır.
+      setError(cameraErrorMessage(reason instanceof CameraAccessError ? reason.reason : "unknown", language));
     }
   }
   function stopCamera() {

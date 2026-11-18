@@ -30,6 +30,8 @@ import { userProfilePath } from "../components/UserIdentityLink";
 import { NotificationDialog, ShareDialog } from "../components/ContentDialogs";
 import { ReportDialog } from "../components/ReportDialog";
 import { ComposerTips } from "../components/ComposerTips";
+import { DraftLeaveGuard } from "../components/DraftLeaveGuard";
+import { useComposerDraft } from "../lib/composerDrafts";
 import { EmbeddedMedia } from "../components/EmbeddedMedia";
 import { GuestListAction } from "../components/GuestListAction";
 import { formatPostDateTime } from "../lib/formats";
@@ -58,6 +60,7 @@ import {
 } from "../lib/api";
 import { ThinkingIcon } from "../components/ThinkingIcon";
 import { useLanguage } from "../lib/i18n";
+import { tagInstagramCaption, tagPostInstagramCaption } from "../lib/shareCaptions";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 
 export function TagsPage() {
@@ -90,6 +93,8 @@ export function TagsPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [sharedPost, setSharedPost] = useState<{ id: string; body: string; author: string; likes: number } | null>(null);
   const [selectedTagMedia, setSelectedTagMedia] = useState<File[]>([]);
+  // 17/10 #23: ilgi alanı gönderi taslağı kullanıcıya ve ilgi alanına özel saklanır.
+  const [postDraft, setPostDraft, clearPostDraft] = useComposerDraft(user?.id, "tag", slug);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
   const tags = useQuery({
     queryKey: ["tags", slug ? "detail" : directoryFilters],
@@ -452,7 +457,7 @@ export function TagsPage() {
         <h2>{t("Profiline ekleyen kişiler", "People who added it to their profile")}</h2>
         <div><span className="attendee-avatar-stack">{(relatedUsers.data ?? []).slice(0, 8).map((member) => <Link key={member.id} title={t(`${member.name} profilini aç`, `Open ${member.name}'s profile`)} to={userProfilePath(member)}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/tags/${tag.slug}/users`}><strong>{t(`${relatedUsers.data?.length ?? tag.usageCount} kullanıcının tümünü göster`, `Show all ${relatedUsers.data?.length ?? tag.usageCount} users`)}</strong></Link></div>
       </section>
-      {relatedEvents.data?.total ? <Link className="tag-related-events-notice" to={`/events?tag=${encodeURIComponent(tag.slug)}`}>{t(`${relatedEvents.data.total} ilişkili etkinlik bulundu.`, `${relatedEvents.data.total} related events found.`)}</Link> : null}
+      {relatedEvents.data?.total ? <Link className="tag-related-events-notice" to={`/events?tag=${encodeURIComponent(tag.slug)}`}>{t(`${relatedEvents.data.total} ilişkili güncel etkinlik bulundu.`, `${relatedEvents.data.total} related upcoming events found.`)}</Link> : null}
       <section className="admin-form">
 
         <div className="section-header compact">
@@ -462,7 +467,7 @@ export function TagsPage() {
           <span>{t(`${comments.data?.length ?? 0} sonuç`, `${comments.data?.length ?? 0} results`)}</span>
         </div>
         <details className="collapsed-filter-panel tag-detail-filters">
-          <summary><SlidersHorizontal size={17}/> {t("Gönderileri filtrele", "Filter posts")}</summary>
+          <summary><SlidersHorizontal size={17}/> {t("Gönderilerde ara & filtrele", "Search & filter posts")}</summary>
           <div className="feed-tabs">
           {(["all", "popular", "following", "photo", "video"] as const).map(
             (value) => (
@@ -499,7 +504,7 @@ export function TagsPage() {
               if (input.value.trim() || selectedTagMedia.length)
                 post.mutate(
                   { body: input.value.trim(), files: selectedTagMedia },
-                  { onSuccess: () => form.reset() },
+                  { onSuccess: () => { form.reset(); clearPostDraft(); } },
                 );
             }}
           >
@@ -507,14 +512,17 @@ export function TagsPage() {
               name="body"
               minLength={1}
               maxLength={2000}
+              value={postDraft}
+              onChange={(event) => setPostDraft(event.target.value)}
               placeholder={(comments.data?.length ?? 0) === 0 ? t(`#${tag.name} hakkında ilk yorumu yazan sen ol…`, `Be the first to post about #${tag.name}…`) : t(`#${tag.name} hakkında bir şey yaz…`, `Write something about #${tag.name}…`)}
             />
             <div>
               <button className="primary-action" disabled={post.isPending}>
                 {t("Yayınla", "Publish")}
               </button>
-              <label className="secondary-action">
+              <label className="secondary-action tag-composer-media">
                 <ImagePlus aria-label={t("Resim/video ekle", "Add image/video")} size={20}/>
+                <span aria-hidden="true" className="composer-media-label">{t("Resim / video ekle", "Add photo / video")}</span>
                 <input
                   accept="image/*,video/mp4,video/webm"
                   hidden
@@ -525,6 +533,7 @@ export function TagsPage() {
                 />
               </label>
               <ComposerTips/>
+              <DraftLeaveGuard active={Boolean(postDraft.trim()) && !post.isPending} kind="post" onDiscard={clearPostDraft} />
               {selectedTagMedia.length ? <span className="comment-media-count">{t(`${selectedTagMedia.filter((file) => file.type.startsWith("image/")).length} resim, ${selectedTagMedia.filter((file) => file.type.startsWith("video/")).length} video seçildi`, `${selectedTagMedia.filter((file) => file.type.startsWith("image/")).length} images, ${selectedTagMedia.filter((file) => file.type.startsWith("video/")).length} videos selected`)} {post.isPending ? <LoaderCircle className="spin" size={15}/> : null}</span> : null}
             </div>
           </form>
@@ -666,7 +675,7 @@ export function TagsPage() {
 
 ✨ ${sharedPost.likes} ${t("kişi bu gönderiyi beğendi.", "people like this post.")}
 
-🌎 ${t("Konnektora’da gönderiyi gör →", "See this post on Konnektora →")}` : ""} url={new URL(`/tags/${tag.slug}#post-${sharedPost?.id ?? ""}`, window.location.origin).toString()}/>
+🌎 ${t("Konnektora’da gönderiyi gör →", "See this post on Konnektora →")}` : ""} instagramText={sharedPost ? tagPostInstagramCaption({ author: sharedPost.author, body: sharedPost.body, tagName: tag.name, likeCount: sharedPost.likes }, language) : undefined} url={new URL(`/tags/${tag.slug}#post-${sharedPost?.id ?? ""}`, window.location.origin).toString()}/>
       <NotificationDialog
         open={notificationOpen}
         onClose={() => setNotificationOpen(false)}
@@ -688,6 +697,7 @@ export function TagsPage() {
 ${t("Bu ilgi alanına bağlı etkinlikleri, mekânları ve insanları keşfet.", "Discover events, places & people connected to this interest.")}
 
 🌎 Konnektora →`}
+        instagramText={tagInstagramCaption({ name: tag.name, memberCount: tag.usageCount }, language)}
         url={new URL(`/tags/${tag.slug}`, window.location.origin).toString()}
       />
     </section>

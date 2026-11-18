@@ -9,7 +9,7 @@ import {
   listAdminCorporateKyc,
 } from "../lib/api";
 
-export function AdminKycPage() {
+export function AdminKycPage({ embedded = false }: { embedded?: boolean } = {}) {
   const client = useQueryClient();
   const [status, setStatus] = useState("pending");
   const [selected, setSelected] = useState("");
@@ -44,10 +44,10 @@ export function AdminKycPage() {
   };
 
   return (
-    <div className="page admin-kyc-page">
-      <Link className="back-link" to="/admin"><ArrowLeft size={16} /> Admin paneline dön</Link>
+    <div className={embedded ? "admin-kyc-page admin-kyc-page--embedded" : "page admin-kyc-page"}>
+      {embedded ? null : <Link className="back-link" to="/admin"><ArrowLeft size={16} /> Admin paneline dön</Link>}
       <header>
-        <div><span className="eyebrow">Uyumluluk</span><h1>Kurumsal KYC inceleme</h1></div>
+        <div><span className="eyebrow">Uyumluluk</span>{embedded ? <h2>Kurumsal KYC inceleme</h2> : <h1>Kurumsal KYC inceleme</h1>}</div>
         <select aria-label="KYC başvuru durumu" onChange={(event) => setStatus(event.target.value)} value={status}>
           <option value="pending">İncelemede</option>
           <option value="approved">Onaylı</option>

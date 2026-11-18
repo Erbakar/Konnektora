@@ -297,6 +297,7 @@ describe("FRD referanslı ekran davranışları", () => {
       age_25_34: 58,
       decision_event_day: 19,
       ticketTypeSold_VIP: 24,
+      ticketTypeKonnektora_VIP: 1,
     });
     renderStats("event", "event-1");
 
@@ -312,7 +313,7 @@ describe("FRD referanslı ekran davranışları", () => {
     expect(within(sources).getByRole("option", { name: "Katılım kararı zamanı" })).toBeInTheDocument();
     expect(within(sources).getByRole("option", { name: "Keşif kaynakları" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /Görüntülenme: 1200/ })).toBeVisible();
-    expect(screen.getByRole("cell", { name: "VIP" })).toBeVisible();
+    expect(screen.getByRole("article", { name: "VIP" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "PDF indir" })).not.toBeInTheDocument();
     expect(screen.getAllByText("1.200").length).toBeGreaterThan(0);
     expect(screen.getByText("25.800 TRY")).toBeVisible();

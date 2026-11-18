@@ -68,6 +68,8 @@ export const eventVisibilitySchema = z.enum([
   "open",
   "approval_required",
   "invite_only",
+  // 17/10 #14: "Gizli - sadece davetliler görebilir".
+  "hidden",
 ]);
 export const tagStatusSchema = z.enum(["active", "hidden", "archived"]);
 export const userRoleSchema = z.enum([
@@ -265,7 +267,7 @@ export const memberScanSchema = z.object({
 });
 export const memberScansSchema = z.array(memberScanSchema);
 export const discoveryItemSchema = z.object({
-  visibility: z.enum(["open", "approval_required", "invite_only"]).optional(),
+  visibility: z.enum(["open", "approval_required", "invite_only", "hidden"]).optional(),
   kind: z.enum(["user", "tag", "event", "place"]),
   id: z.string().uuid(),
   title: z.string(),
@@ -957,6 +959,28 @@ export const adminDashboardSchema = z.object({
   draftEvents: z.number().int().nonnegative(),
   activeTags: z.number().int().nonnegative(),
   upcomingEvents: z.number().int().nonnegative(),
+});
+
+/** 17/10 #1-#2: Backoffice başlık rozetleri ve dashboard sayaçları. */
+export const adminBackofficeSummarySchema = z.object({
+  openReports: z.number().int().nonnegative(),
+  openReportGroups: z.number().int().nonnegative(),
+  messages: z.object({
+    faq: z.number().int().nonnegative(),
+    writeToUs: z.number().int().nonnegative(),
+    accountFreeze: z.number().int().nonnegative(),
+    dataDeletion: z.number().int().nonnegative(),
+  }),
+  openMessages: z.number().int().nonnegative(),
+  pendingKyc: z.number().int().nonnegative(),
+  heldEvents: z.object({
+    expired: z.number().int().nonnegative(),
+    notExpired: z.number().int().nonnegative(),
+  }),
+  activeAnnouncements: z.number().int().nonnegative(),
+  customerPayoutRequests: z.number().int().nonnegative(),
+  curatorPayoutRequests: z.number().int().nonnegative(),
+  pendingFinanceRequests: z.number().int().nonnegative(),
 });
 
 export const adminUserSchema = z.object({
@@ -1686,6 +1710,7 @@ export type CorporateKycDocument = z.infer<typeof corporateKycDocumentSchema>;
 export type BeneficialOwner = z.infer<typeof beneficialOwnerSchema>;
 export type EventList = z.infer<typeof eventListSchema>;
 export type AdminDashboard = z.infer<typeof adminDashboardSchema>;
+export type AdminBackofficeSummary = z.infer<typeof adminBackofficeSummarySchema>;
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
 export type EventParticipant = z.infer<typeof eventParticipantSchema>;
 export type ContentReport = z.infer<typeof contentReportSchema>;

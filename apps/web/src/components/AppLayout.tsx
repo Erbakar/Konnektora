@@ -54,6 +54,8 @@ export function AppLayout() {
   }, []);
   useEffect(() => { if (profileMenuRef.current) profileMenuRef.current.open = false; }, [location.pathname, location.search]);
   const unreadNotifications = notificationsQuery.data?.filter((item) => !item.readAt).length ?? 0;
+  // 17/10 #1: /admin altında son kullanıcı başlığı yerine sayfanın kendi Backoffice başlığı gösterilir.
+  const backoffice = location.pathname === "/admin" || location.pathname.startsWith("/admin/");
 
   useEffect(() => {
     if (!user) return;
@@ -149,7 +151,7 @@ export function AppLayout() {
       {liveCheckInDecision ? <CheckInDecisionDialog notification={liveCheckInDecision} onClose={() => { const id = liveCheckInDecision.id; setLiveCheckInDecision(null); void markMyNotificationRead(id).then(() => notificationsQuery.refetch()); }}/>: null}
       <DevicePushPrompt userId={user && storedUser?.onboardingCompleted !== false ? user.id : null} blocked={locationIntroOpen || onboardingAccessiblePaths.has(location.pathname)} />
       {locationIntroOpen ? <div className="dialog-backdrop location-intro-backdrop" role="presentation"><section aria-describedby="location-intro-description" aria-labelledby="location-intro-title" aria-modal="true" className="content-dialog location-intro-dialog" role="dialog"><button aria-label={language === "tr" ? "Şimdi değil" : "Not now"} className="passport-close" onClick={dismissLocationIntro} type="button"><X size={20}/></button><span className="location-intro-icon"><Navigation size={25}/></span><p className="eyebrow">{language === "tr" ? "Konum tabanlı keşif" : "Location-based discovery"}</p><h2 id="location-intro-title">{language === "tr" ? "Size daha yakın deneyimleri gösterelim" : "Let us show experiences closer to you"}</h2><p id="location-intro-description">{language === "tr" ? "Konnektora, özellikle etkinlikler ve mekânlarda ilgi alanı ve konum bazlı bir deneyim sunar. İsterseniz konum erişimine izin verebilir veya şimdi kapatıp kartlardaki konum bağlantısından daha sonra açabilirsiniz." : "Konnektora uses interests and location to improve event and venue discovery. Allow location access now, or close this message and enable it later from the location link on a card."}</p><div className="location-intro-actions"><button className="primary-action" onClick={requestLocationPermission} type="button">{language === "tr" ? "Konuma izin ver" : "Allow location"}</button><button className="secondary-action" onClick={dismissLocationIntro} type="button">{language === "tr" ? "Şimdi değil" : "Not now"}</button></div></section></div> : null}
-      <header className="corp-topbar">
+      <header className="corp-topbar" hidden={backoffice}>
         <a href={publicSiteHref()} className="brand" aria-label={t("brandHome")}>
           <img alt="Konnektora" src="/brand/konnektora-logo.svg" />
         </a>
@@ -215,6 +217,7 @@ export function AppLayout() {
         id="corp-mobile-menu"
         className={`corp-mobile-menu${menuOpen ? " is-open" : ""}`}
         aria-hidden={!menuOpen}
+        hidden={backoffice}
       >
         <button
           type="button"
@@ -229,7 +232,7 @@ export function AppLayout() {
             <NavLink to="/notifications" onClick={() => setMenuOpen(false)}><Bell size={18}/>{t("notifications")}{unreadNotifications ? <b className="notification-count">{unreadNotifications}</b> : null}</NavLink>
             <NavLink to="/search" onClick={() => setMenuOpen(false)}><Search size={18}/>{t("search")}</NavLink>
             <NavLink to="/identity" onClick={() => setMenuOpen(false)}><QrCode size={18}/>{t("memberId")}</NavLink>
-            <NavLink to="/community" onClick={() => setMenuOpen(false)}><Users size={18}/>{t("membersAndLists")}</NavLink>
+            <NavLink className={({ isActive }) => `nav-hide-on-tablet${isActive ? " active" : ""}`} to="/community" onClick={() => setMenuOpen(false)}><Users size={18}/>{t("membersAndLists")}</NavLink>
             <NavLink to="/tickets" onClick={() => setMenuOpen(false)}><Ticket size={18}/>{t("myTickets")}</NavLink>
             <NavLink to="/contacts" onClick={() => setMenuOpen(false)}><Users size={18}/>{t("findFriends")}</NavLink>
             <NavLink to="/settings" onClick={() => setMenuOpen(false)}><Settings size={18}/>{t("settingsCenter")}</NavLink>
@@ -242,12 +245,14 @@ export function AppLayout() {
         </nav>
       </div>
 
-      <nav className="mobile-tab-bar" aria-label={t("mobileNavigation")}>
+      <nav className="mobile-tab-bar" aria-label={t("mobileNavigation")} hidden={backoffice}>
         {user ? <>
         <NavLink to="/feed"><Home size={20}/><span>{t("feed")}</span></NavLink>
         <NavLink to="/tags"><Tag size={20}/><span>{t("tags")}</span></NavLink>
         <NavLink to="/events"><CalendarDays size={20}/><span>{t("events")}</span></NavLink>
         <NavLink to="/places"><MapPin size={20}/><span>{t("places")}</span></NavLink>
+        {/* 17/10 #27: yalnız tablet (761–1100 px) — "Üyeler" sekmesi Mesajlar'dan önce; masaüstü ve mobilde gizli. */}
+        <NavLink className={({ isActive }) => `nav-tablet-only${isActive ? " active" : ""}`} to="/community"><Users size={20}/><span>{t("members")}</span></NavLink>
         <NavLink to="/messages"><MessageCircle size={20}/><span>{t("messages")}</span>{conversationsQuery.data?.totalUnread ? <b>{conversationsQuery.data.totalUnread}</b> : null}</NavLink>
         <button aria-label={t("menuOpen")} aria-expanded={menuOpen} aria-controls="corp-mobile-menu" onClick={() => setMenuOpen(open => !open)} type="button"><Menu size={20}/><span>{t("menu")}</span></button>
         </> : <><NavLink to="/"><Home size={20}/><span>{t("home")}</span></NavLink><NavLink to="/events"><CalendarDays size={20}/><span>{t("events")}</span></NavLink><NavLink to="/places"><MapPin size={20}/><span>{t("places")}</span></NavLink><NavLink to="/tags"><Tag size={20}/><span>{t("tags")}</span></NavLink><button aria-label={t("menuOpen")} aria-expanded={menuOpen} aria-controls="corp-mobile-menu" onClick={() => setMenuOpen(open => !open)} type="button"><Menu size={20}/><span>{t("menu")}</span></button></>}
@@ -256,7 +261,7 @@ export function AppLayout() {
       <main>
         <Outlet />
       </main>
-      <SiteFooter />
+      {backoffice ? null : <SiteFooter />}
     </div>
   );
 }

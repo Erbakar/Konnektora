@@ -24,7 +24,8 @@ describe("TagsService comments", () => {
       mediaFile: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
       eventTag: { count: jest.fn(), findMany: jest.fn() },
       placeTag: { count: jest.fn() },
-      userInterestTag: { count: jest.fn(), groupBy: jest.fn(), findMany: jest.fn() },
+      userInterestTag: { count: jest.fn(), groupBy: jest.fn(), findMany: jest.fn(), findUnique: jest.fn() },
+      profileTagSuggestion: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
       contentView: { count: jest.fn(), findMany: jest.fn(), groupBy: jest.fn() },
       contentShare: { groupBy: jest.fn() },
       user: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: "curator-1", role: "curator", createdAt: new Date("2026-01-01") }) },
@@ -76,6 +77,7 @@ describe("TagsService comments", () => {
     prisma.contentShare.groupBy.mockResolvedValue([]);
     prisma.userInterestTag.findMany.mockResolvedValue([]);
     prisma.eventTag.findMany.mockResolvedValue([]);
+    prisma.contentReaction.findMany.mockResolvedValue([]);
     await expect(service.getPublicStats("tag-1", { id: "curator-1", role: "curator" } as never)).resolves.toEqual(expect.objectContaining({
       events: 4,
       places: 2,
@@ -88,6 +90,50 @@ describe("TagsService comments", () => {
       reactions: 6,
       engagementRate: 55,
     }));
+  });
+
+  it("etiket istatistiklerinde zaman serisi, yapıştırılma dağılımı ve check-in ısı haritası üretir (17/11 #66, #114, #115, #117)", async () => {
+    const { service, prisma } = createService();
+    const recent = new Date(); // saat başından sonraki ilk dakikalarda da son saat kovasına düşsün
+    const person = (id: string) => ({ id, birthDate: null, gender: null, city: null, country: null, preferredLanguage: null, interestTags: [], _count: { eventParticipations: 0, sentPrivateMessages: 0, scansMade: 0, scansReceived: 0 } });
+    prisma.tag.findFirst.mockResolvedValue({ id: "tag-1" });
+    prisma.tag.findUnique.mockResolvedValue({ usageCount: 3 });
+    prisma.tag.count.mockResolvedValue(0);
+    prisma.eventTag.count.mockResolvedValue(1);
+    prisma.placeTag.count.mockResolvedValue(0);
+    prisma.userInterestTag.groupBy.mockResolvedValue([{ sentiment: "like", _count: { _all: 2 } }, { sentiment: "dislike", _count: { _all: 1 } }]);
+    prisma.userInterestTag.findMany.mockResolvedValue([{ sentiment: "like", createdAt: recent, user: person("u1") }, { sentiment: "like", createdAt: recent, user: person("u2") }, { sentiment: "dislike", createdAt: recent, user: person("u3") }]);
+    prisma.contentComment.count.mockResolvedValue(1);
+    prisma.contentComment.aggregate.mockResolvedValue({ _sum: { likeCount: 2 } });
+    prisma.contentComment.findMany.mockResolvedValue([{ id: "c1", createdAt: recent }]);
+    prisma.contentReaction.findMany.mockResolvedValue([{ createdAt: recent }, { createdAt: recent }]);
+    prisma.contentView.count.mockResolvedValue(4);
+    prisma.contentView.findMany.mockResolvedValue([{ createdAt: recent, user: null }]);
+    prisma.contentView.groupBy.mockResolvedValue([]);
+    prisma.contentShare.groupBy.mockResolvedValue([]);
+    prisma.eventTag.findMany.mockResolvedValue([{ event: { startsAt: new Date("2026-11-13T18:00:00.000Z"), timezone: "Europe/Istanbul", currency: "TRY", participants: [{ status: "attended", checkedInAt: new Date("2026-11-13T18:30:00.000Z") }, { status: "accepted", checkedInAt: null }], ticketTypeRecords: [], payments: [], ticketRefunds: [] } }]);
+    prisma.profileTagSuggestion.findMany.mockResolvedValue([{ targetUserId: "u2", status: "accepted", suggestedBy: { gender: "female" } }, { targetUserId: "u9", status: "pending", suggestedBy: { gender: "male" } }, { targetUserId: "u8", status: "declined", suggestedBy: { gender: null } }]);
+    const stats = await service.getPublicStats("tag-1", { id: "curator-1", role: "curator" } as never) as Record<string, number>;
+    expect(stats).toMatchObject({ stickBy_kendisi: 2, stickBy_bir_baskasi: 1, suggestGender_kadinlar: 1, suggestGender_erkekler: 1, suggestGender_belirtmek_istemiyor: 1, checkinHeat_cum_20: 1 });
+    expect(stats).toMatchObject({ ts_like_24h_23: 2, ts_dislike_7d_6: 1, ts_views_30d_29: 1, ts_interest_12m_11: 3, ts_comments_24h_23: 1, ts_commentLikes_24h_23: 2 });
+    expect(stats.tsNow).toBeGreaterThan(0);
+    expect(Object.values(stats).every((value) => typeof value === "number" && value >= 0)).toBe(true);
+  });
+
+  it("etiketin nasıl oluşturulduğunu bildirir (17/11 #116)", async () => {
+    const { service, prisma } = createService();
+    prisma.tag.findFirst.mockResolvedValue({ id: "tag-1" });
+    prisma.userBlock.findUnique.mockResolvedValue(null);
+    prisma.tag.findUnique.mockResolvedValue({ createdAt: new Date("2026-01-01"), createdBy: { id: "u1", username: "ada", name: "Ada" } });
+    prisma.userInterestTag.findUnique.mockResolvedValue({ createdAt: new Date("2026-01-01T10:00:00Z") });
+    await expect(service.getStatsOrigin("tag-1", { id: "viewer" } as never)).resolves.toEqual({ mode: "self", username: "ada" });
+    prisma.profileTagSuggestion.findFirst.mockResolvedValue({ createdAt: new Date("2026-01-01T09:00:00Z") });
+    await expect(service.getStatsOrigin("tag-1", { id: "viewer" } as never)).resolves.toEqual({ mode: "other", username: "ada" });
+    prisma.userInterestTag.findUnique.mockResolvedValue(null);
+    prisma.profileTagSuggestion.findFirst.mockResolvedValue(null);
+    await expect(service.getStatsOrigin("tag-1", { id: "viewer" } as never)).resolves.toEqual({ mode: "unknown", username: "ada" });
+    prisma.tag.findUnique.mockResolvedValue({ createdAt: new Date("2026-01-01"), createdBy: null });
+    await expect(service.getStatsOrigin("tag-1", { id: "viewer" } as never)).resolves.toEqual({ mode: "unknown", username: null });
   });
 
   it("toggles a post like and keeps the stored counter in sync", async () => {

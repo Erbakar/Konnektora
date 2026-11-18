@@ -50,8 +50,11 @@ describe("ilgi alanı etkinlik bağlantısı", () => {
       </QueryClientProvider>,
     );
 
-    const notice = await screen.findByRole("link", { name: "7 ilişkili etkinlik bulundu." });
+    const notice = await screen.findByRole("link", { name: "7 ilişkili güncel etkinlik bulundu." });
     expect(notice).toHaveAttribute("href", "/events?tag=teknoloji");
+    // 17/10 #16
+    expect(screen.getByText("Gönderilerde ara & filtrele")).toBeInTheDocument();
+    expect(screen.queryByText("Gönderileri filtrele")).not.toBeInTheDocument();
     expect(apiMocks.listEvents.mock.calls[0]?.[0].get("tag")).toBe("teknoloji");
     expect(apiMocks.listEvents.mock.calls[0]?.[0].get("dateFrom")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 

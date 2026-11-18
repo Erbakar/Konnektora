@@ -1,9 +1,11 @@
+import { visibleEventWhere } from "../common/event-visibility";
 import { audienceAllows } from "../common/privacy-context";
 import { additionalActivities, activityRelations, eventActivityRelations } from "./activity-cards";
 import { publicName } from "../common/public-name";
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { DiscoveryFeedQueryDto } from "./discovery.dto";
+import { territoryNameVariants } from "../curator-finance/territory";
 
 const userSelect = {
   id: true,
@@ -29,12 +31,16 @@ export class DiscoveryService {
       userId
         ? this.prisma.user.findUnique({
             where: { id: userId },
-            select: { city: true, country: true },
+            select: { city: true, region: true, country: true },
           })
         : null,
       this.blockedUserIds(userId),
     ]);
-    const city = query.city?.trim() || viewer?.city || undefined;
+    // 17/10 #14: gizli etkinlikler akış ve keşif kartlarına yalnız ilgili kişiler için girer.
+    const visibleEvents = { AND: [await visibleEventWhere(this.prisma, userId)] };
+    // 17/10 #13: Türkiye adreslerinde il "region", ilçe "city" alanındadır; "yakınındaki" içerik il düzeyinde eşleşir.
+    const viewerLocality = viewer?.region && /^t[uü]rk[iı]ye$|^turkey$/i.test(viewer.country ?? "") ? viewer.region : viewer?.city;
+    const city = query.city?.trim() || viewerLocality || undefined;
     const country = query.country?.trim() || viewer?.country || undefined;
     const userWhere = {
       status: "active" as const,
@@ -45,7 +51,7 @@ export class DiscoveryService {
       query.scope === "global"
         ? {}
         : city
-          ? { city: { equals: city, mode: "insensitive" as const } }
+          ? localityFilter(city)
           : country
             ? { country: { equals: country, mode: "insensitive" as const } }
             : {};
@@ -60,10 +66,7 @@ export class DiscoveryService {
                     event: {
                       ...(city
                         ? {
-                            city: {
-                              equals: city,
-                              mode: "insensitive" as const,
-                            },
+                            ...localityFilter(city),
                           }
                         : {
                             country: {
@@ -81,10 +84,7 @@ export class DiscoveryService {
                     place: {
                       ...(city
                         ? {
-                            city: {
-                              equals: city,
-                              mode: "insensitive" as const,
-                            },
+                            ...localityFilter(city),
                           }
                         : {
                             country: {
@@ -102,10 +102,7 @@ export class DiscoveryService {
                     user: {
                       ...(city
                         ? {
-                            city: {
-                              equals: city,
-                              mode: "insensitive" as const,
-                            },
+                            ...localityFilter(city),
                           }
                         : {
                             country: {
@@ -148,6 +145,7 @@ export class DiscoveryService {
           status: "published",
           startsAt: { gte: new Date() },
           ...localWhere,
+          ...visibleEvents,
         },
         orderBy: { startsAt: "asc" },
         take: 8,
@@ -197,7 +195,7 @@ export class DiscoveryService {
           ? Promise.resolve([])
           : this.prisma.event.findMany({
         include: eventActivityRelations,
-              where: { status: "published", startsAt: { gte: new Date() } },
+              where: { status: "published", startsAt: { gte: new Date() }, ...visibleEvents },
               orderBy: { startsAt: "asc" },
               take: 8,
             }),
@@ -228,7 +226,7 @@ export class DiscoveryService {
     ] = await Promise.all([
       this.prisma.event.findMany({
         include: eventActivityRelations,
-        where: { status: "published", ...localWhere, ...dateWhere },
+        where: { status: "published", ...localWhere, ...dateWhere, ...visibleEvents },
         orderBy: { createdAt: "desc" },
         take: 15,
       }),
@@ -247,7 +245,7 @@ export class DiscoveryService {
         where: {
           status: { in: ["accepted", "attended"] },
           ...dateWhere,
-          event: { status: "published", ...localWhere },
+          event: { status: "published", ...localWhere, ...visibleEvents },
           ...(blockedIds.length ? { userId: { notIn: blockedIds } } : {}),
         },
         include: { event: { include: eventActivityRelations }, user: { select: userSelect } },
@@ -271,7 +269,7 @@ export class DiscoveryService {
     if (!activityEvents.length && Object.keys(localWhere).length)
       activityEvents = await this.prisma.event.findMany({
         include: eventActivityRelations,
-        where: { status: "published", ...dateWhere },
+        where: { status: "published", ...dateWhere, ...visibleEvents },
         orderBy: { createdAt: "desc" },
         take: 15,
       });
@@ -326,7 +324,7 @@ export class DiscoveryService {
     return {
       popularMembers: popularMembers.map((item) => this.userItem(item)),
       newMembers: newMembers.map((item) => this.userItem(item)),
-      localEvents: localEvents.map((item) => this.eventItem(item)),
+      localEvents: localEvents.map((item) => this.eventItem(item, true)),
       trendingTags: trendingTags.map((item) => this.tagItem(item)),
       popularPlaces: popularPlaces.map((item) => this.placeItem(item)),
       activeUserCount,
@@ -367,6 +365,7 @@ export class DiscoveryService {
         include: eventActivityRelations,
         where: {
           status: "published",
+          AND: [await visibleEventWhere(this.prisma, userId)],
           OR: [{ title: contains }, { summary: contains }, { city: contains }],
         },
         orderBy: { startsAt: "asc" },
@@ -459,7 +458,9 @@ export class DiscoveryService {
     startsAt: Date;
     endsAt?: Date | null;
     locationName?: string | null;
-  }) {
+  }, venueFirst = false) {
+    // 26/09 #2: "Yakınındaki etkinlikler" kartlarında varsa mekân adı, yoksa şehir gösterilir.
+    const location = venueFirst ? event.place?.name?.trim() || event.locationName?.trim() || event.city : event.city;
     return {
       tags: event.tags?.map(t => t.tag) ?? [],
       place: event.place ?? null,
@@ -473,7 +474,7 @@ export class DiscoveryService {
       subtitle: event.summary,
       href: `/events/${event.slug}`,
       imageUrl: event.coverImageUrl,
-      meta: `${event.city ?? "Online"} · ${event.startsAt.toISOString()}`,
+      meta: `${location ?? "Online"} · ${event.startsAt.toISOString()}`,
     };
   }
   private placeItem(place: {
@@ -503,4 +504,9 @@ export class DiscoveryService {
       meta: `${place.followerCount} takipçi${place.city ? ` · ${place.city}` : ""}`,
     };
   }
+}
+
+/** Bir yerleşim adını hem şehir/ilçe hem il alanında, eski ve yeni yazımlarıyla ("Istanbul" / "İstanbul") arar. */
+function localityFilter(name: string) {
+  return { OR: territoryNameVariants(name).flatMap((value) => [{ city: { equals: value, mode: "insensitive" as const } }, { region: { equals: value, mode: "insensitive" as const } }]) };
 }

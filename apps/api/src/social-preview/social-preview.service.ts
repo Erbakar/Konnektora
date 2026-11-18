@@ -14,7 +14,7 @@ export class SocialPreviewService {
       return /^https?:$/.test(resolved.protocol) ? resolved.toString() : new URL("/brand/app-icon-1024.png", webOrigin).toString();
     };
     if (type === "event") {
-      const event = await this.prisma.event.findFirst({ where: { slug: identity, status: "published", visibility: { not: "invite_only" } }, select: { title: true, slug: true, description: true, startsAt: true, city: true, country: true, coverImageUrl: true, place: { select: { name: true } }, tags: { orderBy: { sortOrder: "asc" }, take: 4, select: { tag: { select: { name: true } } } } } });
+      const event = await this.prisma.event.findFirst({ where: { slug: identity, status: "published", visibility: { notIn: ["invite_only", "hidden"] } }, select: { title: true, slug: true, description: true, startsAt: true, city: true, country: true, coverImageUrl: true, place: { select: { name: true } }, tags: { orderBy: { sortOrder: "asc" }, take: 4, select: { tag: { select: { name: true } } } } } });
       if (!event) throw new NotFoundException();
       return { title: event.title, description: [`📍 ${event.place?.name ?? [event.city, event.country].filter(Boolean).join(" · ")}`, `📅 ${event.startsAt.toISOString()}`, event.tags.map(item => `#${item.tag.name}`).join(" "), event.description ?? ""].join("\n"), image: image(event.coverImageUrl), path: `/events/${event.slug}` };
     }

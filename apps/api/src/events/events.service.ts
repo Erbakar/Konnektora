@@ -4,7 +4,7 @@ import { actorLabel, isUndiscoverable, notifyEntityCreated, notifyEntityChanges,
 import { ticketSalesEligibility, ticketSalesRequirement } from "../common/ticket-sales-eligibility";
 import { invitePhone, invitePhoneVariants } from "../common/invite-phone";
 import { privacyContext, visibleLocation } from "../common/privacy-context";
-import { periodInterestMetrics, socializationMetrics } from "../common/analytics-extras";
+import { dailyCountMetrics, periodInterestMetrics, socializationMetrics, spendByPayerTry } from "../common/analytics-extras";
 import { consumeQuota, paidCorporateEvent, quotaLock } from "../common/usage-quota";
 import { publicName } from "../common/public-name";
 import { reverseStoredPayment } from "../finance/payment-ledger";
@@ -22,6 +22,7 @@ import {
   EventVisibility,
   OwnedTicketStatus,
   Prisma,
+  ReportTargetType,
   TicketOrderStatus,
   User,
 } from "@prisma/client";
@@ -29,6 +30,7 @@ import { hash } from "bcryptjs";
 import { createHash, randomBytes, randomInt, randomUUID } from "crypto";
 import { AuthService } from "../auth/auth.service";
 import { toSlug } from "../common/slug";
+import { isInvitationOnlyVisibility, visibleEventWhere } from "../common/event-visibility";
 import { MailService } from "../mail/mail.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -63,6 +65,9 @@ export class EventsService {
           : { gte: new Date(Date.now() - 1000 * 60 * 60 * 24) },
     };
     const andFilters: Prisma.EventWhereInput[] = [];
+    // 17/10 #14: gizli etkinlikler yalnız ilgili kişilere, admin ve küratöre listelenir.
+    const hiddenAccess = await visibleEventWhere(this.prisma, userId);
+    if (Object.keys(hiddenAccess).length) andFilters.push(hiddenAccess);
     const nearInterestTagIds = new Set(
       query.scope === "near" && userId
         ? ((await this.prisma.userInterestTag.findMany({ where: { userId, sentiment: { in: ["like", "ok"] } }, select: { tagId: true }, take: 100 })) ?? []).map((item) => item.tagId)
@@ -110,9 +115,11 @@ export class EventsService {
       where.tags = { some: { tag: { slug: query.tag, status: "active" } } };
     }
 
-    if (query.city) {
-      where.city = { equals: query.city, mode: "insensitive" };
-    }
+    // 17/10 #12-13: Türkiye adreslerinde il "region", ilçe "city" alanında tutulur; şehir filtresi ikisini de arar.
+    const cityFilter: Prisma.EventWhereInput | null = query.city
+      ? { OR: [{ city: { equals: query.city, mode: "insensitive" } }, { region: { equals: query.city, mode: "insensitive" } }] }
+      : null;
+    if (cityFilter) andFilters.push(cityFilter);
 
     if (query.country) {
       where.country = { equals: query.country, mode: "insensitive" };
@@ -149,12 +156,17 @@ export class EventsService {
 
     if (query.scope === "popular" && (query.city || query.country)) {
       const localCount = await this.prisma.event.count({ where });
+      const dropCityFilter = () => {
+        const remaining = andFilters.filter((filter) => filter !== cityFilter);
+        if (remaining.length) where.AND = remaining;
+        else delete where.AND;
+      };
       if (!localCount && query.city) {
-        delete where.city;
+        dropCityFilter();
         if (query.country) where.country = { equals: query.country, mode: "insensitive" };
       }
       if (!await this.prisma.event.count({ where })) {
-        delete where.city;
+        dropCityFilter();
         delete where.country;
       }
     }
@@ -269,6 +281,8 @@ export class EventsService {
           ...(publicCode ? [{ slug: { endsWith: `-${publicCode}` } }] : []),
         ],
         status: "published",
+        // 17/10 #14: gizli etkinliğin detayına yetkisi olmayanlar erişemez (404).
+        AND: [await visibleEventWhere(this.prisma, userId)],
         NOT: [
           { id: { in: blocked("event") } },
           { createdById: { in: blocked("user") } },
@@ -348,7 +362,7 @@ export class EventsService {
     }
     const exists = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, startsAt: true, endsAt: true, lineup: true },
+      select: { id: true, startsAt: true, endsAt: true, lineup: true, tags: { select: { tag: { select: { name: true, status: true } } } } },
     });
     if (!exists) throw new NotFoundException("Etkinlik bulunamadı.");
     const [participants, participantDetails, comments, reactions, ratingRows, views, detailViews, viewSources, sharesByChannel, ticketOrders, orderDetails, refunds, ticketTypes, payments] = await Promise.all([
@@ -403,7 +417,7 @@ export class EventsService {
         take: 50_000,
       }),
       this.prisma.ticketRefund.aggregate({ where: { eventId }, _count: { _all: true }, _sum: { amount: true } }),
-      this.prisma.eventTicketType.findMany({ where: { eventId }, select: { id: true, name: true, capacity: true, soldCount: true, price: true } }),
+      this.prisma.eventTicketType.findMany({ where: { eventId }, select: { id: true, name: true, capacity: true, soldCount: true, price: true, salesPlatform: true } }),
       this.prisma.paymentTransaction.aggregate({ where: { eventId, status: { in: ["succeeded", "partially_refunded", "refunded"] } }, _sum: { grossAmount: true, platformFee: true, netAmount: true, refundedAmount: true } }),
     ]);
     const count = (status: string) =>
@@ -429,7 +443,7 @@ export class EventsService {
       else decisionBuckets.etkinlik_gunu += 1;
     }
     const participantIds = participantDetails.map((item) => item.userId);
-    const [eventScans, lineupActions, detailViewers] = await Promise.all([
+    const [eventScans, lineupActions, detailViewers, recentViews, eventPayments] = await Promise.all([
       participantIds.length ? this.prisma.memberScan.findMany({
         where: {
           createdAt: { gte: exists.startsAt, lte: exists.endsAt ?? new Date(exists.startsAt.getTime() + 86_400_000) },
@@ -440,6 +454,9 @@ export class EventsService {
       }) : [],
       this.prisma.contentAction.groupBy({ by: ["action"], where: { targetType: "event", targetId: eventId, action: { startsWith: "lineup_" } }, _count: { _all: true } }),
       this.prisma.contentView.findMany({ where: { targetType: "event", targetId: eventId, kind: "detail", userId: { not: null } }, select: { userId: true }, distinct: ["userId"], take: 20_000 }),
+      // 17/11 #103: günlük görüntülenme çizgisi; #111: etiketlerin kazandırdığı TL.
+      this.prisma.contentView.findMany({ where: { targetType: "event", targetId: eventId, kind: "detail", createdAt: { gte: new Date(now.getTime() - 31 * 86_400_000) } }, select: { createdAt: true }, take: 100_000 }),
+      this.prisma.paymentTransaction.findMany({ where: { eventId, status: { in: ["succeeded", "partially_refunded"] } }, select: { payerId: true, grossAmount: true, refundedAmount: true, currency: true }, take: 100_000 }),
     ]);
     const socialConnections = eventScans.length;
     // 07/11 #73: line-up'ta en çok tıklananlar (ContentAction "lineup_<sıra>").
@@ -451,15 +468,23 @@ export class EventsService {
     }
     // 07/11 #75: bilet türüne göre kapasite doluluk oranı.
     const ticketTypeOccupancy = Object.fromEntries(ticketTypes.filter((ticket) => ticket.capacity > 0).map((ticket) => [ticket.name, Math.round(ticket.soldCount / ticket.capacity * 100)]));
-    const [attendeeInterests, visitorInterests] = await Promise.all([
-      periodInterestMetrics(this.prisma, "attendeeInterest", participantIds),
-      periodInterestMetrics(this.prisma, "visitorInterest", detailViewers.map((row) => row.userId)),
+    const spendByUser = await spendByPayerTry(eventPayments);
+    const visitorIds = detailViewers.map((row) => row.userId);
+    // 17/11 #111: "Etkinlik programı ve etiketlerini değerlendir" — line-up maddeleri ve etkinlik etiketleri.
+    const programTags = [...lineupItems.map((item) => item?.title?.trim() ?? ""), ...(exists.tags ?? []).filter((item) => item.tag.status === "active").map((item) => item.tag.name)];
+    const [attendeeInterests, visitorInterests, programInterests] = await Promise.all([
+      periodInterestMetrics(this.prisma, "attendeeInterest", participantIds, { spendByUser }),
+      periodInterestMetrics(this.prisma, "visitorInterest", visitorIds, { spendByUser }),
+      periodInterestMetrics(this.prisma, "programInterest", [...participantIds, ...visitorIds], { spendByUser, fixedTags: programTags }),
     ]);
+    // 17/11 #75: Konnektora'da satılmak üzere tanımlanan bilet türleri.
+    const konnektoraTicketTypes = ticketTypes.filter((ticket) => ticket.salesPlatform === "konnektora");
     const acceptedTotal = accepted + attended;
     const shares = sharesByChannel.reduce((sum, item) => sum + item._count._all, 0);
     const ticketTypeSold = distributionSum(orderDetails.map((order) => [order.ticketType.name, order.quantity] as const));
     // 07/11 #75: sipariş kaydı olmayan (kapıda/harici) satışlar için bilet türünün satılan adedi esas alınır.
     for (const ticket of ticketTypes) if (ticket.soldCount > (ticketTypeSold[ticket.name] ?? 0)) ticketTypeSold[ticket.name] = ticket.soldCount;
+    for (const ticket of konnektoraTicketTypes) ticketTypeSold[ticket.name] ??= 0;
     const ticketTypeRevenue = distributionSum(orderDetails.map((order) => [order.ticketType.name, Number(order.totalAmount)] as const));
     const ticketSaleDay = distributionCount(orderDetails.map((order) => (order.purchasedAt ?? order.createdAt).toISOString().slice(0, 10)));
     const ticketSaleHour = distributionCount(orderDetails.map((order) => hourBucket(order.purchasedAt ?? order.createdAt)));
@@ -517,6 +542,9 @@ export class EventsService {
       ...socializationMetrics(eventScans, participantDetails.filter((item) => item.checkedInAt).map((item) => item.userId).concat(attended ? [] : participantIds)),
       ...attendeeInterests,
       ...visitorInterests,
+      ...programInterests,
+      ...prefixMetrics("ticketTypeKonnektora", Object.fromEntries(konnektoraTicketTypes.map((ticket) => [ticket.name, 1]))),
+      ...dailyCountMetrics("viewsDay", recentViews.map((row) => row.createdAt), now),
       performanceScore: Math.min(100, Math.round(((detailViews ? acceptedTotal / detailViews : 0) * 40 + (acceptedTotal ? attended / acceptedTotal : 0) * 40 + (detailViews ? (comments + reactions) / detailViews : 0) * 20) * 100)),
     };
   }
@@ -616,6 +644,31 @@ export class EventsService {
     await this.refreshTagUsageCounts(tagIds);
 
     return this.mapEvent(event);
+  }
+
+  /**
+   * 17/10 #29 — "Etkinliği kopyala": kaynak etkinlikten YENİ bir etkinlik oluşturur.
+   * Katılımcılar, davetler ve satılmış biletler kopyalanmaz; kaynak etkinlik değişmez.
+   * Yalnız kurucu, organizatör/yöneticiler, admin ve küratör kopyalayabilir.
+   */
+  async copyEvent(sourceId: string, input: CreateEventDto, user: User) {
+    if (!(await this.canManageParticipants(sourceId, user, true))) throw new ForbiddenException("Bu etkinliği kopyalama yetkiniz yok.");
+    const source = await this.prisma.event.findUnique({ where: { id: sourceId }, select: { id: true, coverImageUrl: true } });
+    if (!source) throw new NotFoundException("Etkinlik bulunamadı.");
+    const created = await this.createEvent(input, user.id);
+    const media = await this.prisma.mediaFile.findMany({
+      where: { contentType: ReportTargetType.event, contentId: sourceId, status: "active" },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: { url: true, type: true },
+    });
+    if (media.length) {
+      await this.prisma.mediaFile.createMany({
+        data: media.map((item, sortOrder) => ({ url: item.url, type: item.type, contentType: ReportTargetType.event, contentId: created.id, uploadedById: user.id, sortOrder })),
+      });
+    }
+    const coverImageUrl = created.coverImageUrl ?? source.coverImageUrl ?? media.find((item) => item.type === "image")?.url ?? null;
+    if (coverImageUrl && coverImageUrl !== created.coverImageUrl) await this.prisma.event.update({ where: { id: created.id }, data: { coverImageUrl } });
+    return { ...created, coverImageUrl };
   }
 
   async listMyTickets(userId: string) {
@@ -914,7 +967,7 @@ export class EventsService {
 
   async listRelatedUsers(eventId: string, actor?: User) {
     const event = await this.prisma.event.findFirst({
-      where: { id: eventId, status: "published" },
+      where: { id: eventId, status: "published", AND: [await visibleEventWhere(this.prisma, actor)] },
       select: {
         id: true,
         createdById: true,
@@ -995,7 +1048,7 @@ export class EventsService {
     }
 
     if (
-      event.visibility === "invite_only" &&
+      isInvitationOnlyVisibility(event.visibility) &&
       existing?.status !== EventParticipantStatus.invited &&
       existing?.status !== EventParticipantStatus.accepted &&
       !(existing?.status === EventParticipantStatus.not_attending && ["organizer", "manager"].includes(existing.role)) && event.createdById !== userId

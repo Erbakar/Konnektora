@@ -121,6 +121,31 @@ describe("ChatService", () => {
     expect(privateMessage.create).not.toHaveBeenCalled();
   });
 
+  it("17/10 #22 reports up-front whether the viewer may message a member, with the same rule as sending", async () => {
+    user.findUnique.mockResolvedValue(peer);
+    await expect(service.messagingPermission(sender.id, peer.id)).resolves.toEqual({ canMessage: true, reason: null });
+
+    privacySettings.findUnique.mockResolvedValue({ messageAudience: "following" });
+    userFollow.findMany.mockResolvedValue([]);
+    await expect(service.messagingPermission(sender.id, peer.id)).resolves.toEqual({ canMessage: false, reason: "privacy" });
+    await expect(service.send(sender, { recipientId: peer.id, body: "hello" })).rejects.toBeInstanceOf(ForbiddenException);
+
+    userFollow.findMany.mockResolvedValue([{ followingId: sender.id }]);
+    await expect(service.messagingPermission(sender.id, peer.id)).resolves.toEqual({ canMessage: true, reason: null });
+
+    privacySettings.findUnique.mockResolvedValue({ messageAudience: "nobody" });
+    await expect(service.messagingPermission(sender.id, peer.id)).resolves.toEqual({ canMessage: false, reason: "privacy" });
+
+    privacySettings.findUnique.mockResolvedValue(null);
+    userBlock.findFirst.mockResolvedValue({ userId: peer.id });
+    await expect(service.messagingPermission(sender.id, peer.id)).resolves.toEqual({ canMessage: false, reason: "blocked" });
+
+    await expect(service.messagingPermission(sender.id, sender.id)).resolves.toEqual({ canMessage: false, reason: "self" });
+    user.findUnique.mockResolvedValue(null);
+    await expect(service.messagingPermission(sender.id, peer.id)).resolves.toEqual({ canMessage: false, reason: "unavailable" });
+    expect(privateMessage.create).not.toHaveBeenCalled();
+  });
+
   it("stores a message and delegates channel delivery", async () => {
     const message = { id: "m1", senderId: sender.id, recipientId: peer.id, body: "hello" };
     user.findUnique.mockResolvedValue(peer);

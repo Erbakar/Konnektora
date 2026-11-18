@@ -70,6 +70,13 @@ export class MessagesService {
       where.category = query.category;
     }
 
+    if (query.dataDeletion === "only") {
+      where.AND = [{ category: { startsWith: "Veri silme talebi" } }];
+    } else if (query.dataDeletion === "exclude") {
+      // NULL kategori SQL'de NOT LIKE ile eşleşmediği için ayrıca dahil edilir.
+      where.AND = [{ OR: [{ category: null }, { NOT: { category: { startsWith: "Veri silme talebi" } } }] }];
+    }
+
     if (query.q) {
       where.OR = [
         { name: { contains: query.q, mode: "insensitive" } },

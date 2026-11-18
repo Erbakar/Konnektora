@@ -8,7 +8,7 @@ const ui = {
   tr: {
     home: "Anasayfa", menu: "Menü", signUp: "Kayıt ol", logOut: "Çıkış",
     feed: "Akış", events: "Etkinlikler", tags: "İlgi alanları", places: "Mekânlar",
-    messages: "Mesajlar", memberId: "Üye kartı", finance: "Finans", search: "Ara",
+    messages: "Mesajlar", memberId: "Üye kartı (QR / NFC)", finance: "Finans", search: "Ara",
     create: "Profil oluştur", login: "Giriş yap", explore: "Etkinlikleri keşfet",
     admin: "Yönetim", menuOpen: "Menüyü aç", menuClose: "Menüyü kapat",
     navigation: "Ana navigasyon", mobileNavigation: "Mobil navigasyon",
@@ -24,7 +24,7 @@ const ui = {
   en: {
     home: "Home", menu: "Menu", signUp: "Sign up", logOut: "Log out",
     feed: "Feed", events: "Events", tags: "Tags", places: "Places", messages: "Messages",
-    memberId: "Member ID", finance: "Finance", search: "Search", create: "Create",
+    memberId: "Member card (QR / NFC)", finance: "Finance", search: "Search", create: "Create",
     login: "Log in", explore: "Explore events", admin: "Admin", menuOpen: "Open menu",
     menuClose: "Close menu", navigation: "Main navigation", mobileNavigation: "Mobile navigation",
     discover: "Discover", community: "Community", founders: "Founders", investment: "Investment",

@@ -392,6 +392,33 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
     );
   });
 
+  it("17/10 #19: mutualizm kutusundaki metni mobilde iki sütun / ikişer satıra bölünecek biçimde işaretler", async () => {
+    apiMocks.getUserSession.mockReturnValue({
+      id: "viewer-1", name: "Deniz", username: "deniz", role: "user", status: "active", accountType: "individual",
+    });
+    apiMocks.getPublicProfile.mockResolvedValue({
+      id: "person-1", name: "Ada Yılmaz", username: "ada", accountType: "individual", verified: false,
+      followerCount: 0, followingCount: 0, city: null, country: null, media: [], interests: [], events: [], places: [],
+      relationship: { isSelf: false, following: false, canMessage: true, blockedByViewer: false },
+      mutualism: {
+        total: 16, hiddenCount: 0, sameSentimentTags: [], events: [], places: [], people: [],
+        sharedReactionCount: 0, sharedCommentTargetCount: 0,
+        scores: { overall: 0, friendship: 0, networking: 0, eventPartner: 0, travel: 0, business: 0 },
+        explanation: "", actions: [],
+      },
+    });
+
+    render(providers(
+      <Routes><Route path="/users/:username" element={<PublicProfilePage />} /></Routes>,
+      "/users/ada",
+    ));
+
+    const bar = await screen.findByRole("link", { name: /16 ortak noktanız var\s*Mutualizm analizini gör →/ });
+    expect(bar).toHaveClass("mutualism-bar");
+    expect([...bar.querySelectorAll("strong > .mutualism-line")].map((line) => line.textContent)).toEqual(["16 ortak", "noktanız var"]);
+    expect([...bar.querySelectorAll(".mutualism-link-label .mutualism-line")].map((line) => line.textContent)).toEqual(["Mutualizm", "analizini gör →"]);
+  });
+
   it("üçüncü etiket eklemesinden sonra profil sinyallerine göre seçilebilir akıllı öneriler gösterir", async () => {
     const session = { id: "person-1", name: "Ada Yılmaz", username: "ada", role: "user", status: "active", accountType: "individual" };
     apiMocks.getUserSession.mockReturnValue(session);
@@ -481,7 +508,14 @@ describe("157 maddelik listenin 55-66 arası web davranışları", () => {
 
     await userEvent.type(screen.getByRole("textbox", { name: "Ad soyad" }), "Ada Yılmaz");
     await userEvent.type(screen.getByRole("textbox", { name: "E-posta" }), "ada@example.com");
-    expect(screen.getByRole("textbox", { name: "Şehir" })).toHaveValue("İstanbul");
+    // 17/10 #24: şehir alanı Türkiye'nin 81 ilini listeler (ilçeleri değil); ülke varsayılanı Türkiye'dir.
+    const city = screen.getByRole("combobox", { name: "Şehir" });
+    expect(city).toHaveValue("İstanbul");
+    expect(within(city).getAllByRole("option")).toHaveLength(82);
+    expect(within(city).getByRole("option", { name: "Ankara" })).toBeInTheDocument();
+    expect(within(city).queryByRole("option", { name: "Kadıköy" })).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Ülke" })).toHaveValue("Türkiye");
+    expect(screen.getByRole("textbox", { name: "Motivasyon mektubu" })).toHaveAttribute("placeholder", "Neden şehrinin Konnektora küratörü olmak istediğini ve nasıl bir küratör olabileceğini bize anlat…");
     await userEvent.type(screen.getByRole("textbox", { name: "Motivasyon mektubu" }), "Şehrimde nitelikli topluluk etkinlikleri düzenlemek ve yerel ağı büyütmek istiyorum.");
     const cvUrl = screen.getByRole("textbox", { name: "Özgeçmiş bağlantısı (LinkedIn, Instagram profiliniz vb. linki)" });
     expect(cvUrl).toHaveAttribute("type", "url");

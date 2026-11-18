@@ -1,10 +1,11 @@
+import { visibleEventWhere } from "../common/event-visibility";
 import { compatibilityScores } from "../common/compatibility";
 import { effectivePlan } from "../plans/plan-runtime";
 import { consumeQuota } from "../common/usage-quota";
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrivacyAudience } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import { periodInterestMetrics } from "../common/analytics-extras";
+import { analyticsPrefix, checkinHeatmapMetrics, dailyCountMetrics, densityMetrics, periodInterestMetrics, spendByPayerTry, timeSeriesMetrics } from "../common/analytics-extras";
 import { canUseAdvancedAnalytics } from "../common/analytics-access";
 
 @Injectable()
@@ -45,10 +46,12 @@ export class PublicProfileService {
       if (viewerId === profile.id) await this.prisma.$transaction(tx => consumeQuota(tx, { ...profile, role: profile.role }, "profile", analyticsRequest));
     }
     const canViewStats = Boolean(analyticsRequest) || ["admin", "super_admin", "curator"].includes(viewerRole ?? "") || viewerId === profile.id && canUseAdvancedAnalytics({ ...profile, role: viewerRole ?? "user" });
+    // 17/10 #14: gizli etkinlikler profil sayfasında yalnız görmeye yetkili izleyiciye listelenir.
+    const visibleEvents = await visibleEventWhere(this.prisma, viewerId ? { id: viewerId, role: viewerRole ?? "user" } : null);
     const [media, ownInterests, events, places, profileViews, authoredComments, sentMessages, profileViewDetails, followerDetails, connectionDetails, ownedEventStats, scans, profileViewSources, profileSharesByChannel, profileActions] = await Promise.all([
       this.prisma.mediaFile.findMany({ where: { contentType: "user", contentId: profile.id, status: "active" }, select: { id: true, url: true, type: true, sortOrder: true, isProfilePicture: true }, orderBy: { sortOrder: "asc" }, take: 50 }),
       viewerId ? this.prisma.userInterestTag.findMany({ where: { userId: viewerId }, select: { tagId: true, sentiment: true } }) : [],
-      this.canView(privacy.eventAudience, relationship) ? this.prisma.event.findMany({ where: { status: "published", OR: [{ createdById: profile.id }, { participants: { some: { userId: profile.id, status: { in: ["accepted", "attended"] } } } }] }, orderBy: { startsAt: "desc" }, take: 24, include: { _count: { select: { participants: { where: { status: { in: ["accepted", "attended"] } } } } } } }) : [],
+      this.canView(privacy.eventAudience, relationship) ? this.prisma.event.findMany({ where: { status: "published", AND: [visibleEvents], OR: [{ createdById: profile.id }, { participants: { some: { userId: profile.id, status: { in: ["accepted", "attended"] } } } }] }, orderBy: { startsAt: "desc" }, take: 24, include: { _count: { select: { participants: { where: { status: { in: ["accepted", "attended"] } } } } } } }) : [],
       this.canView(privacy.placeAudience, relationship) ? this.prisma.place.findMany({ where: { status: "active", OR: [{ createdById: profile.id }, { members: { some: { userId: profile.id, status: "accepted" } } }] }, orderBy: { followerCount: "desc" }, take: 24 }) : [],
       canViewStats ? this.prisma.contentView.count({ where: { targetType: "user", targetId: profile.id, kind: "detail" } }) : 0,
       canViewStats ? this.prisma.contentComment.count({ where: { authorId: profile.id, status: "active" } }) : 0,
@@ -82,8 +85,13 @@ export class PublicProfileService {
         where: { createdById: profile.id },
         select: {
           id: true,
+          title: true,
           startsAt: true,
-          participants: { where: { status: { in: ["accepted", "attended", "declined"] } }, select: { status: true } },
+          timezone: true,
+          capacity: true,
+          lineup: true,
+          tags: { select: { tag: { select: { name: true, status: true } } } },
+          participants: { where: { status: { in: ["accepted", "attended", "declined"] } }, select: { status: true, userId: true, checkedInAt: true } },
           ticketTypeRecords: { select: { soldCount: true, capacity: true } },
           payments: { where: { status: "succeeded" }, select: { grossAmount: true, platformFee: true, netAmount: true } },
           ticketRefunds: { select: { amount: true } },
@@ -119,11 +127,36 @@ export class PublicProfileService {
     const followersLast7d = followerDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 7 * day).length;
     const followersLast30d = followerDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 30 * day).length;
     const followersLast90d = followerDetails.filter((item) => now.getTime() - item.createdAt.getTime() <= 90 * day).length;
-    // 07/11 #89: takipçi / ziyaretçi ilgi alanları, son 1 hafta–6 ay.
-    const [followerPeriodInterests, visitorPeriodInterests] = canViewStats ? await Promise.all([
-      periodInterestMetrics(this.prisma, "followerInterest", followerDetails.map((item) => item.followerId)),
-      periodInterestMetrics(this.prisma, "visitorInterest", profileViewDetails.map((item) => item.userId).filter((id) => id !== profile.id)),
-    ]) : [{}, {}];
+    // 17/11 #85: postlarına aldığı yorum ve beğeniler ile yorumlarına aldığı beğeniler; #113: etiketlerin kazandırdığı TL.
+    const yearAgo = new Date(now.getTime() - 366 * day);
+    const [postComments, postLikes, ownComments, ownedEventPayments] = canViewStats ? await Promise.all([
+      this.prisma.postComment.findMany({ where: { post: { authorId: profile.id }, authorId: { not: profile.id }, status: "active", createdAt: { gte: yearAgo } }, select: { createdAt: true }, take: 100_000 }),
+      this.prisma.postLike.findMany({ where: { post: { authorId: profile.id }, userId: { not: profile.id }, createdAt: { gte: yearAgo } }, select: { createdAt: true }, take: 100_000 }),
+      this.prisma.contentComment.findMany({ where: { authorId: profile.id, status: "active" }, select: { id: true }, orderBy: { createdAt: "desc" }, take: 20_000 }),
+      this.prisma.paymentTransaction.findMany({ where: { event: { createdById: profile.id }, status: { in: ["succeeded", "partially_refunded"] } }, select: { payerId: true, grossAmount: true, refundedAmount: true, currency: true }, take: 100_000 }),
+    ]) : [[], [], [], []];
+    const commentLikes = ownComments.length ? await this.prisma.contentReaction.findMany({ where: { targetType: { in: ["tag_comment", "event_comment", "place_comment"] }, targetId: { in: ownComments.map((item) => item.id) }, reaction: "like", userId: { not: profile.id }, createdAt: { gte: yearAgo } }, select: { createdAt: true }, take: 100_000 }) : [];
+    const spendByUser = await spendByPayerTry(ownedEventPayments);
+    const ownedAttendeeIds = ownedEventStats.flatMap((event) => event.participants.filter((participant) => participant.status !== "declined").map((participant) => participant.userId));
+    const ownedProgramTags = ownedEventStats.flatMap((event) => [...(Array.isArray(event.lineup) ? (event.lineup as Array<{ title?: string } | null>).map((item) => item?.title?.trim() ?? "") : []), ...(event.tags ?? []).filter((item) => item.tag.status === "active").map((item) => item.tag.name)]);
+    // 07/11 #89: takipçi / ziyaretçi ilgi alanları, son 1 hafta–6 ay. 17/11 #113: etkinlik katılımcıları ve etkinlik programı/etiketleri.
+    const [followerPeriodInterests, visitorPeriodInterests, eventAttendeeInterests, eventProgramInterests] = canViewStats ? await Promise.all([
+      periodInterestMetrics(this.prisma, "followerInterest", followerDetails.map((item) => item.followerId), { spendByUser }),
+      periodInterestMetrics(this.prisma, "visitorInterest", profileViewDetails.map((item) => item.userId).filter((id) => id !== profile.id), { spendByUser }),
+      periodInterestMetrics(this.prisma, "eventAttendeeInterest", ownedAttendeeIds, { spendByUser }),
+      periodInterestMetrics(this.prisma, "eventProgramInterest", ownedAttendeeIds, { spendByUser, fixedTags: ownedProgramTags, limit: 10 }),
+    ]) : [{}, {}, {}, {}];
+    // 17/11 #108: kurucusu olduğu etkinliklerden son 1/3/12 ayın en popüler 10'u (katılımcı sayısı ve bilet kapasitesi).
+    const popularEvents: Record<string, number> = {};
+    for (const [label, days] of [["1m", 31], ["3m", 92], ["12m", 365]] as const) {
+      const inPeriod = ownedEventStats.filter((event) => event.startsAt.getTime() >= now.getTime() - days * day && event.startsAt.getTime() <= now.getTime()).map((event) => ({
+        title: event.title,
+        attendees: event.participants.filter((participant) => participant.status !== "declined").length,
+        capacity: event.ticketTypeRecords.reduce((sum, ticket) => sum + ticket.capacity, 0) || event.capacity || 0,
+      }));
+      Object.assign(popularEvents, analyticsPrefix(`popularAttendees${label}`, Object.fromEntries([...inPeriod].filter((event) => event.attendees > 0).sort((a, b) => b.attendees - a.attendees).slice(0, 10).map((event) => [event.title, event.attendees]))));
+      Object.assign(popularEvents, analyticsPrefix(`popularCapacity${label}`, Object.fromEntries([...inPeriod].filter((event) => event.capacity > 0).sort((a, b) => b.capacity - a.capacity).slice(0, 10).map((event) => [event.title, event.capacity]))));
+    }
     const eventAccepted = ownedEventStats.reduce((sum, event) => sum + event.participants.filter((participant) => ["accepted", "attended"].includes(participant.status)).length, 0);
     const eventAttended = ownedEventStats.reduce((sum, event) => sum + event.participants.filter((participant) => participant.status === "attended").length, 0);
     const eventDeclined = ownedEventStats.reduce((sum, event) => sum + event.participants.filter((participant) => participant.status === "declined").length, 0);
@@ -209,6 +242,16 @@ export class PublicProfileService {
       ...profilePrefix("shareChannel", Object.fromEntries(profileSharesByChannel.map((item) => [item.channel, item._count._all]))),
       ...followerPeriodInterests,
       ...visitorPeriodInterests,
+      ...eventAttendeeInterests,
+      ...eventProgramInterests,
+      ...popularEvents,
+      // 17/11 #85: dönem sekmelerine göre zaman serileri.
+      ...timeSeriesMetrics({ views: profileViewDetails.map((item) => item.createdAt), followers: followerDetails.map((item) => item.createdAt), postEngagement: [...postComments, ...postLikes].map((item) => item.createdAt), commentLikes: commentLikes.map((item) => item.createdAt) }, now),
+      // 17/11 #107: günlük görüntülenme çizgisi.
+      ...dailyCountMetrics("viewsDay", profileViewDetails.map((item) => item.createdAt), now),
+      // 17/11 #109: kurucusu olduğu etkinliklerin yoğunluğu (satılan bilet / katılımcı) ve check-in gün × saat dağılımı.
+      ...densityMetrics(ownedEventStats.map((event) => ({ startsAt: event.startsAt, timezone: event.timezone, weight: event.ticketTypeRecords.reduce((sum, ticket) => sum + ticket.soldCount, 0) || event.participants.filter((participant) => participant.status !== "declined").length }))),
+      ...checkinHeatmapMetrics(ownedEventStats.flatMap((event) => event.participants.map((participant) => ({ at: participant.checkedInAt, timezone: event.timezone })))),
     } : undefined;
     return {
       id: profile.id, name: this.canView(privacy.profileNameAudience ?? "everybody", relationship) ? profile.name : profile.username ?? "Konnektora üyesi", username: profile.username ?? profile.id,

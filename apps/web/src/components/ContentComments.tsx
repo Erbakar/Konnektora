@@ -46,6 +46,8 @@ import { ReportDialog } from "./ReportDialog";
 import { ComposerTips } from "./ComposerTips";
 import { ShareDialog } from "./ContentDialogs";
 import { useLanguage } from "../lib/i18n";
+import { useComposerDraft } from "../lib/composerDrafts";
+import { DraftLeaveGuard } from "./DraftLeaveGuard";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 import { formatPostDateTime } from "../lib/formats";
 import { GuestListAction } from "./GuestListAction";
@@ -63,12 +65,14 @@ export function ContentComments({
   title: string;
   organizerId?: string | null;
   canManage?: boolean;
-  shareContext?: { title: string; location?: string; date?: string; tags?: string[]; icon?: string };
+  shareContext?: { title: string; location?: string; date?: string; tags?: string[]; icon?: string; instagramCaption?: (post: { author: string; body: string }) => string };
 }) {
   const { language } = useLanguage();
   const user = getUserSession();
   const client = useQueryClient();
-  const [body, setBody] = useState("");
+  // 17/10 #23: etkinlik / mekân gönderi taslağı kullanıcıya ve sayfaya özel saklanır.
+  const draftScope = targetType === "event" || targetType === "place" ? targetType : null;
+  const [body, setBody, clearBodyDraft] = useComposerDraft(draftScope ? user?.id : null, draftScope ?? "event", targetId);
   const [media, setMedia] = useState<File[]>([]);
   const [pollDraft, setPollDraft] = useState<PollDraft | null>(null);
   const [pollError, setPollError] = useState("");
@@ -121,7 +125,7 @@ export function ContentComments({
       return draft.id;
     },
     onSuccess: async (id) => {
-      setBody("");
+      clearBodyDraft();
       setMedia([]);
       setPollDraft(null);
       await client.invalidateQueries({
@@ -312,6 +316,7 @@ export function ContentComments({
       </div>
       {user ? (
         <form
+          className={pollKind ? "content-post-composer" : undefined}
           onSubmit={(event) => {
             event.preventDefault();
             if (pollDraft) {
@@ -348,7 +353,7 @@ export function ContentComments({
               type="file"
             />
           </label>
-          {pollKind ? <button type="button" className={`comment-poll-toggle composer-link${pollDraft ? " active" : ""}`} aria-pressed={Boolean(pollDraft)} onMouseDown={(event) => event.preventDefault()} onClick={() => { setPollDraft((current) => current ? null : emptyPollDraft()); setPollError(""); }}><BarChart3 size={18}/>{language === "tr" ? "Anket ekle" : "Add poll"}</button> : null}
+          {pollKind ? <button type="button" className={`comment-poll-toggle composer-link${pollDraft ? " active" : ""}`} aria-pressed={Boolean(pollDraft)} onMouseDown={(event) => event.preventDefault()} onClick={() => { setPollDraft((current) => current ? null : emptyPollDraft()); setPollError(""); }}><BarChart3 size={18}/><span>{language === "tr" ? "Anket ekle" : "Add poll"}</span></button> : null}
           <ComposerTips />
           {pollKind && pollDraft ? <PollComposer draft={pollDraft} kind={pollKind} onChange={(next) => { setPollDraft(next); setPollError(""); }} onRemove={() => { setPollDraft(null); setPollError(""); }} tr={language === "tr"}/> : null}
           {pollError ? <p className="form-error" role="alert">{pollError}</p> : null}
@@ -364,6 +369,7 @@ export function ContentComments({
               ) : null}
             </span>
           ) : null}
+          {draftScope ? <DraftLeaveGuard active={Boolean(body.trim()) && !create.isPending} kind="post" onDiscard={clearBodyDraft} /> : null}
         </form>
       ) : (
         <p className="form-help">
@@ -396,7 +402,7 @@ function CommentActions({
   canManage: boolean;
   canAddGuest: boolean;
   onChanged: () => void;
-  shareContext?: { title: string; location?: string; date?: string; tags?: string[]; icon?: string };
+  shareContext?: { title: string; location?: string; date?: string; tags?: string[]; icon?: string; instagramCaption?: (post: { author: string; body: string }) => string };
 }) {
   const { language } = useLanguage();
   const [banned, setBanned] = useState(false);
@@ -594,6 +600,7 @@ function CommentActions({
         targetType="post"
         title={comment.body.trim().slice(0, 120) || (language === "tr" ? "Konnektora postu" : "Konnektora post")}
         text={[`${comment.author?.username ? `@${comment.author.username}` : comment.author?.name ?? ""}${shareContext ? ` · ${shareContext.title}${shareContext.icon ? ` ${shareContext.icon}` : ""}` : ""}`, `“${comment.body.trim()}”`, shareContext?.location ? `📍 ${shareContext.location}` : "", shareContext?.date ? `📅 ${shareContext.date}` : "", shareContext?.tags?.slice(0, 4).map((tag) => `#${tag}`).join(" "), language === "tr" ? "🌎 Konnektora’da gönderiyi gör →" : "🌎 See the post on Konnektora →"].filter(Boolean).join("\n")}
+        instagramText={shareContext?.instagramCaption?.({ author: comment.author?.username ? `@${comment.author.username}` : comment.author?.name ?? "", body: comment.body })}
         url={`${window.location.href.split("#")[0]}#post-${comment.id}`}
       />
     </>

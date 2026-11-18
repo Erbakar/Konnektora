@@ -22,7 +22,9 @@ export class ContentController {
 
   @Get("media")
   @UseGuards(OptionalJwtAuthGuard)
-  listMedia(@Query("targetType") targetType?: ReportTargetType, @Query("targetId") targetId?: string) {
+  async listMedia(@Query("targetType") targetType?: ReportTargetType, @Query("targetId") targetId?: string, @CurrentUser() user?: User) {
+    // 17/10 #14: gizli etkinliğin medya albümü, etkinliği göremeyenlere dönmez.
+    if (targetType === ReportTargetType.event && targetId && !(await this.contentService.canViewEvent(targetId, user))) return [];
     return this.contentService.listMedia(targetType, targetId);
   }
 

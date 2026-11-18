@@ -88,5 +88,19 @@ describe("Guest List ortak aksiyonu", () => {
     expect(apiMocks.invitePlaceMember).toHaveBeenCalledWith("place-1", { userId: "person-1", role: "member" });
     expect(apiMocks.updatePlaceMember).toHaveBeenCalledWith("place-1", "person-1", { status: "accepted", role: "member" });
     expect(apiMocks.updatePlaceMember.mock.invocationCallOrder[0]!).toBeLessThan(apiMocks.checkInPlaceMember.mock.invocationCallOrder[0]!);
+    // 17/10 #20: kayıt tamamlanınca lightbox kapanır.
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Misafir listesine ekle" })).not.toBeInTheDocument());
+  });
+
+  it("17/10 #20: kayıt başarısız olursa lightbox açık kalır ve hata gösterir", async () => {
+    apiMocks.listGuestLists.mockResolvedValue([{ id: "list-a", name: "Arkadaşlar", access: "owner", members: [] }]);
+    apiMocks.addGuestListMember.mockRejectedValue(new Error("fail"));
+    render(providers(<GuestListAction canUse target={{ id: "person-1", name: "Ada" }}/>));
+    await userEvent.click(await screen.findByRole("button", { name: "Guest List'e ekle" }));
+    const dialog = await screen.findByRole("dialog", { name: "Misafir listesine ekle" });
+    await userEvent.click(await within(dialog).findByRole("checkbox", { name: /Arkadaşlar/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Değişiklikleri kaydet" }));
+    expect(await within(dialog).findByText("Guest List değişikliği kaydedilemedi.")).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Misafir listesine ekle" })).toBeVisible();
   });
 });

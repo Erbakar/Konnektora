@@ -4,6 +4,7 @@ import { User } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { MailService } from "../mail/mail.service";
 import { CuratorApplicationDto } from "./curators.dto";
+import { territoryNameVariants, territoryWhere } from "../curator-finance/territory";
 
 @Injectable()
 export class CuratorsService {
@@ -33,7 +34,7 @@ export class CuratorsService {
     const territories = contract && Array.isArray(contract.territories) ? contract.territories as Array<{ country: string; city?: string; region?: string }> : [];
     const city = territories.length ? territories.map(row => row.city || row.region || row.country).join(", ") : user.curatorCity || user.city;
     if (!city) throw new ForbiddenException("Küratör için sorumlu şehir tanımlanmalı.");
-    const scope = territories.length ? { OR: territories.map(row => ({ country: { equals: row.country, mode: "insensitive" as const }, ...(row.city ? { city: { equals: row.city, mode: "insensitive" as const } } : {}), ...(row.region ? { region: { equals: row.region, mode: "insensitive" as const } } : {}) })) } : { city: { equals: city, mode: "insensitive" as const } };
+    const scope = territories.length ? { OR: territories.map(row => territoryWhere(row)) } : { OR: territoryNameVariants(city).flatMap(name => [{ city: { equals: name, mode: "insensitive" as const } }, { region: { equals: name, mode: "insensitive" as const } }]) };
     const entityScope = scope;
     const [events, places, organizers, revenue] = await Promise.all([
       this.prisma.event.findMany({ where: { ...scope, status: { in: ["draft", "published"] } }, orderBy: { startsAt: "asc" }, take: 100, select: { id: true, title: true, slug: true, status: true, startsAt: true, createdBy: { select: { id: true, name: true, username: true, accountType: true, companyName: true, privacySettings: { select: { profileNameAudience: true } } } } } }),

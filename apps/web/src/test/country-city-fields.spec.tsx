@@ -49,5 +49,7 @@ it("restores the full address, scopes city suggestions by region and clears depe
   expect(screen.getByRole("combobox",{name:"Şehir"})).toHaveValue("");expect(screen.getByLabelText("Posta kodu (opsiyonel)")).toHaveValue("");
   expect(document.querySelector('datalist option[value="Buffalo"]')).not.toBeNull();
   expect(document.querySelector('datalist option[value="Los Angeles"]')).toBeNull();
-  await userEvent.selectOptions(screen.getByRole("combobox",{name:"Ülke"}),"Türkiye");expect(region).toHaveValue("");
+  await userEvent.selectOptions(screen.getByRole("combobox",{name:"Ülke"}),"Türkiye");
+  // 17/10 #12: Türkiye seçilince eyalet alanı "Şehir" (il) seçimine dönüşür ve boşalır.
+  expect(screen.getByRole("combobox",{name:"Şehir"})).toHaveValue("");expect(screen.getByRole("combobox",{name:"İlçe"})).toHaveValue("");
 });

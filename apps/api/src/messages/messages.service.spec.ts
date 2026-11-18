@@ -23,4 +23,35 @@ describe("MessagesService admin inbox permissions", () => {
 
     await expect(service.getAdminMessage("message-1", admin)).rejects.toBeInstanceOf(UnauthorizedException);
   });
+
+  describe("data deletion inbox split (17/10 #1)", () => {
+    const list = { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) };
+    const inbox = new MessagesService({ userMessage: list } as never, {} as never, {} as never);
+
+    it("lists only data deletion requests when asked", async () => {
+      await inbox.listAdminMessages(UserMessageType.write_to_us, { dataDeletion: "only" });
+
+      expect(list.count).toHaveBeenCalledWith({
+        where: { type: "write_to_us", AND: [{ category: { startsWith: "Veri silme talebi" } }] }
+      });
+    });
+
+    it("keeps uncategorised messages when data deletion requests are excluded", async () => {
+      await inbox.listAdminMessages(UserMessageType.write_to_us, { dataDeletion: "exclude", status: "unread" as never });
+
+      expect(list.count).toHaveBeenCalledWith({
+        where: {
+          type: "write_to_us",
+          status: "unread",
+          AND: [{ OR: [{ category: null }, { NOT: { category: { startsWith: "Veri silme talebi" } } }] }]
+        }
+      });
+    });
+
+    it("leaves the inbox unfiltered by default", async () => {
+      await inbox.listAdminMessages(UserMessageType.faq, {});
+
+      expect(list.count).toHaveBeenCalledWith({ where: { type: "faq" } });
+    });
+  });
 });

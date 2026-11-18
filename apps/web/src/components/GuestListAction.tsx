@@ -188,6 +188,8 @@ export function GuestListDialog({ context, target, onClose }: { context?: GuestL
         await client.invalidateQueries({ queryKey: ["guest-list-context", context.type, context.id] });
         await client.invalidateQueries({ queryKey: [context.type, context.id, "related-users"] });
       }
+      // 17/10 #20: kayıt tamamlanınca lightbox kapanır.
+      onClose();
     },
     onError: () => setSaveError(true),
   });

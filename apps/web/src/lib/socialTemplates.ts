@@ -99,6 +99,40 @@ export async function shareOrDownloadSocialFiles(files: File[], shareTitle: stri
   return "downloaded" as const;
 }
 
+export function downloadSocialFile(file: File) {
+  const href = URL.createObjectURL(file);
+  const download = document.createElement("a");
+  download.href = href;
+  download.download = file.name;
+  download.click();
+  window.setTimeout(() => URL.revokeObjectURL(href), 1000);
+}
+
+/**
+ * 17/10 #6, #7, #9: içerik görselini (etkinlik kapağı, mekân fotoğrafı, profil fotoğrafı) Instagram'ın kabul ettiği
+ * JPEG dosyasına çevirir. Görsel yüklenemezse veya CORS nedeniyle okunamazsa null döner; çağıran yedek karta düşer.
+ */
+export async function createShareImageFile(src: string, fileName = "konnektora-instagram.jpg") {
+  // Yavaş yüklenen görsel paylaşım menüsünü (kullanıcı etkileşimi süresini) geciktirmesin diye 4 sn ile sınırlanır.
+  const image = await Promise.race([loadImage(src), new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 4000))]);
+  if (!image || !image.naturalWidth || !image.naturalHeight) return null;
+  const scale = Math.min(1, 1080 / image.naturalWidth);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  try {
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    return blob ? new File([blob], fileName, { type: "image/jpeg" }) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function formatWeeklyEventTime(event: Pick<Event, "startsAt" | "endsAt" | "timezone">, language: "tr" | "en") {
   const locale = language === "tr" ? "tr-TR" : "en-GB";
   const timeZone = validTimeZone(event.timezone);

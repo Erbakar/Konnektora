@@ -1,0 +1,60 @@
+/* 17/10 (X) — paylaşım, navigasyon ve küçük arayüz maddeleri (#3–#9, #17, #19, #27, #28). */
+
+/* #3–#9: Instagram'da paylaş — açıklama önizlemesi ve yönlendirme */
+.share-instagram-result { display: grid; gap: 10px; margin-top: 12px; }
+.share-instagram-result > .form-success { margin: 0; }
+.share-instagram-caption {
+  background: #f4f7f5;
+  border: 1px solid #dce7df;
+  border-radius: 10px;
+  color: #1c2a23;
+  font: inherit;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  margin: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  text-align: left;
+  user-select: all;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.share-instagram-result-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.share-instagram-result-actions:empty { display: none; }
+
+/* #17: İlgi Alanı Detay — ilişkili etkinlik barı, Etkinlik Detay "Biletler" widget'ı gibi koyu zemin / açık yazı */
+.tag-related-events-notice,
+.tag-related-events-notice:hover,
+.tag-related-events-notice:focus-visible {
+  background: #101c15;
+  border-color: #263b2c;
+  color: #fff;
+}
+.tag-related-events-notice:hover,
+.tag-related-events-notice:focus-visible { color: #b9ef7d; }
+
+/* #19: mobil — başkasının profilindeki sabit mutualizm kutusu iki sütun, ikişer satır */
+@media (max-width: 700px) {
+  .mutualism-bar { gap: 14px; }
+  .mutualism-bar .mutualism-line { display: block; white-space: nowrap; }
+  .mutualism-bar > strong { flex: 0 1 auto; line-height: 1.25; min-width: 0; }
+  .mutualism-bar .mutualism-link-label { flex: 0 1 auto; justify-content: flex-end; line-height: 1.25; min-width: 0; }
+  .mutualism-bar .mutualism-link-text { display: block; text-align: left; }
+}
+
+/* #27: "Üyeler" sekmesi yalnız tablet tab bar'ında; hamburger'deki "Üyeler ve Listeler" tablette gizlenir */
+.mobile-tab-bar > a.nav-tablet-only { display: none; }
+@media (min-width: 761px) and (max-width: 1100px) {
+  .mobile-tab-bar > a.nav-tablet-only { display: flex; }
+  .corp-mobile-menu-panel > a.nav-hide-on-tablet { display: none; }
+
+  /* #28: tablet — hamburger menü alttaki tab bar'ın arkasında kalmasın; "Dil ayarı"na kaydırılarak ulaşılsın */
+  .corp-mobile-menu-panel {
+    -webkit-overflow-scrolling: touch;
+    max-height: calc(100dvh - 72px - 64px - env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    touch-action: pan-y;
+  }
+  .corp-mobile-menu-backdrop { bottom: calc(64px + env(safe-area-inset-bottom, 0px)); height: auto; }
+}
