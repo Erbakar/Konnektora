@@ -5,6 +5,7 @@ import { publicName } from "../common/public-name";
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { DiscoveryFeedQueryDto } from "./discovery.dto";
+import { territoryNameVariants } from "../curator-finance/territory";
 
 const userSelect = {
   id: true,
@@ -30,14 +31,16 @@ export class DiscoveryService {
       userId
         ? this.prisma.user.findUnique({
             where: { id: userId },
-            select: { city: true, country: true },
+            select: { city: true, region: true, country: true },
           })
         : null,
       this.blockedUserIds(userId),
     ]);
     // 17/10 #14: gizli etkinlikler akış ve keşif kartlarına yalnız ilgili kişiler için girer.
     const visibleEvents = { AND: [await visibleEventWhere(this.prisma, userId)] };
-    const city = query.city?.trim() || viewer?.city || undefined;
+    // 17/10 #13: Türkiye adreslerinde il "region", ilçe "city" alanındadır; "yakınındaki" içerik il düzeyinde eşleşir.
+    const viewerLocality = viewer?.region && /^t[uü]rk[iı]ye$|^turkey$/i.test(viewer.country ?? "") ? viewer.region : viewer?.city;
+    const city = query.city?.trim() || viewerLocality || undefined;
     const country = query.country?.trim() || viewer?.country || undefined;
     const userWhere = {
       status: "active" as const,
@@ -48,7 +51,7 @@ export class DiscoveryService {
       query.scope === "global"
         ? {}
         : city
-          ? { city: { equals: city, mode: "insensitive" as const } }
+          ? localityFilter(city)
           : country
             ? { country: { equals: country, mode: "insensitive" as const } }
             : {};
@@ -63,10 +66,7 @@ export class DiscoveryService {
                     event: {
                       ...(city
                         ? {
-                            city: {
-                              equals: city,
-                              mode: "insensitive" as const,
-                            },
+                            ...localityFilter(city),
                           }
                         : {
                             country: {
@@ -84,10 +84,7 @@ export class DiscoveryService {
                     place: {
                       ...(city
                         ? {
-                            city: {
-                              equals: city,
-                              mode: "insensitive" as const,
-                            },
+                            ...localityFilter(city),
                           }
                         : {
                             country: {
@@ -105,10 +102,7 @@ export class DiscoveryService {
                     user: {
                       ...(city
                         ? {
-                            city: {
-                              equals: city,
-                              mode: "insensitive" as const,
-                            },
+                            ...localityFilter(city),
                           }
                         : {
                             country: {
@@ -510,4 +504,9 @@ export class DiscoveryService {
       meta: `${place.followerCount} takipçi${place.city ? ` · ${place.city}` : ""}`,
     };
   }
+}
+
+/** Bir yerleşim adını hem şehir/ilçe hem il alanında, eski ve yeni yazımlarıyla ("Istanbul" / "İstanbul") arar. */
+function localityFilter(name: string) {
+  return { OR: territoryNameVariants(name).flatMap((value) => [{ city: { equals: value, mode: "insensitive" as const } }, { region: { equals: value, mode: "insensitive" as const } }]) };
 }

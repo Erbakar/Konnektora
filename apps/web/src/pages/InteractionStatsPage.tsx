@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, BarChart3, Clock, Lightbulb, ListOrdered, Meh, Radar, Share2, ThumbsDown, ThumbsUp, Ticket, TrendingUp, Trophy, Users, WalletCards } from "lucide-react";
 import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { getInteractionStats, getPublicProfileById, getTagStats, getTagStatsOrigin, listTags, getPlaceAnalyticsReferences } from "../lib/api";
+import { getInteractionStats, getPublicProfileById, getTagStats, getTagStatsOrigin, listEventTicketTypes, listTags, getPlaceAnalyticsReferences } from "../lib/api";
 import { analyticsSeries, fillDailySeries } from "../lib/analyticsSeries";
 import { useLanguage } from "../lib/i18n";
 import { ChartPanel, DensityHeatmap, FunnelChart, PeriodRankedList, PeriodTotalsChart, PieWithLegend, SegmentTabs, SourceDonut, TimeSeriesChart, TitleSelect, checkinSlots, sentimentColors } from "../components/StatsCharts";
@@ -344,16 +344,24 @@ function CommonInterestsPanel({ data }: { data: Stats }) {
  * #75: Bilet adı · satılan · doluluk · gelir. 17/11: Konnektora'da satılmak üzere tanımlanan her bilet türü için bir kart;
  * hiç yoksa tablo yerine bilgilendirme metni.
  */
-function TicketTypeTable({ data }: { data: Stats }) {
+function TicketTypeTable({ data, eventId }: { data: Stats; eventId: string }) {
   const { language } = useLanguage();
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
+  // Ölçüm anahtarları aksansız üretildiği için ("Genel Giriş" → "genel_giris") kart başlığında bilet türünün gerçek adı gösterilir.
+  const ticketNames = useQuery({ queryKey: ["stats-ticket-type-names", eventId], enabled: Boolean(eventId), retry: false, refetchOnWindowFocus: false, queryFn: async () => new Map((await listEventTicketTypes(eventId)).map((ticket) => [statsMetricKey(ticket.name), ticket.name])) });
+  const ticketLabel = (key: string) => ticketNames.data?.get(key) ?? prettyKey(key, language);
   const rows = grouped(data, "ticketTypeKonnektora_").map(([name]) => ({ name, sold: data[`ticketTypeSold_${name}`] ?? 0, occupancy: data[`ticketTypeOccupancy_${name}`], revenue: data[`ticketTypeRevenue_${name}`] ?? 0 })).sort((a, b) => b.sold - a.sold);
   return <ChartPanel title={t("Satılan bilet türü", "Tickets sold by type")}>
-    {rows.length ? <div className="stats-ticket-cards">{rows.map((row) => <article aria-label={prettyKey(row.name, language)} key={row.name}>
-      <h3><Ticket aria-hidden size={17}/> {prettyKey(row.name, language)}</h3>
+    {rows.length ? <div className="stats-ticket-cards">{rows.map((row) => <article aria-label={ticketLabel(row.name)} key={row.name}>
+      <h3><Ticket aria-hidden size={17}/> {ticketLabel(row.name)}</h3>
       <dl><div><dt>{t("Satılan bilet", "Sold")}</dt><dd>{row.sold.toLocaleString(language === "tr" ? "tr-TR" : "en-GB")}</dd></div><div><dt>{t("Kapasite doluluk oranı", "Occupancy")}</dt><dd>{row.occupancy === undefined ? "—" : `%${row.occupancy}`}</dd></div><div><dt>{t("Toplam bilet geliri", "Revenue")}</dt><dd>{displayValue("ticketRevenue", row.revenue, language)}</dd></div></dl>
     </article>)}</div> : <p className="stats-empty">{t("Bu etkinlik için Konnektora'da satılan bir bilet tanımlanmamıştır.", "No tickets sold on Konnektora are defined for this event.")}</p>}
   </ChartPanel>;
+}
+
+/** API'deki metricKey ile aynı dönüşüm: küçük harf, aksansız, alt çizgili. */
+function statsMetricKey(value: string) {
+  return value.toLocaleLowerCase("tr-TR").replace(/ı/g, "i").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "belirtilmedi";
 }
 
 function safeBackPath(value: string | null) {
@@ -503,7 +511,7 @@ export function InteractionStatsPage() {
       {otherTrends.length ? <StatsSection title={chartedSeries.length ? t("Diğer dönem toplamları", "Other period totals") : t("Dönem toplamları", "Period totals")} description={t("Bu dönemler birbiriyle örtüşür; günlük değişim değildir.", "These periods overlap; they are not daily changes.")} icon={<TrendingUp size={21}/>}><BarList entries={otherTrends}/></StatsSection> : null}
       {conversions.length ? <StatsSection title={t("Dönüşüm ve etkileşim", "Conversion and engagement")} icon={<TrendingUp size={21}/>}><MetricGrid entries={conversions}/></StatsSection> : null}
       {money.length ? <StatsSection title={t("Bilet ve gelir", "Tickets and revenue")} description={t("Satış, komisyon, organizatör geliri ve iade özeti", "Sales, commission, organiser revenue and refund summary")} icon={<WalletCards size={21}/>}><MetricGrid entries={money}/></StatsSection> : null}
-      {targetType === "event" ? <TicketTypeTable data={data}/> : null}
+      {targetType === "event" ? <TicketTypeTable data={data} eventId={targetId}/> : null}
       <div className="stats-chart-grid">
         <DemographicsPanel data={data} targetType={targetType}/>
         <SourcesPanel data={data} description={["Kullanıcıların içeriği keşfettiği ve paylaştığı kanallar", "Channels where people discovered and shared this content"]} groups={sourceGroups}/>

@@ -206,13 +206,19 @@ async function createFallbackCard(title: string, url: string, qrImage: string, l
   context.font = "500 38px system-ui, sans-serif";
   context.fillStyle = "rgba(255,255,255,.84)";
   context.fillText(language === "tr" ? "İlgi alanlarından gerçek bağlantılara." : "From shared interests to real connections.", 90, 1220);
+  // decode() bazı tarayıcı durumlarında (arka plandaki sekme vb.) hiç sonuçlanmayabiliyor; paylaşım
+  // "hazırlanıyor"da takılı kalmasın diye yükleme olayı ve 3 sn sınırıyla beklenir.
   const qr = new Image();
-  qr.src = qrImage;
-  await qr.decode();
+  const qrReady = await new Promise<boolean>((resolve) => {
+    const timer = window.setTimeout(() => resolve(qr.complete && qr.naturalWidth > 0), 3000);
+    qr.onload = () => { window.clearTimeout(timer); resolve(true); };
+    qr.onerror = () => { window.clearTimeout(timer); resolve(false); };
+    qr.src = qrImage;
+  });
   context.fillStyle = "#ffffff";
   roundRect(context, 90, 1360, 350, 350, 34);
   context.fill();
-  context.drawImage(qr, 125, 1395, 280, 280);
+  if (qrReady) context.drawImage(qr, 125, 1395, 280, 280);
   context.fillStyle = "#113b2a";
   context.font = "700 34px system-ui, sans-serif";
   context.fillText(language === "tr" ? "Detayları görmek için tara" : "Scan to view details", 485, 1485);

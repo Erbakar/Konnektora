@@ -1,0 +1,87 @@
+KONNEKTORA — 17/10 (X) LİSTESİ + TESTTEN DÖNENLER / 18 KASIM 2026
+
+Kaynak: Konnektora Testler
+- 17/10 (X) sekmesi (gid=717819260): #1–#29 (yeni liste, 29 madde)
+- 10/11 (X) sekmesi (gid=1376110755): testten dönen #66 #72 #75 #80 #82 #83 #85 #94 ve yeni #103–#117
+- 26/09 (X): #2   ·   23/10 (X): #37 (Destek Merkezi videosu, 10/11 #110 ile aynı)
+Dal: claude/nov17-test-items
+Migration: 20261117120000_hidden_event_visibility (EventVisibility enum'una "hidden" değeri; veri değişikliği yok)
+
+KAPSAM DIŞI BIRAKILANLAR (kullanıcı talimatı)
+- SMS: 26/09 #47, 23/10 #17 #19, 3/11 #32
+- Ödeme / cüzdan: 26/09 #48 #80
+- Google / Facebook / rehber: 3/11 #24 #25 #26 #39 #40
+- Kod işi olmayanlar: 26/09 #15 #31 #86 (gelir modeli / finans dokümanı kararları), 23/10 #6 #20 ve etiket yazıcı notu
+- 10/11 #73: test eden tarafından iptal edildi
+
+ÖNEMLİ BULGU — CANLIYA ÇIKMAMIŞ İKİ PR
+PR 22 (basın kiti logoart'ları) ve PR 23 (Destek Merkezi videosu, help-20261109.mp4) main'e birleşmiş ama
+canlıya dağıtılmamıştı (17.11 kontrolü: dosyalar konnektora.com'dan gelmiyor, PR 21 ise yayında).
+10/11 #94 ve video maddesinin testten dönme sebebi bu. Bu dalın birleştirilmesiyle birlikte yayına girmeleri
+gerekir; dağıtımdan sonra /brand/press/logoart-*.png ve /media/guides/help-20261109.mp4 canlıda kontrol edilmeli.
+
+YAPILANLAR
+
+Backoffice (17/10 #1, #2)
+- Kendi başlığı: logo altında BACKOFFICE, ana navigasyon (Moderasyon, İletişim, Kullanıcılar, İçerikler, CMS,
+  Muhasebe & Finans, Çıkış), kırmızı bekleyen sayıları, seçili öğe vurgusu, sol yan menüde alt kategoriler.
+- 36 alt bölümün tamamı /admin?section=<id> ile doğrudan açılabiliyor; eski bağlantılar yönleniyor.
+- Dashboard yalnız istenen sayaçları gösteriyor (GET /admin/backoffice-summary), her sayaç bölümüne bağlı.
+- Yer tutucu: "Kullanıcının paket kullanım raporu" (API'de veri yok). Para çekme listeleri salt okunur.
+
+Instagram paylaşımı (17/10 #3–#9)
+- Tüm paylaşım pencerelerinde "Instagram'da paylaş": madde şablonundaki metin panoya kopyalanır, görsel
+  paylaşım menüsüne verilir (desteklenmeyen cihazda indirilir, metin ekranda gösterilir).
+- Düzeltme: paylaşım kartı hazırlanırken QR görseli çözülemezse "Paylaşım hazırlanıyor…"da takılıyordu.
+
+Gönderi / mesaj kutuları (17/10 #10, #18, #22, #23, #25, #26)
+- Mobilde gömülü YouTube/SoundCloud tam genişlikte; ipucu ilk dokunuşta açılıyor; anket "Vazgeç" etiketi;
+  mobilde ikon düğmeler, masaüstünde ikon + bağlantı.
+- Postahane: öneri satırında boşluk; mesaj almak istemeyen kullanıcıda kutu pasif + bilgi satırı
+  (GET /me/conversations/:peerId/permission); mesaj ve gönderi taslakları + çıkışta soru penceresi.
+- Düzeltmeler: taslak penceresinde "Sil" yönlendirici hatası veriyordu; mobil Postahane'de video içeren balon
+  ve konuşma sütunu kartın dışına taşıyordu.
+
+Etkinlik ve adres (17/10 #12, #13, #14, #24, #29; 26/09 #2)
+- Türkiye seçiliyken "Şehir / İlçe" etiketleri; 81 il ve 973 ilçe (apps/web/public/data/regions/TR.json).
+- Küratör formu: yeni yer tutucu metin, şehir listesinde 81 il.
+- "Gizli - sadece davetliler görebilir" katılım tipi: liste, arama, akış, detay, mekân/profil/etiket yüzeyleri ve
+  sosyal önizleme API tarafında filtreleniyor.
+- "Etkinliği kopyala": tarihler boş gelen kopyalama ekranı, POST /events/:id/copy yeni etkinlik oluşturur.
+- Ana sayfa "Yakınındaki etkinlikler": mekân adı, yoksa şehir.
+- Düzeltme: il/ilçe düzeni yüzünden "yakınındaki" içerik ve küratör bölgesi ilçe bazında daralmasın diye
+  keşif akışı ve küratör paneli il düzeyinde, eski ve yeni yazımlarla ("Istanbul" / "İstanbul") eşleşiyor.
+
+Navigasyon ve küçük arayüz (17/10 #11, #15, #16, #17, #19, #20, #21, #27, #28)
+- Giriş sonrası ara sayfa yerine yükleniyor ekranı; kamera hataları nedenine göre ayrıştırıldı ve
+  Permissions-Policy: camera=(self) başlığı eklendi; metin ve stil değişiklikleri; Guest List penceresi kayıtta
+  kapanıyor; "Üye kartı (QR / NFC)"; tablette "Üyeler" sekmesi ve kaydırılabilir menü.
+
+İstatistikler (10/11 #66, #72, #75, #80, #82, #83, #85, #103–#109, #111–#117)
+- Dönem grafikleri seçili sekmeye göre saat / gün / tarih / ay kovalarıyla; yeni seriler; günlük görüntülenme
+  grafiği boş günleri sıfırla dolduruyor; check-in ısı haritaları; popüler etkinlikler; ilgi alanı tabloları
+  (TL, beğenen / kararsız / beğenmeyen + değişim); etiket halka grafiği ve "Nasıl oluşturuldu".
+- #82/#83 listeleri yalnız veri varken çiziliyordu; artık boş durumda da görünüyor.
+- Düzeltme: bilet türü kartlarında adlar aksansız çıkıyordu ("Genel Giris"); gerçek ad gösteriliyor.
+
+DOĞRULAMA
+- Birim testleri: api 535/535 (jest, 70 suite), web 317/317 (vitest, 57 dosya); lint, typecheck, build temiz.
+- Yerel uçtan uca: PostgreSQL 18 (konnektora_qa) + API'nin sunduğu üretim build'i (SERVE_WEB_APP=true, port 3100),
+  nov07 QA hesapları + admin. Her madde ekranda tek tek denendi: masaüstü 1280, tablet 1024, mobil 375.
+  Gizli etkinlik: anonim/üye 404 ve listede yok; kurucu, davetli ve admin görüyor; sosyal önizleme sızdırmıyor.
+- 360° yerel tarama: 55 sayfa (ana sayfa, akış, etkinlik/mekân/etiket liste-detay-ilgili kullanıcılar-davet,
+  profil, mutualizm, mesajlar, bildirimler, biletler, ayarlar, mağaza, işletme, yardım, basın, yasal sayfalar,
+  istatistikler) ve backoffice'in 36 bölümü: hata ekranı ve JS hatası yok.
+- Canlı üretim veritabanına QA kaydı yazılmadı.
+
+EKRANDA DOĞRULANAMAYANLAR
+- #15: tarayıcının gerçek kamera izin penceresi (test panelinde kamera engelli). Kodda getUserMedia doğru
+  çağrılıyor; canlıda gerçek tarayıcıda denenmeli.
+- #3–#9: telefonun paylaşım menüsünden Instagram'a aktarım (masaüstünde indirme + metin akışı doğrulandı).
+- #18: gerçek dokunmatik cihazda ilk dokunuş (fare olayıyla doğrulandı).
+
+BİLİNEN SINIRLAR
+- Eski kayıtlar ("Istanbul", GeoNames adları) düzenlenene kadar eski değerleriyle kalır; veri taşıması yazılmadı.
+  Mekân listesi şehir filtresi ve etiket bildirimi şehir eşleşmesi hâlâ yalnız "city" alanını karşılaştırıyor.
+- Etiket başına TL: etiketi profilinde taşıyan kullanıcıların ilgili etkinliklere yaptığı bilet ödemeleri.
+- Küratör / müşteri para çekme ayrımı küratör anlaşması olup olmamasına göre.

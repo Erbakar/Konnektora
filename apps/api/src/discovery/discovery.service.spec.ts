@@ -30,7 +30,7 @@ describe("DiscoveryService", () => {
   it("builds a personalized feed from the viewer location", async () => {
     const result = await service.feed("viewer-id");
     expect(result.popularMembers[0]).toMatchObject({ kind: "user", title: "@ada", subtitle: "Ada" });
-    expect(event.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ city: { equals: "Istanbul", mode: "insensitive" } }) }));
+    expect(event.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ OR: expect.arrayContaining([{ city: { equals: "Istanbul", mode: "insensitive" } }, { region: { equals: "İstanbul", mode: "insensitive" } }]) }) }));
     expect(result.activeUserCount).toBe(3);
   });
 

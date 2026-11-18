@@ -204,4 +204,14 @@
     width: 100%;
   }
   .message-bubble .embedded-media { margin-top: 6px; }
+  /* Asgari yükseklik en-boy oranı üzerinden asgari genişliğe (≈355px) dönüşüp balonu ekrandan taşırıyordu;
+     balon içinde yükseklik yalnız genişlikten türetilir ve konuşma sütunu içeriğe göre genişlemez. */
+  .message-stream { grid-template-columns: minmax(0, 1fr); }
+  /* Konuşma sütunu başlığın (Geri + avatar + ad + menü) en geniş hâline göre büyüyüp kartı ~30px taşırıyordu. */
+  .message-thread { grid-template-columns: minmax(0, 1fr); }
+  .message-thread-header, .message-thread-header > * { min-width: 0; }
+  .message-bubble:has(.embedded-media) { min-width: 0; }
+  .message-bubble .embedded-media > iframe,
+  .message-bubble .embedded-media > .youtube-preview { min-height: 0; }
+  .message-bubble .embedded-media.embedded-audio > iframe { min-height: 166px; }
 }

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useId } from "react";
+import { useContext, useEffect, useId, useRef } from "react";
 import { UNSAFE_DataRouterContext, useBlocker, type BlockerFunction } from "react-router-dom";
 import { useLanguage } from "../lib/i18n";
 
@@ -27,9 +27,18 @@ function ActiveDraftLeaveGuard({ active, kind, onDiscard, isLeaving = leavesPath
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const titleId = useId();
   const blocker = useBlocker((args) => active && isLeaving(args));
+  // "Sil" hem taslağı temizler hem geçişi sürdürür; aynı engelleme için proceed() iki kez çağrılırsa
+  // yönlendirici "unblocked -> proceeding" hatası fırlatır. Bu yüzden her engelleme yalnız bir kez sürdürülür.
+  const proceeded = useRef(false);
+  const proceedOnce = () => {
+    if (blocker.state !== "blocked" || proceeded.current) return;
+    proceeded.current = true;
+    blocker.proceed();
+  };
   useEffect(() => {
-    if (blocker.state === "blocked" && !active) blocker.proceed();
-  }, [active, blocker]);
+    if (blocker.state !== "blocked") proceeded.current = false;
+    else if (!active) proceedOnce();
+  });
   if (blocker.state !== "blocked" || !active) return null;
   return (
     <div className="emotion-modal draft-leave-modal" role="presentation">
@@ -41,10 +50,10 @@ function ActiveDraftLeaveGuard({ active, kind, onDiscard, isLeaving = leavesPath
             : t("Bir gönderi taslağı yazdınız. Silinsin mi yoksa taslak olarak kalmaya devam mı etsin?", "You wrote a post draft. Delete it or keep it as a draft?")}
         </p>
         <div className="row-actions">
-          <button autoFocus className="primary-action" onClick={() => blocker.proceed()} type="button">
+          <button autoFocus className="primary-action" onClick={proceedOnce} type="button">
             {t("Taslak olarak dursun", "Keep as draft")}
           </button>
-          <button className="danger-action" onClick={() => { onDiscard(); blocker.proceed(); }} type="button">
+          <button className="danger-action" onClick={() => { onDiscard(); proceedOnce(); }} type="button">
             {t("Sil", "Delete")}
           </button>
         </div>
