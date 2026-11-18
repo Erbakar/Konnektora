@@ -38,6 +38,8 @@ import { useComposerDraft } from "../lib/composerDrafts";
 import type { PrivateChatMessage } from "@konnektora/shared";
 import {
   createBlock,
+  listBlocks,
+  removeBlock,
   deleteConversation,
   deletePrivateMessage,
   editPrivateMessage,
@@ -453,12 +455,26 @@ function MessageThread({
       onBack();
     },
   });
+  // 06/08 #59: engellenen kişi için menüde "Engeli kaldır" gösterilir.
+  const queryClient = useQueryClient();
+  const blocksQuery = useQuery({ queryKey: ["blocks"], queryFn: listBlocks });
+  const peerBlocked = Boolean(blocksQuery.data?.some((block) => block.targetType === "user" && block.targetId === peer.id));
   const blockMutation = useMutation({
     mutationFn: () => createBlock("user", peer.id),
     onSuccess: () => {
       setMenu(false);
+      void queryClient.invalidateQueries({ queryKey: ["blocks"] });
       onChanged();
       onBack();
+    },
+  });
+  const unblockMutation = useMutation({
+    mutationFn: () => removeBlock("user", peer.id),
+    onSuccess: () => {
+      setMenu(false);
+      void queryClient.invalidateQueries({ queryKey: ["blocks"] });
+      void queryClient.invalidateQueries({ queryKey: ["message-permission"] });
+      onChanged();
     },
   });
   useLayoutEffect(() => {
@@ -551,6 +567,12 @@ function MessageThread({
                 <Trash2 size={15} />
                 {t("Konuşmayı sil", "Delete conversation")}
               </button>
+              {peerBlocked ? (
+                <button disabled={unblockMutation.isPending} onClick={() => unblockMutation.mutate()}>
+                  <Ban size={15} />
+                  {t("Engeli kaldır", "Unblock member")}
+                </button>
+              ) : (
               <button
                 disabled={blockMutation.isPending}
                 onClick={() =>
@@ -561,6 +583,7 @@ function MessageThread({
                 <Ban size={15} />
                 {t("Kullanıcıyı engelle", "Block member")}
               </button>
+              )}
             </div>
           ) : null}
         </div>

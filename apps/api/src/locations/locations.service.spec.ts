@@ -1,5 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
-import { LocationsService } from "./locations.service";
+import { geocodeCandidates, LocationsService } from "./locations.service";
 
 describe("LocationsService", () => {
   const originalFetch = global.fetch;
@@ -66,5 +66,28 @@ describe("LocationsService", () => {
     await expect(
       new LocationsService().geocode("Olmayan bir test adresi"),
     ).resolves.toEqual({ found: false });
+  });
+
+  it("31/08 #5: tam adres bulunamazsa sadeleştirilmiş adresle yeniden dener", async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockResolvedValueOnce({ ok: true, json: async () => [{ lat: "41.067", lon: "29.017", display_name: "Zorlu Center, Beşiktaş, İstanbul" }] });
+    global.fetch = fetchMock as jest.Mock;
+    const result = await new LocationsService().geocode("Zorlu Center, Levazım Mahallesi, Koru Sokağı No:2, 34340 Beşiktaş/İstanbul");
+    jest.useRealTimers();
+    expect(result).toEqual({ found: true, latitude: 41.067, longitude: 29.017, displayName: "Zorlu Center, Beşiktaş, İstanbul" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const second = new URL(String(fetchMock.mock.calls[1][0])).searchParams.get("q");
+    expect(second).toBe("Zorlu Center, Levazım Mahallesi, Koru Sokağı, Beşiktaş, İstanbul");
+  });
+
+  it("geocodeCandidates en fazla üç benzersiz sorgu üretir", () => {
+    expect(geocodeCandidates("Zorlu Center, Levazım Mahallesi, Koru Sokağı No:2, 34340 Beşiktaş/İstanbul")).toEqual([
+      "Zorlu Center, Levazım Mahallesi, Koru Sokağı No:2, 34340 Beşiktaş/İstanbul",
+      "Zorlu Center, Levazım Mahallesi, Koru Sokağı, Beşiktaş, İstanbul",
+      "Zorlu Center, Beşiktaş, İstanbul",
+    ]);
+    expect(geocodeCandidates("Kadıköy")).toEqual(["Kadıköy"]);
   });
 });

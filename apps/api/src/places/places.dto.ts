@@ -13,7 +13,7 @@ export class PlaceCheckInDecisionDto {
 }
 
 export class PlaceQueryDto {
-  @IsOptional() @IsIn(["near", "popular", "trendy", "for_you", "following", "mine"]) scope?: "trendy" | "near" | "popular" | "for_you" | "following" | "mine";
+  @IsOptional() @IsIn(["near", "popular", "trendy", "new", "for_you", "following", "mine"]) scope?: "trendy" | "near" | "popular" | "new" | "for_you" | "following" | "mine";
   @IsOptional() @IsString() @MaxLength(120) q?: string;
   @IsOptional() @IsString() @MaxLength(120) city?: string;
   @IsOptional() @IsString() @MaxLength(120) country?: string;

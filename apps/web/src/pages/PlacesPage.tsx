@@ -15,7 +15,7 @@ const placeCopy = {
   tr: {
     filterSearch: "Filtrele & Ara", filters: "Mekân filtreleri", search: "Arama", searchPlaceholder: "Hub, kafe, stüdyo...", city: "Şehir", cityPlaceholder: "İstanbul", country: "Ülke", countryPlaceholder: "Türkiye", trending: "Trend etiketler", clear: "Filtreleri temizle",
     title: "Mekânlar", loading: "Yükleniyor", result: (count: number) => `${count} sonuç`, showMap: "Haritada göster", showList: "Listeyi göster", create: "Mekân oluştur", groups: "Mekân grupları",
-    all: "Tümü", near: "Yakındaki mekânlar", popular: "Popüler mekânlar", forYou: "Sizin için", following: "Takip ettiklerim", mine: "Mekânlarım",
+    all: "Tümü", near: "Yakındaki mekânlar", popular: "Popüler mekânlar", newest: "Yeni mekânlar", forYou: "Sizin için", following: "Takip ettiklerim", mine: "Mekânlarım",
     newPlace: "Yeni mekân", name: "Ad", placeType: "Mekân türü", visibility: "Katılım tipi", open: "Herkese açık", approval: "Onay gerekli", inviteOnly: "Sadece davetli", media: "Fotoğraf ve videolar", managers: "Yönetici kullanıcı adları", description: "Açıklama", creating: "Oluşturuluyor", createPlace: "Mekânı oluştur", createFailed: "Mekân oluşturulamadı. Alanları kontrol et.",
     loadingPlaces: "Mekânlar yükleniyor…", loadFailed: "Mekânlar yüklenemedi", retryCopy: "Bağlantını kontrol edip yeniden deneyebilirsin.", retry: "Yeniden dene", locationMissing: "Konum belirtilmedi", previous: "Önceki", next: "Sonraki", page: (page: number) => `Sayfa ${page}`,
     mineEmpty: "Üyesi ve yöneticisi olduğunuz mekânlar burada gösterilecek", noMatch: "Bu filtrelerle mekân bulunamadı", none: "Henüz mekân eklenmedi", changeFilters: "Filtreleri değiştirerek yeniden deneyebilirsin.", noneCopy: "Topluluk mekânları oluşturulduğunda burada listelenecek.", first: "İlk mekânı oluştur",
@@ -23,7 +23,7 @@ const placeCopy = {
   en: {
     filterSearch: "Filter & Search", filters: "Place filters", search: "Search", searchPlaceholder: "Hub, cafe, studio...", city: "City", cityPlaceholder: "London", country: "Country", countryPlaceholder: "United Kingdom", trending: "Trending tags", clear: "Clear filters",
     title: "Places", loading: "Loading", result: (count: number) => `${count} results`, showMap: "Show on map", showList: "Show list", create: "Create place", groups: "Place groups",
-    all: "All", near: "Places nearby", popular: "Popular places", forYou: "For you", following: "Following", mine: "My places",
+    all: "All", near: "Places nearby", popular: "Popular places", newest: "New places", forYou: "For you", following: "Following", mine: "My places",
     newPlace: "New place", name: "Name", placeType: "Place type", visibility: "Access type", open: "Open to everyone", approval: "Approval required", inviteOnly: "Invite only", media: "Photos and videos", managers: "Manager usernames", description: "Description", creating: "Creating", createPlace: "Create place", createFailed: "Place could not be created. Check the fields.",
     loadingPlaces: "Loading places…", loadFailed: "Places could not be loaded", retryCopy: "Check your connection and try again.", retry: "Try again", locationMissing: "Location not specified", previous: "Previous", next: "Next", page: (page: number) => `Page ${page}`,
     mineEmpty: "Places you belong to or manage will appear here", noMatch: "No places match these filters", none: "No places yet", changeFilters: "Change the filters and try again.", noneCopy: "Community places will appear here when they are created.", first: "Create the first place",
@@ -107,6 +107,8 @@ export function PlacesPage() {
     createMutation.mutate(input);
   }
 
+  const popularLocation = searchParams.get("city") || searchParams.get("country") || user?.city || user?.country || "";
+  const popularPlacesLabel = popularLocation ? (language === "tr" ? `${popularLocation} içinde popüler mekânlar` : `Popular places in ${popularLocation}`) : c.popular;
   const placeList = placesQuery.data;
   const hasFilters = [...searchParams.keys()].some((key) => key !== "page");
   return (
@@ -124,7 +126,8 @@ export function PlacesPage() {
       <div className="places-content">
         <div className="section-header"><h1>{createOpen ? c.newPlace : c.title}</h1><div className="row-actions">{!createOpen ? <><span>{placesQuery.isLoading ? c.loading : c.result(placeList?.total ?? 0)}</span><button className="create-inline-link" onClick={() => setMapOpen((open) => !open)}><MapPinned size={16}/>{mapOpen ? c.showList : c.showMap}</button></> : <Link className="create-inline-link" to="/places">{c.title}</Link>}{user && !createOpen ? <button className="create-inline-link" onClick={() => { setCreateOpen(true); setSearchParams({ create: "1" }); }} type="button"><Plus size={16}/> {c.create}</button> : null}</div></div>
         {!createOpen ? <nav className="discovery-tabs" aria-label={c.groups}>
-          {([["all", c.all], ["near", c.near], ["popular", c.popular], ["for_you", c.forYou], ["following", c.following], ["mine", c.mine]] as const).map(([scope, label]) => (
+          {/* 06/08 #29, 09/08 #67: "Yeni mekânlar" sekmesi; popüler sekmesinde konum adı */}
+          {([["all", c.all], ["near", c.near], ["popular", popularPlacesLabel], ["new", c.newest], ["for_you", c.forYou], ["following", c.following], ["mine", c.mine]] as const).map(([scope, label]) => (
             <button key={scope} className={selectedScope === scope ? "active" : ""} disabled={!user && ["near", "for_you", "following", "mine"].includes(scope)} onClick={() => updateFilter("scope", scope === "all" ? "" : scope)} type="button">{label}</button>
           ))}
         </nav> : null}

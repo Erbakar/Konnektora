@@ -32,7 +32,7 @@ const apiMocks = vi.hoisted(() => ({
   listSocialAccounts: vi.fn(),
   getPrivacySettings: vi.fn(),
 }));
-const socialTemplateMocks = vi.hoisted(() => ({ createShareImageFile: vi.fn(), downloadSocialFile: vi.fn() }));
+const socialTemplateMocks = vi.hoisted(() => ({ createShareImageFile: vi.fn(), createCaptionCardFile: vi.fn(), downloadSocialFile: vi.fn() }));
 const navigateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("qrcode", () => ({ default: { toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,cXI=") } }));
@@ -58,6 +58,7 @@ beforeEach(() => {
   apiMocks.getProfileVerification.mockResolvedValue({ verified: false, eligible: true, request: null });
   apiMocks.listTags.mockResolvedValue([]);
   socialTemplateMocks.createShareImageFile.mockResolvedValue(null);
+  socialTemplateMocks.createCaptionCardFile.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -207,24 +208,41 @@ describe("17/10 #3–#9: Instagram'da paylaş düğmesi", () => {
     const share = vi.fn().mockResolvedValue(undefined);
     setNavigator("share", share);
     setNavigator("canShare", vi.fn().mockReturnValue(true));
-    const file = new File(["image"], "konnektora-instagram.jpg", { type: "image/jpeg" });
-    socialTemplateMocks.createShareImageFile.mockResolvedValue(file);
+    const file = new File(["image"], "konnektora-instagram.png", { type: "image/png" });
+    socialTemplateMocks.createCaptionCardFile.mockResolvedValue(file);
     render(dialog({ instagramImageUrl: "https://cdn.example.com/cover.jpg" }));
     const button = screen.getByRole("button", { name: "Instagram'da paylaş" });
     await waitFor(() => expect(button).toBeEnabled());
     await userEvent.click(button);
 
     await waitFor(() => expect(share).toHaveBeenCalledWith({ title: "#Electronic Music", text: `${caption}\nkonnektora.com/tags/electronic-music`, files: [file] }));
-    expect(socialTemplateMocks.createShareImageFile).toHaveBeenCalledWith("https://cdn.example.com/cover.jpg");
+    // 18/11: paylaşılan görsel, şablon metnini (ve varsa fotoğrafı) içeren karttır; QR'lı yedek kart kullanılmaz.
+    expect(socialTemplateMocks.createCaptionCardFile).toHaveBeenCalledWith({ caption: `${caption}\nkonnektora.com/tags/electronic-music`, imageUrl: "https://cdn.example.com/cover.jpg", language: "tr" });
     expect(await screen.findByText(/Paylaşım menüsü açıldı/)).toBeVisible();
     expect(screen.queryByRole("link", { name: "Instagram'ı aç" })).not.toBeInTheDocument();
     expect(socialTemplateMocks.downloadSocialFile).not.toHaveBeenCalled();
   });
 
+  it("18/11 test sonucu: fotoğraf yokken de telefonda QR kartı değil, şablon metnini içeren kart paylaşılır", async () => {
+    setNavigator("clipboard", { writeText: vi.fn().mockResolvedValue(undefined) });
+    const share = vi.fn().mockResolvedValue(undefined);
+    setNavigator("share", share);
+    setNavigator("canShare", vi.fn().mockReturnValue(true));
+    const card = new File(["card"], "konnektora-instagram.png", { type: "image/png" });
+    socialTemplateMocks.createCaptionCardFile.mockResolvedValue(card);
+    render(dialog());
+    const button = screen.getByRole("button", { name: "Instagram'da paylaş" });
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+    await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({ files: [card] })));
+    expect(socialTemplateMocks.createCaptionCardFile).toHaveBeenCalledWith({ caption: `${caption}\nkonnektora.com/tags/electronic-music`, imageUrl: undefined, language: "tr" });
+    expect(share.mock.calls[0]![0].files[0].name).not.toMatch(/story/);
+  });
+
   it("görsel var ama dosya paylaşımı desteklenmiyorsa görseli indirir; pano başarısızsa elle kopyalama sunar", async () => {
     setNavigator("clipboard", { writeText: vi.fn().mockRejectedValue(new Error("denied")) });
-    const file = new File(["image"], "konnektora-instagram.jpg", { type: "image/jpeg" });
-    socialTemplateMocks.createShareImageFile.mockResolvedValue(file);
+    const file = new File(["image"], "konnektora-instagram.png", { type: "image/png" });
+    socialTemplateMocks.createCaptionCardFile.mockResolvedValue(file);
     render(dialog({ instagramImageUrl: "https://cdn.example.com/cover.jpg" }));
     const button = screen.getByRole("button", { name: "Instagram'da paylaş" });
     await waitFor(() => expect(button).toBeEnabled());

@@ -133,6 +133,98 @@ export async function createShareImageFile(src: string, fileName = "konnektora-i
   }
 }
 
+/**
+ * 18/11 (17/10 #3–#9 test sonucu): Instagram, paylaşım menüsünden gelen metni çoğu zaman yok sayıp yalnız görseli alır.
+ * Telefonda paylaşılan görsel bu yüzden QR'lı yedek kart oluyordu. Bu kart maddedeki şablon metnini görselin içine yazar
+ * (varsa içerik fotoğrafı üstte), QR içermez; böylece Feed / DM'de alıcı şablonun aynısını görür.
+ */
+export async function createCaptionCardFile({ caption, imageUrl, language }: { caption: string; imageUrl?: string | null; language: "tr" | "en" }) {
+  await document.fonts?.ready;
+  const width = 1080;
+  const pad = 72;
+  const textWidth = width - pad * 2;
+  const image = imageUrl ? await Promise.race([loadImage(imageUrl), new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 4000))]) : null;
+  const photoHeight = image && image.naturalWidth ? 600 : 0;
+
+  // Ölçüm için geçici bağlam; satırlar önce hesaplanır, kart yüksekliği içeriğe göre (1080x1080 – 1080x1920) seçilir.
+  const measure = document.createElement("canvas").getContext("2d");
+  if (!measure) throw new Error(language === "tr" ? "Paylaşım kartı hazırlanamadı." : "The sharing card could not be prepared.");
+  const rawLines = caption.split("\n");
+  const linkLine = rawLines.length > 1 && /^[^\s/]+(:\d+)?\/\S*$/.test(rawLines[rawLines.length - 1]!.trim()) ? rawLines.pop()!.trim() : "";
+  type Line = { text: string; font: string; color: string; height: number };
+  const lines: Line[] = [];
+  let first = true;
+  for (const raw of rawLines) {
+    const text = raw.trim();
+    if (!text) { lines.push({ text: "", font: "", color: "", height: 26 }); continue; }
+    const isCta = text.startsWith("🌎");
+    const font = first ? "800 50px Inter, system-ui, sans-serif" : isCta ? "750 40px Inter, system-ui, sans-serif" : text.startsWith("“") ? "italic 500 42px Inter, system-ui, sans-serif" : "600 38px Inter, system-ui, sans-serif";
+    const color = isCta ? GREEN : first ? INK : "#2c3430";
+    measure.font = font;
+    for (const part of wrapText(measure, text, textWidth)) lines.push({ text: part, font, color, height: first ? 62 : 52 });
+    first = false;
+  }
+  const bodyHeight = lines.reduce((sum, line) => sum + line.height, 0);
+  const headerHeight = 150;
+  const footerHeight = linkLine ? 130 : 70;
+  const height = Math.min(1920, Math.max(1080, photoHeight + headerHeight + bodyHeight + footerHeight + 80));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error(language === "tr" ? "Paylaşım kartı hazırlanamadı." : "The sharing card could not be prepared.");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  if (image && photoHeight) {
+    try { drawCoverImage(context, image, 0, 0, width, photoHeight); } catch { /* CORS: fotoğrafsız devam */ }
+  } else {
+    context.fillStyle = LIGHT_GREY;
+    context.fillRect(0, 0, width, headerHeight);
+    context.save();
+    context.beginPath();
+    context.rect(0, 0, width, headerHeight);
+    context.clip();
+    drawPattern(context, 0, 0, width, headerHeight, "solid");
+    context.restore();
+  }
+  const logoY = photoHeight ? photoHeight + 36 : 36;
+  drawLogoMark(context, pad, logoY, 78);
+  context.fillStyle = INK;
+  context.font = "800 40px Inter, system-ui, sans-serif";
+  context.fillText("KONNEKTORA", pad + 100, logoY + 52);
+
+  const top = (photoHeight || 0) + headerHeight + 60;
+  const maxY = height - footerHeight;
+  // Kısa metinlerde içerik boş alanda dikey olarak ortalanır.
+  let y = top + Math.max(0, Math.floor((maxY - top - bodyHeight) / 2));
+  for (const line of lines) {
+    if (y > maxY) break;
+    if (line.text) {
+      context.font = line.font;
+      context.fillStyle = line.color;
+      context.fillText(line.text, pad, y);
+    }
+    y += line.height;
+  }
+  if (linkLine) {
+    context.fillStyle = GREEN;
+    context.fillRect(0, height - 110, width, 110);
+    context.fillStyle = "#ffffff";
+    context.font = "700 36px Inter, system-ui, sans-serif";
+    context.fillText(linkLine, pad, height - 44);
+  }
+  let blob: Blob;
+  try {
+    blob = await canvasBlob(canvas, language);
+  } catch {
+    // Fotoğraf CORS ile tuvali kirlettiyse fotoğrafsız yeniden çiz.
+    if (imageUrl) return createCaptionCardFile({ caption, imageUrl: null, language });
+    throw new Error(language === "tr" ? "Kart oluşturulamadı." : "The card could not be created.");
+  }
+  return new File([blob], "konnektora-instagram.png", { type: "image/png" });
+}
+
 export function formatWeeklyEventTime(event: Pick<Event, "startsAt" | "endsAt" | "timezone">, language: "tr" | "en") {
   const locale = language === "tr" ? "tr-TR" : "en-GB";
   const timeZone = validTimeZone(event.timezone);

@@ -116,7 +116,9 @@ afterEach(() => {
 
 describe("17/10 #10 mobil YouTube / SoundCloud oynatıcıları", () => {
   it("mobilde oynatıcıyı tam genişlikte ve oynatılabilir yükseklikte gösterir, masaüstüne dokunmaz", () => {
-    expect(mobileCss).toMatch(/\.embedded-media > iframe,\s*\.embedded-media > \.youtube-preview \{[^}]*aspect-ratio: 16 \/ 9;[^}]*min-height: 200px;[^}]*width: 100%;/);
+    expect(mobileCss).toMatch(/\.embedded-media > iframe,\s*\.embedded-media > \.youtube-preview \{[^}]*aspect-ratio: 16 \/ 9;[^}]*min-height: 0;[^}]*min-width: 0;[^}]*width: 100%;/);
+    // 18/10 #1–#3: asgari yükseklik asgari genişliğe dönüşüp kartları ekrandan taşırmasın.
+    expect(mobileCss).not.toContain("min-height: 200px");
     expect(mobileCss).toMatch(/\.embedded-media \{[^}]*max-width: none;[^}]*width: 100%;/);
     expect(mobileCss).toMatch(/\.embedded-media\.embedded-audio > iframe \{[^}]*height: 166px;/);
     expect(mobileCss).toMatch(/\.message-bubble:has\(\.embedded-media\) \{[^}]*max-width: 100%;[^}]*width: 100%;/);

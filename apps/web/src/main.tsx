@@ -22,6 +22,7 @@ import "./styles/nov17-share.css";
 import "./styles/nov17-composer.css";
 import "./styles/nov17-stats.css";
 import "./styles/nov17-events.css";
+import "./styles/nov18-mobile.css";
 
 const chunkReloadKey = "konnektora:chunk-reload";
 const chunkLoadErrorPattern =

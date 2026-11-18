@@ -239,6 +239,8 @@ export function AppLayout() {
             <div className="language-switch language-switch-mobile" aria-label="Dil / Language"><span>{t("language")}</span><button className={language === "tr" ? "active" : ""} onClick={() => setLanguage("tr")} type="button">TR</button><button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")} type="button">EN</button></div>
 
           </> : <>
+            {/* 22/08 #5: giriş yapmamış kullanıcının hamburger menüsü: 1- Dil seçenekleri 2- Giriş yap 3- Üye ol */}
+            <div className="language-switch language-switch-mobile" aria-label="Dil / Language"><span>{t("language")}</span><button className={language === "tr" ? "active" : ""} onClick={() => setLanguage("tr")} type="button">TR</button><button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")} type="button">EN</button></div>
             <a className="corp-mobile-menu-link" href={publicSiteHref("/login")} onClick={() => setMenuOpen(false)}>{t("login")}</a>
             <a className="corp-mobile-menu-cta" href={publicSiteHref("/onboarding")} onClick={() => setMenuOpen(false)}>{t("signUp")}</a>
           </>}

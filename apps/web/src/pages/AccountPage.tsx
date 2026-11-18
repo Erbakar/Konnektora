@@ -832,7 +832,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       locationAddress: address,
       organizerName: editingEvent?.organizerName ?? (profileQuery.data?.accountType === "corporate" ? profileQuery.data.companyName ?? user?.name ?? "Konnektora" : user?.username ?? user?.name ?? "Konnektora User"),
       tagIds: eventTagIds,
-      liveUrl: String(form.get("liveUrl") || "") || (editingEvent ? null : undefined),
+      // 06/08 #18: "www.ornek.com" gibi şemasız bağlantıya https:// eklenir; tarayıcı url kontrolü bu bağlantıları reddediyordu.
+      liveUrl: normalizeWebsite(String(form.get("liveUrl") || "")) || (editingEvent ? null : undefined),
       lineup: form
         .getAll("lineupTitle")
         .map((title, index) => {
@@ -2243,7 +2244,8 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                       defaultValue={formEvent?.liveUrl ?? ""}
                       name="liveUrl"
                       required
-                      type="url"
+                      inputMode="url"
+                      type="text"
                       placeholder="https://..."
                     />
                     <span className="form-help">
@@ -2884,8 +2886,9 @@ function ProfileMediaPanel({
 }
 
 function normalizeWebsite(value?: string) {
-  if (!value) return undefined;
-  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
 function MyEventsPanel({

@@ -1,0 +1,48 @@
+KONNEKTORA — TÜM SEKMELER KONTROLÜ + 18/10 LİSTESİ / 18 KASIM 2026 (akşam turu)
+
+Kaynak: Konnektora Testler (25 sekme). Dal: claude/nov18-all-tabs
+
+1) YENİ SEKME 18/10 (#1–#3): mobilde Akış, İlgi Alanları ve İlgi Alanı detayında içerik sağa kayıyordu.
+   Sebep: 17/10 #10 için mobilde YouTube önizlemesine verilen asgari yükseklik (200px) en-boy oranı
+   üzerinden ~355px asgari genişliğe dönüşüyor, YouTube içeren gönderi kartı tüm listeyi 428px'e
+   genişletiyordu (canlıda /tags/daft-punk, /tags/depeche-mode ve Akış'ta ölçüldü). İlgi Alanları
+   ana sayfasında ayrıca çok uzun etiket adı (mustafa kemal: egemenlik...) tek satırda ekranı aşıyordu.
+   Düzeltme: asgari yükseklik kaldırıldı (yükseklik yalnız genişlikten), liste ızgaraları minmax(0,1fr),
+   etiket hapları ekrana sığacak şekilde kırılıyor (styles/nov18-mobile.css, nov17-composer.css).
+   Doğrulama: yerelde 375px: Akış, /tags, /tags/<etiket> (YouTube içerikli kart ekleyerek) scrollWidth = ekran.
+
+2) 17/10 #3–#9 TEST SONUCU ("telefonda hâlâ QR kodlu paylaşım"):
+   Sebep: Instagram, paylaşım menüsünden gelen metni almıyor, yalnız görseli alıyor; görseli olmayan
+   paylaşımlarda (gönderi, etiket) yedek olarak QR'lı kart üretiliyordu.
+   Düzeltme: Instagram'a giden görsel artık maddedeki şablon metnini içeren kart (varsa içerik fotoğrafı
+   üstte, altta bağlantı bandı, QR yok). Kart pencere açılınca hazırlanıyor, dokunuşta paylaşım menüsü
+   gecikmeden açılıyor. Metin ayrıca panoya kopyalanmaya devam ediyor.
+   Doğrulama: yerelde etkinlik ve etiket paylaşımında üretilen kart görüntülendi; telefonda Instagram'a
+   aktarım denenmedi (cihaz yok).
+
+3) ESKİ SEKMELER (29/07 – 16/10, 26/09 (X)): 799 satır tek tek bugünkü kodla karşılaştırıldı.
+   DONE 722 · SUPERSEDED 19 · PARTIAL 36 · NEEDS_DEVICE 13 · NOT_CODE 24 · OUT_OF_SCOPE 14 · SKIP 72
+   Bu turda düzeltilen kısmi maddeler:
+   12/10 #13 #29 (ilgili kullanıcı kartında üç nokta menüsü konumu) · 27/08 #73 (kapasite uyarısı metni ve sayı)
+   27/08 #136 ("Açık bildirimleri kapat") · 29/07 #12 (ayarlarda şifre kuralı) · 29/07 #13 (ayarlarda şemasız web adresi)
+   29/07 #29 (Akış'ta Guest List'e ekle) · 22/08 #5 (girişsiz mobil menüde dil seçimi)
+   09/08 #5 = 06/08 #86 ("Konnektora nasıl çalışır?" kutu sırası ve metinleri) · 09/08 #21 (hibritte "Online & mekân, şehir")
+   06/08 #4 (tarih filtresinde devam eden etkinlikler) · 06/08 #18 (canlı yayın URL'si şemasız kabul)
+   06/08 #60 = 09/08 #101 (mesaj kutusu odakta büyür) · 06/08 #59 (mesajda "Engeli kaldır")
+   31/08 #9 (Guest List'te "Listeye ekle / Listeden kaldır") · 31/08 #5 (Haritada bul: sadeleştirilmiş adresle yeniden arama)
+   01/09 #4 (kurumsal hesapta şehir açılır liste) · 09/08 #99 (topluluk kartında cinsiyet)
+   12/08 #31 (etkinlik/mekân gönderilerinde alt yorumlar üstte, yazma alanı altta)
+   06/08 #29 = 09/08 #67 (Mekânlar: "Yeni mekânlar" sekmesi, konumlu popüler başlığı)
+   Sonraki istekle değişenler: 09/08 #25 #73, 12/08 #50 #52 (istatistik bağlantısı 27/08 #26 #28 ile herkese açık menüde).
+
+   Açık kalanlar (Sheet'te not yazıldı, renklendirilmedi):
+   06/08 #58 mesaj önerilerinde takip edilen/mesajlaşılan kişiler · 06/08 #81 Akış konum filtresi
+   06/08 #82 anasayfa "Size yakın etkinlikler" gerçek yakınlık · 09/08 #22 #34 takip edilenler önce
+   09/08 #51 #82 yönetici alanında yazdıkça kullanıcı arama · 09/08 #121 en fazla 3 yazı boyutu (tasarım kararı)
+   26/09 #28 SSS konu videoları (içerik işi)
+   Cihaz testi bekleyenler: QR/NFC/kamera/push/Instagram (27/08 #47 #48 #53 #54 #101 #106 #107, 06/08 #21 #42,
+   12/10 #79, 16/10 #15, 26/09 #4 #83).
+
+DOĞRULAMA
+- Birim testleri: api 537/537, web 320/320; lint, typecheck, build temiz.
+- Yerel uçtan uca (konnektora_qa, port 3100): her düzeltilen madde ekranda veya DOM'da denendi.

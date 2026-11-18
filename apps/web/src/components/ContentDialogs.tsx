@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useLanguage } from "../lib/i18n";
 import { formatTimeZoneOffset } from "../lib/formats";
 import { recordContentShare } from "../lib/api";
-import { createEventStoryFile, createShareImageFile, downloadSocialFile, type EventStoryDetails } from "../lib/socialTemplates";
+import { createCaptionCardFile, createEventStoryFile, createShareImageFile, downloadSocialFile, type EventStoryDetails } from "../lib/socialTemplates";
 import { instagramCaptionWithLink } from "../lib/shareCaptions";
 
 export function ShareDialog({
@@ -39,20 +39,28 @@ export function ShareDialog({
   const [storyPending, setStoryPending] = useState(false);
   const [storyMessage, setStoryMessage] = useState("");
   const [instagramResult, setInstagramResult] = useState<InstagramShareResult | null>(null);
+  const [preparedCard, setPreparedCard] = useState<File | null>(null);
+  const instagramCaption = instagramCaptionWithLink(instagramText?.trim() || text?.trim() || title, url);
   useEffect(() => {
     if (!open) return;
     void QRCode.toDataURL(url, { width: 240, margin: 1 }).then(setQrImage);
   }, [open, url]);
+  // 18/11: kart pencere açılınca hazırlanır; dokunuşta paylaşım menüsü beklemeden açılır (iOS kullanıcı etkileşimi süresi).
+  useEffect(() => {
+    if (!open) { setPreparedCard(null); return; }
+    let active = true;
+    void createCaptionCardFile({ caption: instagramCaption, imageUrl: instagramImageUrl, language }).then((file) => { if (active) setPreparedCard(file); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [open, instagramCaption, instagramImageUrl, language]);
   if (!open) return null;
   const message = `${text?.trim() || title}\n${url}`;
   const track = (channel: string) => void recordContentShare(targetType, targetId, channel).catch(() => undefined);
   const supportsSocialCard = Boolean(instagramText) || /\/(events|places|tags)\//.test(new URL(url, window.location.origin).pathname);
-  const instagramCaption = instagramCaptionWithLink(instagramText?.trim() || text?.trim() || title, url);
   const shareOnInstagram = () => {
     setStoryPending(true);
     setStoryMessage("");
     setInstagramResult(null);
-    void shareToInstagram({ title, url, caption: instagramCaption, qrImage, language, imageUrl: instagramImageUrl, storyDetails: targetType === "event" ? storyDetails : undefined })
+    void shareToInstagram({ title, url, caption: instagramCaption, qrImage, language, imageUrl: instagramImageUrl, storyDetails: targetType === "event" ? storyDetails : undefined, preparedFile: preparedCard })
       .then((result) => { setInstagramResult(result); track("instagram_story_dm"); })
       .catch((error: unknown) => { if (!(error instanceof DOMException && error.name === "AbortError")) setStoryMessage(language === "tr" ? "Paylaşım hazırlanamadı. Yeniden deneyin veya bağlantıyı paylaşın." : "The share could not be prepared. Try again or share the link."); })
       .finally(() => setStoryPending(false));
@@ -162,9 +170,11 @@ export function instagramNotice(result: InstagramShareResult, language: "tr" | "
  * 1) açıklama panoya kopyalanır, 2) destekleyen cihazlarda Web Share API ile görsel + açıklama paylaşım menüsüne
  * gönderilir, 3) desteklenmiyorsa görsel indirilir, açıklama ekranda gösterilir ve Instagram bağlantısı sunulur.
  */
-export async function shareToInstagram({ title, url, caption, qrImage, language, imageUrl, storyDetails }: { title: string; url: string; caption: string; qrImage: string; language: "tr" | "en"; imageUrl?: string | null; storyDetails?: EventStoryDetails }): Promise<InstagramShareResult> {
+export async function shareToInstagram({ title, url, caption, qrImage, language, imageUrl, storyDetails, preparedFile }: { title: string; url: string; caption: string; qrImage: string; language: "tr" | "en"; imageUrl?: string | null; storyDetails?: EventStoryDetails; preparedFile?: File | null }): Promise<InstagramShareResult> {
   const captionCopied = await copyText(caption);
-  let file: File | null = imageUrl ? await createShareImageFile(imageUrl).catch(() => null) : null;
+  // 18/11: Instagram metni çoğu zaman almadığı için görsel, şablon metnini içeren karttır (QR yok).
+  let file: File | null = preparedFile ?? await createCaptionCardFile({ caption, imageUrl, language }).catch(() => null);
+  if (!file && imageUrl) file = await createShareImageFile(imageUrl).catch(() => null);
   if (!file) file = await createFallbackCard(title, url, qrImage, language, storyDetails).catch(() => null);
   if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
     await navigator.share({ title, text: caption, files: [file] });
