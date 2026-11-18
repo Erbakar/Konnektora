@@ -94,7 +94,7 @@ describe("TagsService comments", () => {
 
   it("etiket istatistiklerinde zaman serisi, yapıştırılma dağılımı ve check-in ısı haritası üretir (17/11 #66, #114, #115, #117)", async () => {
     const { service, prisma } = createService();
-    const recent = new Date(Date.now() - 5 * 60_000);
+    const recent = new Date(); // saat başından sonraki ilk dakikalarda da son saat kovasına düşsün
     const person = (id: string) => ({ id, birthDate: null, gender: null, city: null, country: null, preferredLanguage: null, interestTags: [], _count: { eventParticipations: 0, sentPrivateMessages: 0, scansMade: 0, scansReceived: 0 } });
     prisma.tag.findFirst.mockResolvedValue({ id: "tag-1" });
     prisma.tag.findUnique.mockResolvedValue({ usageCount: 3 });

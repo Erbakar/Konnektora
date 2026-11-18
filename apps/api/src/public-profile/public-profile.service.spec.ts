@@ -53,7 +53,7 @@ describe("PublicProfileService", () => {
   });
 
   it("profil istatistiklerinde zaman serisi, günlük görüntülenme, popüler etkinlikler ve check-in ısı haritası üretir (17/11 #85, #107, #108, #109, #113)", async () => {
-    const recent = new Date(Date.now() - 5 * 60_000);
+    const recent = new Date(); // saat başından sonraki ilk dakikalarda da son saat kovasına düşsün
     const lastWeek = new Date(Date.now() - 6 * 86_400_000);
     const owned = (title: string, attendees: number, capacity: number) => ({ id: title, title, startsAt: lastWeek, timezone: "Europe/Istanbul", capacity: null, lineup: [{ title: "Daft Punk" }], tags: [{ tag: { name: "Elektronik", status: "active" } }], participants: Array.from({ length: attendees }, (_, index) => ({ status: "attended", userId: `${title}-${index}`, checkedInAt: new Date("2026-11-13T18:30:00.000Z") })), ticketTypeRecords: [{ soldCount: attendees, capacity }], payments: [], ticketRefunds: [] });
     event.findMany.mockImplementation(async (query: { where: { createdById?: string } }) => query.where.createdById ? [owned("Caz Gecesi", 3, 50), owned("Açılış", 5, 20)] : []);
