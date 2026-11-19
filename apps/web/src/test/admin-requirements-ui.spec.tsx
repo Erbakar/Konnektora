@@ -125,12 +125,12 @@ describe("admin gereksinimleri 125–137", () => {
     const onCreate = vi.fn();
     render(<RoleGroupAdminPanel isPending={false} onCreate={onCreate} onUpdate={vi.fn()} roleGroups={[]} />);
 
-    for (const label of ["Özel Mesaj Yönetimi", "User activity log", "Post Yönetimi", "Muhasebe & Finans"]) {
+    for (const label of ["Özel Mesajlar", "User activity log", "Post'lar", "Muhasebe & Finans (tüm alt sayfalar)"]) {
       expect(screen.getByRole("checkbox", { name: label })).toBeVisible();
     }
     await userEvent.type(screen.getByRole("textbox", { name: "Rol grubu adı" }), "İçerik Ekibi");
-    await userEvent.click(screen.getByRole("checkbox", { name: "Post Yönetimi" }));
-    await userEvent.click(screen.getByRole("checkbox", { name: "Özel Mesaj Yönetimi" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Post'lar" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Özel Mesajlar" }));
     await userEvent.click(screen.getByRole("button", { name: "Rol grubu ekle" }));
     expect(onCreate).toHaveBeenCalledWith({
       name: "İçerik Ekibi",

@@ -211,7 +211,7 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
 
     await userEvent.click((await screen.findAllByRole("button", { name: "Paylaş" }))[0]!);
     expect(screen.getByRole("dialog", { name: "Paylaş" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Bağlantıyı kopyala" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Kopyala" })).toBeVisible();
     expect(screen.getByRole("button", { name: "QR kodu" })).toBeVisible();
     expect(screen.getByRole("link", { name: "Ece profilini aç" })).toHaveAttribute("href", "/users/ece");
     expect(screen.getByRole("link", { name: "@ece" })).toHaveAttribute("href", "/users/ece");

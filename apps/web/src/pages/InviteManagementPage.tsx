@@ -64,6 +64,7 @@ import { getServiceErrorMessage } from "../lib/serviceErrors";
 import { formatShortDate } from "../lib/formats";
 import { useLanguage } from "../lib/i18n";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
+import { ScoreChip } from "../components/ScoreChip";
 
 type InviteMethod =
   | "recommendations"
@@ -1131,10 +1132,10 @@ function InviteSignalBoxes({
     <>
       <div className="member-compatibility invite-signal-boxes">
         {/* 07/11 #46, #47: organizatörün ilk baktığı eşleşme puanı en başta. */}
-        {score !== undefined ? <span className="compatibility-score is-match" title={tr ? "Genel uyum, etkinlik partneri uyumu ve katılımcılarla uyumun ortalaması; yakın zamanda aktif olma ve daha önce katılım küçük bir ek puan verir." : "Average of overall, event partner and attendee compatibility, with a small bonus for recent activity and past attendance."}><span>{scoreLabel}</span><strong>{Math.min(100, score)}</strong></span> : null}
-        {evaluation?.eventPartner !== undefined ? <span className="compatibility-score"><span>{tr ? "Etkinlik partneri uyumu" : "Event partner compatibility"}</span><strong>%{evaluation.eventPartner}</strong></span> : null}
-        {evaluation?.attendeeCompatibility !== undefined ? <span className="compatibility-score is-partner"><span>{tr ? "Katılımcılarla uyum" : "Attendee compatibility"}</span><strong>%{evaluation.attendeeCompatibility}</strong></span> : null}
-        {shared > 0 ? <span className="compatibility-score is-shared"><span>{tr ? "Ortak ilgi alanı" : "Shared interests"}</span><strong>{shared}</strong></span> : null}
+        {score !== undefined ? <ScoreChip kind={kind === "place" ? "placeMatch" : "eventMatch"} tr={tr} className="is-match" label={scoreLabel}><strong>{Math.min(100, score)}</strong></ScoreChip> : null}
+        {evaluation?.eventPartner !== undefined ? <ScoreChip kind="eventPartner" tr={tr} label={tr ? "Etkinlik partneri uyumu" : "Event partner compatibility"}><strong>%{evaluation.eventPartner}</strong></ScoreChip> : null}
+        {evaluation?.attendeeCompatibility !== undefined ? <ScoreChip kind="attendees" tr={tr} className="is-partner" label={tr ? "Katılımcılarla uyum" : "Attendee compatibility"}><strong>%{evaluation.attendeeCompatibility}</strong></ScoreChip> : null}
+        {shared > 0 ? <ScoreChip kind="shared" tr={tr} className="is-shared" label={tr ? "Ortak ilgi alanı" : "Shared interests"}><strong>{shared}</strong></ScoreChip> : null}
         {reasons.has("active_recently") ? <span className="compatibility-score is-active"><span>{tr ? "Yakın zamanda aktif" : "Recently active"}</span></span> : null}
       </div>
       {extra.length ? <small className="invite-recommendation-reasons">{extra.map((reason) => recommendationReasonLabel(reason, tr, shared)).join(" · ")}</small> : null}

@@ -177,7 +177,7 @@ describe("17/10 #3–#9: Instagram paylaşım şablonları", () => {
   });
 });
 
-describe("17/10 #3–#9: Instagram'da paylaş düğmesi", () => {
+describe("17/10 #3–#9 / 19/11 #4: Instagram Feed düğmesi", () => {
   const caption = "#Electronic Music\n✨ 2,840 members added this tag into their profile";
   const url = "https://konnektora.com/tags/electronic-music";
   const dialog = (props: Partial<Parameters<typeof ShareDialog>[0]> = {}) => providers(<ShareDialog onClose={vi.fn()} open targetId="tag-1" targetType="tag" title="#Electronic Music" text="WhatsApp metni" url={url} instagramText={caption} {...props}/>);
@@ -186,20 +186,20 @@ describe("17/10 #3–#9: Instagram'da paylaş düğmesi", () => {
     const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
     setNavigator("clipboard", clipboard);
     render(dialog());
-    const button = screen.getByRole("button", { name: "Instagram'da paylaş" });
+    const button = screen.getByRole("button", { name: "Instagram Feed" });
     await waitFor(() => expect(button).toBeEnabled());
     await userEvent.click(button);
 
     const expected = `${caption}\nkonnektora.com/tags/electronic-music`;
     await waitFor(() => expect(clipboard.writeText).toHaveBeenCalledWith(expected));
-    expect(await screen.findByLabelText("Instagram açıklaması")).toHaveTextContent("konnektora.com/tags/electronic-music");
-    expect(screen.getByLabelText("Instagram açıklaması").textContent).toBe(expected);
+    expect(await screen.findByLabelText("Paylaşım açıklaması")).toHaveTextContent("konnektora.com/tags/electronic-music");
+    expect(screen.getByLabelText("Paylaşım açıklaması").textContent).toBe(expected);
     expect(screen.getByText(/Açıklama panoya kopyalandı/)).toBeVisible();
     expect(screen.getByRole("link", { name: "Instagram'ı aç" })).toHaveAttribute("href", "https://www.instagram.com/");
     expect(screen.queryByRole("button", { name: "Açıklamayı kopyala" })).not.toBeInTheDocument();
     expect(apiMocks.recordContentShare).toHaveBeenCalledWith("tag", "tag-1", "instagram_story_dm");
     // WhatsApp bağlantısı kendi metnini kullanmaya devam eder.
-    expect(screen.getByRole("link", { name: "WhatsApp" })).toHaveAttribute("href", `https://wa.me/?text=${encodeURIComponent(`WhatsApp metni\n${url}`)}`);
+    expect(screen.getByRole("link", { name: "WhatsApp Mesaj" })).toHaveAttribute("href", `https://wa.me/?text=${encodeURIComponent(`WhatsApp metni\n${url}`)}`);
   });
 
   it("görsel ve Web Share destekleniyorsa görseli açıklamayla birlikte paylaşım menüsüne gönderir", async () => {
@@ -211,7 +211,7 @@ describe("17/10 #3–#9: Instagram'da paylaş düğmesi", () => {
     const file = new File(["image"], "konnektora-instagram.png", { type: "image/png" });
     socialTemplateMocks.createCaptionCardFile.mockResolvedValue(file);
     render(dialog({ instagramImageUrl: "https://cdn.example.com/cover.jpg" }));
-    const button = screen.getByRole("button", { name: "Instagram'da paylaş" });
+    const button = screen.getByRole("button", { name: "Instagram Feed" });
     await waitFor(() => expect(button).toBeEnabled());
     await userEvent.click(button);
 
@@ -231,7 +231,7 @@ describe("17/10 #3–#9: Instagram'da paylaş düğmesi", () => {
     const card = new File(["card"], "konnektora-instagram.png", { type: "image/png" });
     socialTemplateMocks.createCaptionCardFile.mockResolvedValue(card);
     render(dialog());
-    const button = screen.getByRole("button", { name: "Instagram'da paylaş" });
+    const button = screen.getByRole("button", { name: "Instagram Feed" });
     await waitFor(() => expect(button).toBeEnabled());
     await userEvent.click(button);
     await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({ files: [card] })));
@@ -244,7 +244,7 @@ describe("17/10 #3–#9: Instagram'da paylaş düğmesi", () => {
     const file = new File(["image"], "konnektora-instagram.png", { type: "image/png" });
     socialTemplateMocks.createCaptionCardFile.mockResolvedValue(file);
     render(dialog({ instagramImageUrl: "https://cdn.example.com/cover.jpg" }));
-    const button = screen.getByRole("button", { name: "Instagram'da paylaş" });
+    const button = screen.getByRole("button", { name: "Instagram Feed" });
     await waitFor(() => expect(button).toBeEnabled());
     await userEvent.click(button);
 
@@ -254,17 +254,57 @@ describe("17/10 #3–#9: Instagram'da paylaş düğmesi", () => {
     expect(screen.getByRole("button", { name: "Açıklamayı kopyala" })).toBeVisible();
   });
 
-  it("profil paylaşımında da Instagram düğmesini gösterir; şablon verilmeyen eski kullanımlarda profil için göstermez", async () => {
-    const view = render(providers(<ShareDialog onClose={vi.fn()} open targetId="u1" targetType="user" title="Ada" url="https://konnektora.com/users/ada" instagramText="🤡 @ada"/>));
-    expect(screen.getByRole("button", { name: "Instagram'da paylaş" })).toBeInTheDocument();
-    view.unmount();
+  it("19/11 #4: profil paylaşımında da Instagram seçenekleri her zaman gösterilir", () => {
     render(providers(<ShareDialog onClose={vi.fn()} open targetId="u1" targetType="user" title="Ada" url="https://konnektora.com/users/ada"/>));
-    expect(screen.queryByRole("button", { name: "Instagram'da paylaş" })).not.toBeInTheDocument();
+    for (const name of ["Instagram Mesaj", "Instagram Story", "Instagram Feed"]) expect(screen.getByRole("button", { name })).toBeInTheDocument();
   });
 
   it("bildirim metni sonucu ve pano durumunu ayrı ayrı anlatır", () => {
     expect(instagramNotice({ mode: "caption_only", captionCopied: true, hasImage: false }, "tr")).toContain("Instagram'ı açıp");
     expect(instagramNotice({ mode: "shared", captionCopied: false, hasImage: true }, "en")).toContain("could not be copied automatically");
+    expect(instagramNotice({ mode: "shared", captionCopied: true, hasImage: true }, "tr", "instagram_story")).toContain("Story");
+    expect(instagramNotice({ mode: "downloaded", captionCopied: true, hasImage: true }, "tr", "tiktok")).toContain("TikTok");
+  });
+});
+
+describe("19/11 #4: yeni Paylaş penceresi", () => {
+  const url = "https://konnektora.com/events/gece-yuruyusu";
+  const dialog = () => providers(<ShareDialog onClose={vi.fn()} open targetId="e1" targetType="event" title="Gece Yürüyüşü" text="Gece yürüyüşüne gel" url={url}/>);
+
+  it("istenen 11 yuvarlak seçeneği sırasıyla gösterir; 'Diğer uygulamalar' yoktur", () => {
+    render(dialog());
+    const names = screen.getAllByRole("listitem").map((item) => item.querySelector("a,button")?.getAttribute("aria-label"));
+    expect(names).toEqual(["QR kodu", "E-mail ile gönder", "WhatsApp Mesaj", "Instagram Mesaj", "Instagram Story", "Instagram Feed", "Facebook Mesaj", "Facebook Post", "X Tweet", "TikTok", "WhatsApp Durum"]);
+    expect(screen.queryByText(/Diğer uygulamalar/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Facebook Post" })).toHaveAttribute("href", `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`);
+    expect(screen.getByRole("link", { name: "X Tweet" })).toHaveAttribute("href", `https://x.com/intent/tweet?text=${encodeURIComponent("Gece yürüyüşüne gel")}&url=${encodeURIComponent(url)}`);
+    expect(screen.getByRole("link", { name: "E-mail ile gönder" }).getAttribute("href")).toMatch(/^mailto:/);
+  });
+
+  it("URL kutusuna veya Kopyala'ya dokununca bağlantıyı kopyalar ve 'Kopyalandı!' yazar", async () => {
+    const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
+    setNavigator("clipboard", clipboard);
+    render(dialog());
+    expect(screen.getByRole("textbox", { name: "Paylaşım bağlantısı" })).toHaveValue(url);
+    await userEvent.click(screen.getByRole("textbox", { name: "Paylaşım bağlantısı" }));
+    await waitFor(() => expect(clipboard.writeText).toHaveBeenCalledWith(url));
+    expect(await screen.findByRole("button", { name: "Kopyalandı!" })).toBeVisible();
+  });
+
+  it("TikTok ve WhatsApp Durum görseli paylaşım menüsüne gönderir", async () => {
+    setNavigator("clipboard", { writeText: vi.fn().mockResolvedValue(undefined) });
+    const share = vi.fn().mockResolvedValue(undefined);
+    setNavigator("share", share);
+    setNavigator("canShare", vi.fn().mockReturnValue(true));
+    const card = new File(["card"], "konnektora-instagram.png", { type: "image/png" });
+    socialTemplateMocks.createCaptionCardFile.mockResolvedValue(card);
+    render(dialog());
+    const tiktok = screen.getByRole("button", { name: "TikTok" });
+    await waitFor(() => expect(tiktok).toBeEnabled());
+    await userEvent.click(tiktok);
+    await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({ files: [card] })));
+    expect(await screen.findByText(/TikTok'u seç/)).toBeVisible();
+    expect(apiMocks.recordContentShare).toHaveBeenCalledWith("event", "e1", "tiktok");
   });
 });
 

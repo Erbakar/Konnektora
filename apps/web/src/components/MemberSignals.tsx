@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Star } from "lucide-react";
 import { followUser, getMemberCompatibility, getUserSession, listFollowing, unfollowUser } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
+import { ScoreChip } from "./ScoreChip";
 type Score = Awaited<ReturnType<typeof getMemberCompatibility>>[number];
 const Scores = createContext<Map<string, Score>>(new Map());
 export function MemberSignalsProvider({ids,children}:{ids:string[];children:ReactNode}) {
@@ -13,10 +14,10 @@ export function MemberSignalsProvider({ids,children}:{ids:string[];children:Reac
  return <Scores.Provider value={new Map((query.data??[]).map(score=>[score.id,score]))}>{children}</Scores.Provider>;
 }
 /** matchScore/matchLabel yalnız etkinlik/mekân yöneticilerine verilir ve "Genel uyum"dan önce gösterilir (07/11 #49, #50). */
-export function MemberCompatibility({id,showFollowers=false,commonTagCount,matchScore,matchLabel}:{id:string;showFollowers?:boolean;commonTagCount?:number;matchScore?:number;matchLabel?:string}) {
+export function MemberCompatibility({id,showFollowers=false,commonTagCount,matchScore,matchLabel,matchKind="event"}:{id:string;showFollowers?:boolean;commonTagCount?:number;matchScore?:number;matchLabel?:string;matchKind?:"event"|"place"}) {
  const {language}=useLanguage();const tr=language==="tr";const score=useContext(Scores).get(id);const viewer=getUserSession();
  if(!viewer||viewer.id===id)return null;
- return <div className="member-compatibility">{showFollowers&&score?<small>{score.followerCount} {tr?"takipçi":"followers"}</small>:null}{matchScore!==undefined&&matchLabel?<span className="compatibility-score is-match"><span>{matchLabel}</span><strong>{Math.min(100,matchScore)}</strong></span>:null}<span className="compatibility-score"><span>{tr?"Genel uyum":"Overall compatibility"}</span><strong>{score?`%${score.overall}`:"—"}</strong></span><span className="compatibility-score is-partner"><span>{tr?"Etkinlik partneri uyumu":"Event partner compatibility"}</span><strong>{score?`%${score.eventPartner}`:"—"}</strong></span>{(score?.commonTagCount??commonTagCount??0)>0?<span className="compatibility-score is-shared"><span>{tr?"Ortak ilgi alanı":"Shared interests"}</span><strong>{score?.commonTagCount??commonTagCount}</strong></span>:null}</div>;
+ return <div className="member-compatibility">{showFollowers&&score?<small>{score.followerCount} {tr?"takipçi":"followers"}</small>:null}{matchScore!==undefined&&matchLabel?<ScoreChip kind={matchKind==="place"?"placeMatch":"eventMatch"} tr={tr} className="is-match" label={matchLabel}><strong>{Math.min(100,matchScore)}</strong></ScoreChip>:null}<ScoreChip kind="overall" tr={tr} label={tr?"Genel uyum":"Overall compatibility"}><strong>{score?`%${score.overall}`:"—"}</strong></ScoreChip><ScoreChip kind="eventPartner" tr={tr} className="is-partner" label={tr?"Etkinlik partneri uyumu":"Event partner compatibility"}><strong>{score?`%${score.eventPartner}`:"—"}</strong></ScoreChip>{(score?.commonTagCount??commonTagCount??0)>0?<ScoreChip kind="shared" tr={tr} className="is-shared" label={tr?"Ortak ilgi alanı":"Shared interests"}><strong>{score?.commonTagCount??commonTagCount}</strong></ScoreChip>:null}</div>;
 }
 export function FollowStar({id, ariaLabel}:{id:string; ariaLabel?:string}) {
  const viewer=getUserSession();const client=useQueryClient();const {language}=useLanguage();

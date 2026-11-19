@@ -485,7 +485,7 @@ export function RelatedUsersPage({
               {user.birthDate ? (
                 <small>{ageFrom(user.birthDate)} {t("yaşında", "years old")}</small>
               ) : null}
-              <MemberCompatibility id={user.id} commonTagCount={user.commonTagCount} matchScore={matchScores.data?.get(user.id)} matchLabel={matchLabel}/>
+              <MemberCompatibility id={user.id} commonTagCount={user.commonTagCount} matchScore={matchScores.data?.get(user.id)} matchLabel={matchLabel} matchKind={kind === "place" ? "place" : "event"}/>
               {user.city || user.country ? (
                 <small className="related-user-location">
                   <MapPin size={14} />

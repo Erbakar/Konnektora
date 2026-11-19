@@ -1,0 +1,35 @@
+19/11 sekmesi #4–#9 — 19.11.2026
+
+#4 Paylaş penceresi
+  - 11 yuvarlak seçenek soldan sağa, yatay kaydırmalı: QR kodu, E-mail ile gönder, WhatsApp Mesaj,
+    Instagram Mesaj / Story / Feed, Facebook Mesaj, Facebook Post, X Tweet, TikTok, WhatsApp Durum.
+  - Her yuvarlak uygulamanın renginde ve ikonunda; etiket altta, en fazla 2 satır. Ekrana 4–6 seçenek sığar,
+    sonraki seçenek yarım görünerek kaydırma olduğunu belli eder.
+  - "Diğer uygulamalar" düğmesi kaldırıldı.
+  - Altta URL kutusu + Kopyala; kutuya veya düğmeye dokununca "Kopyalandı!". Pano izni olmayan
+    tarayıcılarda klasik kopyalama yedeği var.
+  - Instagram / TikTok / WhatsApp Durum web'den metin kabul etmez: şablon kartı + panoya kopyalanan açıklama
+    cihazın paylaşım menüsüyle gönderilir (masaüstünde görsel indirilir ve ilgili uygulamanın bağlantısı verilir).
+    Story / Durum için etkinliklerde dikey hikâye görseli kullanılır.
+  - Facebook Mesaj: telefonda Messenger uygulaması açılır; masaüstünde bağlantı kopyalanıp messenger.com açılır.
+  - Koyu görünüm sorusu: site açık temada olduğu için pencere açık bırakıldı (karar ekipte).
+
+#5 Akış "Takip ettiklerim": keşif kartları (etkinlik/mekân/etiket oluşturdu, katıldı, ileti yazdı vb.)
+  sekme seçiliyken yalnız takip edilen kullanıcılar ve kişinin kendisi için gösterilir.
+  Yerel doğrulama: kimseyi takip etmeyen kullanıcıda 28 karttan yalnız kendi 10 kartı kaldı.
+
+#6 Backoffice Rol / Yetki: yetki grupları üst menü sırasıyla (Moderasyon, İletişim, Kullanıcılar, İçerikler,
+  CMS, Muhasebe & Finans) ve menüdeki sayfa adlarıyla gösterilir. Yetki anahtarları değişmedi.
+
+#7 Küratör üye araması "Geçersiz token": yönetici oturumu 8 saatte doluyor, panel açık kalınca ilk yeni
+  istek bu hatayı veriyordu. Artık API "Oturumunuz sona erdi. Yeniden giriş yapın." der; panel oturumu
+  kapatıp giriş ekranına bu mesajla döner. Yalnız yetki eksikliği (403 benzeri 401) oturumu kapatmaz.
+
+#8 Üye kartlarında (Üyeler, Etiket/Etkinlik/Mekân ilgili kullanıcılar) avatar kartın ortasında değil,
+  takip yıldızı ve kullanıcı adı satırıyla aynı hizada (üstte).
+
+#9 Uyum kutucuklarına (Genel uyum, Etkinlik partneri uyumu, Katılımcılarla uyum, Etkinlik/Mekânla eşleşme
+  puanı, Ortak ilgi alanı) siyah açıklama baloncuğu: masaüstünde üzerine gelince, mobil/tablette dokununca.
+  Baloncuk ekran dışına taşmaz (mobilde sola kaydırılır).
+
+Testler: web 328, API 539 (yeni: nov19-items.spec.tsx, session-version.spec.ts, nov17-share.spec.tsx).

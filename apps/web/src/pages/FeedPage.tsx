@@ -40,7 +40,10 @@ export function FeedPage() {
   );
   const discovery = useQuery({ queryKey: ["discovery-feed", user?.id, time], queryFn: () => getDiscoveryFeed(range) });
   const visiblePosts = feed.data?.items ?? [];
-  const activities = (discovery.data?.activities ?? []).filter((item) => contentType === "all" || (contentType === "events" && item.kind === "event") || (contentType === "places" && item.kind === "place") || (contentType === "tags" && item.kind === "tag"));
+  const followingList = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user && tab === "following") });
+  const followedIds = new Set([user?.id, ...(followingList.data ?? []).map((member) => member.id)]);
+  // 19/11 #5: "Takip ettiklerim" sekmesinde yalnız takip edilen (veya kendi) kullanıcıların etkinlik kartları görünür.
+  const activities = (discovery.data?.activities ?? []).filter((item) => tab !== "following" || followedIds.has(item.ownerId ?? item.actor?.id ?? "")).filter((item) => contentType === "all" || (contentType === "events" && item.kind === "event") || (contentType === "places" && item.kind === "place") || (contentType === "tags" && item.kind === "tag"));
   const timeline = [
     ...((contentType === "all" || contentType === "posts" || contentType === "photos" || contentType === "videos") ? visiblePosts.filter((post) => contentType !== "photos" && contentType !== "videos" || post.media.some((media) => media.type === contentType.slice(0, -1))).map((post) => ({ type: "post" as const, at: new Date(post.createdAt).getTime(), post })) : []),
     ...(contentType !== "posts" ? activities.map((activity) => ({ type: "activity" as const, at: new Date(activity.occurredAt).getTime(), activity })) : []),

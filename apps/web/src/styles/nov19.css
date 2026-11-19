@@ -1,0 +1,127 @@
+/* 19/11 #8: Üye kartlarında avatar kartın ortasında değil, takip yıldızı ve kullanıcı adı satırıyla aynı hizada durur. */
+.community-card > :first-child,
+.related-user-card > :first-child { align-self: start; }
+
+/* 19/11 #9: Uyum kutucuklarında profil takipçi bilgisindeki gibi siyah açıklama baloncuğu. */
+.compatibility-score.has-score-tip { cursor: help; position: relative; }
+.compatibility-score.has-score-tip:focus-visible { outline: 2px solid #15291f; outline-offset: 2px; }
+.compatibility-score.has-score-tip:hover::after,
+.compatibility-score.has-score-tip:focus-visible::after,
+.compatibility-score.has-score-tip.tooltip-open::after {
+  background: #15291f;
+  box-sizing: border-box;
+  border-radius: 9px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  color: #fff;
+  content: attr(data-tooltip);
+  font-size: 12px;
+  font-weight: 600;
+  left: var(--score-tip-shift, 0px);
+  line-height: 1.45;
+  max-width: min(280px, 80vw);
+  padding: 8px 10px;
+  position: absolute;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  top: calc(100% + 8px);
+  white-space: normal;
+  width: max-content;
+  z-index: 30;
+}
+@media (hover: none) {
+  .compatibility-score.has-score-tip:hover::after { content: none; }
+  .compatibility-score.has-score-tip.tooltip-open::after,
+  .compatibility-score.has-score-tip:focus-visible::after { content: attr(data-tooltip); }
+}
+
+/* 19/11 #4: Paylaş penceresi — soldan sağa kayan, uygulamaya göre renklenen yuvarlak seçenekler. */
+.share-sheet-modal > div { box-sizing: border-box; max-width: calc(100vw - 32px); width: 540px; }
+.share-sheet-options {
+  display: flex;
+  gap: 6px;
+  margin: 18px -6px 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 4px 6px 12px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+.share-sheet-option { flex: 0 0 80px; scroll-snap-align: start; }
+.share-sheet-option > a,
+.share-sheet-option > button {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: var(--text, #15291f);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font: inherit;
+  gap: 7px;
+  padding: 0;
+  text-decoration: none;
+  width: 100%;
+}
+.share-sheet-option > button:disabled { cursor: default; opacity: .55; }
+.share-sheet-circle {
+  align-items: center;
+  border-radius: 50%;
+  box-shadow: 0 6px 16px rgba(16, 40, 30, .16);
+  color: #fff;
+  display: flex;
+  height: 58px;
+  justify-content: center;
+  transition: transform .15s ease, box-shadow .15s ease;
+  width: 58px;
+}
+.share-sheet-option > a:hover .share-sheet-circle,
+.share-sheet-option > button:not(:disabled):hover .share-sheet-circle { box-shadow: 0 10px 22px rgba(16, 40, 30, .24); transform: translateY(-2px); }
+.share-sheet-option > a:focus-visible .share-sheet-circle,
+.share-sheet-option > button:focus-visible .share-sheet-circle { outline: 3px solid #1a7a52; outline-offset: 3px; }
+.share-sheet-label {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  min-height: 2.5em;
+  overflow: hidden;
+  text-align: center;
+}
+.share-qr .share-sheet-circle { background: #15291f; }
+.share-email .share-sheet-circle { background: #5f6b7a; }
+.share-whatsapp .share-sheet-circle { background: #25d366; }
+.share-whatsapp-status .share-sheet-circle { background: #128c7e; }
+.share-instagram-dm .share-sheet-circle,
+.share-instagram-story .share-sheet-circle,
+.share-instagram-feed .share-sheet-circle { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285aeb 90%); }
+.share-messenger .share-sheet-circle { background: linear-gradient(45deg, #0695ff, #a334fa 60%, #ff6968); }
+.share-facebook .share-sheet-circle { background: #1877f2; }
+.share-x .share-sheet-circle { background: #000; }
+.share-tiktok .share-sheet-circle { background: #010101; }
+.share-tiktok .share-sheet-circle svg { filter: drop-shadow(1px 1px 0 #fe2c55) drop-shadow(-1px -1px 0 #25f4ee); }
+.share-sheet-spinner {
+  animation: share-sheet-spin .8s linear infinite;
+  border: 3px solid rgba(255, 255, 255, .35);
+  border-radius: 50%;
+  border-top-color: #fff;
+  height: 22px;
+  width: 22px;
+}
+@keyframes share-sheet-spin { to { transform: rotate(360deg); } }
+.share-sheet-url { display: flex; gap: 8px; margin-top: 6px; }
+.share-sheet-url input {
+  background: var(--surface-muted, #f4f7f5);
+  border: 1px solid var(--border, #dfe7e2);
+  border-radius: 12px;
+  color: var(--text-muted, #4b5d54);
+  cursor: copy;
+  flex: 1;
+  font-size: 14px;
+  min-width: 0;
+  padding: 10px 12px;
+  text-overflow: ellipsis;
+}
+.share-sheet-url button { flex: 0 0 auto; white-space: nowrap; }
