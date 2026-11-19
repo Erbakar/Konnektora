@@ -22,7 +22,8 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       payload = await this.jwtService.verifyAsync<{ sub: string; role: string; sessionVersion?: number }>(token);
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.name === "TokenExpiredError") throw new UnauthorizedException("Oturumunuz sona erdi. Yeniden giriş yapın.");
       throw new UnauthorizedException("Geçersiz token.");
     }
 

@@ -1,6 +1,6 @@
-import { Bell, BellOff, CalendarDays, Copy, Instagram, Mail, QrCode, Share2 } from "lucide-react";
+import { Bell, BellOff, CalendarDays, CircleDashed, Copy, Facebook, Instagram, LayoutGrid, Mail, QrCode, Send, Share2 } from "lucide-react";
 import QRCode from "qrcode";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useLanguage } from "../lib/i18n";
 import { formatTimeZoneOffset } from "../lib/formats";
 import { recordContentShare } from "../lib/api";
@@ -38,7 +38,8 @@ export function ShareDialog({
   const [copied, setCopied] = useState(false);
   const [storyPending, setStoryPending] = useState(false);
   const [storyMessage, setStoryMessage] = useState("");
-  const [instagramResult, setInstagramResult] = useState<InstagramShareResult | null>(null);
+  const [instagramResult, setInstagramResult] = useState<(InstagramShareResult & { channel?: VisualChannel }) | null>(null);
+  const [pendingChannel, setPendingChannel] = useState<VisualChannel | null>(null);
   const [preparedCard, setPreparedCard] = useState<File | null>(null);
   const instagramCaption = instagramCaptionWithLink(instagramText?.trim() || text?.trim() || title, url);
   useEffect(() => {
@@ -53,87 +54,135 @@ export function ShareDialog({
     return () => { active = false; };
   }, [open, instagramCaption, instagramImageUrl, language]);
   if (!open) return null;
+  const tr = language === "tr";
   const message = `${text?.trim() || title}\n${url}`;
   const track = (channel: string) => void recordContentShare(targetType, targetId, channel).catch(() => undefined);
-  const supportsSocialCard = Boolean(instagramText) || /\/(events|places|tags)\//.test(new URL(url, window.location.origin).pathname);
-  const shareOnInstagram = () => {
+  const copyLink = () => {
+    const done = () => { setCopied(true); setStoryMessage(""); track("copy_link"); };
+    // Pano izni olmayan tarayıcılarda URL kutusu seçilip klasik kopyalama denenir.
+    const legacyCopy = () => {
+      const input = document.querySelector<HTMLInputElement>(".share-sheet-url input");
+      input?.select();
+      let ok = false;
+      try { ok = typeof document.execCommand === "function" && document.execCommand("copy"); } catch { ok = false; }
+      if (ok) done(); else setStoryMessage((tr ? "Bağlantı kopyalanamadı: " : "Unable to copy link: ") + url);
+    };
+    if (!navigator.clipboard) { legacyCopy(); return; }
+    void navigator.clipboard.writeText(url).then(done).catch(legacyCopy);
+  };
+  // 19/11 #4: Instagram, TikTok ve WhatsApp Durum'un web'den metin alan bir paylaşım adresi yoktur;
+  // şablon kartı + panodaki açıklama cihazın paylaşım menüsüyle (masaüstünde indirme) gönderilir.
+  const shareVisual = (channel: VisualChannel) => {
     setStoryPending(true);
+    setPendingChannel(channel);
     setStoryMessage("");
     setInstagramResult(null);
-    void shareToInstagram({ title, url, caption: instagramCaption, qrImage, language, imageUrl: instagramImageUrl, storyDetails: targetType === "event" ? storyDetails : undefined, preparedFile: preparedCard })
-      .then((result) => { setInstagramResult(result); track("instagram_story_dm"); })
-      .catch((error: unknown) => { if (!(error instanceof DOMException && error.name === "AbortError")) setStoryMessage(language === "tr" ? "Paylaşım hazırlanamadı. Yeniden deneyin veya bağlantıyı paylaşın." : "The share could not be prepared. Try again or share the link."); })
-      .finally(() => setStoryPending(false));
+    const story = channel === "instagram_story" || channel === "whatsapp_status";
+    void shareToInstagram({ title, url, caption: instagramCaption, qrImage, language, imageUrl: instagramImageUrl, storyDetails: targetType === "event" ? storyDetails : undefined, preparedFile: story && targetType === "event" && storyDetails ? null : preparedCard, format: story ? "story" : "card" })
+      .then((result) => { setInstagramResult({ ...result, channel }); track(channel === "instagram_feed" || channel === "instagram_dm" || channel === "instagram_story" ? "instagram_story_dm" : channel); })
+      .catch((error: unknown) => { if (!(error instanceof DOMException && error.name === "AbortError")) setStoryMessage(tr ? "Paylaşım hazırlanamadı. Yeniden deneyin veya bağlantıyı paylaşın." : "The share could not be prepared. Try again or share the link."); })
+      .finally(() => { setStoryPending(false); setPendingChannel(null); });
   };
+  const messengerHref = isMobileDevice() ? `fb-messenger://share/?link=${encodeURIComponent(url)}` : "https://www.messenger.com/new";
+  const options: ShareOption[] = [
+    { id: "qr", label: tr ? "QR kodu" : "QR code", icon: <QrCode size={24}/>, disabled: !qrImage, onClick: () => { setQrOpen(true); track("qr"); } },
+    { id: "email", label: tr ? "E-mail ile gönder" : "Send by email", icon: <Mail size={24}/>, href: `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(message)}`, onClick: () => track("email") },
+    { id: "whatsapp", label: tr ? "WhatsApp Mesaj" : "WhatsApp Message", icon: <WhatsAppIcon/>, href: `https://wa.me/?text=${encodeURIComponent(message)}`, external: true, onClick: () => track("whatsapp") },
+    { id: "instagram-dm", label: tr ? "Instagram Mesaj" : "Instagram Message", icon: <Send size={22}/>, onClick: () => shareVisual("instagram_dm"), pending: pendingChannel === "instagram_dm" },
+    { id: "instagram-story", label: tr ? "Instagram Story" : "Instagram Story", icon: <Instagram size={24}/>, onClick: () => shareVisual("instagram_story"), pending: pendingChannel === "instagram_story" },
+    { id: "instagram-feed", label: tr ? "Instagram Feed" : "Instagram Feed", icon: <LayoutGrid size={22}/>, onClick: () => shareVisual("instagram_feed"), pending: pendingChannel === "instagram_feed" },
+    { id: "messenger", label: tr ? "Facebook Mesaj" : "Facebook Message", icon: <MessengerIcon/>, href: messengerHref, external: !messengerHref.startsWith("fb-"), onClick: () => { if (!messengerHref.startsWith("fb-")) void copyText(url).then((done) => done && setStoryMessage(tr ? "Bağlantı kopyalandı; Messenger'da sohbete yapıştır." : "Link copied; paste it into a Messenger chat.")); track("facebook_message"); } },
+    { id: "facebook", label: tr ? "Facebook Post" : "Facebook Post", icon: <Facebook size={24}/>, href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, external: true, onClick: () => track("facebook_post") },
+    { id: "x", label: tr ? "X Tweet" : "X Post", icon: <XIcon/>, href: `https://x.com/intent/tweet?text=${encodeURIComponent(text?.trim() || title)}&url=${encodeURIComponent(url)}`, external: true, onClick: () => track("x") },
+    { id: "tiktok", label: "TikTok", icon: <TikTokIcon/>, onClick: () => shareVisual("tiktok"), pending: pendingChannel === "tiktok" },
+    { id: "whatsapp-status", label: tr ? "WhatsApp Durum" : "WhatsApp Status", icon: <CircleDashed size={26}/>, onClick: () => shareVisual("whatsapp_status"), pending: pendingChannel === "whatsapp_status" },
+  ];
   return (
     <div
-      className="emotion-modal"
+      className="emotion-modal share-sheet-modal"
       role="dialog"
       aria-modal="true"
-      aria-label={language === "tr" ? "Paylaş" : "Share"}
+      aria-label={tr ? "Paylaş" : "Share"}
       onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); /* 07/11 #97–#99: siyah alana tıklayınca kapanır */ }}
     >
       <div>
-        <button aria-label={language === "tr" ? "Kapat" : "Close"} onClick={onClose}>
+        <button aria-label={tr ? "Kapat" : "Close"} onClick={onClose}>
           ×
         </button>
         <h2>
           <Share2 size={21} />
-          {language === "tr" ? "Paylaş" : "Share"}
+          {tr ? "Paylaş" : "Share"}
         </h2>
-        <p>{language === "tr" ? "Bağlantıyı istediğin kanaldan topluluğunla paylaş." : "Share this link with your community using any channel."}</p>
-        <div className="share-dialog-actions">
-          <button
-            className="secondary-action"
-            onClick={() => { if (!navigator.clipboard) { setStoryMessage(language === "tr" ? "Bağlantı: " + url : "Link: " + url); return; } void navigator.clipboard.writeText(url).then(() => { setCopied(true); track("copy_link"); }).catch(() => setStoryMessage(language === "tr" ? "Bağlantı kopyalanamadı: " + url : "Unable to copy link: " + url)); }}
-          >
-            <Copy size={17} />
-            {copied ? language === "tr" ? "URL kopyalandı!" : "URL copied!" : language === "tr" ? "Bağlantıyı kopyala" : "Copy link"}
-          </button>
-          <button className="secondary-action" disabled={!qrImage} onClick={() => setQrOpen(true)}><QrCode size={17}/>{language === "tr" ? "QR kodu" : "QR code"}</button>
-          <a
-            className="secondary-action"
-            href={`mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(message)}`}
-            onClick={() => track("email")}
-          >
-            <Mail size={17} />
-            {language === "tr" ? "E-posta" : "Email"}
-          </a>
-          <a
-            className="secondary-action"
-            href={`https://wa.me/?text=${encodeURIComponent(message)}`}
-            onClick={() => track("whatsapp")}
-            rel="noreferrer"
-            target="_blank"
-          >
-            WhatsApp
-          </a>
-          {supportsSocialCard ? <button className="secondary-action" disabled={!qrImage || storyPending} onClick={shareOnInstagram}><Instagram size={17}/>{storyPending ? language === "tr" ? "Paylaşım hazırlanıyor…" : "Preparing share…" : language === "tr" ? "Instagram'da paylaş" : "Share on Instagram"}</button> : null}
-          {navigator.share ? (
-            <button
-              className="primary-action"
-              onClick={() => void navigator.share({ title, text: text?.trim() || title, url }).then(() => { track("native_share"); onClose(); }).catch((error: unknown) => { if (!(error instanceof DOMException && error.name === "AbortError")) setStoryMessage(language === "tr" ? "Paylaşım açılamadı. Bağlantıyı kopyalayın." : "Unable to open sharing. Copy the link instead."); })}
-            >
-              <Share2 size={17} />
-              {language === "tr" ? "Diğer uygulamalar" : "Other apps"}
-            </button>
-          ) : null}
+        <p>{tr ? "Bağlantıyı istediğin kanaldan topluluğunla paylaş." : "Share this link with your community using any channel."}</p>
+        <div className="share-sheet-options" role="list">
+          {options.map((option) => {
+            const content = <><span aria-hidden="true" className="share-sheet-circle">{option.pending ? <span className="share-sheet-spinner"/> : option.icon}</span><span className="share-sheet-label">{option.pending ? tr ? "Hazırlanıyor…" : "Preparing…" : option.label}</span></>;
+            return (
+              <div className={`share-sheet-option share-${option.id}`} key={option.id} role="listitem">
+                {option.href ? (
+                  <a aria-label={option.label} href={option.href} onClick={option.onClick} {...(option.external ? { rel: "noopener noreferrer", target: "_blank" } : {})}>{content}</a>
+                ) : (
+                  <button aria-label={option.label} disabled={option.disabled || storyPending} onClick={option.onClick} type="button">{content}</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="share-sheet-url">
+          <input aria-label={tr ? "Paylaşım bağlantısı" : "Share link"} onClick={(event) => { event.currentTarget.select(); copyLink(); }} readOnly value={url}/>
+          <button className={copied ? "primary-action" : "secondary-action"} onClick={copyLink} type="button"><Copy size={16}/>{copied ? tr ? "Kopyalandı!" : "Copied!" : tr ? "Kopyala" : "Copy"}</button>
         </div>
         {storyMessage ? <p className="form-success">{storyMessage}</p> : null}
         {instagramResult ? (
           <div className="share-instagram-result" role="status">
-            <p className="form-success">{instagramNotice(instagramResult, language)}</p>
-            <pre aria-label={language === "tr" ? "Instagram açıklaması" : "Instagram caption"} className="share-instagram-caption">{instagramCaption}</pre>
+            <p className="form-success">{instagramNotice(instagramResult, language, instagramResult.channel)}</p>
+            <pre aria-label={tr ? "Paylaşım açıklaması" : "Share caption"} className="share-instagram-caption">{instagramCaption}</pre>
             <div className="share-instagram-result-actions">
-              {instagramResult.captionCopied ? null : <button className="secondary-action" onClick={() => void copyText(instagramCaption).then((captionCopied) => setInstagramResult((current) => current ? { ...current, captionCopied } : current))} type="button"><Copy size={17}/>{language === "tr" ? "Açıklamayı kopyala" : "Copy caption"}</button>}
-              {instagramResult.mode === "shared" ? null : <a className="secondary-action" href={INSTAGRAM_URL} rel="noopener noreferrer" target="_blank"><Instagram size={17}/>{language === "tr" ? "Instagram'ı aç" : "Open Instagram"}</a>}
+              {instagramResult.captionCopied ? null : <button className="secondary-action" onClick={() => void copyText(instagramCaption).then((captionCopied) => setInstagramResult((current) => current ? { ...current, captionCopied } : current))} type="button"><Copy size={17}/>{tr ? "Açıklamayı kopyala" : "Copy caption"}</button>}
+              {instagramResult.mode === "shared" ? null : <a className="secondary-action" href={channelHome(instagramResult.channel)} rel="noopener noreferrer" target="_blank">{instagramResult.channel === "tiktok" ? <TikTokIcon/> : instagramResult.channel === "whatsapp_status" ? <WhatsAppIcon/> : <Instagram size={17}/>}{channelOpenLabel(instagramResult.channel, tr)}</a>}
             </div>
           </div>
         ) : null}
-        {qrOpen && qrImage ? <div className="share-qr-backdrop" onClick={() => setQrOpen(false)} role="presentation"><section aria-label={language === "tr" ? "QR kodu" : "QR code"} aria-modal="true" onClick={(event) => event.stopPropagation()} role="dialog"><img alt={`${title} QR`} height="300" src={qrImage} width="300"/><strong>{language === "tr" ? "Ekrana dokunarak paylaşıma dön" : "Tap the screen to return to sharing"}</strong></section></div> : null}
+        {qrOpen && qrImage ? <div className="share-qr-backdrop" onClick={() => setQrOpen(false)} role="presentation"><section aria-label={tr ? "QR kodu" : "QR code"} aria-modal="true" onClick={(event) => event.stopPropagation()} role="dialog"><img alt={`${title} QR`} height="300" src={qrImage} width="300"/><strong>{tr ? "Ekrana dokunarak paylaşıma dön" : "Tap the screen to return to sharing"}</strong></section></div> : null}
       </div>
     </div>
   );
+}
+
+type VisualChannel = "instagram_dm" | "instagram_story" | "instagram_feed" | "tiktok" | "whatsapp_status";
+type ShareOption = { id: string; label: string; icon: ReactNode; href?: string; external?: boolean; disabled?: boolean; pending?: boolean; onClick?: () => void };
+
+function isMobileDevice() {
+  return typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
+function channelHome(channel?: VisualChannel) {
+  if (channel === "tiktok") return "https://www.tiktok.com/upload";
+  if (channel === "whatsapp_status") return "https://web.whatsapp.com/";
+  if (channel === "instagram_dm") return "https://www.instagram.com/direct/inbox/";
+  return INSTAGRAM_URL;
+}
+
+function channelOpenLabel(channel: VisualChannel | undefined, tr: boolean) {
+  if (channel === "tiktok") return tr ? "TikTok'u aç" : "Open TikTok";
+  if (channel === "whatsapp_status") return tr ? "WhatsApp'ı aç" : "Open WhatsApp";
+  return tr ? "Instagram'ı aç" : "Open Instagram";
+}
+
+function WhatsAppIcon() {
+  return <svg aria-hidden="true" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.6.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3a.5.5 0 0 0 0-.4l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7a2.8 2.8 0 0 0 1.8-1.3 2.3 2.3 0 0 0 .2-1.3c-.1-.1-.3-.2-.6-.3Z"/></svg>;
+}
+
+function MessengerIcon() {
+  return <svg aria-hidden="true" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M12 2C6.4 2 2 6.1 2 11.7c0 2.9 1.2 5.5 3.2 7.2v3.1l3-1.6c1.2.3 2.4.5 3.8.5 5.6 0 10-4.1 10-9.7S17.6 2 12 2Zm1 12.9-2.5-2.7-5 2.7 5.5-5.8 2.6 2.7 4.9-2.7-5.5 5.8Z"/></svg>;
+}
+
+function XIcon() {
+  return <svg aria-hidden="true" fill="currentColor" height="20" viewBox="0 0 24 24" width="20"><path d="M18.9 1.2h3.7l-8 9.2L24 22.8h-7.4l-5.8-7.6-6.6 7.6H.5l8.6-9.8L0 1.2h7.6l5.2 6.9 6.1-6.9Zm-1.3 19.5h2L6.5 3.2H4.3l13.3 17.5Z"/></svg>;
+}
+
+function TikTokIcon() {
+  return <svg aria-hidden="true" fill="currentColor" height="22" viewBox="0 0 24 24" width="22"><path d="M16.6 2h-3.5v13.3a3 3 0 1 1-2.6-3V8.8a6.5 6.5 0 1 0 6.1 6.5V8.6a8.3 8.3 0 0 0 4.9 1.6V6.7a4.9 4.9 0 0 1-4.9-4.7Z"/></svg>;
 }
 
 const INSTAGRAM_URL = "https://www.instagram.com/";
@@ -155,14 +204,26 @@ async function copyText(value: string) {
   }
 }
 
-export function instagramNotice(result: InstagramShareResult, language: "tr" | "en") {
+export function instagramNotice(result: InstagramShareResult, language: "tr" | "en", channel?: VisualChannel) {
   const tr = language === "tr";
+  const target = channelTarget(channel, tr);
   const copied = result.captionCopied
     ? tr ? "Açıklama panoya kopyalandı; Instagram'da açıklama / mesaj alanına yapıştır." : "The caption was copied to your clipboard; paste it into the Instagram caption or message field."
     : tr ? "Açıklama otomatik kopyalanamadı; aşağıdaki metni kopyalayıp Instagram'a yapıştır." : "The caption could not be copied automatically; copy the text below and paste it into Instagram.";
-  if (result.mode === "shared") return `${tr ? "Paylaşım menüsü açıldı: Instagram'da Feed veya DM'i seç." : "The share menu was opened: choose Instagram Feed or DM."} ${copied}`;
-  if (result.mode === "downloaded") return `${tr ? "Görsel indirildi. Instagram'da yeni gönderi (Feed) veya DM oluşturup görseli ekle." : "The image was downloaded. Create a new Instagram post (Feed) or DM and attach it."} ${copied}`;
-  return `${tr ? "Instagram'ı açıp Feed veya DM paylaşımını oluştur." : "Open Instagram and create your Feed post or DM."} ${copied}`;
+  if (result.mode === "shared") return `${tr ? `Paylaşım menüsü açıldı: ${target.pick}.` : `The share menu was opened: ${target.pick}.`} ${copied}`;
+  if (result.mode === "downloaded") return `${tr ? `Görsel indirildi. ${target.create} oluşturup görseli ekle.` : `The image was downloaded. Create ${target.create} and attach it.`} ${copied}`;
+  return `${tr ? `${target.app}'ı açıp ${target.create} oluştur.` : `Open ${target.app} and create ${target.create}.`} ${copied}`;
+}
+
+function channelTarget(channel: VisualChannel | undefined, tr: boolean) {
+  switch (channel) {
+    case "instagram_dm": return tr ? { app: "Instagram", pick: "Instagram'ı ve ardından Mesaj'ı seç", create: "Instagram'da yeni mesaj" } : { app: "Instagram", pick: "choose Instagram, then Message", create: "a new Instagram message" };
+    case "instagram_story": return tr ? { app: "Instagram", pick: "Instagram'ı ve ardından Story'yi seç", create: "Instagram'da yeni Story" } : { app: "Instagram", pick: "choose Instagram, then Story", create: "a new Instagram Story" };
+    case "instagram_feed": return tr ? { app: "Instagram", pick: "Instagram'ı ve ardından Feed'i seç", create: "Instagram'da yeni gönderi (Feed)" } : { app: "Instagram", pick: "choose Instagram, then Feed", create: "a new Instagram post (Feed)" };
+    case "tiktok": return tr ? { app: "TikTok", pick: "TikTok'u seç", create: "TikTok'ta yeni gönderi" } : { app: "TikTok", pick: "choose TikTok", create: "a new TikTok post" };
+    case "whatsapp_status": return tr ? { app: "WhatsApp", pick: "WhatsApp'ı ve ardından Durumum'u seç", create: "WhatsApp'ta yeni Durum" } : { app: "WhatsApp", pick: "choose WhatsApp, then My Status", create: "a new WhatsApp Status" };
+    default: return tr ? { app: "Instagram", pick: "Instagram'da Feed veya DM'i seç", create: "Instagram'da yeni gönderi (Feed) veya DM" } : { app: "Instagram", pick: "choose Instagram Feed or DM", create: "a new Instagram post (Feed) or DM" };
+  }
 }
 
 /**
@@ -170,10 +231,12 @@ export function instagramNotice(result: InstagramShareResult, language: "tr" | "
  * 1) açıklama panoya kopyalanır, 2) destekleyen cihazlarda Web Share API ile görsel + açıklama paylaşım menüsüne
  * gönderilir, 3) desteklenmiyorsa görsel indirilir, açıklama ekranda gösterilir ve Instagram bağlantısı sunulur.
  */
-export async function shareToInstagram({ title, url, caption, qrImage, language, imageUrl, storyDetails, preparedFile }: { title: string; url: string; caption: string; qrImage: string; language: "tr" | "en"; imageUrl?: string | null; storyDetails?: EventStoryDetails; preparedFile?: File | null }): Promise<InstagramShareResult> {
+export async function shareToInstagram({ title, url, caption, qrImage, language, imageUrl, storyDetails, preparedFile, format = "card" }: { title: string; url: string; caption: string; qrImage: string; language: "tr" | "en"; imageUrl?: string | null; storyDetails?: EventStoryDetails; preparedFile?: File | null; format?: "card" | "story" }): Promise<InstagramShareResult> {
   const captionCopied = await copyText(caption);
+  // 19/11 #4: Story / Durum için etkinliklerde dikey hikâye görseli kullanılır.
+  let file: File | null = format === "story" && storyDetails ? await createEventStoryFile(title, storyDetails, language).catch(() => null) : null;
   // 18/11: Instagram metni çoğu zaman almadığı için görsel, şablon metnini içeren karttır (QR yok).
-  let file: File | null = preparedFile ?? await createCaptionCardFile({ caption, imageUrl, language }).catch(() => null);
+  file = file ?? preparedFile ?? await createCaptionCardFile({ caption, imageUrl, language }).catch(() => null);
   if (!file && imageUrl) file = await createShareImageFile(imageUrl).catch(() => null);
   if (!file) file = await createFallbackCard(title, url, qrImage, language, storyDetails).catch(() => null);
   if (file && navigator.share && navigator.canShare?.({ files: [file] })) {

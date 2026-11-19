@@ -36,6 +36,7 @@ import {
   archiveAdminEvent,
   archiveAdminTag,
   banAdminTag,
+  ADMIN_SESSION_EXPIRED_EVENT,
   clearAdminToken,
   createAdminAnnouncement,
   createAdminEvent,
@@ -208,32 +209,14 @@ const CMS_CATEGORY_TYPE_LABELS: Record<CmsCategory["type"], string> = {
   write_to_us: "Write to us kategorisi"
 };
 
+// 19/11 #6: Gruplar Backoffice üst menüsüyle aynı sırada ve aynı adlarla gösterilir.
 const ADMIN_PERMISSION_GROUPS: Array<{ label: string; description: string; permissions: AdminPermission[] }> = [
-  {
-    label: "CMS",
-    description: "Kategori, SSS, duyuru ve politika içerikleri.",
-    permissions: ["cms.categories.manage", "cms.faq.manage", "cms.announcements.manage", "cms.policies.manage"]
-  },
-  {
-    label: "Moderasyon",
-    description: "Şikayetler, müdahale akışları ve kullanıcı mesajları.",
-    permissions: ["reports.manage", "messages.faq.manage", "messages.account_freeze.manage", "messages.write_to_us.manage"]
-  },
-  {
-    label: "Üyeler",
-    description: "Üye listesi, detayları ve rol grubu atamaları.",
-    permissions: ["users.manage", "roles.manage", "private_messages.manage", "user_activity.manage"]
-  },
-  {
-    label: "İçerik",
-    description: "İlgi alanları, etkinlikler ve sonraki faz içerik modülleri.",
-    permissions: ["tags.manage", "events.manage", "places.manage", "posts.manage", "comments.manage", "media.manage"]
-  },
-  {
-    label: "Muhasebe & Finans",
-    description: "Finans, gelirler, faturalar, ödeme hesapları ve KYC kontrolleri.",
-    permissions: ["finance.manage"]
-  }
+  { label: "Moderasyon", description: "Şikayetler, kural yönetimi ve özel mesajlar.", permissions: ["reports.manage", "private_messages.manage"] },
+  { label: "İletişim", description: "Kullanıcılardan gelen mesajlar.", permissions: ["messages.faq.manage", "messages.write_to_us.manage", "messages.account_freeze.manage"] },
+  { label: "Kullanıcılar", description: "Üyeler, rol grupları ve kullanıcı hareketleri.", permissions: ["users.manage", "roles.manage", "user_activity.manage"] },
+  { label: "İçerikler", description: "Etkinlik, mekân, medya, post, yorum ve ilgi alanları.", permissions: ["events.manage", "places.manage", "media.manage", "posts.manage", "comments.manage", "tags.manage"] },
+  { label: "CMS", description: "Kategoriler, duyurular ve yasal politika sayfaları.", permissions: ["cms.categories.manage", "cms.faq.manage", "cms.announcements.manage", "cms.policies.manage"] },
+  { label: "Muhasebe & Finans", description: "KYB/KYC, blokeli etkinlikler, küratörler, müşteriler, faturalar, paketler ve gelir raporu.", permissions: ["finance.manage"] }
 ];
 
 const ADMIN_PERMISSION_LABELS = new Map<string, string>([
@@ -639,6 +622,16 @@ export function AdminDashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ["policy"] });
     }
   });
+
+  useEffect(() => {
+    const onExpired = () => {
+      setToken(null);
+      queryClient.clear();
+      setLoginError("Oturumunuz sona erdi. Devam etmek için yeniden giriş yapın.");
+    };
+    window.addEventListener(ADMIN_SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(ADMIN_SESSION_EXPIRED_EVENT, onExpired);
+  }, [queryClient]);
 
   function handleLogout() {
     clearAdminToken();
@@ -2144,7 +2137,7 @@ export function RoleGroupAdminPanel({
         <span>{roleGroups.length} grup</span>
       </div>
       <p className="admin-section-desc">
-        Admin yetki grupları oluştur ve her gruba farklı yetkiler ata. Admin kullanıcılara yetki grubu atamak için <strong>Üye Yönetimi</strong> bölümüne git.
+        Admin yetki grupları oluştur ve her gruba farklı yetkiler ata. Admin kullanıcılara yetki grubu atamak için <a href="/admin?section=users"><strong>Kullanıcılar › Üye yönetimi</strong></a> sayfasına git.
       </p>
       <div className="admin-create-section">
         <span className="admin-create-section-label"><Plus size={11} /> Yeni rol grubu</span>

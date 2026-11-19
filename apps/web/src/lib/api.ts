@@ -313,34 +313,26 @@ export const adminPermissionOptions: Array<{
   value: AdminPermission;
   label: string;
 }> = [
-  { value: "cms.categories.manage", label: "CMS Kategori Yönetimi" },
-  { value: "cms.faq.manage", label: "CMS SSS Yönetimi" },
-  { value: "cms.announcements.manage", label: "CMS Duyuru Yönetimi" },
-  { value: "cms.policies.manage", label: "CMS Diğer İçeriklerin Yönetimi" },
-  { value: "reports.manage", label: "Şikayetlerin Yönetimi" },
-  { value: "users.manage", label: "Üyelerin Yönetimi" },
-  { value: "roles.manage", label: "Üyelerin Rol Yönetimi" },
-  { value: "tags.manage", label: "İlgi Alanı Yönetimi" },
-  { value: "events.manage", label: "Etkinlik Yönetimi" },
-  { value: "places.manage", label: "Mekan Yönetimi" },
-  { value: "posts.manage", label: "Post Yönetimi" },
-  { value: "comments.manage", label: "Yorum Yönetimi" },
-  { value: "media.manage", label: "Medya Yönetimi" },
-  { value: "private_messages.manage", label: "Özel Mesaj Yönetimi" },
+  // 19/11 #6: Etiketler Backoffice üst menüsündeki sayfa adlarıyla aynıdır.
+  { value: "reports.manage", label: "Şikayetler ve Kural Yönetimi" },
+  { value: "private_messages.manage", label: "Özel Mesajlar" },
+  { value: "messages.faq.manage", label: "SSS mesajları" },
+  { value: "messages.write_to_us.manage", label: "Write to us mesajları" },
+  { value: "messages.account_freeze.manage", label: "Hesap dondurma mesajları" },
+  { value: "users.manage", label: "Üye yönetimi" },
+  { value: "roles.manage", label: "Rol / Yetki yönetimi" },
   { value: "user_activity.manage", label: "User activity log" },
-  { value: "finance.manage", label: "Muhasebe & Finans" },
-  {
-    value: "messages.faq.manage",
-    label: "Kullanıcılardan Mesajlar - SSS mesajları",
-  },
-  {
-    value: "messages.account_freeze.manage",
-    label: "Kullanıcılardan Mesajlar - Hesap dondurma mesajları",
-  },
-  {
-    value: "messages.write_to_us.manage",
-    label: "Kullanıcılardan Mesajlar - Write to us mesajları",
-  },
+  { value: "events.manage", label: "Etkinlikler" },
+  { value: "places.manage", label: "Mekanlar" },
+  { value: "media.manage", label: "Medya" },
+  { value: "posts.manage", label: "Post'lar" },
+  { value: "comments.manage", label: "Yorumlar" },
+  { value: "tags.manage", label: "İlgi Alanları" },
+  { value: "cms.categories.manage", label: "Kategoriler (SSS ve Write to Us)" },
+  { value: "cms.faq.manage", label: "Sık Sorulan Sorular içerikleri" },
+  { value: "cms.announcements.manage", label: "Duyuru yönetimi" },
+  { value: "cms.policies.manage", label: "Yasal Politika Sayfaları" },
+  { value: "finance.manage", label: "Muhasebe & Finans (tüm alt sayfalar)" },
 ];
 
 type CmsCategoryInput = {
@@ -397,6 +389,16 @@ export function setAdminToken(token: string) {
 
 export function clearAdminToken() {
   localStorage.removeItem(TOKEN_KEY);
+}
+
+export const ADMIN_SESSION_EXPIRED_EVENT = "konnektora:admin-session-expired";
+// Yalnız oturumun kendisi geçersizse (süresi dolmuş/silinmiş token) çıkış yapılır;
+// "Bu işlem için yetki gerekli." gibi yetki 401'leri oturumu kapatmaz.
+const ADMIN_SESSION_ERRORS = ["Geçersiz token.", "Token gerekli.", "Aktif kullanıcı gerekli.", "Oturumunuz sona erdi. Yeniden giriş yapın."];
+function expireAdminSession(message: string | null | undefined) {
+  if (!message || !ADMIN_SESSION_ERRORS.includes(message)) return;
+  clearAdminToken();
+  window.dispatchEvent(new CustomEvent(ADMIN_SESSION_EXPIRED_EVENT));
 }
 
 export function getUserToken() {
@@ -905,9 +907,13 @@ async function requestJson<T>(
       if (response.status === 401 && options.auth === "user" && headers.get("Authorization") === `Bearer ${getUserToken()}`) {
         clearUserSession();
       }
+      const message = await readApiErrorMessage(response);
+      if (response.status === 401 && options.auth === "admin" && headers.get("Authorization") === `Bearer ${getAdminToken()}`) {
+        expireAdminSession(message);
+      }
       throw new ApiHttpError(
         response.status,
-        await readApiErrorMessage(response),
+        message,
       );
     }
 

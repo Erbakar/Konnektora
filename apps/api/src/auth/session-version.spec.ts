@@ -16,3 +16,16 @@ describe("23/10 #18 password session revocation", () => {
     await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });
+
+describe("19/11 #7 expired admin/user token", () => {
+  const context = (request: object) => ({ switchToHttp: () => ({ getRequest: () => request }) }) as never;
+  it("explains that the session expired instead of reporting an invalid token", async () => {
+    const expired = Object.assign(new Error("jwt expired"), { name: "TokenExpiredError" });
+    const guard = new JwtAuthGuard({ verifyAsync: jest.fn().mockRejectedValue(expired) } as never, {} as never);
+    await expect(guard.canActivate(context({ headers: { authorization: "Bearer old" } }))).rejects.toThrow("Oturumunuz sona erdi. Yeniden giriş yapın.");
+  });
+  it("keeps the invalid token message for tampered tokens", async () => {
+    const guard = new JwtAuthGuard({ verifyAsync: jest.fn().mockRejectedValue(new Error("invalid signature")) } as never, {} as never);
+    await expect(guard.canActivate(context({ headers: { authorization: "Bearer bad" } }))).rejects.toThrow("Geçersiz token.");
+  });
+});

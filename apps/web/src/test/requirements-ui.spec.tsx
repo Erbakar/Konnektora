@@ -456,9 +456,9 @@ describe("157 maddelik listenin kritik web davranışları", () => {
       url="https://konnektora.com/events/konnektora-etkinligi-420999"
     />));
 
-    await userEvent.click(screen.getByRole("button", { name: "Bağlantıyı kopyala" }));
+    await userEvent.click(screen.getByRole("button", { name: "Kopyala" }));
     expect(clipboard.writeText).toHaveBeenCalledWith("https://konnektora.com/events/konnektora-etkinligi-420999");
-    expect(screen.getByRole("button", { name: "URL kopyalandı!" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Kopyalandı!" })).toBeVisible();
 
     const qrButton = screen.getByRole("button", { name: "QR kodu" });
     await waitFor(() => expect(qrButton).toBeEnabled());
