@@ -125,3 +125,7 @@
   text-overflow: ellipsis;
 }
 .share-sheet-url button { flex: 0 0 auto; white-space: nowrap; }
+
+/* 360° tarama: Backoffice Üye yönetimi filtresinde uzun ülke adları seçim kutusunu sütundan taşırıyordu. */
+.user-admin-filters > label { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.user-admin-filters select { max-width: 100%; min-width: 0; }

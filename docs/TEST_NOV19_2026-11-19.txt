@@ -33,3 +33,5 @@
   Baloncuk ekran dışına taşmaz (mobilde sola kaydırılır).
 
 Testler: web 328, API 539 (yeni: nov19-items.spec.tsx, session-version.spec.ts, nov17-share.spec.tsx).
+
+360° tarama: 24 sayfa × 1280/375 px; tek bulgu Backoffice Üye yönetimi filtresinde ülke seçim kutusunun 1280 px'de 26 px taşmasıydı (önceden vardı), düzeltildi.
