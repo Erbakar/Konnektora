@@ -1,0 +1,37 @@
+/* 12/10 #13, #29: ilgili kullanıcı kartlarında üç nokta menüsü en soldaki düğmenin hemen sağında; eski
+   "margin-left: auto" kuralı menüyü sağa itip araya boşluk bırakıyordu. */
+.related-user-card > .row-actions > .action-menu { margin-left: 0; }
+
+/* 18/10 #1–#3: mobilde Akış, İlgi Alanları ve İlgi Alanı detay sayfalarında içerik ekranda sağa kayıyordu.
+   Liste ızgaraları içeriğin en geniş öğesine göre büyümesin; kartlar ve uzun etiket adları ekrana sığsın. */
+@media (max-width: 700px) {
+  .post-list,
+  .tag-post-list,
+  .tag-detail-page .admin-form,
+  .social-feed-page .admin-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .post-card,
+  .tag-post-card,
+  .feed-activity-card {
+    min-width: 0;
+  }
+  .post-card .post-body,
+  .tag-post-card .post-body {
+    overflow-wrap: anywhere;
+  }
+  /* İlgi Alanları ana sayfasındaki etiket hapları: çok uzun etiket adı tek satırda ekranı aşmasın, kart içinde kırılsın. */
+  .tag-directory-card {
+    max-width: 100%;
+  }
+  .tag-directory-card strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* 06/08 #60, 09/08 #101: "Bir mesaj yaz" kutusu odaklanınca büyür (yazdıkça büyüme 120px'e kadar sürer). */
+.message-composer textarea:focus { min-height: 96px; }
+
+/* 31/08 #9: Guest List satırında yapılacak işlem yazısı. */
+.guest-list-checkboxes .guest-list-row-action { color: #1f6b47; font-size: 13px; font-weight: 700; margin-left: auto; white-space: nowrap; }

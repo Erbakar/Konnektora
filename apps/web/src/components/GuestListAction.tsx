@@ -267,6 +267,8 @@ export function GuestListDialog({ context, target, onClose }: { context?: GuestL
               <input checked={selected.has(list.id)} disabled={readOnly} onChange={(event) => setSelected((current) => { const next = new Set(current); if (event.target.checked) next.add(list.id); else next.delete(list.id); return next; })} type="checkbox"/>
               <span className="guest-list-checkmark"><Check size={15}/></span>
               <span><strong>{list.name}</strong><small>{list.members.length} {tr ? "kişi" : "people"}{readOnly ? ` · ${tr ? "salt okunur" : "read only"}` : ""}</small></span>
+              {/* 31/08 #9: kullanıcı listede değilse "Listeye ekle", listedeyse "Listeden kaldır". */}
+              {readOnly ? null : <span className="guest-list-row-action">{selected.has(list.id) ? (tr ? "Listeden kaldır" : "Remove from list") : (tr ? "Listeye ekle" : "Add to list")}</span>}
             </label>;
           })}
         </div>

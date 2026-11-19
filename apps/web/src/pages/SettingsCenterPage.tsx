@@ -336,7 +336,8 @@ function ProfileSettings() {
             country: value("country"),
             district: value("district"),
             address: value("address"),
-            website: value("website"),
+            // 29/07 #13: "ornek.com" gibi şemasız adres de kabul edilir (üyelikteki gibi https:// eklenir).
+            website: value("website") ? (/^https?:\/\//i.test(value("website")!) ? value("website") : `https://${value("website")}`) : undefined,
             birthDate: value("birthDate")
               ? new Date(`${value("birthDate")}T00:00:00.000Z`).toISOString()
               : undefined,
@@ -431,8 +432,10 @@ function ProfileSettings() {
             {t("Web sitesi", "Website")}
             <input
               defaultValue={profile.data.website ?? ""}
+              inputMode="url"
               name="website"
-              type="url"
+              placeholder="ornek.com"
+              type="text"
             />
           </label>
         </div>
@@ -630,10 +633,15 @@ function AccountSettings() {
           {t("Yeni şifre", "New password")}
           <PasswordInput
             autoComplete="new-password"
+            maxLength={128}
             minLength={8}
             name="newPassword"
+            pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}"
             required
+            title={t("En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam kullanın.", "Use at least 8 characters with an uppercase letter, a lowercase letter and a number.")}
           />
+          {/* 29/07 #12: şifre standardı bilgisi yeni şifre alanında da gösterilir. */}
+          <span className="form-help">{t("En az 8 karakter; bir büyük harf, bir küçük harf ve bir rakam içermeli.", "At least 8 characters, including an uppercase letter, a lowercase letter and a number.")}</span>
         </label>
         <label>
           {t("Yeni şifre tekrar", "Confirm new password")}
@@ -969,7 +977,8 @@ function BusinessSettings({ user }: { user: NonNullable<ReturnType<typeof getUse
             {businessCategoryOptions.map(([value, tr, en]) => <option key={value} value={value}>{t(tr, en)}</option>)}
           </select>
         </label>
-        <CountryCityFields addressFields
+        {/* 01/09 #4: firmanın şehri açılır listeden seçilir. */}
+        <CountryCityFields addressFields cityDropdown
           countryLabel={t("Firmanın ülkesi", "Company country")}
           cityLabel={t("Firmanın şehri (opsiyonel)", "Company city (optional)")}
           defaultCity={user.city}

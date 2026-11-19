@@ -59,12 +59,17 @@ export class EventsService {
     const where: Prisma.EventWhereInput = {
       status: "published",
       startsAt: query.dateFrom
-        ? { gte: new Date(query.dateFrom) }
+        ? undefined
         : query.dateTo
           ? undefined
           : { gte: new Date(Date.now() - 1000 * 60 * 60 * 24) },
     };
     const andFilters: Prisma.EventWhereInput[] = [];
+    // 06/08 #4: seçilen tarihte başlayanlar ve o tarihte hâlâ devam edenler listelenir.
+    if (query.dateFrom) {
+      const from = new Date(query.dateFrom);
+      andFilters.push({ OR: [{ startsAt: { gte: from } }, { startsAt: { lt: from }, endsAt: { gte: from } }] });
+    }
     // 17/10 #14: gizli etkinlikler yalnız ilgili kişilere, admin ve küratöre listelenir.
     const hiddenAccess = await visibleEventWhere(this.prisma, userId);
     if (Object.keys(hiddenAccess).length) andFilters.push(hiddenAccess);
@@ -1711,7 +1716,7 @@ export class EventsService {
     for (const [index, ticket] of ticketTypes.entries()) {
       const current = existing[index];
       const capacity = ticket.capacity ?? 1;
-      if (current && capacity < current.soldCount) throw new BadRequestException(`${ticket.name} kontenjanı satılmış bilet sayısından düşük olamaz.`);
+      if (current && capacity < current.soldCount) throw new BadRequestException(`${ticket.name}: ${current.soldCount} satılmış bilet olduğundan, minimum bilet kapasitesi bu rakam veya üzeri olmalıdır.`); // 27/08 #73
       const data = {
         name: ticket.name,
         description: ticket.description ?? null,

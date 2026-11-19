@@ -232,6 +232,8 @@ export function EventDetailPage() {
         </span>
         <span>
           <MapPin size={16} />
+          {/* 09/08 #21: hibrit etkinlikte "Online & mekân, şehir" */}
+          {event.format === "hybrid" ? "Online & " : null}
           {event.format === "online" ? (language === "tr" ? "Çevrim içi" : "Online") : event.place ? <Link to={`/places/${event.place.slug}`}>{event.place.name} · {[event.place.address, localizeCityName(event.place.city, language), localizeCountryName(event.place.country, language)].filter(Boolean).join(", ")}</Link> : [event.locationName, event.locationAddress, localizeCityName(event.city, language), localizeCountryName(event.country, language)].filter(Boolean).join(", ") || (language === "tr" ? "Konum belirtilmedi" : "Location not specified")}
         </span>
         <span>
@@ -289,7 +291,7 @@ export function EventDetailPage() {
         <details className="detail-action-menu">
           <summary aria-label={language === "tr" ? "Etkinlik işlemleri" : "Event actions"}><MoreVertical size={20}/></summary>
           <div>
-            {user ? <button aria-pressed={notificationQuery.data?.enabled} disabled={notificationMutation.isPending} onClick={() => setNotificationOpen(true)}><Bell size={18}/>{notificationQuery.data?.enabled ? language === "tr" ? "Bildirimleri kapat" : "Turn off notifications" : language === "tr" ? "Bildirimleri aç" : "Turn on notifications"}</button> : null}
+            {user ? <button aria-pressed={notificationQuery.data?.enabled} disabled={notificationMutation.isPending} onClick={() => setNotificationOpen(true)}><Bell size={18}/>{notificationQuery.data?.enabled ? language === "tr" ? "Açık bildirimleri kapat" : "Turn off active notifications" : language === "tr" ? "Bildirimleri aç" : "Turn on notifications" /* 27/08 #136 */}</button> : null}
             <button onClick={() => setCalendarOpen(true)}><CalendarDays size={18}/>{language === "tr" ? "Takvimime ekle" : "Add to calendar"}</button>
             {ticketTypesQuery.data?.length ? <button onClick={() => setTicketPickerOpen(true)}><CreditCard size={18}/>{language === "tr" ? "Biletleri gör" : "View tickets"}</button> : null}
             {/* 07/11 #51: "Bilet al" kaldırıldı; bilet "Biletleri gör" penceresinden seçilip alınır. */}

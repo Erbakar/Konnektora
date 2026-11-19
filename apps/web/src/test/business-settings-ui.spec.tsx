@@ -18,6 +18,7 @@ vi.mock("../lib/api", async () => {
 
 describe("business account settings", () => {
   it("collects company classification and location with the requested field types", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (url.includes("/regions/") ? { ok: false, json: async () => [] } : { ok: true, json: async () => ["Ankara", "İstanbul"] })));
     apiMocks.getUserSession.mockReturnValue({
       id: "member-1",
       name: "Ada",
@@ -43,6 +44,8 @@ describe("business account settings", () => {
     expect(screen.getByLabelText("İşletme kategorisi")).toBeInstanceOf(HTMLSelectElement);
     expect(screen.getByLabelText("Firmanın ülkesi")).toBeInstanceOf(HTMLSelectElement);
     expect(screen.getByLabelText("Firmanın şehri (opsiyonel)")).not.toBeRequired();
+    // 01/09 #4: firmanın şehri açılır liste.
+    expect(screen.getByLabelText("Firmanın şehri (opsiyonel)")).toBeInstanceOf(HTMLSelectElement);
     expect(screen.getByLabelText("Firmanın ilçesi (opsiyonel)")).toBeInstanceOf(HTMLInputElement);
     expect(screen.getByLabelText("Firmanın açık adresi (opsiyonel)")).toBeInstanceOf(HTMLInputElement);
 
@@ -51,7 +54,8 @@ describe("business account settings", () => {
     await userEvent.selectOptions(screen.getByLabelText("Şirket türü"), "limited_or_corporation");
     await userEvent.selectOptions(screen.getByLabelText("İşletme kategorisi"), "event_organizer");
     await userEvent.selectOptions(screen.getByLabelText("Firmanın ülkesi"), "Türkiye");
-    await userEvent.type(screen.getByLabelText("Firmanın şehri (opsiyonel)"), "İstanbul");
+    await screen.findByRole("option", { name: "İstanbul" });
+    await userEvent.selectOptions(screen.getByLabelText("Firmanın şehri (opsiyonel)"), "İstanbul");
     await userEvent.type(screen.getByLabelText("Firmanın ilçesi (opsiyonel)"), "Beyoğlu");
     await userEvent.type(screen.getByLabelText("Firmanın açık adresi (opsiyonel)"), "İstiklal Caddesi 10");
     await userEvent.click(screen.getByRole("button", { name: "Kurumsal hesaba geç" }));

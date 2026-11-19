@@ -538,25 +538,26 @@ export function HomePage() {
             <p>{c.howCopy}</p>
           </div>
         </div>
+        {/* 09/08 #5, 06/08 #86: kutu sırası ve metinleri */}
         <div className="corp-steps">
+          <article>
+            <UserPlus size={28} />
+            <strong>{language === "tr" ? "Doğru insanları bul" : "Find the right people"}</strong>
+            <p>{language === "tr" ? "İlgi alanlarını profiline ekleyerek kendini kolayca ifade et; ortak ilgi alanlarını ve AI destekli uyumunu gör, davetler ve onay akışlarıyla bağlantı kur." : c.findPeopleCopy}</p>
+            <Link className="corp-link" to="/tags">{language === "tr" ? "Etiketler" : "Tags"}</Link>
+          </article>
           <article>
             <Search size={28} />
             <strong>{language === "tr" ? "Etkinlikleri ve mekânları keşfet" : "Discover events and places"}</strong>
-            <p>{c.discoverEventsCopy}</p>
+            <p>{language === "tr" ? "Konumuna yakın etkinlikleri ve mekânları keşfet, etkinliklerde bir QR veya NFC dokunuşuyla anında sosyalleş." : "Discover events and places near you, and connect instantly at events with a QR or NFC tap."}</p>
             <Link className="corp-link" to="/events">
               {c.start}
             </Link>
           </article>
           <article>
-            <UserPlus size={28} />
-            <strong>{language === "tr" ? "Doğru insanları bul" : "Find the right people"}</strong>
-            <p>{language === "tr" ? "İlgi alanlarını profiline ekleyerek kendini ifade et; ortak ilgi alanlarını ve AI destekli uyumunu gör, davetler ve onay akışlarıyla bağlantı kur." : c.findPeopleCopy}</p>
-            <Link className="corp-link" to="/tags">{language === "tr" ? "Etiketler" : "Tags"}</Link>
-          </article>
-          <article>
             <Sparkles size={28} />
             <strong>{c.host}</strong>
-            <p>{language === "tr" ? "Etkinlik oluştur, davetli listelerini yönet, check-in sırasında listeleri gör ve topluluğunu güvenle büyüt." : c.hostCopy}</p>
+            <p>{language === "tr" ? "Etkinlik oluştur, davetli listelerini yönet, check-in sırasında kimin hangi listelerde olduğunu gör ve topluluğunu güvenle büyüt." : c.hostCopy}</p>
             <Link className="corp-link" to="/business">
               {c.organizer}
             </Link>

@@ -42,48 +42,24 @@ export class LocationsService {
     if (existing) return existing;
 
     const task = this.enqueue(async () => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8_000);
       try {
-        const params = new URLSearchParams({
-          format: "jsonv2",
-          limit: "1",
-          q: normalized,
-        });
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?${params}`,
-          {
-            headers: {
-              Accept: "application/json",
-              "Accept-Language": locale,
-              "User-Agent":
-                "Konnektora/1.0 (https://konnektora.com/contact)",
-            },
-            signal: controller.signal,
-          },
-        );
-        if (!response.ok) {
-          throw new BadGatewayException("Adres sağlayıcısına ulaşılamadı.");
+        // 31/08 #5: tam yazılmış adreslerde (No:, posta kodu, "İlçe/İl") sağlayıcı sonuç bulamayabiliyor;
+        // sırayla sadeleştirilmiş biçimler denenir (sağlayıcı sınırı için istekler arasında ~1 sn beklenir).
+        const candidates = geocodeCandidates(normalized);
+        let value: GeocodedLocation = { found: false };
+        for (const [index, candidate] of candidates.entries()) {
+          if (index > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 1_050));
+            this.lastProviderRequestAt = Date.now();
+          }
+          value = await this.searchProvider(candidate, locale, normalized);
+          if (value.found) break;
         }
-        const rows = (await response.json()) as NominatimResult[];
-        const latitude = Number(rows[0]?.lat);
-        const longitude = Number(rows[0]?.lon);
-        const value: GeocodedLocation =
-          Number.isFinite(latitude) && Number.isFinite(longitude)
-            ? {
-                found: true,
-                latitude,
-                longitude,
-                displayName: rows[0]?.display_name?.trim() || normalized,
-              }
-            : { found: false };
         this.remember(key, value);
         return value;
       } catch (error) {
         if (error instanceof BadGatewayException) throw error;
         throw new BadGatewayException("Adres aranamadı. Lütfen tekrar deneyin.");
-      } finally {
-        clearTimeout(timeout);
       }
     });
     this.pending.set(key, task);
@@ -103,6 +79,31 @@ export class LocationsService {
         return { country: address?.country_code?.toUpperCase() ?? "", city: address?.city ?? address?.town ?? address?.village ?? address?.state ?? "" };
       } catch { throw new BadGatewayException("Konum bulunamadı. Ülke ve şehri elle seçebilirsiniz."); }
     });
+  }
+
+  private async searchProvider(query: string, locale: string, original: string): Promise<GeocodedLocation> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8_000);
+    try {
+      const params = new URLSearchParams({ format: "jsonv2", limit: "1", q: query });
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+        headers: {
+          Accept: "application/json",
+          "Accept-Language": locale,
+          "User-Agent": "Konnektora/1.0 (https://konnektora.com/contact)",
+        },
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new BadGatewayException("Adres sağlayıcısına ulaşılamadı.");
+      const rows = (await response.json()) as NominatimResult[];
+      const latitude = Number(rows[0]?.lat);
+      const longitude = Number(rows[0]?.lon);
+      return Number.isFinite(latitude) && Number.isFinite(longitude)
+        ? { found: true, latitude, longitude, displayName: rows[0]?.display_name?.trim() || original }
+        : { found: false };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
@@ -131,4 +132,20 @@ export class LocationsService {
       value,
     });
   }
+}
+
+/** Tam adresten sağlayıcının daha kolay bulacağı en fazla 3 sorgu üretir (ilki her zaman orijinal adres). */
+export function geocodeCandidates(address: string): string[] {
+  const parts = (value: string) => value.split(",").map((part) => part.trim()).filter(Boolean);
+  const simplified = address
+    .replace(/\b(no|numara)\s*[:.]?\s*\d+[a-zA-Z]?(\s*\/\s*\d+)?/gi, " ")
+    .replace(/\b\d{5}\b/g, " ")
+    .replace(/\s*\/\s*/g, ", ")
+    .replace(/\s+/g, " ")
+    .replace(/\s+,/g, ",")
+    .replace(/,(\s*,)+/g, ",")
+    .replace(/^[\s,]+|[\s,]+$/g, "");
+  const segments = parts(simplified);
+  const short = segments.length > 3 ? [segments[0], ...segments.slice(-2)].join(", ") : "";
+  return [...new Set([address, simplified, short].filter((value) => value && value.length >= 3))];
 }

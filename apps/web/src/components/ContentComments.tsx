@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { FollowStar } from "./MemberSignals";
 import { MediaAlbum } from "./MediaAlbum";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -265,51 +266,53 @@ export function ContentComments({
                     queryKey: ["content-comments", targetType, targetId],
                   })
                 }
-              />
-              {comment.replies?.length ? (
-                <div className="comment-replies">
-                  {comment.replies.map((reply) => (
-                    <article className="comment-reply" id={`post-${reply.id}`} key={reply.id}>
-                      {reply.author ? (
-                        <Link
-                          aria-label={language === "tr" ? `${reply.author.name} profilini aç` : `Open ${reply.author.name}'s profile`}
-                          className="comment-author-avatar-link"
-                          to={userProfilePath(reply.author)}
-                        >
-                          {reply.author.avatarUrl ? (
-                            <img className="comment-author-avatar" src={resolveMediaUrl(reply.author.avatarUrl)} alt="" />
-                          ) : (
-                            <span className="comment-author-avatar comment-author-fallback">{reply.author.name?.[0] ?? "?"}</span>
-                          )}
-                        </Link>
-                      ) : (
-                        <span className="comment-author-avatar comment-author-fallback">?</span>
-                      )}
-                      <div>
-                        <header className="comment-author-line">{reply.author?<FollowStar id={reply.author.id}/>:null}<strong>
-                          {reply.author ? (
-                            <Link to={userProfilePath(reply.author)}>{reply.author.username ? `@${reply.author.username}` : reply.author.name}</Link>
-                          ) : language === "tr" ? "Silinmiş kullanıcı" : "Deleted user"}
-                        </strong><small className="comment-timestamp"><a href={`#post-${reply.id}`}>{formatPostDateTime(reply.createdAt, language)}</a></small></header>
-                        <span className="post-copy"><RichText hideEmbeddableUrls text={reply.body} /></span>
-                        <EmbeddedMedia text={reply.body} />
-                        {reply.media?.length ? <MediaAlbum items={reply.media} owner={{ contentType: "comment_reply", contentId: reply.id, ownerId: reply.authorId, queryKeys: [["content-comments", targetType, targetId]] }}/> : null}
-                        <CommentActions
-                          shareContext={shareContext}
-                          canManage={canManage}
-                organizerId={organizerId}
-                          canAddGuest={canAddGuest}
-                          comment={reply}
-                          currentUserId={user?.id}
-                          following={Boolean(reply.authorId && followingIds.has(reply.authorId))}
-                          targetType={targetType}
-                          onChanged={() => void client.invalidateQueries({ queryKey: ["content-comments", targetType, targetId] })}
-                        />
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : null}
+              >
+                {/* 12/08 #31: önce mevcut alt yorumlar, altında alt yorum yazma alanı. */}
+                {comment.replies?.length ? (
+                  <div className="comment-replies">
+                    {comment.replies.map((reply) => (
+                      <article className="comment-reply" id={`post-${reply.id}`} key={reply.id}>
+                        {reply.author ? (
+                          <Link
+                            aria-label={language === "tr" ? `${reply.author.name} profilini aç` : `Open ${reply.author.name}'s profile`}
+                            className="comment-author-avatar-link"
+                            to={userProfilePath(reply.author)}
+                          >
+                            {reply.author.avatarUrl ? (
+                              <img className="comment-author-avatar" src={resolveMediaUrl(reply.author.avatarUrl)} alt="" />
+                            ) : (
+                              <span className="comment-author-avatar comment-author-fallback">{reply.author.name?.[0] ?? "?"}</span>
+                            )}
+                          </Link>
+                        ) : (
+                          <span className="comment-author-avatar comment-author-fallback">?</span>
+                        )}
+                        <div>
+                          <header className="comment-author-line">{reply.author?<FollowStar id={reply.author.id}/>:null}<strong>
+                            {reply.author ? (
+                              <Link to={userProfilePath(reply.author)}>{reply.author.username ? `@${reply.author.username}` : reply.author.name}</Link>
+                            ) : language === "tr" ? "Silinmiş kullanıcı" : "Deleted user"}
+                          </strong><small className="comment-timestamp"><a href={`#post-${reply.id}`}>{formatPostDateTime(reply.createdAt, language)}</a></small></header>
+                          <span className="post-copy"><RichText hideEmbeddableUrls text={reply.body} /></span>
+                          <EmbeddedMedia text={reply.body} />
+                          {reply.media?.length ? <MediaAlbum items={reply.media} owner={{ contentType: "comment_reply", contentId: reply.id, ownerId: reply.authorId, queryKeys: [["content-comments", targetType, targetId]] }}/> : null}
+                          <CommentActions
+                            shareContext={shareContext}
+                            canManage={canManage}
+                  organizerId={organizerId}
+                            canAddGuest={canAddGuest}
+                            comment={reply}
+                            currentUserId={user?.id}
+                            following={Boolean(reply.authorId && followingIds.has(reply.authorId))}
+                            targetType={targetType}
+                            onChanged={() => void client.invalidateQueries({ queryKey: ["content-comments", targetType, targetId] })}
+                          />
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+              </CommentActions>
             </div>
           </article>
         ))}
@@ -393,7 +396,9 @@ function CommentActions({
   onChanged,
   shareContext,
   organizerId,
+  children,
 }: {
+  children?: ReactNode;
   organizerId?: string | null;
   comment: ContentThreadComment;
   currentUserId?: string;
@@ -464,7 +469,7 @@ function CommentActions({
       onChanged();
     },
   });
-  if (!currentUserId) return null;
+  if (!currentUserId) return <>{children}</>;
   const reportTargetType = comment.parentId
     ? "comment_reply"
     : targetType === "event"
@@ -574,6 +579,7 @@ function CommentActions({
         </details>
       </div>
       {editing ? <form className="comment-inline-editor" onSubmit={(event) => { event.preventDefault(); if (editBody.trim() && editBody.trim() !== comment.body) edit.mutate(editBody.trim()); }}><textarea aria-label={language === "tr" ? "Yorumu düzenle" : "Edit comment"} maxLength={3000} onChange={(event) => setEditBody(event.target.value)} value={editBody}/><div><button onClick={() => setEditing(false)} type="button">{language === "tr" ? "Vazgeç" : "Cancel"}</button><button className="primary-action" disabled={!editBody.trim() || edit.isPending} type="submit">{language === "tr" ? "Kaydet" : "Save"}</button></div></form> : null}
+      {children}
       {replying ? <form className="comment-inline-editor" onSubmit={(event) => { event.preventDefault(); if (replyBody.trim()) reply.mutate(replyBody.trim()); }}><textarea aria-label={language === "tr" ? "Yanıtını yaz" : "Write your reply"} maxLength={3000} onChange={(event) => setReplyBody(event.target.value)} value={replyBody}/><div><button onClick={() => setReplying(false)} type="button">{language === "tr" ? "Vazgeç" : "Cancel"}</button><button className="primary-action" disabled={!replyBody.trim() || reply.isPending} type="submit">{language === "tr" ? "Yanıtla" : "Reply"}</button></div></form> : null}
       {deleteOpen ? (
         <div className="emotion-modal" role="presentation" onMouseDown={() => setDeleteOpen(false)}>
