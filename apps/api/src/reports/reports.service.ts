@@ -103,10 +103,23 @@ export class ReportsService {
     }
 
     const [group] = await this.buildReportGroups(reports);
+    // 23/11 #81: gönderide anket varsa anket bilgileri de Backoffice'e gönderilir.
+    const commentTypes: ReportTargetType[] = [ReportTargetType.event_comment, ReportTargetType.place_comment, ReportTargetType.tag_comment, ReportTargetType.comment_reply];
+    const poll = commentTypes.includes(targetType) ? await this.prisma.contentPoll.findUnique({ where: { commentId: targetId }, include: { options: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], include: { _count: { select: { votes: true } } } } } }).catch(() => null) : null;
 
     return {
       ...group,
-      reports
+      reports,
+      poll: poll ? {
+        question: poll.question,
+        allowMultiple: poll.allowMultiple,
+        allowOpenAnswer: poll.allowOpenAnswer,
+        closesAt: poll.closesAt ? poll.closesAt.toISOString() : null,
+        totalVotes: poll.options.reduce((sum, option) => sum + option._count.votes, 0),
+        options: poll.options.filter((option) => !option.isOpenAnswer).map((option) => ({ id: option.id, label: option.label, votes: option._count.votes })),
+        // Kullanıcıların kendi girdiği seçenekler ("Dileyen kendi seçeneğini girsin")
+        openAnswers: poll.options.filter((option) => option.isOpenAnswer).map((option) => `${option.label} (${option._count.votes})`).slice(0, 50),
+      } : null,
     };
   }
 
