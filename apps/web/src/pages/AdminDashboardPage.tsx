@@ -3242,6 +3242,17 @@ function ReportAdminPanel({
               <h3>Şikayet edilen içerik</h3>
               <span>{groupDetail.targetSummary?.status ?? "durum yok"}</span>
             </div>
+            {/* 23/11 #81: gönderiye bağlı anket */}
+            {groupDetail.poll ? (
+              <div className="admin-list-row admin-report-poll">
+                <div>
+                  <strong>Anket: {groupDetail.poll.question}</strong>
+                  <span>{groupDetail.poll.allowMultiple ? "Çoklu seçim" : "Tek seçim"}{groupDetail.poll.allowOpenAnswer ? " · Dileyen kendi seçeneğini girebilir" : ""}{groupDetail.poll.closesAt ? ` · Bitiş: ${new Date(groupDetail.poll.closesAt).toLocaleString("tr-TR")}` : ""} · Toplam oy: {groupDetail.poll.totalVotes}</span>
+                  {groupDetail.poll.options.map((option) => <span key={option.id}>• {option.label} — {option.votes} oy</span>)}
+                  {groupDetail.poll.openAnswers.length ? <span>Kullanıcıların eklediği seçenekler: {groupDetail.poll.openAnswers.join(", ")}</span> : null}
+                </div>
+              </div>
+            ) : null}
             {groupDetail.targetSummary ? (
               <div className="admin-list-row">
                 <div>

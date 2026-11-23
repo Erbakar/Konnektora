@@ -1658,6 +1658,16 @@ export const reportGroupSchema = z.object({
 
 export const reportGroupDetailSchema = reportGroupSchema.extend({
   reports: z.array(contentReportSchema),
+  /** 23/11 #81: şikayet edilen gönderiye bağlı anket (soru, seçenekler, oy sayıları, açık cevaplar). */
+  poll: z.object({
+    question: z.string(),
+    allowMultiple: z.boolean(),
+    allowOpenAnswer: z.boolean(),
+    closesAt: z.string().nullable(),
+    totalVotes: z.number(),
+    options: z.array(z.object({ id: z.string(), label: z.string(), votes: z.number() })),
+    openAnswers: z.array(z.string()),
+  }).nullable().optional(),
 });
 
 export type EventStatus = z.infer<typeof eventStatusSchema>;

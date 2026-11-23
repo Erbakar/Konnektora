@@ -33,3 +33,6 @@ Bekleyen / sınırlar
 - #10 SMS kodu gerçek SMS sağlayıcısı bağlanınca çalışır (cüzdanla aynı). SMS entegrasyonu ayrı iş.
 - #74 gizli etkinlikte davet bağlantısı, etkinliği göremeyen kişi için kayıt oluşturamaz.
 - #58 döndürme/kırpma resimlerde; videolar döndürülmez.
+
+#81 (ek): Şikayet edilen gönderide anket varsa Backoffice şikayet ayrıntısında anket sorusu, seçenekler, oy sayıları ve kullanıcıların eklediği seçenekler görünüyor. Doğrulama: yerel API (anketli gönderi şikayet edildi, ayrıntıda anket geldi).
+#80: #78 ile aynı bileşen; mekânla ilgili kullanıcılarda konum rolün altında aynı stilde.
