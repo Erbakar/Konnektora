@@ -15,6 +15,8 @@ type NotificationInput = {
   targetId?: string;
   skipEmail?: boolean;
   context?: import("./activity-events").ActivityContext;
+  /** 23/11 #65, #66: e-postada gövde yerine kullanılacak, bağlantı içerebilen metin parçaları. */
+  emailIntro?: Array<string | { text: string; url: string }>;
 };
 
 const topicByType: Record<string, NotificationTopic> = {
@@ -189,7 +191,7 @@ export class NotificationsService {
       let providerId: string | undefined;
       let skipped = false;
       if (channel === "email") {
-        const result = await this.mail.sendNotificationEmail({ to: user.email, name: user.name, title: input.title, body: input.body, targetType: input.targetType, targetId: input.targetId, targetUrl, labelLink });
+        const result = await this.mail.sendNotificationEmail({ to: user.email, name: user.name, title: input.title, body: input.body, targetType: input.targetType, targetId: input.targetId, targetUrl, labelLink, introParts: input.emailIntro });
         provider = result.provider;
         providerId = result.providerId;
       } else {

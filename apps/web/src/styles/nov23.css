@@ -1,0 +1,203 @@
+/* 23/11 test turu */
+
+/* #1: Kart içeriği her durumda üstten başlar; avatar, yıldız ve ad aynı satırda kalır (kendi kartında da yıldız var, #52). */
+.related-user-card { align-items: start; align-content: start; }
+.related-user-card > div { align-content: start; }
+.related-user-card .member-name-line { min-height: 28px; }
+/* Henüz üyeliğini tamamlamamış katılımcılar kartı */
+.related-user-card.is-provisional { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.related-user-card.is-provisional p { margin: 0; color: var(--muted, #5b6b62); }
+
+/* #6, #7, #78, #79: konum, katılımcı/rol bilgisinin hemen altında ve onunla aynı yazı boyutu ve stilinde */
+.related-user-card > div > span { display: flex; align-items: center; gap: 0.35rem; }
+.related-user-card > div > .related-user-location { font-weight: inherit; }
+
+/* #16, #20: Davetliler sekmesi açıklaması */
+.related-invited-note { margin: 4px 0 0; font-size: 14px; color: var(--muted, #5b6b62); }
+
+/* #52: kendi kartındaki yanık yıldız ve "Kendinizi takip edemezsiniz." ipucu */
+.follow-star-self { position: relative; display: inline-flex; }
+.follow-star-self > .follow-star { color: #e0a800; cursor: default; }
+.follow-star-self-tip { position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); background: #111; color: #fff; font-size: 12px; font-weight: 500; line-height: 1.3; padding: 6px 9px; border-radius: 8px; white-space: nowrap; z-index: 20; pointer-events: none; }
+
+/* #29, #30: Profil "Etkinlikler" / "Mekânlar" widget'ındaki "oluştur" bağlantısı sağ kenara yapışmasın */
+@media (min-width: 901px) { .discovery-tabs .profile-tab-create-link { margin-right: 14px; padding-left: 8px; } }
+
+/* #26: İlgi Alanı detayı mobilde Bildirim / Paylaş / ⋮ başlığın altında tek satırda */
+@media (max-width: 760px) {
+  .tag-detail-header { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+  .tag-detail-header > .row-actions { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; }
+  .tag-detail-header > .row-actions > .secondary-action { flex: 0 1 auto; min-width: 0; white-space: nowrap; }
+  .tag-detail-header > .row-actions > .detail-action-menu { margin-left: auto; }
+}
+
+/* #27, #28: Etkinlikler / Mekânlar ana sayfası mobilde sonuç sayısı gizli; "Haritada göster" ve "oluştur" başlığın altında */
+@media (max-width: 760px) {
+  .events-page-header, .places-page-header { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .events-page-header > .row-actions, .places-page-header > .row-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 14px; width: 100%; }
+  .events-page-header .page-result-count, .places-page-header .page-result-count { display: none; }
+}
+
+/* #34: "N ilişkili güncel etkinlik bulundu." ile "Bu etiketteki gönderiler" arasında boşluk */
+.tag-related-events-notice { display: block; margin-bottom: 18px; }
+
+/* #55, #56: gönderi kartlarında "Paylaş" masaüstünde kartta, mobilde ⋮ menüsünün en üstünde */
+.menu-share-mobile { display: none !important; }
+@media (max-width: 760px) {
+  .menu-share-mobile { display: flex !important; }
+  footer:has(> .post-action-menu) > .post-share-inline,
+  :has(> .comment-action-menu) > .post-share-inline { display: none !important; }
+  /* #56.2: menü ekranın kör noktasına açılmasın; alttan açılan sabit panel */
+  .post-action-menu[open] > div,
+  .comment-action-menu[open] > div,
+  .related-user-card .action-menu[open] > div {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    max-height: 60vh;
+    overflow-y: auto;
+    min-width: 0;
+    z-index: 300;
+  }
+}
+
+/* #57: Akış mobilde üst sekmeler ve filtre barları tek satırda yatay kaydırmalı */
+@media (max-width: 760px) {
+  .social-feed-page .feed-heading .feed-tabs,
+  .social-feed-page .feed-filter-panel .feed-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+  .social-feed-page .feed-tabs::-webkit-scrollbar { display: none; }
+  .social-feed-page .feed-tabs > button { flex: 0 0 auto; white-space: nowrap; }
+}
+
+/* #59: medya liste görünümü açıklaması soldan sağa akar, gerekirse alt satıra geçer */
+@media (max-width: 760px) {
+  .media-list-editor > header { flex-wrap: wrap; }
+  .media-list-editor > header > div:first-child { flex: 1 1 100%; min-width: 0; }
+  .media-list-editor > header span { white-space: normal; overflow-wrap: anywhere; }
+}
+
+/* #70.2: oluşturulmuş anket ekranı boydan boya kaplamasın */
+.content-poll { max-width: 560px; }
+
+/* İlgili kullanıcılar başlığı mobilde sütun olunca 320px'lik esnek taban yüksekliğe dönüşüp boşluk açıyordu. */
+@media (max-width: 760px) { .related-users-page > .section-header > div { flex: 0 0 auto; } .related-users-page .related-invite-link { align-self: flex-start; } }
+
+/* #4: Üyeler ve ilgili kullanıcı kartlarında bilgi satırları (takipçi, konum, yaş, check-in) tek yazı boyutunda; renkli kutucuklara dokunulmaz. */
+.community-card-body > span,
+.related-user-card > div > span,
+.related-user-card > div > small,
+.guest-list-member-copy > span,
+.guest-list-member-copy > small { font-size: 14px; line-height: 1.4; }
+.community-card-body > .community-card-followers { color: var(--muted, #667085); }
+
+/* #33: e-posta alanının sağ üst köşesinde doğrulama uyarısı */
+.email-verify-hint { margin: 0 0 -4px; text-align: right; font-size: 13px; color: #9a3412; }
+.email-verify-hint .text-button { font-size: inherit; padding: 0; text-decoration: underline; color: var(--brand, #1d6545); }
+
+/* #58: medya lightbox — açıklama, kaydırma, kırpma */
+.album-media-stage { position: relative; display: grid; place-items: center; min-height: 0; width: 100%; touch-action: pan-y; }
+.album-image-frame { position: relative; display: inline-block; max-width: 100%; max-height: 100%; }
+.album-image-frame > img { display: block; max-width: 100%; max-height: 72vh; }
+.album-caption-edit { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 3; width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(0,0,0,.55); color: #fff; display: grid; place-items: center; }
+.album-caption, .album-caption-form { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; display: inline-flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 8px 12px; border-radius: 10px; background: rgba(0,0,0,.62); color: #fff; font-weight: 600; text-align: center; }
+.album-caption > span { overflow-wrap: anywhere; }
+.album-caption > button, .album-caption-form > button { border: 0; background: transparent; color: #fff; display: grid; place-items: center; padding: 2px; }
+.album-caption-form > input { width: min(70vw, 320px); border: 0; border-radius: 6px; padding: 6px 8px; background: rgba(255,255,255,.12); color: #fff; font: inherit; }
+.album-caption-form > input::placeholder { color: rgba(255,255,255,.7); }
+.album-crop-box { position: absolute; border: 2px dashed #fff; box-shadow: 0 0 0 9999px rgba(0,0,0,.45); cursor: move; touch-action: none; }
+.album-crop-handle { position: absolute; right: -9px; bottom: -9px; width: 18px; height: 18px; border-radius: 50%; background: #fff; cursor: nwse-resize; }
+.album-crop-actions { display: flex; justify-content: center; gap: 10px; margin-top: 10px; }
+
+/* #62 Postane */
+/* 62.3: "Geri" ayrı üst satırda (yalnız tek sütunlu görünümde görünür; masaüstünde konuşma listesi yanda) */
+.message-thread-topbar { display: none; }
+@media (max-width: 760px) {
+  .message-thread { grid-template-rows: auto auto minmax(0, 1fr); }
+  .message-thread-topbar { display: flex; padding: 10px 16px 0; }
+  .message-thread-topbar .messages-back { display: inline-flex; }
+  .message-thread-header .messages-back { display: none; }
+}
+/* 62.1: "+ yeni mesaj" */
+.message-sidebar-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.new-message-link { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--brand, #1d6545); white-space: nowrap; }
+/* 62.5: sağ sütun açık gri; benim balonlarım açık mavi; gelenler beyaz */
+.advanced-messages .message-thread { background: #f2f4f6; }
+.advanced-messages .message-thread-header, .advanced-messages .message-thread-topbar { background: #fff; }
+.advanced-messages .message-bubble { background: #fff; border: 1px solid #e3e8ec; }
+.advanced-messages .message-bubble.is-mine { background: #dbeafe; border-color: #c7dcf7; }
+/* 62.4: gelen balonların solunda avatar */
+.message-line { display: flex; align-items: flex-end; gap: 8px; justify-self: start; max-width: min(80%, 660px); }
+.message-line.is-mine { justify-self: end; flex-direction: row-reverse; }
+.message-line > .message-bubble { max-width: 100%; }
+.message-row-group { display: grid; gap: 10px; }
+.message-peer-avatar { flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: #dfe7e2; font-size: 12px; font-weight: 700; color: #1d6545; }
+.message-peer-avatar img { width: 100%; height: 100%; object-fit: cover; }
+/* 62.6: görülen mesajlar mavi çift tik */
+.message-read-tick { color: #2563eb; }
+/* 62.7: gün ayracı */
+.message-day-separator { display: flex; justify-content: center; margin: 6px 0; }
+.message-day-separator span { background: #e4e8ec; color: #4b5563; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+/* 62.8–62.10: konuşma kartları — sabitle / sil, okunmamış sayısı adın sağında, son mesaj zamanı */
+.conversation-card-wrap { position: relative; }
+.conversation-card-wrap > .conversation-card { width: 100%; }
+.conversation-card .conversation-unread { margin-left: 6px; display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #1d6545; color: #fff; font-size: 11px; }
+.conversation-card small { display: flex; min-width: 0; gap: 0; }
+.conversation-card .conversation-last { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.conversation-card .conversation-ago { flex: 0 0 auto; color: #7a8780; white-space: pre; }
+.conversation-card-tools { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; }
+.conversation-card-tools button { width: 30px; height: 30px; border-radius: 50%; border: 1px solid #e3e8ec; background: #fff; display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity .15s; }
+.conversation-card-tools .conversation-delete { color: #dc2626; }
+.conversation-card-tools .conversation-pin.is-on { opacity: 1; pointer-events: auto; color: #1d6545; }
+@media (hover: hover) { .conversation-card-wrap:hover .conversation-card-tools button { opacity: 1; pointer-events: auto; } }
+@media (hover: none) { .conversation-card-tools .conversation-pin:not(.is-on) { display: none; } .conversation-card-tools .conversation-delete { display: none; } }
+/* 62.11 / #63: ortak medya seçici */
+.media-picker { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px 0; }
+.media-picker-item { position: relative; width: 120px; height: 96px; border-radius: 10px; overflow: hidden; background: #e7ece9; }
+.media-picker-item img, .media-picker-item video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.media-picker-remove { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; display: grid; place-items: center; }
+.media-picker-progress { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.45); color: #fff; font-weight: 800; font-size: 18px; }
+.media-picker-add { width: 120px; height: 96px; border-radius: 10px; border: 1px dashed #9db4a6; background: #f6faf7; color: #1d6545; display: grid; place-items: center; align-content: center; gap: 4px; font-weight: 700; font-size: 13px; }
+@media (max-width: 760px) { .media-picker-item, .media-picker-add { width: calc(33.333% - 7px); height: 84px; } }
+.message-bubble .post-media-album { margin-top: 6px; min-width: 220px; }
+
+/* #50: başlıkta arama */
+.corp-nav { position: relative; }
+.header-search { position: relative; display: flex; align-items: center; margin-right: 6px; min-width: 82px; min-height: 40px; }
+/* Açılan kutu menü öğelerini itmez, üzerlerine taşar */
+.header-search.is-expanded .header-search-box { position: absolute; left: 0; top: 50%; transform: translateY(-50%); }
+.header-search-trigger { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid #cfe2d6; background: #eef7f1; color: #1d6545; font-weight: 700; }
+.header-search-box { display: flex; align-items: center; gap: 8px; width: clamp(260px, 26vw, 360px); min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #1d6545; background: #eef7f1; color: #10231f; animation: header-search-grow .18s ease-out; }
+.header-search-box input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; outline: none; min-height: 0; padding: 0; }
+@keyframes header-search-grow { from { width: 90px; } }
+/* Açıkken arama kutusu sonraki menü öğelerinin üzerine taşar (wireframe 2–4) */
+.header-search.is-expanded { z-index: 30; }
+.header-search.is-expanded ~ a { opacity: .35; }
+.header-search-panel { position: absolute; top: calc(100% + 6px); left: 0; width: min(540px, 70vw); max-height: 70vh; overflow-y: auto; background: #eef7f1; border: 1px solid #b9d6c4; border-radius: 12px; box-shadow: 0 18px 44px rgba(16, 35, 31, .16); padding: 10px 0 0; z-index: 40; }
+.header-search-caption { display: block; padding: 0 14px 6px; color: #66756d; }
+.header-search-empty { margin: 0; padding: 6px 14px 12px; color: #66756d; font-size: 14px; }
+.header-search-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 7px 14px; border: 0; background: transparent; text-align: left; color: #10231f; min-height: 0; }
+.header-search-row:hover, .header-search-row:focus-visible { background: #dcefe3; }
+.header-search-row > span:last-child { display: grid; min-width: 0; }
+.header-search-row strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-search-row small { color: #4b5b53; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-search-row .muted { color: #66756d; font-weight: 500; }
+.header-search-thumb { flex: 0 0 44px; width: 44px; height: 44px; border-radius: 8px; overflow: hidden; display: grid; place-items: center; background: #fff; border: 1px solid #d5e3da; color: #1d6545; font-weight: 800; }
+.header-search-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.header-search-more { display: block; margin-top: 6px; padding: 10px 14px; background: #dfe8e2; color: #10231f; font-weight: 700; text-decoration: none; border-radius: 0 0 12px 12px; }
+/* Masaüstünde eski sağ üst "Ara" gizlenir; tablet/mobilde (≤1100px) eskisi gibi kalır */
+@media (min-width: 1101px) { .corp-topbar-actions > .corp-header-search { display: none; } }
+@media (max-width: 1100px) { .header-search { display: none; } }
+/* "İşletmeler için" (giriş yapmamış) */
+.corp-business-link { display: inline-flex; align-items: center; min-height: 38px; padding: 0 14px; border-radius: 10px; border: 1.5px solid #2f7d55; color: #1d6545; font-weight: 700; text-decoration: none; white-space: nowrap; }
+@media (min-width: 761px) and (max-width: 1100px) { .corp-topbar-actions > .corp-business-link { display: inline-flex !important; order: 2; } .corp-topbar-actions > .corp-header-search { order: 1; } }
+@media (max-width: 760px) { .corp-topbar-actions > .corp-business-link { display: none !important; } }

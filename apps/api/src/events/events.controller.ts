@@ -162,6 +162,13 @@ export class EventsController {
     return this.eventsService.listInviteRecommendations(id, user);
   }
 
+  /** 23/11 #74: "Davet bağlantısını kopyala" ile gelen üye, bağlantıyı paylaşan kişinin davetlisi olarak kaydedilir. */
+  @Post("events/:id/invite-link")
+  @UseGuards(JwtAuthGuard)
+  inviteLink(@Param("id") id: string, @Body() body: { inviterId?: string }, @CurrentUser() user: User) {
+    return this.eventsService.recordInviteLinkVisit(id, String(body?.inviterId ?? ""), user);
+  }
+
   @Post("events/:id/attend")
   @UseGuards(JwtAuthGuard)
   requestAttendance(@Param("id") id: string, @CurrentUser() user: User) {

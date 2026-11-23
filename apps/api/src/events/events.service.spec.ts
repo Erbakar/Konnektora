@@ -748,7 +748,8 @@ describe("EventsService", () => {
         status: "published",
         startsAt: new Date(Date.now() + 60_000),
         endsAt: new Date(Date.now() + 3_600_000),
-        participants: [],
+        // 23/11 #42: kurucu davetini yalnız kurucular gönderir; davet eden burada etkinliğin kurucularından.
+        participants: [{ status: "accepted", role: "manager" }],
       });
     prisma.user.findUnique.mockResolvedValue({
       id: "manager-1",

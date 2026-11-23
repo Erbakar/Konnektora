@@ -368,6 +368,8 @@ model CuratorAgreement {
   rates Json
   referrerId String? @map("referrer_id")
   referralRate Decimal @default(0) @db.Decimal(5,2) @map("referral_rate")
+  /// 23/11 #9: birden fazla referans küratör [{ referrerId, referralRate }]; ilk kayıt eski alanlarda da tutulur.
+  referrers Json @default("[]")
   bankName String? @map("bank_name")
   accountName String? @map("account_name")
   iban String?
@@ -1360,6 +1362,8 @@ model MediaFile {
   uploadedById     String?          @map("uploaded_by")
   sortOrder        Int              @default(0) @map("sort_order")
   isProfilePicture Boolean          @default(false) @map("is_profile_picture")
+  /// 23/11 #58: albümü yöneten kişinin medyaya yazdığı kısa açıklama (en çok 30 karakter)
+  caption          String?          @db.VarChar(30)
   createdAt        DateTime         @default(now()) @map("created_at")
   updatedAt        DateTime         @updatedAt @map("updated_at")
 

@@ -23,6 +23,11 @@ const items = [
   ["Biletler başka bir üyeye devredilebilir mi?", "Biletler kısmen veya tamamen başka bir üyeye bedelsiz devredilebilir."],
   ["Biletler iade edilebilir mi?", "Etkinliğin yeri veya zamanı değiştiğinde Biletlerim sayfasından iade talep edebilirsiniz. Çevrim içi ödeme henüz açık değildir. Ücretli satış başladığında iptal ve iadenin kapsamı, ödeme yöntemi ve işlem süreleri satın alma koşullarında belirtilecektir."],
   ["Profil, mekân, etkinlik ve ilgi alanı bildirimlerini yönetebilir miyim?", "Evet. İlgilendiğiniz profil, mekân, etkinlik ve etiketlerin bildirimlerini açıp kapatabilirsiniz. Örneğin takip ettiğiniz bir mekânda oluşturulan veya bir etiketle ilişkilendirilen etkinliklerden haberdar olabilirsiniz."],
+  // 23/11 #31
+  ["Tekrar eden etkinliğimi nasıl hızlı oluşturabilirim?", "Tekrar eden etkinliklerinizi “Etkinliği kopyala” butonunu tuşlayarak zaman ve katılımcı bilgileri dışındaki tüm diğer bilgileriyle yeni tercihlerinize göre kolayca kopyalayabilirsiniz."],
+  ["Etkinlik ve/veya mekân sayfasında anket düzenlenebilir mi?", "Siz ya da katılımcılarınız dilediğinizi öğrenmek amacıyla sayfadaki yorumlarda basit ya da gelişmiş anketler düzenleyebilirsiniz."],
+  ["Bir etkinliği cihazımın takvimine nasıl eklerim?", "Etkinlik sayfasındaki “Takvimime ekle”yi tuşlayarak Google Calendar, Outlook ya da Apple / iCal takviminize ekleyebilirsiniz."],
+  ["Kurumsal hesabıma mavi tik nasıl alabilirim?", "Ayarlar Merkezindeki “Business ve ödeme ayarları” sayfasındaki “KYB / KYC başvurusu” sekmesinde bulunan bilgileri girerek kurumsal hesabınızı doğrulamanız gerekmektedir."],
 ] as const;
 
 const answerLinks: Record<string, string> = {

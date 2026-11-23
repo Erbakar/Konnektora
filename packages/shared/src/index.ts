@@ -294,6 +294,8 @@ export const discoveryActivitySchema = discoveryItemSchema.extend({
   tags: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() })).optional(),
   place: z.object({ name: z.string(), slug: z.string() }).nullable().optional(),
   canManageContent: z.boolean().optional(),
+  /** 23/11 #71: etkinlik/mekân gönderisine bağlı anket özeti (web'de anket şemasıyla doğrulanır). */
+  poll: z.unknown().optional(),
   action: z.string(),
   occurredAt: z.string().datetime().or(z.date()),
   ownerId: z.string().uuid().nullable(),
@@ -608,6 +610,7 @@ export const publicProfileSchema = z.object({
       type: z.string(),
       sortOrder: z.number().int(),
       isProfilePicture: z.boolean(),
+      caption: z.string().nullable().optional(),
     }),
   ),
   interests: z.array(publicProfileInterestSchema),
@@ -693,6 +696,8 @@ export const profileTagSuggestionSchema = z.object({
   tag: tagSchema,
   targetUser: profileTagSuggestionUserSchema,
   suggestedBy: profileTagSuggestionUserSchema,
+  /** 23/11 #68: etiketteki gönderi sayıları (öneren kişininki ve toplam). */
+  postCounts: z.object({ suggester: z.number().int().nonnegative(), total: z.number().int().nonnegative() }).optional(),
 });
 export const profileTagSuggestionsSchema = z.array(profileTagSuggestionSchema);
 export const tagCommentSchema = z.object({
@@ -1287,8 +1292,10 @@ export const adminPlaceSchema = z.object({
   tags: z.array(tagSchema).optional(),
 });
 
+// 23/11 #43: "onay gerekli" mekânı takip eden kullanıcının üyeliği "pending" olur; şemada yoksa mekân sayfası ve listeler çöküyordu.
 export const placeMemberStatusSchema = z.enum([
   "invited",
+  "pending",
   "accepted",
   "declined",
   "banned",
@@ -1412,7 +1419,8 @@ export const adminMediaSchema = z.object({
   reportCount: z.number().int().nonnegative().optional(),
 });
 
-export const profileMediaSchema = adminMediaSchema.pick({
+// 23/11 #58: medya açıklaması profileMediaSchema'ya aşağıda eklenir.
+const profileMediaBaseSchema = adminMediaSchema.pick({
   id: true,
   url: true,
   type: true,
@@ -1425,6 +1433,7 @@ export const profileMediaSchema = adminMediaSchema.pick({
   createdAt: true,
   updatedAt: true,
 });
+export const profileMediaSchema = profileMediaBaseSchema.extend({ caption: z.string().nullable().optional() });
 export const profileMediaListSchema = z.array(profileMediaSchema);
 
 export const adminCommentSchema = z.object({
@@ -1549,20 +1558,22 @@ export const conversationMessagesSchema = z.object({
   hasNextPage: z.boolean(),
 });
 
+// 23/11 #8: bu şema sunucudan gelen kayıtları OKUMAK için kullanılır; tek bir eski/uzun kayıt (ör. uzun sistem bilgisi,
+// UUID olmayan kimlik) tüm Backoffice listesini boş gösteriyordu. Giriş doğrulaması formlarda ve API DTO'larında yapılır.
 export const userMessageSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string(),
   type: userMessageTypeSchema,
-  category: z.string().max(120).nullable(),
-  userId: z.string().uuid().nullable(),
-  name: z.string().min(2).max(160),
-  email: z.string().email(),
-  phone: z.string().max(40).nullable(),
-  body: z.string().min(3).max(5000),
+  category: z.string().nullable(),
+  userId: z.string().nullable(),
+  name: z.string(),
+  email: z.string(),
+  phone: z.string().nullable(),
+  body: z.string(),
   status: userMessageStatusSchema,
-  appVersion: z.string().max(80).nullable(),
-  systemInfo: z.string().max(500).nullable(),
+  appVersion: z.string().nullable(),
+  systemInfo: z.string().nullable(),
   readAt: z.string().datetime().or(z.date()).nullable(),
-  readById: z.string().uuid().nullable(),
+  readById: z.string().nullable(),
   createdAt: z.string().datetime().or(z.date()).optional(),
   updatedAt: z.string().datetime().or(z.date()).optional(),
   user: adminUserSchema.optional().nullable(),

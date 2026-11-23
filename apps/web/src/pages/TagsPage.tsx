@@ -1,3 +1,7 @@
+import { hasPostMedia, totalPostMedia } from "../lib/postMedia";
+import { MediaPicker } from "../components/MediaPicker";
+import { useIsMobile } from "../lib/useIsMobile";
+import { CountryCityFields } from "../components/CountryCityFields";
 import { FollowStar } from "../components/MemberSignals";
 import { MediaAlbum } from "../components/MediaAlbum";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -56,7 +60,7 @@ import {
   unfollowUser,
   updateProfileAffinities,
   updateTagComment,
-  uploadTagCommentMedia,
+  uploadTagCommentMediaWithProgress,
 } from "../lib/api";
 import { ThinkingIcon } from "../components/ThinkingIcon";
 import { useLanguage } from "../lib/i18n";
@@ -86,13 +90,14 @@ export function TagsPage() {
   >("popular");
   const [commentQuery, setCommentQuery] = useState("");
   const [postTab, setPostTab] = useState<
-    "all" | "popular" | "following" | "photo" | "video"
+    "all" | "popular" | "following" | "media"
   >("all");
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [sharedPost, setSharedPost] = useState<{ id: string; body: string; author: string; likes: number } | null>(null);
   const [selectedTagMedia, setSelectedTagMedia] = useState<File[]>([]);
+  const [tagUploadProgress, setTagUploadProgress] = useState<Record<number, number>>({});
   // 17/10 #23: ilgi alanı gönderi taslağı kullanıcıya ve ilgi alanına özel saklanır.
   const [postDraft, setPostDraft, clearPostDraft] = useComposerDraft(user?.id, "tag", slug);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
@@ -174,10 +179,14 @@ export function TagsPage() {
         await updateTagComment(draft.id, body);
         draft.body = body;
       }
+      // 23/11 #63: ortak seçicide her dosyanın yüklenme yüzdesi
+      const total = draft.files.length;
       while (draft.files.length) {
-        await uploadTagCommentMedia(draft.id, draft.files[0]!);
+        const index = total - draft.files.length;
+        await uploadTagCommentMediaWithProgress(draft.id, draft.files[0]!, (percent) => setTagUploadProgress({ [index]: percent }));
         draft.files.shift();
       }
+      setTagUploadProgress({});
       pendingUpload.current = null;
     },
     onSuccess: () => {
@@ -193,6 +202,9 @@ export function TagsPage() {
       void client.invalidateQueries({ queryKey: ["tag-comments", tag?.id] }),
   });
   const [editingPost, setEditingPost] = useState<string | null>(null);
+  // 23/11 #73: silme onayı tarayıcı penceresi yerine Etkinlik Detay'daki gibi uygulama içi pencere.
+  const [deletePostId, setDeletePostId] = useState<string | null>(null);
+  const isMobile = useIsMobile();
   const [editBody, setEditBody] = useState("");
   const edit = useMutation({
     mutationFn: ({ id, body }: { id: string; body: string }) =>
@@ -246,7 +258,7 @@ export function TagsPage() {
     (following.data ?? []).map((member) => member.id),
   );
   const filteredAuthor = (comments.data ?? []).find((item) => authorIdFilter ? item.author?.id === authorIdFilter : authorFilter && item.author?.username?.toLocaleLowerCase("tr") === authorFilter)?.author;
-  const authorNotice = filteredAuthor ? <div className="filter-notice"><span>{t(`${filteredAuthor.username ? `@${filteredAuthor.username}` : filteredAuthor.name} gönderileri filtreleniyor.`, `Filtering posts by ${filteredAuthor.username ? `@${filteredAuthor.username}` : filteredAuthor.name}.`)}</span><button onClick={() => { const next = new URLSearchParams(searchParams); next.delete("author"); next.delete("authorId"); setSearchParams(next); }} type="button">{t("Temizle", "Clear")}</button></div> : null;
+  const authorNotice = filteredAuthor ? <div className="filter-notice"><span>{t(`${filteredAuthor.username ? `@${filteredAuthor.username}` : filteredAuthor.name} gönderileri filtreleniyor.`, `Filtering posts by ${filteredAuthor.username ? `@${filteredAuthor.username}` : filteredAuthor.name}.`)}</span><button onClick={() => { const next = new URLSearchParams(searchParams); next.delete("author"); next.delete("authorId"); setSearchParams(next); }} type="button">{t("Diğer tüm gönderileri de göster", "Show all other posts too")}</button></div> : null;
   const visibleComments = [...(comments.data ?? [])]
     .filter((comment) => {
       const matches =
@@ -259,12 +271,7 @@ export function TagsPage() {
       if (!authorIdFilter && authorFilter && (comments.data ?? []).some((item) => item.author?.username?.toLocaleLowerCase("tr") === authorFilter) && comment.author?.username?.toLocaleLowerCase("tr") !== authorFilter) return false;
       if (postTab === "following")
         return Boolean(comment.author && followingIds.has(comment.author.id));
-      if (postTab === "photo" || postTab === "video")
-        return Boolean(
-          comment.media?.some(
-            (media) => media.type === (postTab === "photo" ? "image" : "video"),
-          ),
-        );
+      if (postTab === "media") return hasPostMedia(comment);
       return true;
     })
     .sort((a, b) =>
@@ -313,8 +320,8 @@ export function TagsPage() {
           >
             <label>{t("Oluşturulma tarihi — Başlangıç", "Created — From")}<input defaultValue={directoryFilters.createdFrom} name="createdFrom" type="date"/></label>
             <label>{t("Oluşturulma tarihi — Bitiş", "Created — To")}<input defaultValue={directoryFilters.createdTo} name="createdTo" type="date"/></label>
-            <label>{t("Oluşturulduğu ülke", "Country created")}<input defaultValue={directoryFilters.country} name="country" placeholder={t("Ülke", "Country")}/></label>
-            <label>{t("Oluşturulduğu şehir", "City created")}<input defaultValue={directoryFilters.city} name="city" placeholder={t("Şehir", "City")}/></label>
+            {/* 23/11 #2: Ülke ve Şehir açılır listeden seçilir. */}
+            <CountryCityFields cityDropdown countryLabel={t("Oluşturulduğu ülke", "Country created")} cityLabel={t("Oluşturulduğu şehir", "City created")} defaultCountry={directoryFilters.country} defaultCity={directoryFilters.city}/>
             <div className="row-actions">
               <button className="primary-action" type="submit">{t("Uygula", "Apply")}</button>
               <button className="secondary-action" onClick={(event) => { event.currentTarget.form?.reset(); setDirectoryFilters({ createdFrom: "", createdTo: "", country: "", city: "" }); }} type="button">{t("Temizle", "Clear")}</button>
@@ -402,7 +409,7 @@ export function TagsPage() {
       <Link className="back-link" to="/tags">
         ← {t("İlgi alanları", "Interests")}
       </Link>
-      <div className="section-header">
+      <div className="section-header tag-detail-header">
         <div>
           <p className="eyebrow">{t("İlgi alanı", "Interest")}</p>
           <h1><Link to={`/tags/${tag.slug}`}>#{tag.name}</Link></h1>
@@ -458,7 +465,7 @@ export function TagsPage() {
         <div><span className="attendee-avatar-stack">{(relatedUsers.data ?? []).slice(0, 8).map((member) => <Link key={member.id} title={t(`${member.name} profilini aç`, `Open ${member.name}'s profile`)} to={userProfilePath(member)}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/tags/${tag.slug}/users`}><strong>{t(`${relatedUsers.data?.length ?? tag.usageCount} kullanıcının tümünü göster`, `Show all ${relatedUsers.data?.length ?? tag.usageCount} users`)}</strong></Link></div>
       </section>
       {relatedEvents.data?.total ? <Link className="tag-related-events-notice" to={`/events?tag=${encodeURIComponent(tag.slug)}`}>{t(`${relatedEvents.data.total} ilişkili güncel etkinlik bulundu.`, `${relatedEvents.data.total} related upcoming events found.`)}</Link> : null}
-      <section className="admin-form">
+      <section className="admin-form" id="tag-posts">
 
         <div className="section-header compact">
           <h2>
@@ -469,7 +476,7 @@ export function TagsPage() {
         <details className="collapsed-filter-panel tag-detail-filters">
           <summary><SlidersHorizontal size={17}/> {t("Gönderilerde ara & filtrele", "Search & filter posts")}</summary>
           <div className="feed-tabs">
-          {(["all", "popular", "following", "photo", "video"] as const).map(
+          {(["all", "popular", "following", "media"] as const).map(
             (value) => (
               <button
                 className={postTab === value ? "active" : ""}
@@ -483,9 +490,7 @@ export function TagsPage() {
                     ? t("Popüler", "Popular")
                     : value === "following"
                       ? t(`Takip ettiklerim (${(comments.data ?? []).filter((comment) => comment.author && followingIds.has(comment.author.id)).length})`, `Following (${(comments.data ?? []).filter((comment) => comment.author && followingIds.has(comment.author.id)).length})`)
-                      : value === "photo"
-                        ? t("Fotoğraf", "Photo")
-                        : "Video"}
+                      : t(`Medya (${totalPostMedia(comments.data ?? [])})`, `Media (${totalPostMedia(comments.data ?? [])})`)}
               </button>
             ),
           )}
@@ -529,12 +534,12 @@ export function TagsPage() {
                   multiple
                   name="media"
                   type="file"
-                  onChange={(event) => setSelectedTagMedia([...(event.target.files ?? [])].slice(0, 9))}
+                  onChange={(event) => { const picked = [...(event.target.files ?? [])]; event.target.value = ""; setSelectedTagMedia((current) => [...current, ...picked].slice(0, 9)); }}
                 />
               </label>
               <ComposerTips/>
               <DraftLeaveGuard active={Boolean(postDraft.trim()) && !post.isPending} kind="post" onDiscard={clearPostDraft} />
-              {selectedTagMedia.length ? <span className="comment-media-count">{t(`${selectedTagMedia.filter((file) => file.type.startsWith("image/")).length} resim, ${selectedTagMedia.filter((file) => file.type.startsWith("video/")).length} video seçildi`, `${selectedTagMedia.filter((file) => file.type.startsWith("image/")).length} images, ${selectedTagMedia.filter((file) => file.type.startsWith("video/")).length} videos selected`)} {post.isPending ? <LoaderCircle className="spin" size={15}/> : null}</span> : null}
+              <MediaPicker disabled={post.isPending} files={selectedTagMedia} language={language} max={9} onChange={setSelectedTagMedia} progress={tagUploadProgress}/>
             </div>
           </form>
         ) : null}
@@ -600,6 +605,7 @@ export function TagsPage() {
                   {comment.replyCount ? t(`${comment.replyCount} yorum`, `${comment.replyCount} comments`) : t("Yorum yap", "Comment")}
                 </button>
                 <button
+                  className="post-share-inline"
                   onClick={() => setSharedPost({ id: comment.id, body: comment.body, author: comment.author?.username ? `@${comment.author.username}` : comment.author?.name ?? t("Üye", "Member"), likes: comment.likeCount })}
                 >
                   <Share2 size={17} />
@@ -609,6 +615,8 @@ export function TagsPage() {
                   <details className="detail-action-menu post-action-menu">
                     <summary aria-label={t("Gönderi işlemleri", "Post actions")}><MoreVertical size={19}/></summary>
                     <div>
+                    {/* 23/11 #55: mobilde Paylaş menünün en üstünde */}
+                    {isMobile ? <button className="menu-share-mobile" onClick={() => setSharedPost({ id: comment.id, body: comment.body, author: comment.author?.username ? `@${comment.author.username}` : comment.author?.name ?? t("Üye", "Member"), likes: comment.likeCount })} type="button"><Share2 size={17}/>{t("Paylaş", "Share")}</button> : null}
                     {comment.author.id !== user.id ? (
                       <>
                         <Link to={`/messages?peer=${comment.author.id}`}><Mail size={17}/>{t("Mesaj gönder", "Send message")}</Link>
@@ -639,10 +647,7 @@ export function TagsPage() {
                     </button>
                     <button
                       disabled={remove.isPending}
-                      onClick={() =>
-                        window.confirm(t("Gönderi silinsin mi?", "Delete this post?")) &&
-                        remove.mutate(comment.id)
-                      }
+                      onClick={() => setDeletePostId(comment.id)}
                     >
                       <Trash2 size={17} />
                       {t("Sil", "Delete")}
@@ -670,6 +675,18 @@ export function TagsPage() {
         </div>
       </section>
       {authorNotice}
+      {deletePostId ? (
+        <div className="emotion-modal" role="presentation" onMouseDown={() => setDeletePostId(null)}>
+          <section aria-labelledby="delete-tag-post-title" aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+            <h2 id="delete-tag-post-title">{t("Gönderiyi sil", "Delete post")}</h2>
+            <p>{t("Bu gönderi kalıcı olarak silinecek. Devam etmek istiyor musunuz?", "This post will be permanently deleted. Do you want to continue?")}</p>
+            <div className="dialog-actions">
+              <button disabled={remove.isPending} onClick={() => setDeletePostId(null)} type="button">{t("Vazgeç", "Cancel")}</button>
+              <button className="danger-action" disabled={remove.isPending} onClick={() => remove.mutate(deletePostId, { onSuccess: () => setDeletePostId(null) })} type="button">{t("Gönderiyi sil", "Delete post")}</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
       <ShareDialog open={Boolean(sharedPost)} onClose={() => setSharedPost(null)} targetType="post" targetId={sharedPost?.id ?? ""} title={`#${tag.name}`} text={sharedPost ? `${sharedPost.author} ${t("paylaştı", "shared a post in")} #${tag.name}
 “${sharedPost.body}”
 

@@ -38,6 +38,8 @@ export function ContentMediaGallery({ targetType, targetId, canManage = false, c
     onMakeAvatar: async (mediaId) => { const ids = (media.data ?? []).map((item) => item.id); const from = ids.indexOf(mediaId); if (from > 0) { ids.splice(0, 0, ids.splice(from, 1)[0]!); await reorder.mutateAsync(ids); setActiveIndex(0); } },
     onEditAlbum: () => { setActiveIndex(null); setListOpen(true); },
     onDelete: (mediaId) => remove.mutateAsync(mediaId),
+    target: { type: targetType, id: targetId },
+    onChanged: () => refresh(),
   };
   if (!media.data?.length) {
     if (!coverImageUrl) return canManage ? <section className="content-media-empty"><Images size={25}/><div><strong>{t("Medya albümü boş", "Media album is empty")}</strong><span>{upload.isPending ? t("Yükleniyor…", "Uploading…") : t("İlk fotoğrafı veya videoyu yükleyin.", "Upload the first photo or video.")}</span></div><MediaUploadButton disabled={upload.isPending} language={language} onFile={(files) => upload.mutate(files)}/>{upload.isError ? <p className="form-error">{upload.error instanceof Error ? upload.error.message : supportedMediaHelp}</p> : null}</section> : null;

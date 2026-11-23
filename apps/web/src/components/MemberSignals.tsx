@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Star } from "lucide-react";
 import { followUser, getMemberCompatibility, getUserSession, listFollowing, unfollowUser } from "../lib/api";
@@ -24,6 +24,15 @@ export function FollowStar({id, ariaLabel}:{id:string; ariaLabel?:string}) {
  const following=useQuery({queryKey:["following",viewer?.id],queryFn:listFollowing,enabled:Boolean(viewer&&viewer.id!==id)});
  const active=following.data?.some(user=>user.id===id)??false;
  const toggle=useMutation({mutationFn:()=>active?unfollowUser(id):followUser(id),onSuccess:async()=>{await Promise.all([client.invalidateQueries({queryKey:["following"]}),client.invalidateQueries({queryKey:["member-suggestions"]}),client.invalidateQueries({queryKey:["new-members"]}),client.invalidateQueries({queryKey:["public-profile"]}),client.invalidateQueries({queryKey:["member-compatibility"]}),client.invalidateQueries({queryKey:["community"]})]);}});
- if(!viewer||viewer.id===id)return null;
+ if(!viewer)return null;
+ // 23/11 #52: kişi kendi kartında da yanan yıldızı görür; dokununca "Kendinizi takip edemezsiniz." ipucu çıkar.
+ if(viewer.id===id)return <SelfStar language={language}/>;
  return <><button type="button" className="follow-star" aria-pressed={active} aria-label={ariaLabel ?? (language==="tr"?active?"Takibi bırak":"Takip et":active?"Unfollow":"Follow")} disabled={following.isLoading||toggle.isPending} onClick={event=>{event.preventDefault();event.stopPropagation();toggle.mutate();}}><Star size={17} fill={active?"currentColor":"none"}/></button>{toggle.isError ? <span className="form-error" role="alert">{toggle.error instanceof Error ? toggle.error.message : "Takip durumu değiştirilemedi."}</span> : null}</>;
+}
+
+function SelfStar({language}:{language:string}) {
+ const [open,setOpen]=useState(false);
+ useEffect(()=>{if(!open)return;const timer=window.setTimeout(()=>setOpen(false),2200);return()=>window.clearTimeout(timer);},[open]);
+ const tip=language==="tr"?"Kendinizi takip edemezsiniz.":"You can't follow yourself.";
+ return <span className="follow-star-self" onMouseEnter={()=>setOpen(true)} onMouseLeave={()=>setOpen(false)}><button type="button" className="follow-star" aria-pressed="true" aria-label={tip} onClick={event=>{event.preventDefault();event.stopPropagation();setOpen(true);}}><Star size={17} fill="currentColor"/></button>{open?<span className="follow-star-self-tip" role="tooltip">{tip}</span>:null}</span>;
 }

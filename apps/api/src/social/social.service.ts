@@ -59,6 +59,35 @@ export class SocialService {
       .slice(0, 20);
   }
 
+  async commonInterests(userId: string) {
+    const [ownTags, follows, ownBlocks, blockedBy] = await Promise.all([
+      this.prisma.userInterestTag.findMany({ where: { userId }, select: { tagId: true } }),
+      this.prisma.userFollow.findMany({ where: { followerId: userId }, select: { followingId: true } }),
+      this.prisma.userBlock.findMany({ where: { userId, targetType: "user" }, select: { targetId: true } }),
+      this.prisma.userBlock.findMany({ where: { targetType: "user", targetId: userId }, select: { userId: true } }),
+    ]);
+    const tagIds = ownTags.map((item) => item.tagId);
+    if (!tagIds.length) return [];
+    const excluded = [userId, ...ownBlocks.map((block) => block.targetId), ...blockedBy.map((block) => block.userId)];
+    const counts = await this.prisma.userInterestTag.groupBy({
+      by: ["userId"],
+      where: { tagId: { in: tagIds }, userId: { notIn: excluded }, user: { status: "active", role: { in: ["user", "curator"] } } },
+      _count: { _all: true },
+      orderBy: { _count: { userId: "desc" } },
+      take: 500,
+    });
+    if (!counts.length) return [];
+    const users = await this.prisma.user.findMany({ where: { id: { in: counts.map((row) => row.userId) } }, select: memberSelect });
+    const followingIds = new Set(follows.map((item) => item.followingId));
+    const own = new Set(tagIds);
+    const byId = new Map(users.map((user) => [user.id, user]));
+    return counts
+      .map((row) => byId.get(row.userId))
+      .filter((user): user is NonNullable<typeof user> => Boolean(user))
+      .map((user) => this.toMemberCard(user, own, followingIds.has(user.id)))
+      .sort((first, second) => second.commonTagCount - first.commonTagCount || second.followerCount - first.followerCount);
+  }
+
   async listFollowing(userId: string) {
     const ownTags = new Set(
       (await this.prisma.userInterestTag.findMany({ where: { userId }, select: { tagId: true } })).map((item) => item.tagId)

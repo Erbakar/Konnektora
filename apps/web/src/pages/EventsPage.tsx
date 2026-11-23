@@ -155,6 +155,7 @@ export function EventsPage() {
       next.set("dateTo", end.toISOString().slice(0, 10));
     } else if (scope === "past") {
       next.set("dateTo", today.toISOString().slice(0, 10));
+      next.set("sort", "past");
     } else {
       next.set("dateFrom", today.toISOString().slice(0, 10));
     }
@@ -199,7 +200,7 @@ export function EventsPage() {
       <div className="events-content">
         <div className="section-header events-page-header">
           <h1>{c.title}</h1>
-          <div className="row-actions"><span>{isLoading ? c.loading : isError ? c.unavailable : c.result(eventList?.total ?? 0)}</span><button className="create-inline-link" onClick={() => setMapOpen((open) => !open)}><MapPinned size={16}/>{mapOpen ? c.showList : c.showMap}</button><Link className="create-inline-link events-create-button" to="/events/create"><Plus size={16}/> {c.create}</Link></div>
+          <div className="row-actions"><span className="page-result-count">{isLoading ? c.loading : isError ? c.unavailable : c.result(eventList?.total ?? 0)}</span><button className="create-inline-link" onClick={() => setMapOpen((open) => !open)}><MapPinned size={16}/>{mapOpen ? c.showList : c.showMap}</button><Link className="create-inline-link events-create-button" to="/events/create"><Plus size={16}/> {c.create}</Link></div>
         </div>
         <nav className="discovery-tabs" aria-label={c.groups}>
           {([["future", c.future], ["24h", c.next24], ["tomorrow", c.tomorrow], ["week", c.week], ["weekend", c.weekend], ["next_week", c.nextWeek], ["month", c.month], ["past", c.past]] as const).map(([scope, label]) => (

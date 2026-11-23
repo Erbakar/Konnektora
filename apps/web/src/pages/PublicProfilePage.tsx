@@ -58,6 +58,7 @@ import {
 } from "../lib/api";
 import { businessLabel, companyTypes } from "../lib/businessLabels";
 import { ThinkingIcon } from "../components/ThinkingIcon";
+import { getServiceErrorMessage } from "../lib/serviceErrors";
 import { useLanguage } from "../lib/i18n";
 import { profileInstagramCaption } from "../lib/shareCaptions";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
@@ -178,6 +179,8 @@ export function PublicProfilePage() {
             .map((item) => ({ tagId: item.tag.id, sentiment: item.sentiment })),
           { tagId, sentiment: selectedSentiment },
         ]);
+      // 23/11 #67: profile zaten yapışık etiket için doğru mesaj.
+      if (profile!.interests.some((interest) => interest.tag.id === tagId)) throw new Error(t("Bu etiket zaten profile yapışık.", "This tag is already on the profile."));
       return createProfileTagSuggestion(profile!.id, {
         tagId,
         sentiment: selectedSentiment,
@@ -323,7 +326,10 @@ export function PublicProfilePage() {
         ) : null}
         <div className="public-profile-heading">
           <span className="eyebrow">
-            {profile.accountType === "corporate"
+            {/* 23/11 #11: aktif küratörlerde "Resmi şehir küratörü" */}
+            {profile.systemRole === "curator"
+              ? t("RESMİ ŞEHİR KÜRATÖRÜ", "OFFICIAL CITY CURATOR")
+              : profile.accountType === "corporate"
               ? t("Kurumsal üye", "Business member")
               : t("Konnektora üyesi", "Konnektora member")}
           </span>
@@ -532,6 +538,8 @@ export function PublicProfilePage() {
       {galleryIndex != null ? <MediaViewer alt={`${profile.name} profil medyası`} items={profile.media} index={galleryIndex} onChange={setGalleryIndex} onClose={() => setGalleryIndex(null)} actions={{
         kind: "profile",
         canManage: profile.relationship.isSelf,
+        target: { type: "user", id: profile.id },
+        onChanged: () => queryClient.invalidateQueries({ queryKey: ["public-profile"] }),
         avatarMediaId: profilePhoto?.id ?? null,
         onUpload: async (files) => { for (const file of files) await uploadProfileMedia(file); await queryClient.invalidateQueries({ queryKey: ["public-profile"] }); },
         onMakeAvatar: async (mediaId) => { await makeProfilePicture(mediaId); await queryClient.invalidateQueries({ queryKey: ["public-profile"] }); setGalleryIndex(0); },
@@ -800,7 +808,7 @@ export function PublicProfilePage() {
               </p>
             ) : null}
             {addTagMutation.isError ? (
-              <p className="form-error">{t("Etiket profile eklenemedi.", "The tag could not be added to the profile.")}</p>
+              <p className="form-error">{getServiceErrorMessage(addTagMutation.error, t("Etiket profile eklenemedi.", "The tag could not be added to the profile."))}</p>
             ) : null}
           </form>
         </div>

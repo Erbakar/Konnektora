@@ -493,9 +493,10 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
       void queryClient.invalidateQueries({ queryKey: ["my-events", user?.id] });
       navigate(`/events/${created.slug}`);
     },
-    onError: () => setNotice({ tone: "error", message: savedEventRef.current
+    // 23/11 #41: sunucunun verdiği gerçek sebep (ör. bilet satışı uygunluğu) gösterilir; yoksa genel metin.
+    onError: (error) => setNotice({ tone: "error", message: savedEventRef.current
       ? t("Etkinlik kaydedildi ancak medya veya yönetici davetleri tamamlanamadı. Yeniden kaydetmeyi deneyin; etkinlik tekrar oluşturulmayacak.", "The event was saved but media or manager invitations failed. Retry saving; the event will not be duplicated.")
-      : t("Etkinlik kaydedilemedi. Alanları ve medya yüklemelerini kontrol edin.", "The event could not be saved. Check the fields and media uploads.") }),
+      : getServiceErrorMessage(error, t("Etkinlik kaydedilemedi. Alanları ve medya yüklemelerini kontrol edin.", "The event could not be saved. Check the fields and media uploads.")) }),
   });
 
   function startEventMediaUpload(files: FileList | null) {

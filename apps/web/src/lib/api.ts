@@ -8421,6 +8421,17 @@ export function uploadContentMedia(
   );
 }
 
+/** 23/11 #58: medya açıklaması (en çok 30 karakter). */
+export function updateMediaCaption(targetType: string, targetId: string, mediaId: string, caption: string) {
+  return requestJson(`/media/${targetType}/${targetId}/${mediaId}/caption`, z.object({ id: z.string(), caption: z.string().nullable() }).passthrough(), { auth: "user", method: "PATCH", body: JSON.stringify({ caption }) });
+}
+/** 23/11 #58: döndürülmüş / kırpılmış görseli eskisinin yerine koyar. */
+export function replaceMediaFile(targetType: string, targetId: string, mediaId: string, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  return requestJson(`/media/${targetType}/${targetId}/${mediaId}/replace`, z.object({ id: z.string(), url: z.string() }).passthrough(), { auth: "user", method: "POST", body: form });
+}
+
 export function uploadPendingEventMedia(batchId: string, file: File): Promise<ProfileMedia> {
   file = normalizeMediaFile(file);
   if (isMockApiMode) {
@@ -8597,6 +8608,10 @@ export function listMemberSuggestions(): Promise<MemberCard[]> {
   return requestJson("/social/suggestions", memberCardsSchema, {
     auth: "user",
   });
+}
+/** 23/11 #3: "Ortak ilgi alanları" sekmesi — en uyumlu ilk 500 üye. */
+export function listCommonInterestMembers(): Promise<MemberCard[]> {
+  return requestJson("/social/common-interests", memberCardsSchema, { auth: "user" });
 }
 
 export function listFollowing(): Promise<MemberCard[]> {
@@ -9132,6 +9147,7 @@ export function listTagRelatedUsers(tagId: string): Promise<RelatedUser[]> {
   return requestJson(
     `/tags/${tagId}/related-users`,
     z.array(relatedUserSchema),
+    { auth: "user" },
   );
 }
 
@@ -9378,7 +9394,7 @@ const contentThreadCommentSchema: z.ZodType<ContentThreadComment> = z.lazy(() =>
       })
       .nullable()
       .optional(),
-    media: z.array(z.object({ id: z.string(), url: z.string(), type: z.string() })).optional(),
+    media: z.array(z.object({ id: z.string(), url: z.string(), type: z.string(), caption: z.string().nullable().optional() })).optional(),
     poll: contentPollSummarySchema.nullable().optional(),
     replies: z.array(contentThreadCommentSchema).optional(),
   }),
@@ -10836,6 +10852,8 @@ export function listEventRelatedUsers(eventId: string): Promise<RelatedUser[]> {
   return requestJson(
     `/events/${eventId}/related-users`,
     z.array(relatedUserSchema),
+    // 23/11 #35, #36, #40: oturum gönderilmezse yönetici sekmeleri (bekleyen, yasaklı, davetli) boş gelir.
+    { auth: "user" },
   );
 }
 
@@ -11090,7 +11108,7 @@ export function listPlaceMembers(id: string): Promise<PlaceMember[]> {
 }
 
 export function listPlaceRelatedUsers(id: string): Promise<RelatedUser[]> {
-  return requestJson(`/places/${id}/related-users`, z.array(relatedUserSchema));
+  return requestJson(`/places/${id}/related-users`, z.array(relatedUserSchema), { auth: "user" });
 }
 
 export function invitePlaceMember(
@@ -11185,7 +11203,7 @@ export function releaseHeldFinanceEvent(id: string) {
   return requestJson(`/admin/finance/held-events/${id}/release`, z.object({ released: z.number(), releasedSources: z.number().optional() }), { auth: "admin", method: "POST" });
 }
 
-const curatorAgreementSchema = z.object({ id: z.string(), userId: z.string(), version: z.number(), active: z.boolean(), territories: z.array(z.object({ country: z.string(), city: z.string(), region: z.string().optional() })), rates: z.record(z.number()), referrerId: z.string().nullable(), referralRate: z.coerce.number(), bankName: z.string().nullable(), accountName: z.string().nullable(), iban: z.string().nullable(), paymentDetails: z.string().nullable(), effectiveAt: z.string().or(z.date()) });
+const curatorAgreementSchema = z.object({ id: z.string(), userId: z.string(), version: z.number(), active: z.boolean(), territories: z.array(z.object({ country: z.string(), city: z.string(), region: z.string().optional() })), rates: z.record(z.number()), referrerId: z.string().nullable(), referralRate: z.coerce.number(), referrers: z.array(z.object({ referrerId: z.string(), referralRate: z.coerce.number() })).optional(), bankName: z.string().nullable(), accountName: z.string().nullable(), iban: z.string().nullable(), paymentDetails: z.string().nullable(), effectiveAt: z.string().or(z.date()) });
 export type CuratorAgreement = z.infer<typeof curatorAgreementSchema>;
 export type CuratorAgreementInput = Omit<CuratorAgreement, "id" | "userId" | "version" | "effectiveAt" | "referrerId" | "bankName" | "accountName" | "iban" | "paymentDetails"> & { referrerId?: string; bankName?: string; accountName?: string; iban?: string; paymentDetails?: string };
 const curatorLedgerSchema = z.object({ items: z.array(z.object({ id: z.string(), kind: z.string(), category: z.string(), description: z.string(), amount: z.number(), currency: z.string(), balance: z.number(), held: z.boolean(), sourceKey: z.string(), occurredAt: z.string().or(z.date()), eventId: z.string().nullable(), event: z.object({ title: z.string(), slug: z.string() }).nullable() })), total: z.number(), page: z.number(), pageSize: z.number(), balances: z.record(z.object({ available: z.number(), held: z.number(), total: z.number() })) });
@@ -11206,8 +11224,8 @@ export async function downloadFinanceInvoice(id: string, admin = false) { const 
 
 export function getMembership() { return requestJson("/me/membership", z.object({ member: z.object({ plan: z.string() }), business: z.object({ plan: z.string() }), limits: z.object({ events: z.number().nullable(), tags: z.number().nullable(), invites: z.number().nullable(), messages: z.number().nullable().optional(), sixHours: z.number().nullable().optional() }), capabilities: z.object({ advanced: z.boolean(), guest: z.boolean(), profileViews: z.number().nullable() }).optional(), gift: z.object({ plan: z.string(), expiresAt: z.string() }).nullable().optional(), researcherGift: z.object({ plan: z.string(), expiresAt: z.string() }).nullable().optional(), chats: z.object({ daily: z.number(), recent: z.number() }).optional(), used: z.object({ events: z.number(), tags: z.number() }), period: z.object({ start: z.string(), end: z.string() }), eventInvites: z.array(z.object({ eventId: z.string(), used: z.number() })) }), { auth: "user" }); }
 export function requestWalletCode() { return requestJson("/me/wallet/request", z.object({ expiresAt: z.string(), phoneHint: z.string() }), { auth: "user", method: "POST" }); }
-export async function verifyWalletCode(code: string) {
- const data = await requestJson("/me/wallet/verify", z.object({ token: z.string(), expiresAt: z.string() }), { auth: "user", method: "POST", body: JSON.stringify({ code }) });
+export async function verifyWalletCode(code: string, section?: "wallet" | "curator") {
+ const data = await requestJson("/me/wallet/verify", z.object({ token: z.string(), expiresAt: z.string() }), { auth: "user", method: "POST", body: JSON.stringify(section ? { code, section } : { code }) });
  setWalletGrant(data.token, getUserToken() ?? "", data.expiresAt); return data;
 }
 export async function closeWallet() { clearWalletGrant(); return requestJson("/me/wallet/close", z.object({ ok: z.boolean() }), { auth: "user", method: "POST" }); }
@@ -11244,3 +11262,79 @@ export function getInviteAssessment(kind:"event"|"place",targetId:string,ids:str
 export function listPlaceInviteRecommendations(id:string){return requestJson(`/places/${id}/invite-recommendations`,z.array(eventInviteRecommendationSchema),{auth:"user"});}
 export function listPlacePastEvents(id:string){return requestJson(`/places/${id}/past-events`,z.array(z.object({id:z.string(),title:z.string(),startsAt:z.string(),endsAt:z.string().nullable()})),{auth:"user"});}
 export function listPlacePastAttendees(id:string,eventId:string){return requestJson(`/places/${id}/past-attendees?${new URLSearchParams({eventId})}`,z.array(z.object({id:z.string(),name:z.string(),username:z.string().nullable(),avatarUrl:z.string().nullable()})),{auth:"user"});}
+
+/** 23/11 #74, #75: davet bağlantısıyla gelen üyeyi, bağlantıyı paylaşanın davetlisi olarak kaydeder. */
+export function recordInviteLinkVisit(kind: "event" | "place", id: string, inviterId: string) {
+  return requestJson(`/${kind === "event" ? "events" : "places"}/${id}/invite-link`, z.object({ recorded: z.boolean() }), { auth: "user", method: "POST", body: JSON.stringify({ inviterId }) });
+}
+
+/** 23/11 #33: doğrulanmamış e-postaya aktivasyon e-postasını yeniden gönder. */
+export function resendOwnEmailVerification() {
+  return requestJson("/auth/me/email/verify/request", z.object({ ok: z.boolean(), sent: z.boolean(), alreadyVerified: z.boolean(), email: z.string() }), { auth: "user", method: "POST" });
+}
+
+/** 23/11 #10: Küratör bilgi ve ayarları (cüzdan SMS doğrulaması gerekir). */
+const curatorUserRef = z.object({ id: z.string(), name: z.string(), username: z.string().nullable() });
+export function getOwnCuratorAgreement() {
+  return requestJson("/curators/finance/agreement", z.object({
+    agreement: z.object({ active: z.boolean(), effectiveAt: z.string().or(z.date()), version: z.number(), territories: z.array(z.object({ country: z.string(), city: z.string().optional().default(""), region: z.string().optional().default("") })), rates: z.record(z.coerce.number()) }).nullable(),
+    referrers: z.array(z.object({ curator: curatorUserRef.nullable(), referralRate: z.coerce.number() })),
+    referred: z.array(z.object({ curator: curatorUserRef, referralRate: z.coerce.number() })),
+  }), { auth: "user" });
+}
+export function getOwnCuratorWallet() {
+  return requestJson("/curators/finance/wallet", z.object({
+    balances: z.record(z.object({ available: z.number(), held: z.number(), total: z.number() })),
+    bank: z.object({ bankName: z.string().nullable(), accountName: z.string().nullable(), iban: z.string().nullable(), paymentDetails: z.string().nullable() }),
+    pendingRequests: z.array(z.object({ id: z.string(), amount: z.number(), currency: z.string(), status: z.string(), requestedAt: z.string().or(z.date()) })),
+  }), { auth: "user" });
+}
+export function requestCuratorPayout(input: { amount: number; currency: string }) {
+  return requestJson("/curators/finance/payout-requests", z.object({ id: z.string() }).passthrough(), { auth: "user", method: "POST", body: JSON.stringify(input) });
+}
+
+/**
+ * 23/11 #62.11.3, #63: yükleme yüzdesi gösterebilmek için XHR ile çok parçalı gönderim.
+ * Yanıt aynı şemayla doğrulanır; hata mesajı sunucudan geldiği gibi aktarılır.
+ */
+export function uploadFormWithProgress<T>(path: string, form: FormData, schema: z.ZodType<T>, onProgress?: (percent: number) => void): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_URL}${path}`);
+    xhr.setRequestHeader("X-App-Version", import.meta.env.VITE_APP_VERSION ?? "web");
+    const token = getUserToken();
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.upload.onprogress = (event) => { if (event.lengthComputable && onProgress) onProgress(Math.min(99, Math.round((event.loaded / event.total) * 100))); };
+    xhr.onerror = () => reject(new Error("Yükleme tamamlanamadı. Bağlantını kontrol edip yeniden dene."));
+    xhr.onload = () => {
+      let data: unknown = null;
+      try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch { data = null; }
+      if (xhr.status >= 200 && xhr.status < 300) { onProgress?.(100); try { resolve(schema.parse(data)); } catch (error) { reject(error); } return; }
+      const message = (data as { message?: string | string[] } | null)?.message;
+      reject(new ApiHttpError(xhr.status, Array.isArray(message) ? message.join(" ") : message ?? "Yükleme tamamlanamadı."));
+    };
+    xhr.send(form);
+  });
+}
+
+export function sendPrivateMessageWithProgress(recipientId: string, body: string, options: { replyToId?: string; attachment: File }, onProgress?: (percent: number) => void): Promise<PrivateChatMessage> {
+  const form = new FormData();
+  form.set("recipientId", recipientId);
+  form.set("body", body);
+  if (options.replyToId) form.set("replyToId", options.replyToId);
+  form.set("attachment", normalizeMediaFile(options.attachment));
+  return uploadFormWithProgress("/me/private-messages", form, privateChatMessageSchema, onProgress);
+}
+
+export function uploadContentMediaWithProgress(targetType: "event" | "place" | "tag_comment" | "event_comment" | "place_comment" | "comment_reply", targetId: string, file: File, onProgress?: (percent: number) => void): Promise<ProfileMedia> {
+  const form = new FormData();
+  form.append("file", normalizeMediaFile(file));
+  return uploadFormWithProgress(`/media/${targetType}/${targetId}/upload`, form, profileMediaSchema, onProgress);
+}
+
+/** 23/11 #63: etiket gönderisi medyası, yükleme yüzdesiyle. */
+export function uploadTagCommentMediaWithProgress(commentId: string, file: File, onProgress?: (percent: number) => void) {
+  const form = new FormData();
+  form.set("file", normalizeMediaFile(file));
+  return uploadFormWithProgress(`/tags/comments/${commentId}/media`, form, z.unknown(), onProgress);
+}

@@ -556,6 +556,25 @@ export class PlacesService {
     });
   }
 
+  async recordInviteLinkVisit(placeId: string, inviterId: string, visitor: User) {
+    if (!/^[0-9a-f-]{36}$/i.test(inviterId) || inviterId === visitor.id) return { recorded: false };
+    const [place, inviter, existing] = await Promise.all([
+      this.prisma.place.findFirst({ where: { id: placeId, status: "active" }, select: { id: true, createdById: true } }),
+      this.prisma.placeMember.findUnique({ where: { placeId_userId: { placeId, userId: inviterId } }, select: { status: true } }),
+      this.prisma.placeMember.findUnique({ where: { placeId_userId: { placeId, userId: visitor.id } }, select: { status: true } }),
+    ]);
+    if (!place) return { recorded: false };
+    if (place.createdById !== inviterId && !["accepted", "invited"].includes(inviter?.status ?? "")) return { recorded: false };
+    await this.prisma.placeInvitation.upsert({ where: { placeId_inviterId_inviteeId: { placeId, inviterId, inviteeId: visitor.id } }, create: { placeId, inviterId, inviteeId: visitor.id }, update: {} });
+    if (!existing) {
+      await this.prisma.$transaction([
+        this.prisma.placeMember.create({ data: { placeId, userId: visitor.id, status: PlaceMemberStatus.invited, role: PlaceMemberRole.member } }),
+        this.prisma.place.update({ where: { id: placeId }, data: { inviteCount: { increment: 1 } } }),
+      ]).catch(() => undefined);
+    }
+    return { recorded: true };
+  }
+
   async follow(placeId: string, userId: string) {
     const place = await this.ensureActive(placeId);
     const [existing, existingMember] = await Promise.all([this.prisma.placeFollow.findUnique({
@@ -598,6 +617,8 @@ export class PlacesService {
         }),
       ]);
     }
+    // 23/11 #43: "Üyelik isteğini geri çek" bekleyen üyelik isteğini de siler.
+    await this.prisma.placeMember.deleteMany({ where: { placeId, userId, status: PlaceMemberStatus.pending } });
     return { following: false };
   }
 
@@ -744,13 +765,15 @@ export class PlacesService {
       await this.prisma.placeInvitation.create({ data: { placeId, inviterId: actor.id, inviteeId: user.id } });
     }
     const role = canManage ? input.role ?? PlaceMemberRole.member : PlaceMemberRole.member;
+    // 23/11 #42: kurucu ("manager") davetini yalnız kurucular, yönetici ("organizer") davetini kurucu ve yöneticiler gönderebilir.
     if (
-      role === PlaceMemberRole.organizer &&
+      role === PlaceMemberRole.manager &&
       actor.role === "user" &&
-      place.createdById !== actor.id
+      place.createdById !== actor.id &&
+      (await this.prisma.placeMember.findUnique({ where: { placeId_userId: { placeId, userId: actor.id } } }))?.role !== PlaceMemberRole.manager
     ) {
       throw new ForbiddenException(
-        "Organizatör rolünü yalnız mekân sahibi verebilir.",
+        "Kurucu rolünü yalnız mekân kurucuları verebilir.",
       );
     }
     const member = await this.prisma.$transaction(async (tx) => {
@@ -843,14 +866,14 @@ export class PlacesService {
         "Mekân sahibinin organizatör üyeliği kaldırılamaz.",
       );
     }
+    // 23/11 #18, #42: "manager" = mekân kurucusu; kurucu rolünü ve kurucuları yalnız kurucular değiştirebilir.
+    const actorIsFounder = actor.role !== "user" || place.createdById === actor.id || place.members.some((item) => item.role === PlaceMemberRole.manager);
     if (
-      input.role &&
-      actor.role === "user" &&
-      place.createdById !== actor.id &&
-      (input.role === PlaceMemberRole.manager || member.role === PlaceMemberRole.manager)
+      (input.role === PlaceMemberRole.manager || member.role === PlaceMemberRole.manager) &&
+      !actorIsFounder
     ) {
       throw new ForbiddenException(
-        "Mekân sahibi rolünü yalnız mekân kurucusu değiştirebilir.",
+        "Mekân kurucusu rolünü yalnız mekân kurucuları değiştirebilir.",
       );
     }
     return this.prisma.$transaction(async (tx) => {
@@ -865,6 +888,21 @@ export class PlacesService {
         } else if (input.status === PlaceMemberStatus.invited) {
           await tx.place.update({ where: { id: placeId }, data: { inviteCount: { increment: 1 } } });
         }
+      }
+      return updated;
+    }).then(async (updated) => {
+      // 23/11 #21: kullanıcı mekân yöneticisi/kurucusu yapılınca bilgilendirilir.
+      if (input.role && input.role !== member.role && input.role !== PlaceMemberRole.member) {
+        await this.notifications.dispatch({
+          userId,
+          topic: "place_manager",
+          type: "place_manager",
+          context: { actorId: actor.id, groupKey: `place_manager:${placeId}` },
+          title: input.role === PlaceMemberRole.manager ? "Mekân kuruculuğu" : "Mekân yöneticiliği daveti",
+          body: `${actor.username ? "@" + actor.username : "Bir üye"} sizi ${place.name} mekânının ${input.role === PlaceMemberRole.manager ? "kurucuları arasına ekledi" : "yöneticisi yaptı"}.`,
+          targetType: "place",
+          targetId: placeId,
+        });
       }
       return updated;
     });

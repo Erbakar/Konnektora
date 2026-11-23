@@ -1,6 +1,7 @@
 import { Bell, BellOff, CalendarDays, CircleDashed, Copy, Facebook, Instagram, LayoutGrid, Mail, QrCode, Send, Share2 } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useLanguage } from "../lib/i18n";
 import { formatTimeZoneOffset } from "../lib/formats";
 import { recordContentShare } from "../lib/api";
@@ -97,7 +98,8 @@ export function ShareDialog({
     { id: "tiktok", label: "TikTok", icon: <TikTokIcon/>, onClick: () => shareVisual("tiktok"), pending: pendingChannel === "tiktok" },
     { id: "whatsapp-status", label: tr ? "WhatsApp Durum" : "WhatsApp Status", icon: <CircleDashed size={26}/>, onClick: () => shareVisual("whatsapp_status"), pending: pendingChannel === "whatsapp_status" },
   ];
-  return (
+  // 23/11 #22: kartların (ör. yorum kartı) stilleri pencereyi bozmasın diye sayfa kökünde açılır.
+  return createPortal(
     <div
       className="emotion-modal share-sheet-modal"
       role="dialog"
@@ -146,7 +148,7 @@ export function ShareDialog({
         {qrOpen && qrImage ? <div className="share-qr-backdrop" onClick={() => setQrOpen(false)} role="presentation"><section aria-label={tr ? "QR kodu" : "QR code"} aria-modal="true" onClick={(event) => event.stopPropagation()} role="dialog"><img alt={`${title} QR`} height="300" src={qrImage} width="300"/><strong>{tr ? "Ekrana dokunarak paylaşıma dön" : "Tap the screen to return to sharing"}</strong></section></div> : null}
       </div>
     </div>
-  );
+  , document.body);
 }
 
 type VisualChannel = "instagram_dm" | "instagram_story" | "instagram_feed" | "tiktok" | "whatsapp_status";

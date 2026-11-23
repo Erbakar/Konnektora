@@ -98,6 +98,13 @@ export class PlacesController {
     return this.placesService.archive(id, user);
   }
 
+  /** 23/11 #75: mekân davet bağlantısıyla gelen üye, bağlantıyı paylaşanın davetlisi olarak kaydedilir. */
+  @Post("places/:id/invite-link")
+  @UseGuards(JwtAuthGuard)
+  inviteLink(@Param("id") id: string, @Body() body: { inviterId?: string }, @CurrentUser() user: User) {
+    return this.placesService.recordInviteLinkVisit(id, String(body?.inviterId ?? ""), user);
+  }
+
   @Post("places/:id/follow")
   @UseGuards(JwtAuthGuard)
   follow(@Param("id") id: string, @CurrentUser() user: User) {

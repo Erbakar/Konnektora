@@ -16,7 +16,9 @@ export class MailService {
 
   constructor(private readonly configService: ConfigService) {}
 
-  async sendWalletAccessEmail(input: { to: string; at: Date; ip: string; agent: string }) {
+  async sendWalletAccessEmail(input: { to: string; at: Date; ip: string; agent: string; section?: "wallet" | "curator" }) {
+    // 23/11 #10: küratör bölümüne girişte e-posta "Küratör bilgi ve ayarları"na giriş yapıldığını ve oturum bilgilerini söyler.
+    if (input.section === "curator") return this.send({ to: input.to, subject: "Konnektora küratör bilgi ve ayarları erişimi", text: `“Küratör bilgi ve ayarları” bölümüne SMS doğrulamasıyla giriş yapıldı. Zaman: ${input.at.toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" })} (TSİ). IP: ${input.ip}. Tarayıcı: ${input.agent}. Siz değilseniz hesabınızın parolasını hemen değiştirin.` });
     return this.send({ to: input.to, subject: "Konnektora cüzdan erişimi", text: `Cüzdanınıza SMS doğrulamasıyla erişildi. Zaman: ${input.at.toISOString()} (UTC). IP: ${input.ip}. Tarayıcı: ${input.agent}. Siz değilseniz hesabınızın parolasını hemen değiştirin.` });
   }
 
@@ -73,7 +75,7 @@ export class MailService {
     });
   }
 
-  async sendNotificationEmail(input: { to: string; name: string; title: string; body: string; targetType?: string; targetId?: string; targetUrl?: string; labelLink?: { label: string; url: string } }) {
+  async sendNotificationEmail(input: { to: string; name: string; title: string; body: string; targetType?: string; targetId?: string; targetUrl?: string; labelLink?: { label: string; url: string }; introParts?: Array<string | { text: string; url: string }> }) {
     const appUrl = this.getAppUrl();
     const targetUrl = input.targetUrl ? `${appUrl}${input.targetUrl}` : `${appUrl}/feed`;
     const safeName = this.escapeHtml(input.name);
@@ -87,7 +89,8 @@ export class MailService {
       to: input.to,
       subject: input.title,
       text: `Merhaba ${input.name}, ${input.body} ${targetUrl}`,
-      html: this.renderBrandedEmail({ preheader: this.escapeHtml(input.body), eyebrow: "YENİ BİLDİRİM", title: this.escapeHtml(input.title), intro: `Merhaba ${safeName}, ${safeBody}`, buttonLabel: "Konnektora'da görüntüle", buttonUrl: targetUrl, footerNote: "Bu e-posta, Konnektora bildirim tercihlerine göre gönderildi." })
+      // 23/11 #64: selamlama "YENİ BİLDİRİM" başlığının üstünde; mesajın parçası gibi görünmesin.
+      html: this.renderBrandedEmail({ preheader: this.escapeHtml(input.body), greeting: `Merhaba ${safeName},`, eyebrow: "YENİ BİLDİRİM", title: this.escapeHtml(input.title), intro: input.introParts?.length ? this.renderIntroParts(input.introParts, appUrl) : safeBody, buttonLabel: "Konnektora'da görüntüle", buttonUrl: targetUrl, footerNote: "Bu e-posta, Konnektora bildirim tercihlerine göre gönderildi." })
     });
   }
 
@@ -294,8 +297,13 @@ export class MailService {
     return this.configService.get<string>("PUBLIC_APP_URL")?.replace(/\/$/, "") ?? "http://localhost:5173";
   }
 
+  private renderIntroParts(parts: Array<string | { text: string; url: string }>, appUrl: string) {
+    return parts.map((part) => typeof part === "string" ? this.escapeHtml(part).replace(/\n/g, "<br>") : `<a href="${this.escapeHtml(`${appUrl}${part.url}`)}" style="color:#1d6b4f;text-decoration:underline;">${this.escapeHtml(part.text)}</a>`).join("");
+  }
+
   private renderBrandedEmail(input: {
     preheader: string;
+    greeting?: string;
     eyebrow: string;
     title: string;
     intro: string;
@@ -308,7 +316,7 @@ export class MailService {
     const highlights = input.highlights?.map((item) => `<tr><td style="padding:0 0 12px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;background:#f2f8f4;border:1px solid #dce7df;border-radius:14px;"><tr><td width="46" valign="top" style="padding:16px 0 16px 16px;color:#1d6545;font:800 12px/1.4 Arial,sans-serif;letter-spacing:.08em;">${item.number}</td><td style="padding:14px 16px 14px 8px;"><div style="color:#10231f;font:700 15px/1.4 Arial,sans-serif;">${item.title}</div><div style="padding-top:3px;color:#627169;font:400 13px/1.55 Arial,sans-serif;">${item.body}</div></td></tr></table></td></tr>`).join("") ?? "";
     const notice = input.notice ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;border-collapse:separate;background:#f2f8f4;border-left:4px solid #38a96c;border-radius:10px;"><tr><td style="padding:14px 16px;color:#365148;font:400 13px/1.55 Arial,sans-serif;">${input.notice}</td></tr></table>` : "";
 
-    return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${input.title}</title></head><body style="margin:0;padding:0;background:#f6f8f6;color:#10231f;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${input.preheader}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;background:#f6f8f6;border-collapse:collapse;"><tr><td align="center" style="padding:28px 12px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;max-width:620px;border-collapse:separate;background:#ffffff;border:1px solid #dce7df;border-radius:24px;overflow:hidden;"><tr><td style="padding:24px 30px;background:#103c2c;"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td width="42" height="42" align="center" style="width:42px;height:42px;border-radius:11px;background:#caff6a;color:#103c2c;font:900 21px/42px Arial,sans-serif;">K</td><td style="padding-left:12px;color:#ffffff;font:800 20px/1.2 Arial,sans-serif;letter-spacing:-.4px;">Konnektora</td></tr></table></td></tr><tr><td style="padding:42px 34px 34px;"><div style="margin-bottom:14px;color:#1d6545;font:800 11px/1.4 Arial,sans-serif;letter-spacing:.16em;">${input.eyebrow}</div><h1 style="margin:0;color:#10231f;font:800 32px/1.16 Arial,sans-serif;letter-spacing:-.8px;">${input.title}</h1><p style="margin:18px 0 0;color:#526159;font:400 16px/1.65 Arial,sans-serif;">${input.intro}</p><table role="presentation" cellspacing="0" cellpadding="0" style="margin:28px 0;"><tr><td style="border-radius:10px;background:#1d6545;"><a href="${input.buttonUrl}" style="display:inline-block;padding:14px 22px;color:#ffffff;font:700 15px/1.2 Arial,sans-serif;text-decoration:none;">${input.buttonLabel} →</a></td></tr></table>${notice}${highlights ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:28px;border-collapse:collapse;">${highlights}</table>` : ""}<p style="margin:28px 0 0;color:#7a8780;font:400 12px/1.6 Arial,sans-serif;">Buton çalışmıyorsa bu bağlantıyı tarayıcında aç:<br><a href="${input.buttonUrl}" style="color:#1d6545;text-decoration:underline;word-break:break-all;">${input.buttonUrl}</a></p></td></tr><tr><td style="padding:22px 34px;background:#f2f8f4;border-top:1px solid #dce7df;"><p style="margin:0;color:#627169;font:400 12px/1.6 Arial,sans-serif;">${input.footerNote}</p><p style="margin:10px 0 0;color:#87938d;font:400 11px/1.5 Arial,sans-serif;">© ${new Date().getFullYear()} Konnektora · Güvenilir bağlantılar, anlamlı topluluklar.</p></td></tr></table></td></tr></table></body></html>`;
+    return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${input.title}</title></head><body style="margin:0;padding:0;background:#f6f8f6;color:#10231f;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${input.preheader}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;background:#f6f8f6;border-collapse:collapse;"><tr><td align="center" style="padding:28px 12px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;max-width:620px;border-collapse:separate;background:#ffffff;border:1px solid #dce7df;border-radius:24px;overflow:hidden;"><tr><td style="padding:24px 30px;background:#103c2c;"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td width="42" height="42" align="center" style="width:42px;height:42px;border-radius:11px;background:#caff6a;color:#103c2c;font:900 21px/42px Arial,sans-serif;">K</td><td style="padding-left:12px;color:#ffffff;font:800 20px/1.2 Arial,sans-serif;letter-spacing:-.4px;">Konnektora</td></tr></table></td></tr><tr><td style="padding:42px 34px 34px;">${input.greeting ? `<p style="margin:0 0 18px;color:#10231f;font:600 16px/1.5 Arial,sans-serif;">${input.greeting}</p>` : ""}<div style="margin-bottom:14px;color:#1d6545;font:800 11px/1.4 Arial,sans-serif;letter-spacing:.16em;">${input.eyebrow}</div><h1 style="margin:0;color:#10231f;font:800 32px/1.16 Arial,sans-serif;letter-spacing:-.8px;">${input.title}</h1><p style="margin:18px 0 0;color:#526159;font:400 16px/1.65 Arial,sans-serif;">${input.intro}</p><table role="presentation" cellspacing="0" cellpadding="0" style="margin:28px 0;"><tr><td style="border-radius:10px;background:#1d6545;"><a href="${input.buttonUrl}" style="display:inline-block;padding:14px 22px;color:#ffffff;font:700 15px/1.2 Arial,sans-serif;text-decoration:none;">${input.buttonLabel} →</a></td></tr></table>${notice}${highlights ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:28px;border-collapse:collapse;">${highlights}</table>` : ""}<p style="margin:28px 0 0;color:#7a8780;font:400 12px/1.6 Arial,sans-serif;">Buton çalışmıyorsa bu bağlantıyı tarayıcında aç:<br><a href="${input.buttonUrl}" style="color:#1d6545;text-decoration:underline;word-break:break-all;">${input.buttonUrl}</a></p></td></tr><tr><td style="padding:22px 34px;background:#f2f8f4;border-top:1px solid #dce7df;"><p style="margin:0;color:#627169;font:400 12px/1.6 Arial,sans-serif;">${input.footerNote}</p><p style="margin:10px 0 0;color:#87938d;font:400 11px/1.5 Arial,sans-serif;">© ${new Date().getFullYear()} Konnektora · Güvenilir bağlantılar, anlamlı topluluklar.</p></td></tr></table></td></tr></table></body></html>`;
   }
 
   private escapeHtml(value: string) {

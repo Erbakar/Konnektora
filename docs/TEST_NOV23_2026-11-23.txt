@@ -1,0 +1,35 @@
+23/11 TEST TURU — 79 MADDE (Konnektora Testler › 23/11)
+
+Önemli kök nedenler
+- İlgili Kullanıcılar listesi oturum bilgisi göndermeden isteniyordu: sunucu herkesi ziyaretçi sayıyor, Bekleyenler / Yasaklananlar / kendi davetlilerim boş geliyordu (#35, #36, #40, #15, #19). Düzeltildi.
+- "Onay gerekli" mekâna takip isteği gönderen kullanıcının üyeliği "pending" oluyor, ortak şemada bu durum olmadığı için mekân sayfası, mekân listesi ve ana sayfadaki Mekânlar alanı çöküyordu (#43). Düzeltildi.
+- Backoffice ileti listeleri katı şemayla doğrulanıyordu; tek uyumsuz kayıt listeyi boş gösteriyor ama sayaç sayıyordu (#8). Okuma şeması esnetildi; hata olursa "Mesajlar yüklenemedi" yazıyor.
+- Etkinlik düzenlemede, mevcut Konnektora biletleri her kayıtta yeniden "bilet satışı için KYB" kontrolüne giriyordu; katılım tipini değiştirmek bile engelleniyordu (#41). Kontrol artık yalnız yeni/değişen Konnektora biletinde; ekranda sunucunun gerçek sebebi yazıyor.
+- Profil tamamlama formunda seçilmeyen şehir "null" metni olarak kaydediliyordu (#51). Kaynak düzeltildi; mevcut "null" kayıtlar migration ile temizlenir.
+
+Kapsam
+#1 kart hizası (kendi kartında da yıldız), #2 İlgi Alanları filtresinde Ülke/Şehir açılır liste, #3 Ortak ilgi alanları: en uyumlu ilk 500 üye (takip edilenler dahil), #4 bilgi satırları tek yazı boyutu,
+#5 etiket boş metni, #6–#7 #78–#79 konum satırı rolün altında aynı stilde, #8 Backoffice iletiler, #9 çoklu referans küratör (veri, hesap, Backoffice formu),
+#10 Küratör bilgi ve ayarları (SMS kodlu giriş — cüzdanla aynı altyapı; Anlaşma kapsamı, Cüzdan, Hesap hareketleri + "Gelir kaynağı tipi" filtresi ve Excel, Ödeme talep et → Backoffice para çekme listesi; ödendi işaretlenince küratör hesabına ödeme hareketi),
+#11 "Resmi şehir küratörü", #12 Üye detayı ayrı görünüm + "Listeye geri dön", #13 #14 #39 yönetici sekmeleri ve bekleyen sayısı yalnız kurucu/yöneticilere,
+#15–#16 #19–#20 Davetliler, #17–#18 #42 rol adları (Kurucu / Yönetici; "Organizatör yap" kaldırıldı; kurucu yapma yalnız kuruculara), #21 yönetici yapılınca bildirim,
+#22 Paylaş penceresi kartın stillerinden etkilenmesin diye sayfa kökünde açılıyor, #23–#25 KYB (boş isteğe bağlı alanlar, sekme geçişinde veri korunması, kimlik ön/arka yüz ayrı, Kuruluş ülkesi listesi),
+#26–#28 mobil başlıklar, #29–#30 profil "oluştur" bağlantı boşluğu, #31 İşletmeler SSS 4 madde, #32 Profili düzenle açıklaması, #33 doğrulama e-postası gönder,
+#34 boşluk, #35–#36 yasaklananlar, #37–#38 sayı kaldırıldı, #40 bekleyenler, #41 gizli yapma, #43 üyelik isteği ve çökme, #44 bildirim sırası ve kırmızı Reddet,
+#45 "GİZLİ: SADECE DAVETLİLER GÖREBİLİR", #46 bulunamadı metni, #47 Geçmiş sıralaması, #48–#49 konum/adres biçimi,
+#50 yeni arama başlığı (wireframe State 1–4), İşletmeler için butonu, tablet sırası, mobil altbilgide "Konnektora" açık,
+#51 null şehir, #52 kendi yıldızı + "Kendinizi takip edemezsiniz.", #53 "Diğer tüm gönderileri de göster", #54 #60 #61 Medya (N) sekmesi,
+#55–#56 mobilde Paylaş menüde, menü alttan açılan panel, #57 Akış mobil kaydırmalı barlar, #58 medya lightbox (kaydırma, 30 karakter açıklama, Sağa döndür, Resmi kırp),
+#59 metin taşması, #62 Postane (11 alt madde), #63 ortak medya seçici ve yükleme yüzdesi, #64–#66 e-posta şablonları, #67 "Bu etiket zaten profile yapışık.",
+#68–#69 etiket bildirimleri, #70 anket metni/genişlik, #71 Akış'ta anket, #72 menü kapanması, #73 silme penceresi, #74–#75 davet bağlantısında davet eden, #76–#77 Guest List metinleri.
+
+Doğrulama (yerel QA)
+- API 539 test, web 332 test geçti; küratör finansı entegrasyon testi (20) yerel QA veritabanında geçti; lint ve build temiz.
+- Tarayıcı: Yasaklananlar sekmesi, menü (Organizatör yap yok), katılımcı gözüyle yönetici sekmeleri gizli, mobil başlıklar, arama başlığı 4 durum, Postane görünümü.
+- API: çoklu referans anlaşması, küratör uçları (SMS onayıyla), ödeme talebi → ödendi → bakiye; davet bağlantısı, doğrulama e-postası.
+- 360°: 29 ana sayfa hatasız açıldı.
+
+Bekleyen / sınırlar
+- #10 SMS kodu gerçek SMS sağlayıcısı bağlanınca çalışır (cüzdanla aynı). SMS entegrasyonu ayrı iş.
+- #74 gizli etkinlikte davet bağlantısı, etkinliği göremeyen kişi için kayıt oluşturamaz.
+- #58 döndürme/kırpma resimlerde; videolar döndürülmez.

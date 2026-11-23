@@ -30,7 +30,7 @@ import {
   getUserSession,
   listFollowing,
   listContentComments,
-  uploadContentMedia,
+  uploadContentMediaWithProgress,
   toggleContentCommentLike,
   updateContentComment,
   unfollowUser,
@@ -46,6 +46,9 @@ import { userProfilePath } from "./UserIdentityLink";
 import { ReportDialog } from "./ReportDialog";
 import { ComposerTips } from "./ComposerTips";
 import { ShareDialog } from "./ContentDialogs";
+import { hasPostMedia, totalPostMedia } from "../lib/postMedia";
+import { MediaPicker } from "./MediaPicker";
+import { useIsMobile } from "../lib/useIsMobile";
 import { useLanguage } from "../lib/i18n";
 import { useComposerDraft } from "../lib/composerDrafts";
 import { DraftLeaveGuard } from "./DraftLeaveGuard";
@@ -75,11 +78,12 @@ export function ContentComments({
   const draftScope = targetType === "event" || targetType === "place" ? targetType : null;
   const [body, setBody, clearBodyDraft] = useComposerDraft(draftScope ? user?.id : null, draftScope ?? "event", targetId);
   const [media, setMedia] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<Record<number, number>>({});
   const [pollDraft, setPollDraft] = useState<PollDraft | null>(null);
   const [pollError, setPollError] = useState("");
   const pollKind = targetType === "event" || targetType === "place" ? targetType : null;
   const [filter, setFilter] = useState<
-    "all" | "organizer" | "following" | "popular" | "photos" | "videos"
+    "all" | "organizer" | "following" | "popular" | "media"
   >("all");
   const following = useQuery({
     queryKey: ["following", user?.id],
@@ -118,10 +122,14 @@ export function ContentComments({
         draft.pollPending = false;
       }
       const mediaType = targetType === "event" ? "event_comment" : targetType === "place" ? "place_comment" : "tag_comment";
+      // 23/11 #63: ortak seçicide her dosyanın yüklenme yüzdesi
+      const total = draft.files.length;
       while (draft.files.length) {
-        await uploadContentMedia(mediaType, draft.id, draft.files[0]!);
+        const index = total - draft.files.length;
+        await uploadContentMediaWithProgress(mediaType, draft.id, draft.files[0]!, (percent) => setUploadProgress({ [index]: percent }));
         draft.files.shift();
       }
+      setUploadProgress({});
       pendingUpload.current = null;
       return draft.id;
     },
@@ -146,14 +154,7 @@ export function ContentComments({
         (filter === "following" &&
           Boolean(comment.authorId && followingIds.has(comment.authorId))) ||
         filter === "popular" ||
-        (filter === "photos" &&
-          (comment.media?.some((item) => item.type === "image") ||
-            /https?:\/\/\S+\.(?:png|jpe?g|webp|gif)/i.test(comment.body))) ||
-        (filter === "videos" &&
-          (comment.media?.some((item) => item.type === "video") ||
-            /https?:\/\/\S+\.(?:mp4|webm|mov)|youtu(?:\.be|be\.com)|vimeo/i.test(
-              comment.body,
-            ))),
+        (filter === "media" && hasPostMedia(comment)),
     )
     .sort((a, b) =>
       filter === "popular"
@@ -186,8 +187,8 @@ export function ContentComments({
               `${language === "tr" ? "Takip ettiklerim" : "Following"} (${(comments.data ?? []).filter((item) => Boolean(item.authorId && followingIds.has(item.authorId))).length})`,
             ],
             ["popular", language === "tr" ? "Popüler" : "Popular"],
-            ["photos", language === "tr" ? "Fotoğraflar" : "Photos"],
-            ["videos", language === "tr" ? "Videolar" : "Videos"],
+            // 23/11 #60, #61: Fotoğraflar / Videolar yerine tek "Medya" sekmesi
+            ["media", `${language === "tr" ? "Medya" : "Media"} (${totalPostMedia(comments.data ?? [])})`],
           ] as const
         ).map(([value, label]) => (
           <button
@@ -350,9 +351,7 @@ export function ContentComments({
               accept="image/*,video/mp4,video/webm"
               hidden
               multiple
-              onChange={(event) =>
-                setMedia([...(event.target.files ?? [])].slice(0, 50))
-              }
+              onChange={(event) => { const picked = [...(event.target.files ?? [])]; event.target.value = ""; setMedia((current) => [...current, ...picked].slice(0, 50)); }}
               type="file"
             />
           </label>
@@ -361,17 +360,8 @@ export function ContentComments({
           {pollKind && pollDraft ? <PollComposer draft={pollDraft} kind={pollKind} onChange={(next) => { setPollDraft(next); setPollError(""); }} onRemove={() => { setPollDraft(null); setPollError(""); }} tr={language === "tr"}/> : null}
           {pollError ? <p className="form-error" role="alert">{pollError}</p> : null}
 
-          {media.length ? (
-            <span className="comment-media-count">
-              {media.filter((file) => file.type.startsWith("image/")).length}{" "}
-              {language === "tr" ? "resim" : "images"},{" "}
-              {media.filter((file) => file.type.startsWith("video/")).length}{" "}
-              {language === "tr" ? "video seçildi" : "videos selected"}{" "}
-              {create.isPending ? (
-                <LoaderCircle className="spin" size={15} />
-              ) : null}
-            </span>
-          ) : null}
+          <MediaPicker disabled={create.isPending} files={media} language={language} max={50} onChange={setMedia} progress={uploadProgress}/>
+          {create.isPending ? <LoaderCircle className="spin" size={15} /> : null}
           {draftScope ? <DraftLeaveGuard active={Boolean(body.trim()) && !create.isPending} kind="post" onDiscard={clearBodyDraft} /> : null}
         </form>
       ) : (
@@ -414,6 +404,7 @@ function CommentActions({
   const [reportOpen, setReportOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const isMobile = useIsMobile();
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(comment.body);
   const [replying, setReplying] = useState(false);
@@ -498,15 +489,17 @@ function CommentActions({
           <Reply size={14} />
           {comment.replies?.length ?? 0} {language === "tr" ? "yorum" : "replies"}
         </button> : null}
-        <button onClick={() => setShareOpen(true)} type="button">
+        {isMobile ? null : <button className="post-share-inline" onClick={() => setShareOpen(true)} type="button">
             <Share2 size={14} />
             {language === "tr" ? "Paylaş" : "Share"}
-          </button>
+          </button>}
         <details className="action-menu comment-action-menu">
           <summary aria-label={language === "tr" ? "Yorum aksiyonları" : "Comment actions"} role="button">
             <MoreVertical size={16} />
           </summary>
           <div>
+            {/* 23/11 #56: mobilde Paylaş menünün en üstünde */}
+            {isMobile ? <button className="menu-share-mobile" onClick={() => setShareOpen(true)} type="button"><Share2 size={14}/>{language === "tr" ? "Paylaş" : "Share"}</button> : null}
             {comment.authorId && comment.authorId !== currentUserId ? (
               <Link to={`/messages?peer=${comment.authorId}`}>
                 <Mail size={14} />

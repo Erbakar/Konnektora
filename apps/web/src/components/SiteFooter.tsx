@@ -8,7 +8,7 @@ type FooterSection = "konnektora" | "discover" | "help" | "legal";
 
 export function SiteFooter() {
   const { language, setLanguage, t } = useLanguage();
-  const [openSection, setOpenSection] = useState<FooterSection | null>("discover");
+  const [openSection, setOpenSection] = useState<FooterSection | null>("konnektora");
   const toggleSection = (section: FooterSection) => {
     setOpenSection((current) => current === section ? null : section);
   };

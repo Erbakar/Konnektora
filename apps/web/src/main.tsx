@@ -24,6 +24,7 @@ import "./styles/nov17-stats.css";
 import "./styles/nov17-events.css";
 import "./styles/nov18-mobile.css";
 import "./styles/nov19.css";
+import "./styles/nov23.css";
 
 const chunkReloadKey = "konnektora:chunk-reload";
 const chunkLoadErrorPattern =
@@ -154,6 +155,9 @@ const BusinessLandingPage = lazy(() =>
   import("./pages/BusinessLandingPage").then((module) => ({
     default: module.BusinessLandingPage,
   })),
+);
+const CuratorSettingsPage = lazy(() =>
+  import("./pages/CuratorSettingsPage").then((module) => ({ default: module.CuratorSettingsPage })),
 );
 const StorePage = lazy(() =>
   import("./pages/StorePage").then((module) => ({ default: module.StorePage })),
@@ -356,6 +360,7 @@ const router = createBrowserRouter([
           { path: "settings/notifications", element: <SettingsSectionPage section="notifications" /> },
           { path: "settings/privacy", element: <SettingsSectionPage section="privacy" /> },
           { path: "settings/business", element: <SettingsSectionPage section="business" /> },
+          { path: "settings/curator", element: <CuratorSettingsPage /> },
           { path: "contacts", element: <ContactsPage /> },
           { path: "verify-email", element: <VerifyEmailPage /> },
           { path: "reset-password", element: <ResetPasswordPage /> },

@@ -5,7 +5,7 @@ import { CurrentUser } from "../auth/current-user.decorator";
 import { AdminGuard } from "../auth/admin.guard";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RequirePermissions } from "../auth/permissions";
-import { CuratorAgreementDto, CuratorEntryDto } from "./curator-finance.dto";
+import { CuratorAgreementDto, CuratorEntryDto, CuratorPayoutRequestDto } from "./curator-finance.dto";
 import { CuratorFinanceService } from "./curator-finance.service";
 @Controller("admin/finance/curators") @UseGuards(AdminGuard) @RequirePermissions("finance.manage")
 export class AdminCuratorFinanceController {
@@ -23,4 +23,8 @@ export class AdminCuratorFinanceController {
 export class CuratorFinanceController {
  constructor(private readonly finance: CuratorFinanceService) {}
  @Get() ledger(@CurrentUser() user: User, @Query() query: Record<string,string>) { return this.finance.ownLedger(user, query); }
+ // 23/11 #10: Küratör bilgi ve ayarları — SMS kodlu erişim (WalletGuard) arkasında yalnız görüntüleme ve ödeme talebi.
+ @Get("agreement") agreement(@CurrentUser() user: User) { return this.finance.ownAgreement(user); }
+ @Get("wallet") wallet(@CurrentUser() user: User) { return this.finance.ownWallet(user); }
+ @Post("payout-requests") payoutRequest(@CurrentUser() user: User, @Body() body: CuratorPayoutRequestDto) { return this.finance.requestPayout(user, body); }
 }

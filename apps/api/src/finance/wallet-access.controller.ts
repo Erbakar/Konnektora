@@ -1,11 +1,11 @@
 import { Body, CanActivate, Controller, ExecutionContext, Injectable, Post, Req, UseGuards } from "@nestjs/common";
-import { IsString, Matches } from "class-validator";
+import { IsIn, IsOptional, IsString, Matches } from "class-validator";
 import { Request } from "express";
 import { User } from "@prisma/client";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { WalletAccessService } from "./wallet-access.service";
-class WalletCodeDto { @IsString() @Matches(/^\d{8}$/) code!: string; }
+class WalletCodeDto { @IsString() @Matches(/^\d{8}$/) code!: string; @IsOptional() @IsIn(["wallet", "curator"]) section?: "wallet" | "curator"; }
 @Injectable()
 export class WalletGuard implements CanActivate {
   constructor(private readonly wallet: WalletAccessService) {}
@@ -20,6 +20,6 @@ export class WalletGuard implements CanActivate {
 export class WalletAccessController {
   constructor(private readonly wallet: WalletAccessService) {}
   @Post("request") request(@CurrentUser() user: User, @Req() req: Request) { return this.wallet.request(user, req.get("authorization") ?? ""); }
-  @Post("verify") verify(@CurrentUser() user: User, @Req() req: Request, @Body() body: WalletCodeDto) { return this.wallet.verify(user, req.get("authorization") ?? "", body.code, { ip: req.ip ?? "", agent: (req.get("user-agent") ?? "").slice(0, 300) }); }
+  @Post("verify") verify(@CurrentUser() user: User, @Req() req: Request, @Body() body: WalletCodeDto) { return this.wallet.verify(user, req.get("authorization") ?? "", body.code, { ip: req.ip ?? "", agent: (req.get("user-agent") ?? "").slice(0, 300), section: body.section }); }
   @Post("close") close(@CurrentUser() user: User, @Req() req: Request) { return this.wallet.close(user, req.get("authorization") ?? ""); }
 }
