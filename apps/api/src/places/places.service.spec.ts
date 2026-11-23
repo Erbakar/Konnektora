@@ -264,11 +264,11 @@ describe("PlacesService", () => {
     });
   });
 
-  it("prevents a manager from changing member roles", async () => {
+  it("prevents a place manager (organizer) from making founders", async () => {
     place.findUnique.mockResolvedValue({
       id: "place-1",
       createdById: "owner-1",
-      members: [{ role: "manager" }],
+      members: [{ role: "organizer" }],
     });
     placeMember.findUnique.mockResolvedValue({
       placeId: "place-1",

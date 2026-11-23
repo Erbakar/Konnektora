@@ -303,7 +303,8 @@ export function EventInviteManagementPage() {
     <InviteAssessmentProvider kind="event" id={event.data.id}><ManagementShell
       title={event.data.title}
       back={`/events/${event.data.slug}`}
-      shareUrl={`${window.location.origin}/events/${event.data.slug}`}
+      // 23/11 #74: bağlantı, paylaşan kişiyi taşır; gelen üye onun davetlisi olarak kaydedilir.
+      shareUrl={`${window.location.origin}/events/${event.data.slug}${user ? `?ref=${user.id}` : ""}`}
       kind={tr ? "Etkinlik" : "Event"}
     >
       <div hidden={checkInMode}>
@@ -333,6 +334,7 @@ export function EventInviteManagementPage() {
             method={inviteMethod as "username" | "email" | "phone"}
             pending={invite.isPending}
             canAssignRole={canManage}
+            canAssignFounder={Boolean(event.data && user && (event.data.createdById === user.id || (["accepted", "attended", "not_attending"].includes(event.data.viewerParticipation?.status ?? "") && event.data.viewerParticipation!.role === "manager") || ["admin", "super_admin"].includes(user.role)))}
             onSubmit={(form) =>
               invite.mutate({
                 username: form.username,
@@ -752,7 +754,7 @@ export function PlaceInviteManagementPage() {
     <InviteAssessmentProvider kind="place" id={place.data.id}><ManagementShell
       title={place.data.name}
       back={`/places/${place.data.slug}`}
-      shareUrl={`${window.location.origin}/places/${place.data.slug}`}
+      shareUrl={`${window.location.origin}/places/${place.data.slug}${user ? `?ref=${user.id}` : ""}`}
       kind={tr ? "Mekân" : "Place"}
     >
       <div hidden={checkInMode}>
@@ -785,6 +787,7 @@ export function PlaceInviteManagementPage() {
             method={inviteMethod as "username" | "email" | "phone"}
             pending={invite.isPending}
             canAssignRole={canManage}
+            canAssignFounder={Boolean(place.data && user && (place.data.createdById === user.id || (place.data.viewerMembership?.status === "accepted" && place.data.viewerMembership.role === "manager") || ["admin", "super_admin"].includes(user.role)))}
             memberTarget
             onSubmit={(form) =>
               invite.mutate({
@@ -1492,12 +1495,14 @@ function InviteForm({
   method,
   pending,
   canAssignRole = true,
+  canAssignFounder = false,
   memberTarget = false,
   onSubmit,
 }: {
   method: "username" | "email" | "phone";
   pending: boolean;
   canAssignRole?: boolean;
+  canAssignFounder?: boolean;
   memberTarget?: boolean;
   onSubmit: (input: {
     username?: string;
@@ -1574,8 +1579,9 @@ function InviteForm({
                     ? "Katılımcı"
                     : "Attendee"}
               </option>
-              <option value="manager">{tr ? "Sahip" : "Owner"}</option>
-              <option value="organizer">{tr ? "Organizatör" : "Organizer"}</option>
+              {/* 23/11 #42: "Kurucu" yalnız kuruculara, "Yönetici" kurucu ve yöneticilere gösterilir. */}
+              {canAssignFounder ? <option value="manager">{tr ? "Kurucu" : "Founder"}</option> : null}
+              <option value="organizer">{tr ? "Yönetici" : "Manager"}</option>
             </select>
           </label>
         ) : null}
@@ -2426,9 +2432,9 @@ function translateRole(role: string, language: "tr" | "en") {
   const labels: Record<string, [string, string]> = {
     attendee: ["Katılımcı", "Attendee"],
     member: ["Üye", "Member"],
-    manager: ["Sahip", "Owner"],
-    organizer: ["Organizatör", "Organizer"],
-    owner: ["Sahip", "Owner"],
+    manager: ["Kurucu", "Founder"],
+    organizer: ["Yönetici", "Manager"],
+    owner: ["Kurucu", "Founder"],
   };
   const label = labels[role];
   return label ? label[language === "tr" ? 0 : 1] : role;

@@ -76,10 +76,14 @@ export function RelatedUsersPage({
     queryFn: async () => {
       if (kind === "event") {
         const event = await getEvent(slug);
+        const role = ["accepted", "attended", "not_attending"].includes(event.viewerParticipation?.status ?? "") ? event.viewerParticipation!.role : null;
         return {
           id: event.id,
           title: event.title,
           isCreator: event.createdById === session?.id,
+          // 23/11 #17, #39, #42: kurucu = etkinliği açan + "manager" rolü; yönetici = "organizer" rolü.
+          isFounder: Boolean(session && (event.createdById === session.id || role === "manager")),
+          isTeam: Boolean(session && (event.createdById === session.id || role === "manager" || role === "organizer")),
           canManage: Boolean(
             session &&
             (event.createdById === session.id ||
@@ -94,13 +98,16 @@ export function RelatedUsersPage({
       if (kind === "tag") {
         const tag = (await listTags()).find((item) => item.slug === slug);
         if (!tag) throw new Error("Etiket bulunamadı.");
-        return { id: tag.id, title: `#${tag.name}`, canManage: false };
+        return { id: tag.id, title: `#${tag.name}`, canManage: false, isFounder: false, isTeam: false };
       }
       const place = await getPlace(slug);
+      const placeRole = place.viewerMembership?.status === "accepted" ? place.viewerMembership.role : null;
       return {
         id: place.id,
         title: place.name,
         isCreator: place.createdById === session?.id,
+        isFounder: Boolean(session && (place.createdById === session.id || placeRole === "manager")),
+        isTeam: Boolean(session && (place.createdById === session.id || placeRole === "manager" || placeRole === "organizer")),
         canManage: Boolean(
           session &&
           (place.createdById === session.id ||
@@ -183,7 +190,7 @@ export function RelatedUsersPage({
             (Number.isNaN(maximumAge) || age <= maximumAge!));
         return (
           (!country || user.country === country) &&
-          (filter !== "checked-in" || target.data?.canManage) &&
+          (!["checked-in", "pending", "declined", "banned"].includes(filter) || target.data?.isTeam) &&
           matchesQuery &&
           matchesFilter &&
           matchesGender &&
@@ -191,7 +198,7 @@ export function RelatedUsersPage({
           matchesAge
         );
       }),
-    [advancedFilters, ageRange, country, filter, followingIds, gender, query, sentiment, users.data, target.data?.canManage],
+    [advancedFilters, ageRange, country, filter, followingIds, gender, query, sentiment, users.data, target.data?.isTeam],
   );
   const toggleFollow = useMutation({
     mutationFn: (id: string) =>
@@ -225,6 +232,9 @@ export function RelatedUsersPage({
       }),
   });
 
+  const roleAction = (userId: string, role: string) => kind === "event" ? eventParticipantAction.mutate({ userId, changes: { role } }) : placeMemberAction.mutate({ userId, changes: { role } });
+  const statusAction = (userId: string, status: string) => kind === "event" ? eventParticipantAction.mutate({ userId, changes: { status } }) : placeMemberAction.mutate({ userId, changes: { status } });
+
   return (
     <div className="page related-users-page">
       <Link className="back-link" to={back}>
@@ -250,10 +260,6 @@ export function RelatedUsersPage({
           </p>
         </div>
         {session && kind !== "tag" ? <Link className="primary-action related-invite-link" to={`${back}/invites`}><UserPlus size={18}/>{kind === "event" ? t("Etkinliğe davet et", "Invite to event") : t("Mekâna davet et", "Invite to place")}</Link> : null}
-        <span>
-          <Users size={18} />
-          {users.data?.length ?? 0} {t("kişi", "people")}
-        </span>
       </header>
       <section
         className="related-users-tools"
@@ -354,7 +360,7 @@ export function RelatedUsersPage({
               )
             </button>
           ) : null}
-          {kind === "event" && target.data?.canManage ? (
+          {kind === "event" && target.data?.isTeam ? (
             <button
               className={filter === "pending" ? "active" : ""}
               onClick={() => setFilter("pending")}
@@ -380,7 +386,7 @@ export function RelatedUsersPage({
               )
             </button>
           ) : null}
-          {kind === "place" && target.data?.canManage ? (
+          {kind === "place" && target.data?.isTeam ? (
             <button
               className={filter === "pending" ? "active" : ""}
               onClick={() => setFilter("pending")}
@@ -424,7 +430,7 @@ export function RelatedUsersPage({
               {t("Yöneticiler", "Organisers")}
             </button>
           ) : null}
-          {kind === "event" && target.data?.canManage ? (
+          {kind === "event" && target.data?.isTeam ? (
             <button
               className={filter === "checked-in" ? "active" : ""}
               onClick={() => setFilter("checked-in")}
@@ -432,7 +438,7 @@ export function RelatedUsersPage({
               Check-in
             </button>
           ) : null}
-          {kind !== "tag" && target.data?.canManage ? (
+          {kind !== "tag" && target.data?.isTeam ? (
             <button
               className={filter === "declined" ? "active" : ""}
               onClick={() => setFilter("declined")}
@@ -440,7 +446,7 @@ export function RelatedUsersPage({
               {t("Reddedilenler", "Declined")}
             </button>
           ) : null}
-          {kind !== "tag" && target.data?.canManage ? (
+          {kind !== "tag" && target.data?.isTeam ? (
             <button
               className={filter === "banned" ? "active" : ""}
               onClick={() => setFilter("banned")}
@@ -450,6 +456,7 @@ export function RelatedUsersPage({
           ) : null}
         </div>
 
+        {filter === "invited" && kind !== "tag" ? <p className="related-invited-note" role="note">{kind === "event" ? t("Sadece sizin davet ettiğiniz üyeler burada listelenir. Etkinlik yöneticileri ise tüm davetlileri görebilir.", "Only members you invited are listed here. Event managers can see all invitees.") : t("Sadece sizin davet ettiğiniz üyeler burada listelenir. Mekân yöneticileri ise tüm davetlileri görebilir.", "Only members you invited are listed here. Place managers can see all invitees.")}</p> : null}
       </section>
       <MemberSignalsProvider ids={visibleUsers.map(user=>user.id)}>
       <section
@@ -480,18 +487,18 @@ export function RelatedUsersPage({
                   ? user.sentiment
                     ? `${user.sentiment === "like" ? t("Beğeniyorum", "Likes it") : user.sentiment === "dislike" ? t("Beğenmiyorum", "Dislikes it") : t("Nötrüm", "Feels neutral")} ${t("dedi", "")}${/paylaşım|post|yorum/i.test(user.relation) ? t(" · paylaşım yaptı", " · posted") : ""}`
                     : t("Paylaşım yaptı", "Posted")
-                  : <>{user.relation === "creator" ? <ShieldCheck size={15}/> : user.relation === "manager" ? <BriefcaseBusiness size={15}/> : null}{localizeRelation(user.relation, language, kind)}</>}
+                  : <>{["creator", "manager"].includes(user.relation) ? <ShieldCheck size={15}/> : user.relation === "organizer" ? <BriefcaseBusiness size={15}/> : null}{localizeRelation(user.relation, language, kind)}</>}
               </span>
+              {user.city || user.country ? (
+                <span className="related-user-location">
+                  <MapPin size={14} />
+                  {memberLocationLabel(user.city, user.country, language)}
+                </span>
+              ) : null}
               {user.birthDate ? (
                 <small>{ageFrom(user.birthDate)} {t("yaşında", "years old")}</small>
               ) : null}
               <MemberCompatibility id={user.id} commonTagCount={user.commonTagCount} matchScore={matchScores.data?.get(user.id)} matchLabel={matchLabel} matchKind={kind === "place" ? "place" : "event"}/>
-              {user.city || user.country ? (
-                <small className="related-user-location">
-                  <MapPin size={14} />
-                  {memberLocationLabel(user.city, user.country, language)}
-                </small>
-              ) : null}
               {user.checkedIn ? (
                 <small>
                   <CheckCircle2 size={13} />
@@ -518,128 +525,39 @@ export function RelatedUsersPage({
                     <Link to={`/messages?peer=${user.id}`}>
                       <Mail size={15} /> {t("Mesaj gönder", "Send message")}
                     </Link>
-                    {kind === "event" && target.data?.canManage && user.relation !== "creator" ? (
+                    {kind !== "tag" && target.data?.isTeam && user.relation !== "creator" && (target.data.isFounder || user.relation !== "manager") ? (
                       <>
-                        {target.data.isCreator ? (
+                        {/* 23/11 #17, #18: "Organizatör yap" kaldırıldı; kurucu yapma yalnız diğer kuruculara görünür. */}
+                        {target.data.isFounder ? (
                           <button
-                            disabled={eventParticipantAction.isPending}
-                            onClick={() =>
-                              eventParticipantAction.mutate({
-                                userId: user.id,
-                                changes: {
-                                  role:
-                                    user.relation === "manager"
-                                      ? "attendee"
-                                      : "manager",
-                                },
-                              })
-                            }
+                            disabled={eventParticipantAction.isPending || placeMemberAction.isPending}
+                            onClick={() => roleAction(user.id, user.relation === "manager" ? (kind === "event" ? "attendee" : "member") : "manager")}
                             type="button"
                           >
                             <ShieldCheck size={15}/>{user.relation === "manager"
-                              ? t("Etkinlik yöneticiliğinden çıkar", "Remove event manager role")
-                              : t("Etkinlik yöneticisi yap", "Make event manager")}
+                              ? kind === "event" ? t("Etkinlik kurucuları arasından çıkar", "Remove event founder role") : t("Mekân kurucuları arasından çıkar", "Remove place founder role")
+                              : kind === "event" ? t("Etkinlik kurucusu yap", "Make event founder") : t("Mekân kurucusu yap", "Make place founder")}
                           </button>
                         ) : null}
-                        <button
-                          disabled={eventParticipantAction.isPending}
-                          onClick={() =>
-                            eventParticipantAction.mutate({
-                              userId: user.id,
-                              changes: {
-                                role:
-                                  user.relation === "organizer"
-                                    ? "attendee"
-                                    : "organizer",
-                              },
-                            })
-                          }
-                          type="button"
-                        >
-                          <BriefcaseBusiness size={15}/>{user.relation === "organizer"
-                            ? t("Organizatörlükten çıkar", "Remove organiser role")
-                            : t("Organizatör yap", "Make organiser")}
-                        </button>
-                        <button
-                          disabled={eventParticipantAction.isPending}
-                          onClick={() =>
-                            eventParticipantAction.mutate({
-                              userId: user.id,
-                              changes: {
-                                status:
-                                  user.status === "banned"
-                                    ? "accepted"
-                                    : "banned",
-                              },
-                            })
-                          }
-                          type="button"
-                        >
-                          {user.status === "banned" ? <UserMinus size={15}/> : <Ban size={15}/>} {user.status === "banned"
-                            ? t("Etkinliğe affet", "Unban from event")
-                            : t("Etkinliğe yasakla", "Ban from event")}
-                        </button>
-                      </>
-                    ) : null}
-                    {kind === "place" && target.data?.canManage && user.relation !== "creator" ? (
-                      <>
-                        {target.data.isCreator ? (
+                        {user.relation !== "manager" ? (
                           <button
-                            disabled={placeMemberAction.isPending}
-                            onClick={() =>
-                              placeMemberAction.mutate({
-                                userId: user.id,
-                                changes: {
-                                  role:
-                                    user.relation === "manager"
-                                      ? "member"
-                                      : "manager",
-                                },
-                              })
-                            }
+                            disabled={eventParticipantAction.isPending || placeMemberAction.isPending}
+                            onClick={() => roleAction(user.id, user.relation === "organizer" ? (kind === "event" ? "attendee" : "member") : "organizer")}
                             type="button"
                           >
-                            <ShieldCheck size={15}/>{user.relation === "manager"
-                              ? t("Mekân yöneticiliğinden çıkar", "Remove place manager role")
-                              : t("Mekân yöneticisi yap", "Make place manager")}
+                            <BriefcaseBusiness size={15}/>{user.relation === "organizer"
+                              ? kind === "event" ? t("Etkinlik yöneticiliğinden çıkar", "Remove event manager role") : t("Mekân yöneticiliğinden çıkar", "Remove place manager role")
+                              : kind === "event" ? t("Etkinlik yöneticisi yap", "Make event manager") : t("Mekân yöneticisi yap", "Make place manager")}
                           </button>
                         ) : null}
                         <button
-                          disabled={placeMemberAction.isPending}
-                          onClick={() =>
-                            placeMemberAction.mutate({
-                              userId: user.id,
-                              changes: {
-                                role: /organizer/.test(user.relation)
-                                  ? "member"
-                                  : "organizer",
-                              },
-                            })
-                          }
-                          type="button"
-                        >
-                          <BriefcaseBusiness size={15}/>{/organizer/.test(user.relation)
-                            ? t("Organizatörlükten çıkar", "Remove organiser role")
-                            : t("Organizatör yap", "Make organiser")}
-                        </button>
-                        <button
-                          disabled={placeMemberAction.isPending}
-                          onClick={() =>
-                            placeMemberAction.mutate({
-                              userId: user.id,
-                              changes: {
-                                status:
-                                  user.status === "banned"
-                                    ? "accepted"
-                                    : "banned",
-                              },
-                            })
-                          }
+                          disabled={eventParticipantAction.isPending || placeMemberAction.isPending}
+                          onClick={() => statusAction(user.id, user.status === "banned" ? "accepted" : "banned")}
                           type="button"
                         >
                           {user.status === "banned" ? <UserMinus size={15}/> : <Ban size={15}/>} {user.status === "banned"
-                            ? t("Mekâna affet", "Unban from place")
-                            : t("Mekâna yasakla", "Ban from place")}
+                            ? kind === "event" ? t("Etkinliğe affet", "Unban from event") : t("Mekâna affet", "Unban from place")
+                            : kind === "event" ? t("Etkinliğe yasakla", "Ban from event") : t("Mekâna yasakla", "Ban from place")}
                         </button>
                       </>
                     ) : null}
@@ -649,7 +567,7 @@ export function RelatedUsersPage({
             </div>
           </article>
         ))}
-        {visibleUsers.some((user) => user.isProvisional) ? <article className="related-user-card"><Users aria-hidden="true"/><strong>{t("Gösterilemeyen", "Hidden")} +{visibleUsers.filter((user) => user.isProvisional).length} {t("katılımcı", "participants")}</strong><p>{t("Bu kişiler henüz üyeliklerini tamamlamadı.", "These people have not completed registration yet.")}</p></article> : null}
+        {visibleUsers.some((user) => user.isProvisional) ? <article className="related-user-card is-provisional"><Users aria-hidden="true"/><strong>{t("Gösterilemeyen", "Hidden")} +{visibleUsers.filter((user) => user.isProvisional).length} {t("katılımcı", "participants")}</strong><p>{t("Bu kişiler henüz üyeliklerini tamamlamadı.", "These people have not completed registration yet.")}</p></article> : null}
       </section></MemberSignalsProvider>
       {!users.isLoading && !visibleUsers.length ? (
         <section className="empty-state">
@@ -680,8 +598,9 @@ function ageFrom(value: string) {
 function localizeRelation(relation: string, language: "tr" | "en", kind?: "event" | "place" | "tag") {
   const labelsTr: Record<string, string> = {
     member: "Üye",
-    organizer: "Organizatör",
-    manager: "Yönetici",
+    // 23/11 #42: "manager" rolü kurucu, "organizer" rolü yönetici olarak adlandırılır.
+    organizer: "Yönetici",
+    manager: kind === "event" ? "Etkinlik kurucusu" : "Mekân kurucusu",
     owner: kind === "event" ? "Etkinlik kurucusu" : "Mekân kurucusu",
     creator: kind === "event" ? "Etkinlik kurucusu" : "Mekân kurucusu",
     attendee: "Katılımcı",
@@ -689,7 +608,7 @@ function localizeRelation(relation: string, language: "tr" | "en", kind?: "event
     follower: "Takipçi",
   };
   const labelsEn: Record<string, string> = {
-    member: "Member", organizer: "Organiser", manager: "Manager", owner: "Owner", creator: "Owner", attendee: "Attendee", invited: "Invited", follower: "Follower",
+    member: "Member", organizer: "Manager", manager: "Founder", owner: "Founder", creator: "Founder", attendee: "Attendee", invited: "Invited", follower: "Follower",
   };
   const labels = language === "tr" ? labelsTr : labelsEn;
   return labels[relation.trim().toLocaleLowerCase("en-US")] ?? relation;
@@ -711,5 +630,6 @@ function relatedUsersEmptyText(kind: "event" | "place" | "tag", filter: string, 
     if (filter === "following") return t("Takip ettiğiniz kullanıcılardan mekâna üye olanlar burada gösterilecek.", "People you follow who become members of the place will appear here.");
   }
   if (kind === "tag" && filter === "following") return t("Takip ettiğiniz kullanıcılardan ilgi alanını profiline ekleyenler burada gösterilecek.", "People you follow who add this interest to their profile will appear here.");
+  if (kind === "tag") return t("Etiketi profiline ilk ekleyen sen ol.", "Be the first to add this tag to your profile.");
   return t("Onaylanan katılımcılar ve üyeler burada görünecek.", "Approved attendees and members will appear here.");
 }

@@ -9,7 +9,7 @@ const copy: Record<"tr" | "en", Record<NotFoundKind, { eyebrow: string; title: s
   event: {
     eyebrow: "Etkinlik bulunamadı",
     title: "Bu etkinlik artık burada değil.",
-    body: "Etkinlik kaldırılmış, arşivlenmiş veya bağlantısı değişmiş olabilir.",
+    body: "Etkinlik gizli veya yayından kaldırılmış olabilir.",
   },
   place: {
     eyebrow: "Mekân bulunamadı",

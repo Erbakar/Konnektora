@@ -51,8 +51,9 @@ import {
 import { NotFoundPage } from "./NotFoundPage";
 import { getServiceErrorPresentation } from "../lib/serviceErrors";
 import { useLanguage } from "../lib/i18n";
+import { useInviteLinkRef } from "../lib/useInviteLinkRef";
 import { placeInstagramCaption, placePostInstagramCaption } from "../lib/shareCaptions";
-import { localizeCityName, localizeCountryName } from "../lib/formats";
+import { localizeCityName, localizeCountryName, placeLocationLabel } from "../lib/formats";
 
 export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
   const { language } = useLanguage();
@@ -77,7 +78,10 @@ export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
     retry: false,
   });
   const place = placeQuery.data;
+  useInviteLinkRef("place", place?.id, slug);
   const tagsQuery = useQuery({ queryKey: ["tags"], queryFn: () => listTags(), enabled: editOpen });
+  // 23/11 #13: bekleyen kullanıcı sayısı yalnız mekânın kurucu ve yöneticilerine gösterilir.
+  const isTeam = Boolean(user && place && (place.createdById === user.id || place.viewerMembership?.status === "accepted" && ["manager", "organizer"].includes(place.viewerMembership.role)));
   const canManage = Boolean((user && place?.createdById === user.id) || place?.viewerMembership?.status === "accepted" && ["manager", "organizer"].includes(place.viewerMembership.role) || ["admin", "super_admin", "curator"].includes(user?.role ?? ""));
   const relatedUsersQuery = useQuery({ queryKey: ["place", place?.id, "related-users"], queryFn: () => listPlaceRelatedUsers(place!.id), enabled: Boolean(place) });
   const relatedPlacesQuery = useQuery({
@@ -94,7 +98,7 @@ export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
   const archiveMutation = useMutation({ mutationFn: () => archiveMyPlace(place!.id), onError: () => setActionNotice(language === "tr" ? "Mekân yayından kaldırılamadı. Tekrar deneyin." : "The place could not be removed. Try again."), onSuccess: () => { refresh(); navigate("/places"); } });
   const followMutation = useMutation({
     mutationFn: () =>
-      place!.isFollowing ? unfollowPlace(place!.id) : followPlace(place!.id),
+      place!.isFollowing || place!.viewerMembership?.status === "pending" ? unfollowPlace(place!.id) : followPlace(place!.id),
     onSuccess: refresh,
   });
   const notificationQuery = useQuery({
@@ -166,9 +170,7 @@ export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
         <span>{(language === "tr" ? placeTypeLabelsTr : placeTypeLabels)[place.placeType ?? ""] ?? (language === "tr" ? "Mekân" : "Place")}</span>
         <span>
           <MapPin size={16} />
-          {[place.address, localizeCityName(place.city, language), localizeCountryName(place.country, language)]
-            .filter(Boolean)
-            .join(", ") || (language === "tr" ? "Konum belirtilmedi" : "Location not specified")}
+          {placeLocationLabel(place, language, true) || (language === "tr" ? "Konum belirtilmedi" : "Location not specified")}
         </span>
         {place.createdBy ? <span><ShieldCheck size={17}/><FollowStar id={place.createdBy.id}/><Link to={userProfilePath(place.createdBy)}>{place.createdBy.username ? `@${place.createdBy.username}` : place.createdBy.name}</Link></span> : null}
         <DistanceLabel latitude={place.latitude} longitude={place.longitude} />
@@ -187,7 +189,12 @@ export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
             onClick={() => followMutation.mutate()}
             type="button"
           >
-            {place.isFollowing ? language === "tr" ? "Takibi bırak" : "Unfollow" : language === "tr" ? "Takip et" : "Follow"}
+            {/* 23/11 #43: "onay gerekli" mekânlarda takip, üyelik isteği olarak adlandırılır. */}
+            {place.visibility === "approval_required" && place.createdById !== user.id && place.viewerMembership?.status !== "accepted"
+              ? place.viewerMembership?.status === "pending" || place.isFollowing
+                ? language === "tr" ? "Üyelik isteğini geri çek" : "Withdraw membership request"
+                : language === "tr" ? "Üyelik isteği gönder" : "Send membership request"
+              : place.isFollowing ? language === "tr" ? "Takibi bırak" : "Unfollow" : language === "tr" ? "Takip et" : "Follow"}
           </button>
         ) : (
           <Link className="primary-action" to="/login">
@@ -234,7 +241,7 @@ export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
           </div>
         </section>
       ) : null}
-      <section className="admin-form event-attendee-preview"><h2>{language === "tr" ? "Takipçiler" : "Followers"}</h2><span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).filter((member) => !member.isProvisional && member.status === "accepted").slice(0, 8).map((member) => <Link key={member.id} title={member.name} to={member.username ? `/users/${member.username}` : `/users/id/${member.id}`}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/places/${place.slug}/users`}><strong>{place.memberCount ?? (relatedUsersQuery.data ?? []).filter((member) => member.status === "accepted").length} {language === "tr" ? "üye" : "members"} · {invitedPreviewCount} {language === "tr" ? "davetli" : "invited"}{canManage ? ` · ${(relatedUsersQuery.data ?? []).filter((member) => member.status === "pending").length} ${language === "tr" ? "bekleyen" : "pending"}` : ""} · {place.followingMemberCount ?? 0} {language === "tr" ? "takip ettiğiniz" : "you follow"}</strong></Link></section>
+      <section className="admin-form event-attendee-preview"><h2>{language === "tr" ? "Takipçiler" : "Followers"}</h2><span className="attendee-avatar-stack">{(relatedUsersQuery.data ?? []).filter((member) => !member.isProvisional && member.status === "accepted").slice(0, 8).map((member) => <Link key={member.id} title={member.name} to={member.username ? `/users/${member.username}` : `/users/id/${member.id}`}>{member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)}/> : member.name[0]}</Link>)}</span><Link to={`/places/${place.slug}/users`}><strong>{place.memberCount ?? (relatedUsersQuery.data ?? []).filter((member) => member.status === "accepted").length} {language === "tr" ? "üye" : "members"} · {invitedPreviewCount} {language === "tr" ? "davetli" : "invited"}{isTeam ? ` · ${(relatedUsersQuery.data ?? []).filter((member) => member.status === "pending").length} ${language === "tr" ? "bekleyen" : "pending"}` : ""} · {place.followingMemberCount ?? 0} {language === "tr" ? "takip ettiğiniz" : "you follow"}</strong></Link></section>
       <p className="detail-copy">
         <RichText
           text={place.description || (language === "tr" ? "Bu mekân için henüz açıklama eklenmemiş." : "No description has been added for this place yet.")}

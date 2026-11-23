@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Download, Flag, ImagePlus, Images, Trash2, UserRound, X } from "lucide-react";
-import { deleteContentMedia, getUserSession, resolveMediaUrl, uploadContentMedia } from "../lib/api";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Crop, Download, Flag, ImagePlus, Images, Pencil, RotateCw, Trash2, UserRound, X } from "lucide-react";
+import { deleteContentMedia, getUserSession, replaceMediaFile, resolveMediaUrl, updateMediaCaption, uploadContentMedia } from "../lib/api";
+import { cropImage, rotateImageRight } from "../lib/imageEdit";
 import { getServiceErrorMessage } from "../lib/serviceErrors";
 import { useLanguage } from "../lib/i18n";
 import { ReportDialog } from "./ReportDialog";
 
-type Media = { id: string; type: string; url: string };
+type Media = { id: string; type: string; url: string; caption?: string | null };
 
 /**
  * Lightbox "Aksiyonlar" menüsünün bağlamı (07/11 #18).
@@ -23,7 +24,12 @@ export type MediaViewerActions = {
   onMakeAvatar?: (mediaId: string) => Promise<unknown>;
   onEditAlbum?: () => void;
   onDelete?: (mediaId: string) => Promise<unknown>;
+  /** 23/11 #58: albüm hedefi (açıklama, döndür, kırp için) ve değişiklik sonrası yenileme */
+  target?: { type: string; id: string };
+  onChanged?: () => Promise<unknown> | void;
 };
+
+const CAPTION_LIMIT = 30;
 
 const VIEWER_OPEN_CLASS = "media-viewer-open";
 
@@ -41,6 +47,14 @@ export function MediaViewer({ items, index, onChange, onClose, reportTargetType 
   const fileInput = useRef<HTMLInputElement>(null);
   const item = items[index];
   const viewer = getUserSession();
+  const [captionEditing, setCaptionEditing] = useState(false);
+  const [captionDraft, setCaptionDraft] = useState("");
+  const [localCaptions, setLocalCaptions] = useState<Record<string, string | null>>({});
+  const [cropping, setCropping] = useState(false);
+  const [cropBox, setCropBox] = useState({ x: 0.1, y: 0.1, width: 0.8, height: 0.8 });
+  const [versions, setVersions] = useState<Record<string, string>>({});
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const cropFrame = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const overflow = document.body.style.overflow;
@@ -50,7 +64,7 @@ export function MediaViewer({ items, index, onChange, onClose, reportTargetType 
     close.current?.focus();
     return () => { document.body.style.overflow = overflow; document.body.classList.remove(VIEWER_OPEN_CLASS); previous?.focus(); };
   }, []);
-  useEffect(() => { setError(""); }, [index]);
+  useEffect(() => { setError(""); setCaptionEditing(false); setCropping(false); }, [index]);
   useEffect(() => {
     if (!numbersOpen) return;
     numberList.current?.querySelector<HTMLElement>("[aria-selected='true']")?.scrollIntoView?.({ block: "center" });
@@ -58,6 +72,23 @@ export function MediaViewer({ items, index, onChange, onClose, reportTargetType 
   if (!item) return null;
   const canManage = Boolean(viewer && actions?.canManage);
   const isImage = item.type === "image";
+  const currentUrl = resolveMediaUrl(versions[item.id] ?? item.url);
+  const caption = item.id in localCaptions ? localCaptions[item.id] : item.caption ?? null;
+  const canCaption = canManage && Boolean(actions?.target);
+  const saveCaption = () => void run(async () => { const text = captionDraft.trim().slice(0, CAPTION_LIMIT); await updateMediaCaption(actions!.target!.type, actions!.target!.id, item.id, text); setLocalCaptions((map) => ({ ...map, [item.id]: text || null })); setCaptionEditing(false); await actions?.onChanged?.(); });
+  const startCropDrag = (mode: "move" | "resize") => (event: React.PointerEvent) => {
+    event.preventDefault(); event.stopPropagation();
+    const frame = cropFrame.current?.getBoundingClientRect(); if (!frame) return;
+    const start = { x: event.clientX, y: event.clientY, box: cropBox };
+    const move = (moveEvent: PointerEvent) => {
+      const dx = (moveEvent.clientX - start.x) / frame.width; const dy = (moveEvent.clientY - start.y) / frame.height;
+      setCropBox(mode === "move"
+        ? { ...start.box, x: Math.min(Math.max(0, start.box.x + dx), 1 - start.box.width), y: Math.min(Math.max(0, start.box.y + dy), 1 - start.box.height) }
+        : { ...start.box, width: Math.min(Math.max(0.1, start.box.width + dx), 1 - start.box.x), height: Math.min(Math.max(0.1, start.box.height + dy), 1 - start.box.y) });
+    };
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  };
   const avatarLabel = actions?.kind === "profile" ? (tr ? "Profil resmim yap" : "Make my profile picture") : actions?.kind === "event" ? (tr ? "Etkinlik avatarı yap" : "Make event avatar") : actions?.kind === "place" ? (tr ? "Mekân avatarı yap" : "Make place avatar") : "";
   const run = async (task: () => Promise<unknown>) => {
     setActionsOpen(false);
@@ -69,6 +100,10 @@ export function MediaViewer({ items, index, onChange, onClose, reportTargetType 
   if (canManage && actions?.onUpload) menu.push({ key: "upload", label: tr ? "Resim / video ekle" : "Add photo / video", icon: <ImagePlus size={16}/>, onSelect: () => { setActionsOpen(false); fileInput.current?.click(); } });
   if (canManage && isImage && actions?.onMakeAvatar && actions.kind !== "post" && actions.avatarMediaId !== item.id) menu.push({ key: "avatar", label: avatarLabel, icon: <UserRound size={16}/>, onSelect: () => void run(() => actions.onMakeAvatar!(item.id)) });
   menu.push({ key: "download", label: tr ? "Medyayı indir" : "Download media", icon: <Download size={16}/>, onSelect: () => { setActionsOpen(false); downloadMedia(item); } });
+  // 23/11 #58: "Medyayı indir" altında yöneticiye "Sağa döndür" ve (resimlerde) "Resmi kırp"
+  const editable = canManage && Boolean(actions?.target) && isImage;
+  if (editable) menu.push({ key: "rotate", label: tr ? "Sağa döndür" : "Rotate right", icon: <RotateCw size={16}/>, onSelect: () => void run(async () => { const file = await rotateImageRight(currentUrl); const updated = await replaceMediaFile(actions!.target!.type, actions!.target!.id, item.id, file); setVersions((map) => ({ ...map, [item.id]: updated.url })); await actions?.onChanged?.(); }) });
+  if (editable) menu.push({ key: "crop", label: tr ? "Resmi kırp" : "Crop image", icon: <Crop size={16}/>, onSelect: () => { setActionsOpen(false); setCropBox({ x: 0.1, y: 0.1, width: 0.8, height: 0.8 }); setCropping(true); } });
   if (canManage && actions?.onEditAlbum) menu.push({ key: "edit", label: tr ? "Albümü düzenle" : "Edit album", icon: <Images size={16}/>, onSelect: () => { setActionsOpen(false); actions.onEditAlbum!(); } });
   if (viewer && !canManage) menu.push({ key: "report", label: tr ? "Rapor et" : "Report", icon: <Flag size={16}/>, onSelect: () => { setActionsOpen(false); setReport(true); } });
   if (canManage && actions?.onDelete) menu.push({ key: "delete", label: tr ? "Sil" : "Delete", icon: <Trash2 size={16}/>, danger: true, onSelect: () => { setActionsOpen(false); if (window.confirm(tr ? "Bu medya silinsin mi?" : "Delete this media?")) void run(() => actions.onDelete!(item.id)); } });
@@ -95,7 +130,22 @@ export function MediaViewer({ items, index, onChange, onClose, reportTargetType 
         </ul> : null}
       </div>
       <button ref={close} className="album-close" aria-label={tr ? "Kapat" : "Close"} onClick={onClose}><X/></button>
-      {item.type === "video" ? <video key={item.id} controls autoPlay src={resolveMediaUrl(item.url)}/> : <img onClick={() => { if (items.length > 1) onChange((index + 1) % items.length); }} style={{ cursor: items.length > 1 ? "pointer" : undefined }} alt={alt || (tr ? `Medya ${index + 1} / ${items.length}` : `Media ${index + 1} of ${items.length}`)} src={resolveMediaUrl(item.url)}/>}
+      {/* 23/11 #58: yöneticiye medyanın üstünde ortalı kalem; açıklama en çok 30 karakter */}
+      {canCaption && !captionEditing && !cropping ? <button type="button" className="album-caption-edit" aria-label={tr ? "Açıklama yaz" : "Write caption"} onClick={() => { setCaptionDraft(caption ?? ""); setCaptionEditing(true); }}><Pencil size={16}/></button> : null}
+      <div className="album-media-stage" onTouchStart={(event) => { const touch = event.touches[0]; touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null; }} onTouchEnd={(event) => {
+        // 23/11 #58: mobilde sağa/sola kaydırarak sayfalama
+        const start = touchStart.current; const touch = event.changedTouches[0]; touchStart.current = null;
+        if (!start || !touch || cropping || items.length < 2) return;
+        const dx = touch.clientX - start.x; const dy = touch.clientY - start.y;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) onChange(dx < 0 ? (index + 1) % items.length : (index - 1 + items.length) % items.length);
+      }}>
+        {item.type === "video" ? <video key={item.id} controls autoPlay src={currentUrl}/> : <div className="album-image-frame" ref={cropFrame}><img onClick={() => { if (!cropping && items.length > 1) onChange((index + 1) % items.length); }} style={{ cursor: !cropping && items.length > 1 ? "pointer" : undefined }} alt={alt || (tr ? `Medya ${index + 1} / ${items.length}` : `Media ${index + 1} of ${items.length}`)} src={currentUrl}/>
+          {cropping ? <div className="album-crop-box" style={{ left: `${cropBox.x * 100}%`, top: `${cropBox.y * 100}%`, width: `${cropBox.width * 100}%`, height: `${cropBox.height * 100}%` }} onPointerDown={startCropDrag("move")}><span className="album-crop-handle" onPointerDown={startCropDrag("resize")}/></div> : null}
+        </div>}
+        {captionEditing ? <form className="album-caption-form" onSubmit={(event) => { event.preventDefault(); saveCaption(); }}><input autoFocus maxLength={CAPTION_LIMIT} placeholder={tr ? "Açıklama giriniz..." : "Enter a caption..."} value={captionDraft} onChange={(event) => setCaptionDraft(event.target.value)}/><button type="submit" aria-label="OK" disabled={busy}><Check size={16}/></button></form>
+          : caption ? <div className="album-caption"><span>{caption}</span>{canCaption ? <button type="button" aria-label={tr ? "Açıklamayı düzenle" : "Edit caption"} onClick={() => { setCaptionDraft(caption); setCaptionEditing(true); }}><Pencil size={14}/></button> : null}</div> : null}
+      </div>
+      {cropping ? <div className="album-crop-actions"><button type="button" onClick={() => setCropping(false)}>{tr ? "Vazgeç" : "Cancel"}</button><button type="button" className="primary-action" disabled={busy} onClick={() => void run(async () => { const file = await cropImage(currentUrl, cropBox); const updated = await replaceMediaFile(actions!.target!.type, actions!.target!.id, item.id, file); setVersions((map) => ({ ...map, [item.id]: updated.url })); setCropping(false); await actions?.onChanged?.(); })}>{tr ? "Kırp" : "Crop"}</button></div> : null}
       <footer>
         <div className="album-footer-status">{busy ? <span role="status">{tr ? "İşleniyor…" : "Working…"}</span> : null}{error ? <span className="album-error" role="alert">{error}</span> : null}</div>
         <div>
@@ -139,6 +189,8 @@ export function MediaAlbum({ items, owner }: { items: Media[]; owner?: { content
     canManage: Boolean(viewer && (viewer.id === owner.ownerId || ["admin", "super_admin"].includes(viewer.role))),
     onUpload: async files => { for (const file of files) await uploadContentMedia(owner.contentType, owner.contentId, file); await refresh(); },
     onDelete: async mediaId => { await deleteContentMedia(owner.contentType, owner.contentId, mediaId); setIndex(current => current === null ? null : items.length <= 1 ? null : Math.max(0, Math.min(current, items.length - 2))); await refresh(); },
+    target: { type: owner.contentType, id: owner.contentId },
+    onChanged: refresh,
   } : undefined;
   return <><div className={`post-media-album count-${Math.min(items.length, 4)}`}>{items.slice(0, 4).map((item, i) => <button key={item.id} type="button" aria-label={language === "tr" ? `Medya ${i + 1} / ${items.length}` : `Media ${i + 1} of ${items.length}`} onClick={() => setIndex(i)}>{item.type === "video" ? <video muted preload="metadata" src={resolveMediaUrl(item.url)}/> : <img alt="" loading="lazy" src={resolveMediaUrl(item.url)}/>} {i === 3 && items.length > 4 ? <span>+{items.length - 4}</span> : null}</button>)}</div>{index !== null && items[index] ? <MediaViewer items={items} index={index} onChange={setIndex} onClose={() => setIndex(null)} actions={actions}/> : null}</>;
 }

@@ -2,6 +2,7 @@ import { hiddenEventAccessWhere } from "../common/event-visibility";
 import type { Prisma } from "@prisma/client";
 import type { PrismaService } from "../prisma/prisma.service";
 import { publicName } from "../common/public-name";
+import { pollSummaries } from "../content/polls";
 import type { DiscoveryFeed } from "@konnektora/shared";
 
 type Activity = DiscoveryFeed["activities"][number];
@@ -35,6 +36,12 @@ export async function additionalActivities(db: PrismaService, viewerId: string |
     const joined = event ? event.participants.some(p => p.userId === viewerId) : place?.members.some(p => p.userId === viewerId);
     const kind = event ? "event" : place ? "place" : "tag";
     result.push({ id: comment.targetId, activityId: `comment-${comment.id}`, kind, title: event?.title ?? place?.name ?? tag!.name, href: event ? `/events/${event.slug}` : place ? `/places/${place.slug}` : `/tags/${tag!.slug}`, subtitle: null, imageUrl: null, meta: place?.city ?? null, action: manager && joined ? event ? "Etkinlik yöneticisi ileti yazdı" : "Mekân yöneticisi ileti yazdı" : event ? "Etkinliğe ileti yazdı" : place ? "Mekâna ileti yazdı" : "Etikete ileti yazdı", body: comment.body, media: media.filter(m => m.contentId === comment.id), occurredAt: comment.createdAt, ownerId: comment.authorId, actor: identity(comment.author), place: event?.place, canManageContent: false });
+  }
+  // 23/11 #71: etkinlik/mekân gönderisine bağlı anket Akış kartında da görünür.
+  const pollTargets = comments.filter((comment) => comment.targetType === "event" || comment.targetType === "place").map((comment) => comment.id);
+  if (pollTargets.length) {
+    const polls = await pollSummaries(db, pollTargets, viewerId);
+    for (const item of result) { const poll = item.activityId?.startsWith("comment-") ? polls.get(item.activityId.slice("comment-".length)) : undefined; if (poll) item.poll = poll; }
   }
   const groups = new Map<string, typeof interests>();
   for (const item of interests) { const group = groups.get(item.userId) ?? []; group.push(item); groups.set(item.userId, group); }

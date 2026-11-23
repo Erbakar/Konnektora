@@ -32,7 +32,7 @@ export class WalletAccessService {
       return { expiresAt: expiresAt.toISOString(), phoneHint: `•••• ${user.phone!.slice(-4)}` };
     }, { timeout: 15_000 });
   }
-  async verify(user: User, authorization: string, code: string, context: { ip: string; agent: string }) {
+  async verify(user: User, authorization: string, code: string, context: { ip: string; agent: string; section?: "wallet" | "curator" }) {
     this.eligible(user);
     const token = randomBytes(32).toString("hex");
     const result = await this.prisma.$transaction(async tx => {

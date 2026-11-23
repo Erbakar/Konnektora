@@ -1906,7 +1906,7 @@ export function UserMessagesAdminPanel({
     <section className="admin-panel">
       <div className="section-header compact">
         <h2>{fixedType ? meta.label : "Kullanıcılardan Mesajlar"}</h2>
-        <span>{messagesQuery.isLoading ? "Yükleniyor" : `${messageList?.total ?? 0} mesaj`}</span>
+        <span>{messagesQuery.isLoading ? "Yükleniyor" : messagesQuery.isError ? "Mesajlar yüklenemedi" : `${messageList?.total ?? 0} mesaj`}</span>
       </div>
       <p className="admin-section-desc">{meta.description}</p>
       {fixedType ? null : <div aria-label="Mesaj türü" className="segmented-control user-message-tabs" role="tablist">
@@ -2239,6 +2239,7 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
     page: 1
   });
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const listScrollRef = useRef(0);
   const usersQuery = useQuery({
     queryKey: ["admin-users", filters],
     queryFn: () => {
@@ -2326,6 +2327,26 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
       sortDir: String(form.get("sortDir") || "desc"),
       page: 1
     });
+  }
+
+  // 23/11 #12: üye detayı listenin altında değil, ayrı sayfa gibi açılır; "Listeye geri dön" aynı filtre ve kaydırma konumuna döner.
+  if (selectedUserId) {
+    return (
+      <section className="admin-panel user-admin-panel user-admin-detail-page">
+        <button className="text-button admin-back-to-list" onClick={() => { setSelectedUserId(null); window.requestAnimationFrame(() => window.scrollTo({ top: listScrollRef.current })); }} type="button">← Listeye geri dön</button>
+        {detailQuery.isLoading ? <p role="status">Üye bilgileri yükleniyor…</p> : null}
+        {detailQuery.isError ? <p className="form-error">Üye bilgileri yüklenemedi.</p> : null}
+        {detailQuery.data ? (
+          <UserDetailCard
+            isPending={updateMutation.isPending || actionMutation.isPending}
+            onAction={(input) => actionMutation.mutate({ id: detailQuery.data.id, action: input })}
+            onUpdate={(input) => updateMutation.mutate({ id: detailQuery.data.id, ...input })}
+            roleGroups={roleGroups}
+            user={detailQuery.data}
+          />
+        ) : null}
+      </section>
+    );
   }
 
   return (
@@ -2447,7 +2468,7 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
           <UserAdminRow
             isPending={updateMutation.isPending}
             key={user.id}
-            onSelect={() => setSelectedUserId(user.id)}
+            onSelect={() => { listScrollRef.current = window.scrollY; setSelectedUserId(user.id); window.requestAnimationFrame(() => window.scrollTo({ top: 0 })); }}
             onUpdate={(input) => updateMutation.mutate({ id: user.id, ...input })}
             roleGroups={roleGroups}
             user={user}
@@ -2474,15 +2495,6 @@ function UserAdminPanel({ roleGroups }: { roleGroups: AdminRoleGroup[] }) {
             Sonraki
           </button>
         </div>
-      ) : null}
-      {detailQuery.data ? (
-        <UserDetailCard
-          isPending={updateMutation.isPending || actionMutation.isPending}
-          onAction={(input) => actionMutation.mutate({ id: detailQuery.data.id, action: input })}
-          onUpdate={(input) => updateMutation.mutate({ id: detailQuery.data.id, ...input })}
-          roleGroups={roleGroups}
-          user={detailQuery.data}
-        />
       ) : null}
     </section>
   );

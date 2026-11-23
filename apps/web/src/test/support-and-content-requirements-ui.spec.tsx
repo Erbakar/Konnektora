@@ -24,6 +24,7 @@ const apiMocks = vi.hoisted(() => ({
   listPublicSupportCategories: vi.fn(),
   listReportRules: vi.fn(),
   uploadContentMedia: vi.fn(),
+  uploadContentMediaWithProgress: vi.fn(),
   recordContentShare: vi.fn(),
 }));
 const guestEntitlement = vi.hoisted(() => ({ canUseGuestLists: false }));
@@ -71,6 +72,8 @@ beforeEach(() => {
   });
   apiMocks.deleteContentComment.mockResolvedValue({});
   apiMocks.uploadContentMedia.mockResolvedValue({ id: "media-1" });
+  // 23/11 #63: gönderi medyası yükleme yüzdesiyle yüklenir.
+  apiMocks.uploadContentMediaWithProgress.mockImplementation((...args: unknown[]) => apiMocks.uploadContentMedia(args[0], args[1], args[2]));
 });
 
 afterEach(() => {

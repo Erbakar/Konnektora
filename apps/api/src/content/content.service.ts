@@ -125,6 +125,40 @@ export class ContentService {
     return this.listMedia(targetType, targetId);
   }
 
+  /** 23/11 #58: albümü yönetme yetkisi olan kişi için düzenlenebilir medyayı döndürür (ileti sahibi, etkinlik/mekân yöneticisi, profil sahibi). */
+  private async editableMedia(targetType: ReportTargetType, targetId: string, mediaId: string, user: User) {
+    const commentTypes: ReportTargetType[] = [ReportTargetType.tag_comment, ReportTargetType.event_comment, ReportTargetType.place_comment, ReportTargetType.comment_reply];
+    if (commentTypes.includes(targetType)) {
+      const comment = await this.prisma.contentComment.findUnique({ where: { id: targetId }, select: { authorId: true, status: true } });
+      if (!comment || comment.status !== "active") throw new NotFoundException("Yorum bulunamadı.");
+      if (comment.authorId !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu medyayı düzenleme yetkiniz yok.");
+    } else if (targetType === ReportTargetType.event || targetType === ReportTargetType.place) {
+      await this.ensureContentMediaManager(targetType, targetId, user);
+    } else if (targetType === ReportTargetType.user) {
+      if (targetId !== user.id && !["admin", "super_admin"].includes(user.role)) throw new ForbiddenException("Bu medyayı düzenleme yetkiniz yok.");
+    } else throw new BadRequestException("Bu medya düzenlenemez.");
+    const media = await this.prisma.mediaFile.findFirst({ where: { id: mediaId, contentId: targetId, ...(commentTypes.includes(targetType) ? { contentType: { in: commentTypes } } : { contentType: targetType }), status: "active" } });
+    if (!media) throw new NotFoundException("Medya bulunamadı.");
+    return media;
+  }
+
+  async updateMediaCaption(targetType: ReportTargetType, targetId: string, mediaId: string, caption: string, user: User) {
+    await this.editableMedia(targetType, targetId, mediaId, user);
+    const text = caption.trim().slice(0, 30);
+    return this.prisma.mediaFile.update({ where: { id: mediaId }, data: { caption: text || null } });
+  }
+
+  /** 23/11 #58: "Sağa döndür" / "Resmi kırp" sonucu tarayıcıda üretilen yeni görsel eski dosyanın yerine geçer. */
+  async replaceMediaFile(targetType: ReportTargetType, targetId: string, mediaId: string, url: string, user: User) {
+    const media = await this.editableMedia(targetType, targetId, mediaId, user);
+    if (media.type !== "image") throw new BadRequestException("Yalnız resimler döndürülebilir veya kırpılabilir.");
+    const updated = await this.prisma.mediaFile.update({ where: { id: mediaId }, data: { url } });
+    if (targetType === ReportTargetType.event) await this.prisma.event.updateMany({ where: { id: targetId, coverImageUrl: media.url }, data: { coverImageUrl: url } });
+    if (targetType === ReportTargetType.place) await this.prisma.place.updateMany({ where: { id: targetId, coverImageUrl: media.url }, data: { coverImageUrl: url } });
+    if (media.url.startsWith("/uploads/")) await removeDurableUpload(resolve(process.cwd(), media.url.slice(1))).catch(() => undefined);
+    return updated;
+  }
+
   private async ensureContentMediaManager(targetType: "event" | "place", targetId: string, user: User) {
     if (["admin", "super_admin", "curator"].includes(user.role)) return;
     if (targetType === ReportTargetType.event) {

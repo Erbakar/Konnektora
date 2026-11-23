@@ -417,13 +417,14 @@ export function OnboardingPage() {
                 : undefined;
               profileSave.mutate({
                 name: profile.data.name,
-                username: String(form.get("username")),
+                username: String(form.get("username") ?? ""),
                 region: String(form.get("region") || ""), postalCode: String(form.get("postalCode") || ""),
-                country: String(form.get("country")),
-                city: String(form.get("city")),
+                // 23/11 #51: seçilmeyen alan String(null) ile "null" metni olarak kaydediliyordu.
+                country: String(form.get("country") ?? ""),
+                city: String(form.get("city") ?? ""),
                 birthDate,
                 gender: form.get("gender") ? String(form.get("gender")) as "male" | "female" : undefined,
-                website: normalizeWebsite(String(form.get("website"))),
+                website: normalizeWebsite(String(form.get("website") ?? "")),
                 ...(profile.data.accountType === "corporate" ? { district: String(form.get("district") || ""), companyName: String(form.get("companyName") || ""), tradeName: String(form.get("tradeName") || "") } : {}),
               });
             }}

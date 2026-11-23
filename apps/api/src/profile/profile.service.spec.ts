@@ -71,6 +71,7 @@ describe("ProfileService", () => {
         deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
         upsert: jest.fn().mockResolvedValue({})
       },
+      contentComment: { count: jest.fn().mockResolvedValue(0), groupBy: jest.fn().mockResolvedValue([]) },
       profileTagSuggestion: {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),

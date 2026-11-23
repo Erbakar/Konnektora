@@ -366,7 +366,7 @@ export class ProfileService {
   }
 
   async listTagSuggestions(userId: string) {
-    return this.prisma.profileTagSuggestion.findMany({
+    const suggestions = await this.prisma.profileTagSuggestion.findMany({
       where: { status: "pending", OR: [{ targetUserId: userId }, { suggestedById: userId }] },
       orderBy: { createdAt: "desc" },
       include: {
@@ -374,6 +374,13 @@ export class ProfileService {
         targetUser: { select: { id: true, name: true, username: true, role: true, status: true } },
         suggestedBy: { select: { id: true, name: true, username: true, role: true, status: true } },
       },
+    });
+    // 23/11 #68: bildirim kartında öneren kişinin ve herkesin etikette yazdığı gönderi sayısı.
+    const tagIds = [...new Set(suggestions.map((item) => item.tagId))];
+    const rows = tagIds.length ? await this.prisma.contentComment.groupBy({ by: ["targetId", "authorId"], where: { targetType: "tag", targetId: { in: tagIds }, status: "active" }, _count: { _all: true } }) : [];
+    return suggestions.map((item) => {
+      const forTag = rows.filter((row) => row.targetId === item.tagId);
+      return { ...item, postCounts: { suggester: forTag.filter((row) => row.authorId === item.suggestedById).reduce((sum, row) => sum + row._count._all, 0), total: forTag.reduce((sum, row) => sum + row._count._all, 0) } };
     });
   }
 
@@ -386,7 +393,7 @@ export class ProfileService {
       this.prisma.profileTagSuggestion.findFirst({ where: { targetUserId, suggestedById, tagId: input.tagId, status: "pending" } }),
     ]);
     if (!target || !tag) throw new NotFoundException("Kullanıcı veya etiket bulunamadı.");
-    if (existing) throw new ConflictException("Bu etiket kullanıcının profilinde zaten var.");
+    if (existing) throw new ConflictException("Bu etiket zaten profile yapışık.");
     if (pending) throw new ConflictException("Bu etiket daha önce onaya gönderildi.");
     const suggestion = await this.prisma.profileTagSuggestion.create({
       data: { targetUserId, suggestedById, tagId: input.tagId, sentiment: input.sentiment },
@@ -394,7 +401,14 @@ export class ProfileService {
     });
     const sentimentLabel = input.sentiment === "like" ? "Beğeniyorum" : input.sentiment === "dislike" ? "Beğenmiyorum" : "Nötr";
     // Uygulama içinde yalnız onay kartı gösterilir; bu kayıt e-posta/anlık bildirim teslimi içindir.
-    await this.notifications.dispatch({ userId: targetUserId, topic: "tag_request", type: "profile_tag_suggestion", title: "Profil etiketi onayınızı bekliyor", body: `${suggestion.suggestedBy.username ? `@${suggestion.suggestedBy.username}` : suggestion.suggestedBy.name}, “${tag.name}” etiketini “${sentimentLabel}” duygusuyla profilinize eklemek istiyor.`, targetType: "tag", targetId: tag.id, context: { targetLabel: tag.name, targetUrl: "/notifications?tab=waiting" } });
+    await this.notifications.dispatch({ userId: targetUserId, topic: "tag_request", type: "profile_tag_suggestion", title: "Profilinize yeni etiket yapıştırıldı", body: `${suggestion.suggestedBy.username ? `@${suggestion.suggestedBy.username}` : suggestion.suggestedBy.name}, “${tag.name}” etiketini “${sentimentLabel}” duygusuyla profilinize eklemek istiyor.`, targetType: "tag", targetId: tag.id, context: { targetLabel: tag.name, targetUrl: "/notifications?tab=waiting" },
+      // 23/11 #66: e-postada kullanıcı adı ve etiket ilgili sayfalara bağlantılı.
+      emailIntro: [
+        suggestion.suggestedBy.username ? { text: `@${suggestion.suggestedBy.username}`, url: `/users/${suggestion.suggestedBy.username}` } : suggestion.suggestedBy.name,
+        " kullanıcı adlı üye “",
+        { text: suggestion.tag.name, url: `/tags/${suggestion.tag.slug}` },
+        `” etiketini profilinize “${sentimentLabel.toLocaleLowerCase("tr-TR")}” duygusuyla eklemek istiyor. Onaylamak veya reddetmek için bildirimlerinizi kontrol edin.`,
+      ] });
     return suggestion;
   }
 
@@ -412,7 +426,17 @@ export class ProfileService {
     } else {
       await this.prisma.profileTagSuggestion.update({ where: { id }, data: { status: action === "cancel" ? "cancelled" : "declined" } });
     }
-    if (action !== "cancel") await this.notifications.dispatch({ userId: suggestion.suggestedById, topic: "tag_request", type: "profile_tag_suggestion_result", title: action === "accept" ? "Etiket öneriniz kabul edildi" : "Etiket öneriniz reddedildi", body: `${suggestion.targetUser?.username ? `@${suggestion.targetUser.username} profiline ` : "Profile "}“”${suggestion.tag.name}|${suggestion.tag.slug ?? suggestion.tag.name}“” etiketi için gönderdiğiniz öneri ${action === "accept" ? "kabul edildi" : "reddedildi"}.`, targetType: "user", targetId: suggestion.targetUserId });
+    // 23/11 #69: öneren kişinin etikette gönderisi yoksa kabul bildirimine davet satırı eklenir.
+    const suggesterPosts = action === "accept" ? await this.prisma.contentComment.count({ where: { targetType: "tag", targetId: suggestion.tagId, authorId: suggestion.suggestedById, status: "active" } }) : 1;
+    const postInvite = suggesterPosts ? "" : "\nEtikete bir de gönderi yayınlayarak bu anı belki bir metin, belki bir medya paylaşımıyla taçlandırmak için doğru zamandır.";
+    if (action !== "cancel") await this.notifications.dispatch({ userId: suggestion.suggestedById, topic: "tag_request", type: "profile_tag_suggestion_result", title: action === "accept" ? "Etiket öneriniz kabul edildi" : "Etiket öneriniz reddedildi", body: `${suggestion.targetUser?.username ? `@${suggestion.targetUser.username} profiline ` : "Profile "}“”${suggestion.tag.name}|${suggestion.tag.slug ?? suggestion.tag.name}“” etiketi için gönderdiğiniz öneri ${action === "accept" ? "kabul edildi" : "reddedildi"}.${postInvite}`, targetType: "user", targetId: suggestion.targetUserId,
+      // 23/11 #65: kabul e-postasında "gönderi yazmak" etiket sayfasındaki Gönderiler alanına bağlantı.
+      ...(action === "accept" ? { emailIntro: [
+        suggestion.targetUser?.username ? { text: `@${suggestion.targetUser.username}`, url: `/users/${suggestion.targetUser.username}` } : "Bir üye",
+        ` kullanıcı adlı üyenin profili için önerdiğiniz “${suggestion.tag.name}” etiketi kabul edildi. Etikete `,
+        { text: "gönderi yazmak", url: `/tags/${suggestion.tag.slug}#tag-posts` },
+        " da ister misin?",
+      ] } : {}) });
     return { ok: true as const, status: action === "accept" ? "accepted" : action === "cancel" ? "cancelled" : "declined" };
   }
 
@@ -456,7 +480,10 @@ export class ProfileService {
   }
 
   private optionalText(value: string | undefined, current: string | null) {
-    return value === undefined ? current : value.trim() || null;
+    if (value === undefined) return current;
+    const text = value.trim();
+    // 23/11 #51: istemciden gelen "null"/"undefined" metinleri boş değer sayılır.
+    return !text || text === "null" || text === "undefined" ? null : text;
   }
 
   private async blockTargetExists(targetType: BlockedTargetType, targetId: string) {

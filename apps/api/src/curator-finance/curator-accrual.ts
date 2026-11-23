@@ -1,6 +1,7 @@
 import { BadRequestException } from "@nestjs/common";
 import { type PaymentTransaction, Prisma } from "@prisma/client";
 import { territoryMatches } from "./territory";
+import { agreementReferrers } from "./referrers";
 export { territoryMatches } from "./territory";
 export async function accrueTicketCommission(tx: Prisma.TransactionClient, payment: PaymentTransaction) {
   if (Number(payment.platformFee) <= 0) return;
@@ -15,8 +16,11 @@ export async function accrueTicketCommission(tx: Prisma.TransactionClient, payme
     const amount = Math.round(Number(payment.platformFee) * rate) / 100;
     if (amount <= 0) continue;
     rows.push({ userId: contract.userId, agreementId: contract.id, paymentId: payment.id, eventId: payment.eventId, kind: "income", category: "ticket_commission", amount, currency: payment.currency, held: true, rate, description: `${event.title} · bilet komisyon payı`, sourceKey: `payment:${payment.id}:curator:${contract.userId}`, occurredAt: payment.paidAt ?? new Date() });
-    const referral = Math.round(amount * Number(contract.referralRate)) / 100;
-    if (contract.referrerId && referral > 0) rows.push({ userId: contract.referrerId, agreementId: contract.id, paymentId: payment.id, eventId: payment.eventId, kind: "income", category: "referral", amount: referral, currency: payment.currency, held: true, rate: contract.referralRate, description: `${event.title} · referans küratör payı`, sourceKey: `payment:${payment.id}:referral:${contract.userId}`, occurredAt: payment.paidAt ?? new Date() });
+    // 23/11 #9: her referans küratöre kendi oranıyla pay; ilk referansın kaynak anahtarı eskisiyle aynı kalır.
+    for (const [index, referrer] of agreementReferrers(contract).entries()) {
+    const referral = Math.round(amount * referrer.referralRate) / 100;
+    if (referral > 0) rows.push({ userId: referrer.referrerId, agreementId: contract.id, paymentId: payment.id, eventId: payment.eventId, kind: "income", category: "referral", amount: referral, currency: payment.currency, held: true, rate: referrer.referralRate, description: `${event.title} · referans küratör payı`, sourceKey: `payment:${payment.id}:referral:${contract.userId}${index ? `:${referrer.referrerId}` : ""}`, occurredAt: payment.paidAt ?? new Date() });
+    }
   }
   if (Math.round(rows.reduce((sum, row) => sum + Number(row.amount), 0) * 100) > Math.round(Number(payment.platformFee) * 100)) throw new BadRequestException("Küratör paylarının toplamı platform komisyonunu aşıyor. Anlaşma oranları düzeltilmeli.");
   if (rows.length) await tx.curatorLedgerEntry.createMany({ data: rows, skipDuplicates: true });

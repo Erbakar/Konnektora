@@ -113,7 +113,10 @@ export function GuestListHub() {
     /> : <div className="guest-list-empty">
       <div><Users size={26}/></div>
       <strong>{tr ? "İlk listen için hazırsın." : "You are ready for your first list."}</strong>
-      <span>{session ? (tr ? "Yukarıdan bir isim vererek ilk tekrar kullanılabilir listenizi oluşturun." : "Name it above to create your first reusable list.") : ""}</span>
+      {/* 23/11 #76 */}
+      <span>{session ? (tr ? "Yukarıdan bir isim vererek ilk tekrar kullanılabilir listenizi oluşturun. Guest list ismi için yaratıcı olun." : "Name it above to create your first reusable list. Be creative with the guest list name.") : ""}</span>
+      {session ? <span>{tr ? "Örnekler: “VIP müşteri”, “🚷 Yasaklılar”, “Basın mensupları”, “🍻 Free soft drinks”, “%20 indirim” vb. gibi operasyonunuza göre planlayın." : "Examples: “VIP customer”, “🚷 Banned”, “Press”, “🍻 Free soft drinks”, “20% off” — plan them around your operation."}</span> : null}
+      {session ? <span>{tr ? "Daha sonra girişte ya da kasada dilediğinizde check-in yaparken kimin hangi listelerde olduğunu görebilecek; davet et sayfalarında seçtiğiniz listeye toplu davetiyeyi hızlıca gönderebileceksiniz. Sahne sizin." : "Later, at the door or the till, you will see which lists each person is on while checking in, and on invite pages you can quickly send bulk invitations to a list you choose. The stage is yours."}</span> : null}
     </div>}
 
     {sharedLists.length ? <GuestListCollection
@@ -234,7 +237,19 @@ export function GuestListDetailPage() {
         <div className="guest-list-member-copy"><div className="member-name-line"><FollowStar id={member.user.id}/><Link to={userProfilePath(member.user)}><strong>{member.user.username ? `@${member.user.username}` : member.user.name}</strong></Link></div><span>{member.user.name}</span><small>{location}{member.user.birthDate ? ` · ${memberAge(member.user.birthDate)} ${tr ? "yaş" : "years"}` : ""}</small><MemberCompatibility id={member.user.id} showFollowers/></div>
         {mine ? <button aria-label={tr ? "Listeden çıkar" : "Remove from list"} className="guest-list-remove-member" disabled={removeMember.isPending} onClick={() => removeMember.mutate(member.userId)} title={tr ? "Listeden çıkar" : "Remove from list"}><UserMinus size={17}/></button> : <span className="guest-list-member-view"><Eye size={15}/></span>}
       </article>;
-    })}</section></MemberSignalsProvider> : <div className="guest-list-empty is-filtered"><div><Search size={25}/></div><strong>{tr ? "Filtreye uygun kişi bulunamadı." : "No people match these filters."}</strong><span>{tr ? "Arama veya filtrelerini değiştirerek tekrar dene." : "Try changing your search or filters."}</span></div>}
+    })}</section></MemberSignalsProvider> : !(list.data?.members ?? []).length ? <div className="guest-list-empty is-empty-list">
+      {/* 23/11 #77: listede hiç kimse yokken filtre metni yerine yol gösteren metin */}
+      <div><Users size={26}/></div>
+      <strong>{tr ? "Boş bir liste, musluğu akmayan çeşme gibidir." : "An empty list is like a fountain with no water."}</strong>
+      <span>{tr ? "Organizasyonlarınız için davet edeceğiniz kullanıcıları bulmak için aşağıdakileri deneyin:" : "To find people to invite to your events, try:"}</span>
+      <ul>
+        <li>{tr ? "Amacınıza uygun “ilgi alan(lar)ı ile ilgili kullanıcılar” sayfalarından ya da “Gönderiler”den;" : "“People related to an interest” pages or “Posts” that match your goal;"}</li>
+        <li>{tr ? "Yöneticisi olduğunuz etkinlikleriniz ve mekânlarınızla “ilgili kullanıcılar” sayfalarından veya “Yorumlar” alanlarından;" : "The “related people” pages or “Comments” of events and places you manage;"}</li>
+        <li>{tr ? "Üyeler bölümünden;" : "The Members section;"}</li>
+        <li>{tr ? "Akış sayfası, profil sayfaları, diğer guest list'leriniz ve check-in başta olmak üzere;" : "The feed, profile pages, your other guest lists and check-in;"}</li>
+      </ul>
+      <span>{tr ? "AI destekli uyum bilgilerini de inceleyip keşfedebileceğiniz, belki de müdaviminiz olan/olacak potansiyel bağlantılar için “Guest List'e ekle” butonunu tuşlayarak eski/yeni listelerinize ekleyebilirsiniz." : "Review AI-powered compatibility to discover potential regulars, then tap “Add to guest list” to add them to your lists."}</span>
+    </div> : <div className="guest-list-empty is-filtered"><div><Search size={25}/></div><strong>{tr ? "Filtreye uygun kişi bulunamadı." : "No people match these filters."}</strong><span>{tr ? "Arama veya filtrelerini değiştirerek tekrar dene." : "Try changing your search or filters."}</span></div>}
     {sharingOpen ? <GuestListSharingDialog list={list.data} onClose={() => setSharingOpen(false)}/> : null}
     {deleteOpen ? <div className="dialog-backdrop" role="presentation" onMouseDown={() => setDeleteOpen(false)}><section aria-modal="true" className="content-dialog guest-list-dialog guest-list-confirm-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><button aria-label={tr ? "Kapat" : "Close"} className="passport-close" onClick={() => setDeleteOpen(false)}>×</button><header className="guest-list-dialog-heading"><div><Trash2 size={21}/></div><span className="eyebrow">{list.data.name}</span><h2>{tr ? "Liste silinsin mi?" : "Delete this list?"}</h2><p>{tr ? "Liste ve paylaşım izinleri kalıcı olarak silinir. Kullanıcı hesapları etkilenmez." : "The list and its sharing permissions will be permanently deleted. User accounts are not affected."}</p></header><div className="guest-list-dialog-actions"><button className="secondary-action" onClick={() => setDeleteOpen(false)} type="button">{tr ? "Vazgeç" : "Cancel"}</button><button className="danger-action" disabled={deleteList.isPending} onClick={() => deleteList.mutate()} type="button"><Trash2 size={17}/>{tr ? "Listeyi sil" : "Delete list"}</button></div></section></div> : null}
   </div>;

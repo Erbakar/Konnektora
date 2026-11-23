@@ -53,6 +53,7 @@ import {
   recordContentAction,
 } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
+import { useInviteLinkRef } from "../lib/useInviteLinkRef";
 import { eventInstagramCaption, eventPostInstagramCaption } from "../lib/shareCaptions";
 
 export function EventDetailPage() {
@@ -82,6 +83,7 @@ export function EventDetailPage() {
     enabled: Boolean(slug),
     retry: false,
   });
+  useInviteLinkRef("event", event?.id, slug);
   const canManage = Boolean(event && user && (event.createdById === user.id || ["accepted", "attended", "not_attending"].includes(event.viewerParticipation?.status ?? "") && ["organizer", "manager"].includes(event.viewerParticipation!.role) || ["admin", "super_admin", "curator"].includes(user.role)));
   const ticketTypesQuery = useQuery({
     queryKey: ["event-ticket-types", event?.id],
@@ -222,7 +224,7 @@ export function EventDetailPage() {
     <article className="page detail-page">
       <ContentMediaGallery targetType="event" targetId={event.id} canManage={canManage} coverImageUrl={event.coverImageUrl} coverAlt={event.title} />
       <p className="eyebrow">
-        {event.format === "online" ? language === "tr" ? "ÇEVRİM İÇİ" : "ONLINE" : event.format === "hybrid" ? language === "tr" ? "HİBRİT" : "HYBRID" : language === "tr" ? "YÜZ YÜZE" : "IN PERSON"} {language === "tr" ? "ETKİNLİK" : "EVENT"} – {event.visibility === "open" ? language === "tr" ? "HERKESE AÇIK" : "OPEN TO EVERYONE" : event.visibility === "approval_required" ? language === "tr" ? "ONAY GEREKLİ" : "APPROVAL REQUIRED" : language === "tr" ? "SADECE DAVETLİ" : "INVITE ONLY"}
+        {event.format === "online" ? language === "tr" ? "ÇEVRİM İÇİ" : "ONLINE" : event.format === "hybrid" ? language === "tr" ? "HİBRİT" : "HYBRID" : language === "tr" ? "YÜZ YÜZE" : "IN PERSON"} {language === "tr" ? "ETKİNLİK" : "EVENT"} – {event.visibility === "open" ? language === "tr" ? "HERKESE AÇIK" : "OPEN TO EVERYONE" : event.visibility === "approval_required" ? language === "tr" ? "ONAY GEREKLİ" : "APPROVAL REQUIRED" : event.visibility === "hidden" ? language === "tr" ? "GİZLİ: SADECE DAVETLİLER GÖREBİLİR" : "HIDDEN: ONLY INVITEES CAN SEE IT" : language === "tr" ? "SADECE DAVETLİ" : "INVITE ONLY"}
       </p>
       <h1><a href={`/events/${event.slug}`}>{event.title}</a></h1>
       <div className="detail-meta">

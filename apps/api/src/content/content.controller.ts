@@ -72,6 +72,25 @@ export class ContentController {
     return this.contentService.reorderContentMedia(targetType, targetId, body.mediaIds, user);
   }
 
+  /** 23/11 #58: medya açıklaması (en çok 30 karakter) */
+  @Patch("media/:targetType/:targetId/:id/caption")
+  @UseGuards(JwtAuthGuard)
+  updateMediaCaption(@Param("targetType") targetType: ReportTargetType, @Param("targetId") targetId: string, @Param("id") id: string, @Body() body: { caption?: string }, @CurrentUser() user: User) {
+    return this.contentService.updateMediaCaption(targetType, targetId, id, String(body?.caption ?? ""), user);
+  }
+  /** 23/11 #58: döndürülmüş / kırpılmış görsel eskisinin yerine geçer */
+  @Post("media/:targetType/:targetId/:id/replace")
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor("file", {
+    storage: durableStorage({ destination: resolve(process.cwd(), "uploads"), filename: (_request, file, callback) => callback(null, `${randomUUID()}${mediaExtensions[file.mimetype] ?? ""}`) }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_request, file, callback) => { const allowed = file.mimetype.startsWith("image/") && Boolean(mediaExtensions[file.mimetype]); callback(allowed ? null : new BadRequestException("Yalnız resim dosyası yüklenebilir."), allowed); }
+  }))
+  async replaceMediaFile(@Param("targetType") targetType: ReportTargetType, @Param("targetId") targetId: string, @Param("id") id: string, @UploadedFile() file: Express.Multer.File | undefined, @CurrentUser() user: User) {
+    if (!file) throw new BadRequestException("Yüklenecek dosya bulunamadı.");
+    try { return await this.contentService.replaceMediaFile(targetType, targetId, id, `/uploads/${file.filename}`, user); }
+    catch (error) { await removeDurableUpload(file.path).catch(() => undefined); throw error; }
+  }
   @Delete("media/:targetType/:targetId/:id")
   @UseGuards(JwtAuthGuard)
   deleteContentMedia(@Param("targetType") targetType: ReportTargetType, @Param("targetId") targetId: string, @Param("id") id: string, @CurrentUser() user: User) {

@@ -175,3 +175,20 @@ export function formatShortDateTime(value: string | Date | null | undefined) {
   const time = new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
   return `${formatShortDate(date)} ${time}`;
 }
+
+/**
+ * 23/11 #48, #49: mekân konumu. Türkiye'de "city" ilçe, "region" il (şehir); eyaletli ülkelerde "city" şehir, "region" eyalet/bölge.
+ * Kart: "İlçe, Şehir, Ülke" / "Şehir, Eyalet, Ülke". Detay: "Adres, İlçe, posta kodu, Şehir, Ülke" / "Adres, Şehir, posta kodu, Eyalet, Ülke".
+ */
+export function placeLocationLabel(place: { address?: string | null; city?: string | null; region?: string | null; postalCode?: string | null; country?: string | null }, language: "tr" | "en", withAddress = false) {
+  const city = localizeCityName(place.city, language);
+  const region = localizeCityName(place.region, language);
+  const parts = [
+    withAddress ? place.address : null,
+    city,
+    withAddress ? place.postalCode : null,
+    region && region.toLocaleLowerCase("tr-TR") !== city.toLocaleLowerCase("tr-TR") ? region : null,
+    localizeCountryName(place.country, language),
+  ];
+  return parts.map((part) => part?.trim()).filter(Boolean).join(", ");
+}

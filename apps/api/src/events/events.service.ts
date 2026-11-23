@@ -223,6 +223,26 @@ export class EventsService {
       return { items, total, page, pageSize, hasNextPage: page * pageSize < total };
     }
 
+    if (query.sort === "past" && !query.scope) {
+      const rows = await this.prisma.event.findMany({ where, select: { id: true, startsAt: true, endsAt: true }, take: 5000 });
+      const ordered = rows.sort((left, right) => (right.endsAt ?? right.startsAt).getTime() - (left.endsAt ?? left.startsAt).getTime() || right.startsAt.getTime() - left.startsAt.getTime());
+      const pageIds = ordered.slice((page - 1) * pageSize, page * pageSize).map((row) => row.id);
+      const pageEvents = await this.prisma.event.findMany({
+        where: { id: { in: pageIds } },
+        include: {
+          createdBy: { select: { id: true, name: true, username: true, companyName: true, accountType: true, privacySettings: { select: { profileNameAudience: true } } } }, tags: { orderBy: { sortOrder: "asc" as const }, include: { tag: true } },
+          participants: {
+            where: { status: { in: ["accepted", "attended", "invited"] } },
+            select: { status: true, userId: true, user: { select: { followers: { where: { followerId: userId ?? "" }, select: { followerId: true }, take: 1 } } } },
+          },
+          _count: { select: { participants: { where: { status: { in: ["accepted", "attended"] } } } } },
+        },
+      });
+      const byId = new Map(pageEvents.map((event) => [event.id, event]));
+      const items = pageIds.map((id) => byId.get(id)).filter((event): event is NonNullable<typeof event> => Boolean(event)).map(this.mapEvent);
+      return { items, total: rows.length, page, pageSize, hasNextPage: page * pageSize < rows.length };
+    }
+
     const orderBy: Prisma.EventOrderByWithRelationInput[] =
       query.scope === "popular"
         ? [{ participants: { _count: "desc" } }, { startsAt: "asc" }]
@@ -1040,6 +1060,21 @@ export class EventsService {
     }));
   }
 
+  async recordInviteLinkVisit(eventId: string, inviterId: string, visitor: User) {
+    if (!/^[0-9a-f-]{36}$/i.test(inviterId) || inviterId === visitor.id) return { recorded: false };
+    const [event, inviter, existing] = await Promise.all([
+      this.prisma.event.findFirst({ where: { id: eventId, status: EventStatus.published }, select: { id: true, createdById: true, endsAt: true, startsAt: true } }),
+      this.prisma.eventParticipant.findUnique({ where: { eventId_userId: { eventId, userId: inviterId } }, select: { status: true } }),
+      this.prisma.eventParticipant.findUnique({ where: { eventId_userId: { eventId, userId: visitor.id } }, select: { status: true } }),
+    ]);
+    if (!event) return { recorded: false };
+    // Bağlantıyı paylaşan etkinliğin kurucusu ya da etkinliğe katılan/davetli biri olmalı.
+    if (event.createdById !== inviterId && !["accepted", "attended", "invited"].includes(inviter?.status ?? "")) return { recorded: false };
+    await this.prisma.eventInvitation.upsert({ where: { eventId_inviterId_inviteeId: { eventId, inviterId, inviteeId: visitor.id } }, create: { eventId, inviterId, inviteeId: visitor.id }, update: {} });
+    if (!existing) await this.prisma.eventParticipant.create({ data: { eventId, userId: visitor.id, status: EventParticipantStatus.invited, role: EventParticipantRole.attendee } }).catch(() => undefined);
+    return { recorded: true };
+  }
+
   async requestAttendance(eventId: string, userId: string) {
     const [event, existing] = await Promise.all([
       this.prisma.event.findUnique({ where: { id: eventId } }),
@@ -1372,7 +1407,7 @@ export class EventsService {
         status: true,
         participants: {
           where: { userId: actor.id },
-          select: { status: true },
+          select: { status: true, role: true },
           take: 1,
         },
       },
@@ -1380,6 +1415,10 @@ export class EventsService {
 
     if (!event || event.status !== EventStatus.published) {
       throw new NotFoundException("Etkinlik bulunamadı.");
+    }
+    // 23/11 #42: kurucu ("manager") davetini yalnız etkinliğin kurucuları gönderebilir.
+    if (canManage && input.role === EventParticipantRole.manager && !["admin", "super_admin"].includes(actor.role) && event.createdBy?.id !== actor.id && event.participants[0]?.role !== EventParticipantRole.manager) {
+      throw new ForbiddenException("Kurucu rolünü yalnız etkinlik kurucuları verebilir.");
     }
     const cutoff = event.endsAt
       ? event.endsAt.getTime() + 12 * 60 * 60 * 1000
@@ -1510,12 +1549,17 @@ export class EventsService {
     }
 
     if (event?.createdById === userId && (input.status === "banned" || input.status === "declined" || input.role && input.role !== "organizer")) throw new ForbiddenException("Etkinlik sahibi etkinlikten çıkarılamaz veya yasaklanamaz.");
+    // 23/11 #17, #42: "manager" = etkinlik kurucusu. Kurucu rolünü ve kurucuları yalnız kurucular (etkinliği açan veya diğer kurucular) değiştirebilir.
+    const actorParticipant = event?.createdById === actor.id || ["admin", "super_admin"].includes(actor.role) ? null : await this.prisma.eventParticipant.findUnique({ where: { eventId_userId: { eventId, userId: actor.id } } });
+    const actorIsFounder = event?.createdById === actor.id || ["admin", "super_admin"].includes(actor.role) || (actorParticipant?.role === EventParticipantRole.manager && ["accepted", "attended", "not_attending"].includes(actorParticipant.status));
     if (
-      input.role &&
       (input.role === EventParticipantRole.manager || participant.role === EventParticipantRole.manager) &&
-      event?.createdById !== actor.id &&
-      !["admin", "super_admin"].includes(actor.role)
-    ) throw new ForbiddenException("Etkinlik sahibi rolünü yalnızca etkinlik kurucusu değiştirebilir.");
+      !actorIsFounder
+    ) throw new ForbiddenException("Etkinlik kurucusu rolünü yalnızca etkinlik kurucuları değiştirebilir.");
+    if (input.role && input.role !== participant.role && input.role !== EventParticipantRole.attendee) {
+      const title = input.role === EventParticipantRole.manager ? "Etkinlik kuruculuğu" : "Etkinlik yöneticiliği daveti";
+      await recordActivity(this.prisma, { userId, type: "event_manager", title, body: `@${actor.username ?? actor.name} sizi ${input.role === EventParticipantRole.manager ? "etkinliğin kurucuları arasına ekledi" : "etkinliğe yönetici yaptı"}.`, targetType: "event", targetId: eventId, key: `event_role:${eventId}:${input.role}:${Date.now()}`, context: { actorId: actor.id, groupKey: `event_manager:${eventId}` } });
+    }
     return this.prisma.eventParticipant.update({
       where: { eventId_userId: { eventId, userId } },
       data: { ...(input.status ? { status: input.status } : {}), ...(input.role ? { role: input.role } : {}) },
@@ -1582,7 +1626,7 @@ export class EventsService {
     input: Partial<CreateEventDto>,
     userId?: string,
   ) {
-    await this.validateTicketPlatforms(input.ticketTypes, userId);
+    await this.validateTicketPlatforms(input.ticketTypes, userId, id);
     const previousTagIds = await this.getEventTagIds(id);
     const nextTagIds = input.tagIds || input.lineup
       ? await this.resolveEventTagIds(input.tagIds ?? previousTagIds, input.lineup, userId)
@@ -1741,14 +1785,22 @@ export class EventsService {
 
   ticketSalesEligibility(user: User) { return ticketSalesEligibility(this.prisma, user); }
 
-  private async validateTicketPlatforms(ticketTypes?: CreateEventDto["ticketTypes"], userId?: string) {
+  private async validateTicketPlatforms(ticketTypes?: CreateEventDto["ticketTypes"], userId?: string, existingEventId?: string) {
     if (!ticketTypes?.length) return;
     for (const ticket of ticketTypes) {
       if (ticket.salesPlatform !== "external") continue;
       try { new URL(ticket.externalSalesUrl ?? ""); }
       catch { throw new BadRequestException(`${ticket.name} için geçerli bir dış satış URL'si girin.`); }
     }
-    if (!ticketTypes.some((ticket) => ticket.salesPlatform === "konnektora")) return;
+    let konnektoraTickets = ticketTypes.filter((ticket) => ticket.salesPlatform === "konnektora");
+    // 23/11 #41: düzenlemede yalnız yeni eklenen veya fiyatı/para birimi değişen Konnektora biletleri uygunluk kontrolüne girer;
+    // aksi hâlde katılım tipi gibi ilgisiz bir alanı değiştirmek bile "bilet satışı için KYB" hatasıyla engelleniyordu.
+    if (existingEventId && konnektoraTickets.length) {
+      const existing = await this.prisma.eventTicketType.findMany({ where: { eventId: existingEventId, salesPlatform: "konnektora" }, select: { name: true, price: true, currency: true } });
+      const known = new Set(existing.map((ticket) => `${ticket.name}|${Number(ticket.price)}|${ticket.currency}`));
+      konnektoraTickets = konnektoraTickets.filter((ticket) => !known.has(`${ticket.name}|${Number(ticket.price)}|${ticket.currency}`));
+    }
+    if (!konnektoraTickets.length) return;
     const owner = userId ? await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, accountType: true, role: true } }) : null;
     if (!owner || !(await ticketSalesEligibility(this.prisma, owner)).eligible) throw new BadRequestException(ticketSalesRequirement);
   }

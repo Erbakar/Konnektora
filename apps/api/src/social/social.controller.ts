@@ -27,6 +27,12 @@ export class SocialController {
     return this.socialService.suggestions(user.id);
   }
 
+  /** 23/11 #3: ortak ilgi alanı sayısına göre en uyumlu ilk 500 üye (takip edilenler dahil). */
+  @Get("common-interests")
+  commonInterests(@CurrentUser() user: User) {
+    return this.socialService.commonInterests(user.id);
+  }
+
   @Get("following")
   following(@CurrentUser() user: User) {
     return this.socialService.listFollowing(user.id);

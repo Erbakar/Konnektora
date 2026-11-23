@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import { recordContentImpression, rememberContentSource, resolveMediaUrl } from "../lib/api";
 import { DistanceLabel } from "./DistanceLabel";
 import { useLanguage } from "../lib/i18n";
-import { localizeCityName, localizeCountryName } from "../lib/formats";
+import { placeLocationLabel } from "../lib/formats";
 
 export const placeTypeLabels: Record<string, string> = {
   community: "🏘️ Community space", coworking: "💻 Coworking", venue: "🎭 Event venue", cafe: "☕ Cafe", restaurant: "🍽️ Restaurant", bar: "🍸 Bar", club: "🎶 Club", gallery: "🖼️ Gallery", outdoor: "🌳 Outdoor", studio: "🎙️ Studio", office: "🏢 Office",
@@ -54,7 +54,7 @@ export function PlaceCard({ place }: { place: Place }) {
     </Link>
     <div><span className="eyebrow">{(language === "tr" ? placeTypeLabelsTr : placeTypeLabels)[place.placeType ?? ""] ?? (language === "tr" ? "Mekân" : "Place")}</span><h3><Link onClick={() => rememberContentSource("place", place.id)} to={`/places/${place.slug}`}>{place.name}</Link></h3></div>
     <div className="event-details">
-      <span><MapPin size={16}/>{[localizeCityName(place.city, language), localizeCountryName(place.country, language)].filter(Boolean).join(", ") || (language === "tr" ? "Konum belirtilmedi" : "Location not specified")}</span>
+      <span><MapPin size={16}/>{placeLocationLabel(place, language) || (language === "tr" ? "Konum belirtilmedi" : "Location not specified")}</span>
       <span><Users size={16}/>{memberSummary}</span>
       {place.upcomingEventCount ? <span><Calendar size={16}/>{place.upcomingEventCount} {language === "tr" ? "yaklaşan etkinlik" : "upcoming events"}</span> : null}
       <DistanceLabel latitude={place.latitude} longitude={place.longitude}/>

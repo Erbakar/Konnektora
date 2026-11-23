@@ -1,3 +1,4 @@
+import { agreementReferrers } from "./referrers";
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { Prisma, User } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
@@ -40,8 +41,10 @@ export class PlatformRevenueService {
     if(amount.isZero()) continue;
     const common={agreementId:agreement.id,revenueId:revenue.id,eventId:input.eventId,currency:input.currency,held:eventIncome,occurredAt};
     rows.push({...common,userId:agreement.userId,kind:"income",category:input.category,amount,rate,description:input.description,sourceKey:`revenue:${revenue.id}:curator:${agreement.userId}`});
-    const referral=cents(amount.mul(agreement.referralRate).div(100));
-    if(agreement.referrerId && referral.gt(0)) rows.push({...common,userId:agreement.referrerId,kind:"income",category:"referral",amount:referral,rate:agreement.referralRate,description:`Referans payı: ${input.description}`,sourceKey:`revenue:${revenue.id}:referral:${agreement.userId}`});
+    for(const [index,referrer] of agreementReferrers(agreement).entries()){
+     const referral=cents(amount.mul(referrer.referralRate).div(100));
+     if(referral.gt(0)) rows.push({...common,userId:referrer.referrerId,kind:"income",category:"referral",amount:referral,rate:referrer.referralRate,description:`Referans payı: ${input.description}`,sourceKey:`revenue:${revenue.id}:referral:${agreement.userId}${index?`:${referrer.referrerId}`:""}`});
+    }
    }
    if(rows.reduce((sum,row)=>sum.add(String(row.amount)),new Prisma.Decimal(0)).gt(data.amount)) throw new BadRequestException("Toplam küratör payı gelir tutarını aşamaz.");
    if(rows.length) await tx.curatorLedgerEntry.createMany({data:rows});

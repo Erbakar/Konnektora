@@ -6,7 +6,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { GuestListAction } from "../components/GuestListAction";
 import { GuestListHub } from "../components/GuestListHub";
 import { UserIdentityLink, userProfilePath } from "../components/UserIdentityLink";
-import { followUser, getUserSession, listFollowing, listGuestLists, listMemberSuggestions, listNewMembers, unfollowUser } from "../lib/api";
+import { followUser, getUserSession, listFollowing, listGuestLists, listCommonInterestMembers, listMemberSuggestions, listNewMembers, unfollowUser } from "../lib/api";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 import { useLanguage } from "../lib/i18n";
 import { memberLocationLabel } from "../lib/formats";
@@ -25,6 +25,7 @@ export function CommunityPage() {
   const suggestions = useQuery({ queryKey: ["member-suggestions", user?.id], queryFn: listMemberSuggestions, enabled: Boolean(user) });
   const newMembers = useQuery({ queryKey: ["new-members", user?.id], queryFn: listNewMembers, enabled: Boolean(user) });
   const following = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
+  const commonInterests = useQuery({ queryKey: ["member-suggestions", "common-interests", user?.id], queryFn: listCommonInterestMembers, enabled: Boolean(user && tab === "mutual") });
   const { canUseGuestLists } = useGuestListEntitlement();
   const accessibleLists = useQuery({ queryKey: ["guest-lists"], queryFn: listGuestLists, enabled: Boolean(user), retry: false });
   const canViewGuestLists = canUseGuestLists || Boolean(accessibleLists.data?.length);
@@ -32,10 +33,10 @@ export function CommunityPage() {
     ? newMembers.data ?? []
     : tab === "following"
       ? following.data ?? []
-      : [...(suggestions.data ?? [])]
-          .filter((member) => tab !== "mutual" || member.commonTagCount > 0)
-          .sort((a, b) => tab === "mutual" ? b.commonTagCount - a.commonTagCount : b.followerCount - a.followerCount);
-  const pending = (tab === "new" && newMembers.isLoading) || suggestions.isLoading || following.isLoading;
+      : tab === "mutual"
+        ? commonInterests.data ?? []
+        : [...(suggestions.data ?? [])].sort((a, b) => b.followerCount - a.followerCount);
+  const pending = (tab === "new" && newMembers.isLoading) || (tab === "mutual" && commonInterests.isLoading) || suggestions.isLoading || following.isLoading;
   const toggle = useMutation({
     mutationFn: (member: MemberCard) => member.following ? unfollowUser(member.id) : followUser(member.id),
     onSuccess: async () => { await Promise.all([client.invalidateQueries({ queryKey: ["following"] }), client.invalidateQueries({ queryKey: ["member-suggestions"] }),client.invalidateQueries({ queryKey: ["new-members"] })]); },
@@ -53,7 +54,7 @@ export function CommunityPage() {
     </div>
     {tab === "guests" ? <GuestListHub/> : pending ? <div className="feed-state">{tr ? "Kişiler yükleniyor…" : "Loading people…"}</div> : members.length ? <MemberSignalsProvider ids={members.map(member=>member.id)}><section className="community-grid">{members.map((member) => <article className="community-card" key={member.id}>
       <UserIdentityLink user={member} avatarClassName="post-avatar" showName={false}/>
-      <div className="community-card-body"><div className="member-name-line"><FollowStar id={member.id}/><Link to={userProfilePath(member)}><strong>{member.username ? `@${member.username}` : member.name}</strong></Link></div>{tab === "new" && member.createdAt ? <span>{new Intl.RelativeTimeFormat(tr ? "tr" : "en", { numeric: "auto" }).format(Math.ceil((new Date(member.createdAt).getTime() - Date.now()) / 86_400_000), "day")} {tr ? "katıldı" : "joined"}</span> : null}{member.birthDate || member.gender === "female" || member.gender === "male" ? <span>{/* 09/08 #99, 07/11 #44: gizlilik izin veriyorsa yaş ve cinsiyet */}{[member.birthDate ? `${memberAge(member.birthDate)} ${tr ? "yaşında" : "years old"}` : null, member.gender === "female" ? (tr ? "Kadın" : "Female") : member.gender === "male" ? (tr ? "Erkek" : "Male") : null].filter(Boolean).join(", ")}</span> : null}<span><MapPin size={14}/>{memberLocationLabel(member.city, member.country, tr ? "tr" : "en")}</span><small>{member.followerCount} {tr ? "takipçi" : "followers"}</small><MemberCompatibility id={member.id} commonTagCount={member.commonTagCount}/></div>
+      <div className="community-card-body"><div className="member-name-line"><FollowStar id={member.id}/><Link to={userProfilePath(member)}><strong>{member.username ? `@${member.username}` : member.name}</strong></Link></div>{tab === "new" && member.createdAt ? <span>{new Intl.RelativeTimeFormat(tr ? "tr" : "en", { numeric: "auto" }).format(Math.ceil((new Date(member.createdAt).getTime() - Date.now()) / 86_400_000), "day")} {tr ? "katıldı" : "joined"}</span> : null}{member.birthDate || member.gender === "female" || member.gender === "male" ? <span>{/* 09/08 #99, 07/11 #44: gizlilik izin veriyorsa yaş ve cinsiyet */}{[member.birthDate ? `${memberAge(member.birthDate)} ${tr ? "yaşında" : "years old"}` : null, member.gender === "female" ? (tr ? "Kadın" : "Female") : member.gender === "male" ? (tr ? "Erkek" : "Male") : null].filter(Boolean).join(", ")}</span> : null}<span><MapPin size={14}/>{memberLocationLabel(member.city, member.country, tr ? "tr" : "en")}</span><span className="community-card-followers">{member.followerCount} {tr ? "takipçi" : "followers"}</span><MemberCompatibility id={member.id} commonTagCount={member.commonTagCount}/></div>
       <div className="community-card-actions">{member.id!==user.id?<><button className={member.following ? "secondary-action" : "primary-action"} disabled={toggle.isPending} onClick={() => toggle.mutate(member)}>{member.following ? (tr ? "Takipte" : "Following") : (tr ? "Takip et" : "Follow")}</button><GuestListAction canUse={canUseGuestLists} target={{ id: member.id, name: member.name, username: member.username, avatarUrl: member.avatarUrl, accountType: member.accountType }}/><details className="action-menu"><summary aria-label={tr ? "Kullanıcı aksiyonları" : "User actions"}><MoreVertical size={18}/></summary><div><Link to={`/messages?peer=${member.id}`}><Mail size={17}/> {tr ? "Mesaj gönder" : "Send message"}</Link></div></details></>:null}</div>
     </article>)}</section></MemberSignalsProvider> : <div className="feed-state"><strong>{tr ? "Bu listede kullanıcı bulunmuyor." : "No members in this list."}</strong></div>}
   </div>;

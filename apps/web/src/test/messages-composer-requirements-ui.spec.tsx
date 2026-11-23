@@ -15,6 +15,8 @@ const apiMocks = vi.hoisted(() => ({
   listMemberSuggestions: vi.fn(),
   markConversationRead: vi.fn(),
   sendPrivateMessage: vi.fn(),
+  sendPrivateMessageWithProgress: vi.fn(),
+  listFollowing: vi.fn(),
 }));
 
 vi.mock("../lib/api", async () => {
@@ -40,10 +42,16 @@ beforeEach(() => {
     id: "peer-2", name: "Ece", username: "ece", avatarUrl: "/uploads/ece.webp", accountType: "individual",
     city: "İstanbul", country: "Türkiye", followerCount: 3, commonTagCount: 1, following: false,
   }]);
+  // 23/11 #62.1: "+ yeni mesaj" önerileri takip edilenlerden gelir.
+  apiMocks.listFollowing.mockResolvedValue([{
+    id: "peer-2", name: "Ece", username: "ece", avatarUrl: "/uploads/ece.webp", accountType: "individual",
+    city: "İstanbul", country: "Türkiye", followerCount: 3, commonTagCount: 1, following: true,
+  }]);
   apiMocks.listConversationMessages.mockResolvedValue({ items: [], page: 1, pageSize: 50, total: 0, hasNextPage: false });
   apiMocks.getTyping.mockResolvedValue({ typing: false });
   apiMocks.getPublicProfileById.mockResolvedValue(null);
   apiMocks.markConversationRead.mockResolvedValue({ ok: true });
+  apiMocks.sendPrivateMessageWithProgress.mockImplementation(async (...args: unknown[]) => { (args[3] as ((percent: number) => void) | undefined)?.(50); return apiMocks.sendPrivateMessage(); });
   apiMocks.sendPrivateMessage.mockResolvedValue({
     id: "media-message", senderId: "member-1", recipientId: "peer-1", body: "", status: "active",
     attachmentUrl: "/uploads/photo.webp", attachmentType: "image/webp", attachmentName: "photo.webp",
@@ -88,7 +96,8 @@ describe("özel mesaj medya gereksinimleri 139–141", () => {
     fireEvent.change(input, { target: { files: [image] } });
     await userEvent.click(screen.getByRole("button", { name: "Gönder" }));
 
-    await waitFor(() => expect(apiMocks.sendPrivateMessage).toHaveBeenCalledWith("peer-1", "", { replyToId: undefined, attachment: image }));
+    // 23/11 #62.11.3: medyalı mesaj yükleme yüzdesiyle gönderilir.
+    await waitFor(() => expect(apiMocks.sendPrivateMessageWithProgress).toHaveBeenCalledWith("peer-1", "", { replyToId: undefined, attachment: image }, expect.any(Function)));
     await userEvent.click(screen.getByText("İpuçları"));
     expect(screen.getByText("@Username")).toBeVisible();
     expect(screen.getByText(/YouTube ve SoundCloud/)).toBeVisible();
@@ -108,8 +117,9 @@ describe("özel mesaj medya gereksinimleri 139–141", () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() => expect(container.querySelector(".message-media-collage-2")).toBeInTheDocument());
-    expect(container.querySelectorAll(".message-media-collage-2 img")).toHaveLength(2);
+    // 23/11 #62.11.4: aynı yüklemedeki medyalar etkinlik gönderilerindeki tek albümde.
+    await waitFor(() => expect(container.querySelector(".message-bubble .post-media-album.count-2")).toBeInTheDocument());
+    expect(container.querySelectorAll(".message-bubble .post-media-album img")).toHaveLength(2);
     expect(container.querySelector(".message-bubble > p")).not.toBeInTheDocument();
   });
 
@@ -120,7 +130,9 @@ describe("özel mesaj medya gereksinimleri 139–141", () => {
       </QueryClientProvider>,
     );
 
-    await userEvent.click(await screen.findByPlaceholderText("Kullanıcı adı veya ad yaz…"));
+    // 23/11 #62.1: başlığın sağındaki "+ yeni mesaj"
+    await userEvent.click(await screen.findByRole("button", { name: /yeni mesaj/ }));
+    await userEvent.click(await screen.findByPlaceholderText("Kullanıcı adı veya ad soyad yaz…"));
     expect(await screen.findByRole("button", { name: /@ece/ })).toBeVisible();
     expect(container.querySelector<HTMLImageElement>(".message-result-avatar img")?.src).toMatch(/\/uploads\/ece\.webp$/);
   });

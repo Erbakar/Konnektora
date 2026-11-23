@@ -66,7 +66,7 @@ export function normalizeTurkishAddress(region?: string | null, city?: string | 
 
 const trNames = new Intl.DisplayNames(["tr"], { type: "region" });
 const enNames = new Intl.DisplayNames(["en"], { type: "region" });
-const regions = countryCodes.map((code) => ({ code, tr: code === "TR" ? "Türkiye" : trNames.of(code) ?? code, en: enNames.of(code) ?? code }));
+export const regions = countryCodes.map((code) => ({ code, tr: code === "TR" ? "Türkiye" : trNames.of(code) ?? code, en: enNames.of(code) ?? code }));
 export function normalizeCountry(value: string) {
   return regions.find((item) => [item.code, item.tr, item.en, countryNamesEn[item.tr]].includes(value))?.tr ?? value;
 }

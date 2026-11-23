@@ -7,6 +7,7 @@ import { SiteFooter } from "./SiteFooter";
 import { clearUserSession, getUserSession, listConversations, listMyNotifications, markMyNotificationRead, resolveMediaUrl, updatePreferredLanguage, USER_SESSION_CHANGED_EVENT } from "../lib/api";
 import { publicSiteHref } from "../lib/domains";
 import { useLanguage } from "../lib/i18n";
+import { HeaderSearch } from "./HeaderSearch";
 import { DialogAccessibilityManager } from "./DialogAccessibilityManager";
 import { CheckInDecisionDialog } from "./CheckInDecisionDialog";
 import { DevicePushPrompt } from "./DevicePushPrompt";
@@ -45,6 +46,19 @@ export function AppLayout() {
     refetchInterval: 2_500,
   });
   const profileMenuRef = useRef<HTMLDetailsElement>(null);
+  // 23/11 #72: üç noktalı menülerde bir işleme (Düzenle, Sil, Paylaş…) dokununca menü kapanır.
+  useEffect(() => {
+    const close = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const action = target?.closest("details[open] > div button, details[open] > div a");
+      // Menü içinden açılan pencereler (ör. Guest List'e ekle) menüyle birlikte kapanmamalı.
+      if (!action || action.closest("[role=dialog], .dialog-backdrop, .emotion-modal") || action.getAttribute("data-keep-menu") === "true") return;
+      const menu = action?.closest("details.action-menu, details.detail-action-menu, details.post-action-menu, details.comment-action-menu");
+      if (menu instanceof HTMLDetailsElement) window.setTimeout(() => { menu.open = false; }, 0);
+    };
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, []);
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => { if (profileMenuRef.current && event.target instanceof Node && !profileMenuRef.current.contains(event.target)) profileMenuRef.current.open = false; };
     const closeEscape = (event: KeyboardEvent) => { if (event.key === "Escape" && profileMenuRef.current) profileMenuRef.current.open = false; };
@@ -157,6 +171,8 @@ export function AppLayout() {
         </a>
 
         <nav className="corp-nav" aria-label={t("navigation")}>
+          {/* 23/11 #50: masaüstünde "Ara" navigasyonun başında; üzerine gelince açılan arama kutusu */}
+          <HeaderSearch language={language}/>
           {user ? <>
           <NavLink to="/feed"><Home size={18} /> {t("feed")}</NavLink>
           <NavLink to="/events">
@@ -193,6 +209,8 @@ export function AppLayout() {
             <button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")} type="button">EN</button>
           </div> : null}
           <NavLink aria-label={t("search")} className="corp-header-search" to="/search"><Search size={20}/><span>{t("search")}</span></NavLink>
+          {/* 23/11 #50: giriş yapmamış kullanıcılara "İşletmeler için" (masaüstünde Giriş yap'ın solunda, tablette menü ile Ara arasında) */}
+          {!user ? <NavLink className="corp-business-link" to="/business">{language === "tr" ? "İşletmeler için" : "For business"}</NavLink> : null}
           {user ? <>
             <div className="corp-user-links"><div className="corp-profile-cluster"><NavLink className="corp-user-identity" to={`/users/id/${user.id}`}>{user.avatarUrl ? <img alt="" src={resolveMediaUrl(user.avatarUrl)}/> : <span className="corp-user-avatar">{user.name.slice(0, 1).toUpperCase()}</span>}<span>@{user.username ?? user.name}</span></NavLink><details ref={profileMenuRef} className="corp-profile-menu"><summary aria-label={language === "tr" ? "Profil menüsünü aç" : "Open profile menu"}><ChevronDown size={15}/>{unreadNotifications ? <b className="notification-count">{unreadNotifications}</b> : null}</summary><div><NavLink to={`/users/id/${user.id}`}><UserRound size={17}/>{t("profile")}</NavLink><NavLink to="/notifications"><Bell size={17}/>{t("notifications")}{unreadNotifications ? <b className="notification-count">{unreadNotifications}</b> : null}</NavLink><NavLink to="/identity"><QrCode size={17}/>{t("memberId")}</NavLink><NavLink to="/tickets"><Ticket size={17}/>{t("myTickets")}</NavLink><NavLink to="/contacts"><Users size={17}/>{t("findFriends")}</NavLink><NavLink to="/settings"><Settings size={17}/>{t("settingsCenter")}</NavLink><section className="profile-language"><span>{t("language")}</span><button className={language === "tr" ? "active" : ""} onClick={() => setLanguage("tr")} type="button">TR</button><button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")} type="button">EN</button></section><button onClick={() => { clearUserSession(); window.location.assign("/"); }} type="button"><LogOut size={17}/>{t("logOut")}</button></div></details></div></div>
           </> : <>

@@ -155,8 +155,10 @@ describe("topluluk ve ilgili kullanıcı gereksinimleri", () => {
     const eventActions = document.querySelector('summary[aria-label="Kullanıcı aksiyonları"]');
     expect(eventActions).toBeInTheDocument();
     fireEvent.click(eventActions!);
+    // 23/11 #17: "Organizatör yap" kaldırıldı; kurucu yapma yalnız kuruculara görünür.
     expect(screen.getByRole("button", { name: "Etkinlik yöneticisi yap" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Organizatör yap" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Etkinlik kurucusu yap" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Organizatör yap" })).toBeNull();
     expect(screen.getByRole("button", { name: "Etkinliğe yasakla" })).toBeVisible();
   });
 
@@ -190,8 +192,10 @@ describe("topluluk ve ilgili kullanıcı gereksinimleri", () => {
     const placeActions = document.querySelector('summary[aria-label="Kullanıcı aksiyonları"]');
     expect(placeActions).toBeInTheDocument();
     fireEvent.click(placeActions!);
+    // 23/11 #18
     expect(screen.getByRole("button", { name: "Mekân yöneticisi yap" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Organizatör yap" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Mekân kurucusu yap" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Organizatör yap" })).toBeNull();
     expect(screen.getByRole("button", { name: "Mekâna yasakla" })).toBeVisible();
   });
 });

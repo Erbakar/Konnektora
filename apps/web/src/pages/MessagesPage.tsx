@@ -13,6 +13,8 @@ import {
   MessageCircle,
   MoreVertical,
   Pin,
+  PinOff,
+  Plus,
   Reply,
   Search,
   Send,
@@ -48,17 +50,21 @@ import {
   getUserSession,
   listConversationMessages,
   listConversations,
+  listFollowing,
   listMemberSuggestions,
   markConversationRead,
   resolveMediaUrl,
   searchDiscovery,
   searchPrivateMessages,
   sendPrivateMessage,
+  sendPrivateMessageWithProgress,
   sendTyping,
   toggleMessageReaction,
   updateConversationPreference,
 } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
+import { MediaPicker, pickerAccept } from "../components/MediaPicker";
+import { MediaAlbum } from "../components/MediaAlbum";
 
 const emojis = ["❤️", "👍", "😂", "😮", "😢", "🎉"];
 
@@ -83,6 +89,11 @@ export function MessagesPage() {
     queryFn: listMemberSuggestions,
     enabled: Boolean(user),
   });
+  const following = useQuery({ queryKey: ["following", user?.id], queryFn: listFollowing, enabled: Boolean(user) });
+  const [newOpen, setNewOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+  const cardPreference = useMutation({ mutationFn: ({ id, pinned }: { id: string; pinned: boolean }) => updateConversationPreference(id, { pinned }), onSuccess: () => void client.invalidateQueries({ queryKey: ["conversations"] }) });
+  const cardDelete = useMutation({ mutationFn: (id: string) => deleteConversation(id), onSuccess: (_result, id) => { setConfirmDelete(null); void client.invalidateQueries({ queryKey: ["conversations"] }); if (id === peerId) setParams({}); } });
   const messages = useInfiniteQuery({
     queryKey: ["conversation-messages", user?.id, peerId],
     queryFn: ({ pageParam }) => listConversationMessages(peerId, pageParam),
@@ -147,7 +158,8 @@ export function MessagesPage() {
           avatarUrl: suggested.avatarUrl ?? null,
         }
       : directPeer.data ? { id: directPeer.data.id, name: directPeer.data.accountType === "corporate" ? directPeer.data.companyName || directPeer.data.name : directPeer.data.name, username: directPeer.data.username, avatarUrl: directPeer.data.media.find(item => item.type === "image")?.url ?? null } : null);
-  const newRecipients = (suggestions.data ?? []).filter(
+  // 23/11 #62.1: önerilen alıcılar kullanıcının takip ettikleri arasından gelir.
+  const newRecipients = (following.data ?? []).filter(
     (item) =>
       item.id !== user.id &&
       !(conversations.data?.items ?? []).some(
@@ -164,6 +176,8 @@ export function MessagesPage() {
             <h1>{t("Mesajlar", "Messages")}</h1>
             <span>{conversations.data?.totalUnread ?? 0} {t("okunmamış", "unread")}</span>
           </div>
+          {/* 23/11 #62.1: "Yeni konuşma" alanı yerine başlığın sağında "+ yeni mesaj" */}
+          <button className="text-button new-message-link" onClick={() => { setNewOpen((open) => !open); setRecipientQuery(""); }} type="button"><Plus size={15}/>{t("yeni mesaj", "new message")}</button>
         </div>
         <div className="message-search">
           <Search size={17} />
@@ -203,19 +217,20 @@ export function MessagesPage() {
           </div>
         ) : (
           <>
-            <label className="new-conversation-field">
-              {t("Yeni konuşma", "New conversation")}
+            {newOpen ? <label className="new-conversation-field">
+              {t("Kime", "To")}
               <input
+                autoFocus
                 value={recipientQuery}
                 onFocus={() => setRecipientFocused(true)}
                 onBlur={() =>
                   window.setTimeout(() => setRecipientFocused(false), 150)
                 }
                 onChange={(event) => setRecipientQuery(event.target.value)}
-                placeholder={t("Kullanıcı adı veya ad yaz…", "Enter a username or name…")}
+                placeholder={t("Kullanıcı adı veya ad soyad yaz…", "Enter a username or name…")}
               />
-            </label>
-            {recipientQuery.trim().length >= 2 ? (
+            </label> : null}
+            {newOpen && recipientQuery.trim().length >= 2 ? (
               <div className="message-search-results">
                 {recipientResults.data?.items
                   .filter((item) => item.kind === "user")
@@ -226,6 +241,7 @@ export function MessagesPage() {
                       onClick={() => {
                         setParams({ peer: item.id });
                         setRecipientQuery("");
+                        setNewOpen(false);
                       }}
                     >
                       <span className="message-result-avatar">
@@ -241,14 +257,14 @@ export function MessagesPage() {
                   <small>{t("Kullanıcı bulunamadı.", "No member found.")}</small>
                 ) : null}
               </div>
-            ) : recipientFocused ? (
+            ) : newOpen && (recipientFocused || !recipientQuery) ? (
               <div className="message-search-results">
-                <small>{t("Öneriler", "Suggestions")}</small>
-                {newRecipients.slice(0, 5).map((member) => (
+                <small>{t("Takip ettiklerin", "People you follow")}</small>
+                {newRecipients.slice(0, 8).map((member) => (
                   <button
                     className="message-user-result"
                     key={member.id}
-                    onClick={() => setParams({ peer: member.id })}
+                    onClick={() => { setParams({ peer: member.id }); setNewOpen(false); }}
                   >
                     <span className="message-result-avatar">
                       {member.avatarUrl ? <img alt="" src={resolveMediaUrl(member.avatarUrl)} /> : member.name[0]}
@@ -260,13 +276,13 @@ export function MessagesPage() {
             ) : null}
             <div className="conversation-list">
               {list.map((conversation) => (
+                <div className={`conversation-card-wrap${conversation.preference?.pinned ? " is-pinned" : ""}`} key={conversation.peer.id}>
                 <button
                   className={
                     conversation.peer.id === peerId
                       ? "conversation-card is-active"
                       : "conversation-card"
                   }
-                  key={conversation.peer.id}
                   onClick={() => setParams({ peer: conversation.peer.id })}
                 >
                   <span className="conversation-avatar">
@@ -277,22 +293,25 @@ export function MessagesPage() {
                   <span>
                     <strong>
                       {conversation.peer.username ? `@${conversation.peer.username}` : conversation.peer.name}
-                      {conversation.preference?.pinned ? (
-                        <Pin size={12} />
-                      ) : null}
+                      {/* 23/11 #62.10: okunmamış sayısı kullanıcı adının sağında */}
+                      {conversation.unreadCount ? <b className="conversation-unread">{conversation.unreadCount}</b> : null}
                       {conversation.preference?.muted ? (
                         <VolumeX size={12} />
                       ) : null}
                     </strong>
                     <small>
-                      {conversation.lastMessage.attachmentUrl ? "📎 " : ""}
-                      {conversation.lastMessage.body}
+                      <span className="conversation-last">{conversation.lastMessage.attachmentUrl ? "📎 " : ""}{conversation.lastMessage.body}</span>
+                      {/* 23/11 #62.9: son mesajın ne zaman gönderildiği (1d, 3s, 4g, 3h…) */}
+                      <span className="conversation-ago"> - {relativeAgo(conversation.lastMessage.createdAt, language)}</span>
                     </small>
                   </span>
-                  {conversation.unreadCount ? (
-                    <b>{conversation.unreadCount}</b>
-                  ) : null}
                 </button>
+                {/* 23/11 #62.8: üzerine gelince sağ ortada sabitle ve sil */}
+                <div className="conversation-card-tools">
+                  <button aria-label={conversation.preference?.pinned ? t("Sabitlemeyi kaldır", "Unpin") : t("Sabitle", "Pin")} className={`conversation-pin${conversation.preference?.pinned ? " is-on" : ""}`} disabled={cardPreference.isPending} onClick={() => cardPreference.mutate({ id: conversation.peer.id, pinned: !conversation.preference?.pinned })} title={conversation.preference?.pinned ? t("Sabitlemeyi kaldır", "Unpin") : t("Sabitle", "Pin")} type="button">{conversation.preference?.pinned ? <PinOff size={15}/> : <Pin size={15}/>}</button>
+                  <button aria-label={t("Mesaj dizisini sil", "Delete conversation")} className="conversation-delete" onClick={() => setConfirmDelete({ id: conversation.peer.id, name: conversation.peer.username ? `@${conversation.peer.username}` : conversation.peer.name })} title={t("Sil", "Delete")} type="button"><Trash2 size={15}/></button>
+                </div>
+                </div>
               ))}
               {!list.length ? (
                 <p className="form-help">{t("Henüz konuşman yok.", "You have no conversations yet.")}</p>
@@ -301,6 +320,7 @@ export function MessagesPage() {
           </>
         )}
       </aside>
+      {confirmDelete ? <div className="emotion-modal" role="presentation" onMouseDown={() => setConfirmDelete(null)}><section aria-labelledby="delete-thread-title" aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><h2 id="delete-thread-title">{t("Mesaj dizisini sil", "Delete conversation")}</h2><p>{t(`${confirmDelete.name} ile mesaj dizisi senden silinecek. Devam etmek istiyor musun?`, `Your conversation with ${confirmDelete.name} will be deleted for you. Continue?`)}</p><div className="dialog-actions"><button disabled={cardDelete.isPending} onClick={() => setConfirmDelete(null)} type="button">{t("Vazgeç", "Cancel")}</button><button className="danger-action" disabled={cardDelete.isPending} onClick={() => cardDelete.mutate(confirmDelete.id)} type="button">{t("Sil", "Delete")}</button></div></section></div> : null}
       <div className="message-thread">
         {peer ? (
           <MessageThread
@@ -367,6 +387,7 @@ function MessageThread({
   const body = editing ? editBody : draft;
   const setBody = editing ? setEditBody : setDraft;
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<Record<number, number>>({});
   const [menu, setMenu] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -375,10 +396,6 @@ function MessageThread({
   const previousEdges = useRef<{ first?: string; last?: string }>({});
   const olderAnchor = useRef<{ height: number; top: number } | null>(null);
   const typingTimer = useRef<number | undefined>(undefined);
-  const previews = useMemo(
-    () => attachments.map((file) => ({ file, url: URL.createObjectURL(file) })),
-    [attachments],
-  );
   const groupedMessages = useMemo(() => messages.reduce<Array<{ message: PrivateChatMessage; attachments: PrivateChatMessage[] }>>((groups, message) => {
     const previous = groups.at(-1);
     const previousMessage = previous?.attachments.at(-1) ?? previous?.message;
@@ -394,23 +411,22 @@ function MessageThread({
     else groups.push({ message, attachments: message.attachmentUrl ? [message] : [] });
     return groups;
   }, []), [messages]);
-  useEffect(
-    () => () => previews.forEach((preview) => URL.revokeObjectURL(preview.url)),
-    [previews],
-  );
   const send = useMutation({
     mutationFn: async () => {
       if (!attachments.length)
         return sendPrivateMessage(peer.id, body, { replyToId: replyTo?.id });
       let last: PrivateChatMessage | undefined;
-      for (const [index, attachment] of attachments.entries()) {
-        last = await sendPrivateMessage(peer.id, index === 0 ? body : "", { replyToId: index === 0 ? replyTo?.id : undefined, attachment });
+      const queue = [...attachments];
+      for (const [index, attachment] of queue.entries()) {
+        // 23/11 #62.11.3: her dosyanın yüklenme yüzdesi küçük resmin üzerinde
+        last = await sendPrivateMessageWithProgress(peer.id, index === 0 ? body : "", { replyToId: index === 0 ? replyTo?.id : undefined, attachment }, (percent) => setUploadProgress({ 0: percent }));
         setAttachments(items => items.filter(file => file !== attachment));
+        setUploadProgress({});
         if (index === 0) { clearDraft(); setReplyTo(null); }
       }
       return last!;
     },
-    onError: () => { void permission.refetch(); },
+    onError: () => { setUploadProgress({}); void permission.refetch(); },
     onSuccess: () => {
       clearDraft();
       setReplyTo(null);
@@ -510,10 +526,13 @@ function MessageThread({
   }
   return (
     <>
-      <header className="message-thread-header">
+      {/* 23/11 #62.3: "Geri" kullanıcı bilgilerinin bir üst satırında, solda */}
+      <div className="message-thread-topbar">
         <button className="ghost-action messages-back" onClick={onBack}>
           <ArrowLeft size={18} /> {t("Geri", "Back")}
         </button>
+      </div>
+      <header className="message-thread-header">
         <UserIdentityLink
           user={peer}
           avatarClassName="thread-peer-avatar"
@@ -591,9 +610,13 @@ function MessageThread({
       <div className="message-stream" ref={streamRef} aria-live="polite" tabIndex={0} aria-label={t("Konuşma mesajları", "Conversation messages")} onScroll={event => { const node = event.currentTarget; stickToBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; }}>
         {hasOlder && <button type="button" className="secondary-action message-history-load" disabled={loadingOlder} onClick={() => { const node = streamRef.current; if (node) olderAnchor.current = { height: node.scrollHeight, top: node.scrollTop }; onLoadOlder(); }}>{loadingOlder ? t("Yükleniyor…", "Loading…") : t("Önceki mesajları yükle", "Load earlier messages")}</button>}
         {historyError && <p role="alert">{t("Önceki mesajlar yüklenemedi. Tekrar deneyin.", "Earlier messages could not be loaded. Try again.")}</p>}
-        {groupedMessages.map(({ message, attachments: messageAttachments }) => (
+        {groupedMessages.map(({ message, attachments: messageAttachments }, position) => (
+          <div className="message-row-group" key={message.id}>
+          {/* 23/11 #62.7: gün ayracı */}
+          {position === 0 || dayKey(groupedMessages[position - 1]!.message.createdAt) !== dayKey(message.createdAt) ? <div className="message-day-separator"><span>{new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-GB", { day: "numeric", month: "short", year: "numeric" }).format(new Date(message.createdAt))}</span></div> : null}
           <MessageBubble
-            key={message.id}
+            peerAvatarUrl={peer.avatarUrl ?? null}
+            peerInitial={peer.name[0] ?? "?"}
             message={message}
             attachments={messageAttachments}
             mine={message.senderId === currentUserId}
@@ -613,6 +636,7 @@ function MessageThread({
             }
             onReact={(emoji) => react.mutate({ id: message.id, emoji })}
           />
+          </div>
         ))}
         {typing ? (
           <div className="typing-bubble">
@@ -659,33 +683,7 @@ function MessageThread({
           </button>
         </div>
       ) : null}
-      {previews.length ? (
-        <div className="message-attachment-previews">
-          {previews.map(({ file, url }, index) => (
-            <div key={`${file.name}-${file.lastModified}`}>
-              <span>
-                {file.type.startsWith("video/") ? (
-                  <video src={url} />
-                ) : (
-                  <img src={url} alt={file.name} />
-                )}
-              </span>
-              <small>{file.name}</small>
-              <button
-                aria-label={language === "tr" ? `${file.name} ekini kaldır` : `Remove ${file.name} attachment`}
-                onClick={() =>
-                  setAttachments((items) =>
-                    items.filter((_, itemIndex) => itemIndex !== index),
-                  )
-                }
-                type="button"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <MediaPicker disabled={send.isPending} files={attachments} language={language} onChange={setAttachments} progress={uploadProgress}/>
       {send.isError || edit.isError ? <p className="form-error" role="alert">{t("Gönderim tamamlanamadı. Gönderilen mesajları kontrol edip kalan dosyalarla yeniden deneyin.", "Sending could not finish. Check sent messages and retry the remaining files.")}</p> : null}
       {messagingClosed ? <p className="message-closed-notice" role="status"><Ban aria-hidden="true" size={17}/>{t("Bu kullanıcı özel mesaj almak istemiyor.", "This member does not want to receive private messages.")}</p> : null}
       <form aria-disabled={messagingClosed || undefined} className={`message-composer advanced-composer${messagingClosed ? " is-closed" : ""}`} onSubmit={submit}>
@@ -695,7 +693,7 @@ function MessageThread({
           hidden
           multiple
           type="file"
-          accept="image/*,video/*"
+          accept={pickerAccept}
           onChange={(event) => {
             const selected = [...(event.target.files ?? [])].filter(
               (file) =>
@@ -747,6 +745,8 @@ function MessageThread({
 }
 
 function MessageBubble({
+  peerAvatarUrl,
+  peerInitial,
   message,
   attachments,
   mine,
@@ -757,6 +757,8 @@ function MessageBubble({
   onDelete,
   onReact,
 }: {
+  peerAvatarUrl: string | null;
+  peerInitial: string;
   message: PrivateChatMessage;
   attachments: PrivateChatMessage[];
   mine: boolean;
@@ -785,6 +787,8 @@ function MessageBubble({
   );
   return (
     <>
+      <div className={mine ? "message-line is-mine" : "message-line"}>
+      {!mine ? <span className="message-peer-avatar" aria-hidden="true">{peerAvatarUrl ? <img alt="" src={resolveMediaUrl(peerAvatarUrl)}/> : peerInitial}</span> : null}
       <article className={mine ? "message-bubble is-mine" : "message-bubble"}>
         <div className="bubble-actions">
           <button onClick={onReply} title={t("Yanıtla", "Reply")}>
@@ -834,7 +838,9 @@ function MessageBubble({
           <RichText hideEmbeddableUrls text={message.body} />
           {message.status === "active" ? <EmbeddedMedia text={message.body}/> : null}
         </p> : null}
-        {attachments.length ? <div className={`message-media-collage message-media-collage-${Math.min(attachments.length, 4)}`}>{attachments.map((attachment) => attachment.attachmentType?.startsWith("image/") || attachment.attachmentType?.startsWith("video/") ? <a href={resolveMediaUrl(attachment.attachmentUrl!)} key={attachment.id} rel="noreferrer" target="_blank">{attachment.attachmentType.startsWith("image/") ? <img className="message-image" src={resolveMediaUrl(attachment.attachmentUrl!)} alt={attachment.attachmentName ?? t("Mesaj görseli", "Message image")}/> : <video className="message-image" controls preload="metadata" src={resolveMediaUrl(attachment.attachmentUrl!)}/>}</a> : <a className="message-file" href={resolveMediaUrl(attachment.attachmentUrl!)} key={attachment.id} rel="noreferrer" target="_blank"><File size={18}/><span>{attachment.attachmentName ?? t("Dosya", "File")}<small>{attachment.attachmentSize ? `${Math.ceil(attachment.attachmentSize / 1024)} KB` : ""}</small></span></a>)}</div> : null}
+        {/* 23/11 #62.11.4–5: gönderilen medyalar etkinlik gönderilerindeki albüm görünümünde; dokununca medya lightbox'ı açılır */}
+        {attachments.some((attachment) => attachment.attachmentType?.startsWith("image/") || attachment.attachmentType?.startsWith("video/")) ? <MediaAlbum items={attachments.filter((attachment) => attachment.attachmentType?.startsWith("image/") || attachment.attachmentType?.startsWith("video/")).map((attachment) => ({ id: attachment.id, url: attachment.attachmentUrl!, type: attachment.attachmentType!.startsWith("video/") ? "video" : "image" }))}/> : null}
+        {attachments.filter((attachment) => !(attachment.attachmentType?.startsWith("image/") || attachment.attachmentType?.startsWith("video/"))).map((attachment) => <a className="message-file" href={resolveMediaUrl(attachment.attachmentUrl!)} key={attachment.id} rel="noreferrer" target="_blank"><File size={18}/><span>{attachment.attachmentName ?? t("Dosya", "File")}<small>{attachment.attachmentSize ? `${Math.ceil(attachment.attachmentSize / 1024)} KB` : ""}</small></span></a>)}
         <footer>
           <time>
             {new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-GB", {
@@ -845,7 +851,7 @@ function MessageBubble({
           </time>
           {mine ? (
             message.readAt ? (
-              <CheckCheck size={15} aria-label={t("Okundu", "Read")} />
+              <CheckCheck className="message-read-tick" size={15} aria-label={t("Okundu", "Read")} />
             ) : (
               <Check size={15} aria-label={t("Gönderildi", "Sent")} />
             )
@@ -865,6 +871,7 @@ function MessageBubble({
           </div>
         ) : null}
       </article>
+      </div>
       <ReportDialog
         onClose={() => setReportOpen(false)}
         open={reportOpen}
@@ -874,3 +881,16 @@ function MessageBubble({
     </>
   );
 }
+
+/** 23/11 #62.9: "1d" (dakika), "3s" (saat), "4g" (gün), "3h" (hafta) */
+function relativeAgo(value: string | Date, language: "tr" | "en") {
+  const minutes = Math.max(1, Math.round((Date.now() - new Date(value).getTime()) / 60_000));
+  if (minutes < 60) return language === "tr" ? `${minutes}d` : `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return language === "tr" ? `${hours}s` : `${hours}h`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return language === "tr" ? `${days}g` : `${days}d`;
+  return language === "tr" ? `${Math.round(days / 7)}h` : `${Math.round(days / 7)}w`;
+}
+
+const dayKey = (value: string | Date) => { const date = new Date(value); return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`; };

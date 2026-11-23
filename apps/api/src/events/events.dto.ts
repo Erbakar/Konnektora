@@ -31,6 +31,11 @@ export class EventQueryDto {
   @IsIn(["near", "popular", "following", "for_you", "mine", "invited", "individual"])
   scope?: "near" | "popular" | "following" | "for_you" | "mine" | "invited" | "individual";
 
+  /** 23/11 #47: "past" = bitiş (yoksa başlangıç) tarihine göre yeniden eskiye. */
+  @IsOptional()
+  @IsIn(["past"])
+  sort?: "past";
+
   @IsOptional()
   @IsString()
   @MaxLength(120)

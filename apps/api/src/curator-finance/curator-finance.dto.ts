@@ -6,12 +6,18 @@ export class TerritoryDto {
   @IsString() @MaxLength(120) city!: string;
   @IsOptional() @IsString() @MaxLength(120) region?: string;
 }
+export class CuratorReferrerDto {
+  @IsUUID() referrerId!: string;
+  @IsNumber() @Min(0) @Max(100) referralRate!: number;
+}
 export class CuratorAgreementDto {
   @IsBoolean() active!: boolean;
   @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => TerritoryDto) territories!: TerritoryDto[];
   @IsObject() rates!: Record<string, number>;
   @IsOptional() @IsUUID() referrerId?: string;
   @IsOptional() @IsNumber() @Min(0) @Max(100) referralRate?: number;
+  /** 23/11 #9: birden fazla referans küratör */
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => CuratorReferrerDto) referrers?: CuratorReferrerDto[];
   @IsOptional() @IsString() @MaxLength(120) bankName?: string;
   @IsOptional() @IsString() @MaxLength(180) accountName?: string;
   @IsOptional() @IsString() @MaxLength(40) iban?: string;
@@ -27,4 +33,10 @@ export class CuratorEntryDto {
   @IsOptional() @IsUUID() eventId?: string;
   @IsIn(["bank_transfer", "cash", "other"]) method!: string;
   @IsUUID() requestId!: string;
+}
+
+/** 23/11 #10: küratörün ödeme talebi. */
+export class CuratorPayoutRequestDto {
+  @IsNumber({ maxDecimalPlaces: 2 }) @Min(1) amount!: number;
+  @IsIn(["TRY", "USD", "EUR", "GBP"]) currency!: string;
 }

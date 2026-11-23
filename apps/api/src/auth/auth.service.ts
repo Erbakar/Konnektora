@@ -257,6 +257,15 @@ export class AuthService {
     return { ok: true, sent };
   }
 
+  async resendOwnEmailVerification(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException("Oturum bulunamadı.");
+    if (user.emailVerified) return { ok: true, sent: false, alreadyVerified: true, email: user.email };
+    const token = await this.createEmailToken(user.id, "verify_email");
+    const sent = await this.sendVerificationEmailSafely({ to: user.email, name: user.name, token });
+    return { ok: true, sent, alreadyVerified: false, email: user.email };
+  }
+
   async confirmEmail(input: TokenDto) {
     const token = await this.consumeEmailToken(input.token, "verify_email");
     const user = await this.prisma.user.update({

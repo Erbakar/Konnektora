@@ -10,7 +10,7 @@ import {
   LockKeyhole,
   Settings,
   UserRound,
-} from "lucide-react";
+ ShieldCheck } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import type {
   NotificationPreference,
@@ -30,6 +30,7 @@ import {
   getNotificationPreferences,
   getPrivacySettings,
   getUserSession,
+  resendOwnEmailVerification,
   listProfileMedia,
   listBlocks,
   listSocialAccounts,
@@ -99,7 +100,10 @@ const settings = [
 
 export function SettingsCenterPage() {
   const { language } = useLanguage();
-  const translated = language === "tr" ? settings : [
+  // 23/11 #10: "Küratör bilgi ve ayarları" kutusu yalnız küratörlere görünür.
+  const curator = getUserSession()?.role === "curator";
+  const curatorCard = { icon: ShieldCheck, title: language === "tr" ? "Küratör bilgi ve ayarları" : "Curator details and settings", description: language === "tr" ? "Anlaşma kapsamı, cüzdan, hesap hareketleri ve ödeme talebi." : "Agreement scope, wallet, account activity and payment requests.", href: "/settings/curator" };
+  const baseCards = language === "tr" ? settings : [
     { ...settings[0], title: "Profile media", description: "Add, organise or remove your profile media." },
     { ...settings[1], title: "Edit profile", description: "Update your basic information and interests." },
     { ...settings[2], title: "Account settings", description: "Manage your account, security and session options." },
@@ -107,6 +111,7 @@ export function SettingsCenterPage() {
     { ...settings[4], title: "Privacy settings", description: "Choose who can contact you and view your content." },
     { ...settings[5], title: "Business and payment settings", description: "Manage plans, billing and payment details." },
   ];
+  const translated = curator ? [...baseCards, curatorCard] : baseCards;
   return (
     <section className="page settings-center-page">
       <div className="section-header">
@@ -181,7 +186,10 @@ export function SettingsSectionPage({ section }: { section: string }) {
     privacy: { title: "Privacy settings", description: "Manage profile, message, event and place visibility.", target: "/settings/privacy" },
     business: { title: "Business and payment settings", description: "Manage plans, billing, bank and payment settings.", target: "/settings/business" },
   };
-  const item = language === "tr" ? selected : englishSections[section] ?? englishSections.account!;
+  const baseItem = language === "tr" ? selected : englishSections[section] ?? englishSections.account!;
+  // 23/11 #32: "Profili düzenle" açıklaması hesap türüne göre.
+  const corporate = getUserSession()?.accountType === "corporate";
+  const item = section === "profile" ? { ...baseItem, description: language === "tr" ? corporate ? "Temel kurumsal bilgilerinizi düzenleyin." : "Temel kişisel bilgilerinizi düzenleyin." : corporate ? "Edit your basic business information." : "Edit your basic personal information." } : baseItem;
   const user = getUserSession();
   return (
     <section className="page settings-section-page">
@@ -472,6 +480,7 @@ function AccountSettings() {
   const [demoPhoneCode, setDemoPhoneCode] = useState("");
   const [passwordMismatch, setPasswordMismatch] = useState(false);
   const change = useMutation({ mutationFn: changePassword });
+  const resendVerification = useMutation({ mutationFn: resendOwnEmailVerification });
   const updateEmail = useMutation({
     mutationFn: async (email: string) => {
       const updated = await updateMyProfile({
@@ -534,11 +543,15 @@ function AccountSettings() {
         }}
       >
         <h2>{t("E-posta adresi", "Email address")}</h2>
+        {/* 23/11 #33: aktivasyonu tamamlanmamış e-posta için yeniden gönderme bağlantısı */}
+        {profile.data && profile.data.emailVerified === false ? <p className="email-verify-hint">{t("Doğrulanmamış. ", "Not verified. ")}<button className="text-button" disabled={resendVerification.isPending} onClick={() => resendVerification.mutate()} type="button">{t("Aktivasyon e-postası gönder", "Send activation email")}</button></p> : null}
         <EmailInput aria-label={t("E-posta", "Email")} defaultValue={profile.data?.email ?? user.email} onChange={() => updateEmail.reset()} name="email" required />
         <button className="primary-action" disabled={updateEmail.isPending}>{t("E-postayı güncelle", "Update email")}</button>
         {updateEmail.isSuccess ? <p className="form-success">{t("E-posta güncellendi; doğrulama bağlantısı gönderildi.", "Email updated; a verification link has been sent.")}</p> : null}
         {updateEmail.isError ? <p className="form-error">{t("E-posta güncellenemedi.", "Email could not be updated.")}</p> : null}
+        {resendVerification.isError ? <p className="form-error">{t("Aktivasyon e-postası gönderilemedi. Biraz sonra tekrar deneyin.", "The activation email could not be sent. Try again later.")}</p> : null}
       </form>
+      {resendVerification.isSuccess ? <div className="emotion-modal" role="presentation" onMouseDown={() => resendVerification.reset()}><section aria-labelledby="email-activation-title" aria-modal="true" className="content-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog"><h2 id="email-activation-title">{resendVerification.data.alreadyVerified ? t("E-posta adresiniz zaten doğrulanmış", "Your email is already verified") : t("Aktivasyon e-postası gönderildi", "Activation email sent")}</h2><p>{resendVerification.data.alreadyVerified ? t("Ek bir işlem yapmanıza gerek yok.", "No further action is needed.") : t(`${resendVerification.data.email} adresine bir aktivasyon e-postası gönderdik. Hesabınızı doğrulamak için e-postadaki butona tıklayın.`, `We sent an activation email to ${resendVerification.data.email}. Click the button in the email to verify your account.`)}</p><div className="dialog-actions"><button className="primary-action" onClick={() => resendVerification.reset()} type="button">{t("Tamam", "OK")}</button></div></section></div> : null}
       <form
         className="identity-panel settings-form"
         onSubmit={(event) => {

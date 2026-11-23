@@ -48,6 +48,13 @@ export class AuthController {
     return this.authService.removeSocialAccount(user.id, body.provider);
   }
 
+  /** 23/11 #33: Ayarlar > Hesap ayarları — doğrulanmamış e-postaya aktivasyon e-postasını yeniden gönder. */
+  @Post("auth/me/email/verify/request")
+  @UseGuards(JwtAuthGuard)
+  resendOwnEmailVerification(@CurrentUser() user: User) {
+    return this.authService.resendOwnEmailVerification(user.id);
+  }
+
   @Post("auth/email/verify/request")
   requestEmailVerification(@Body() body: EmailDto) {
     return this.authService.requestEmailVerification(body);

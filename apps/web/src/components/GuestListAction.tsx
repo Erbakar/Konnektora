@@ -96,7 +96,7 @@ export function GuestListAction({
       : "Add to Guest List";
   return (
     <>
-      <button aria-label={ariaLabel ?? defaultLabel} className={className} onClick={() => setOpen(true)} type="button">
+      <button aria-label={ariaLabel ?? defaultLabel} className={className} data-keep-menu="true" onClick={() => setOpen(true)} type="button">
         <UserPlus size={16}/>{compact ? null : ` ${label ?? defaultLabel}`}
       </button>
       {open ? <GuestListDialog context={context} target={target} onClose={() => setOpen(false)}/> : null}

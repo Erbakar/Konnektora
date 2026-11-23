@@ -226,10 +226,23 @@ export class FinanceService {
   }
   updateKyc(userId: string, status: KycStatus) { return this.prisma.financialAccount.update({ where: { userId }, data: { kycStatus: status } }); }
   async updatePayout(id: string, status: PayoutStatus) {
-    if (status === PayoutStatus.paid) requireSandboxEnvironment();
+    const preview = await this.prisma.payout.findUnique({ where: { id }, select: { providerRef: true } });
+    // 23/11 #10: küratör ödeme talepleri banka havalesiyle elle ödenir; sağlayıcı gerekmez, ödenince küratör hesabına "ödeme" hareketi yazılır.
+    const curatorRequest = Boolean(preview?.providerRef?.startsWith("curator_request:"));
+    if (status === PayoutStatus.paid && !curatorRequest) requireSandboxEnvironment();
     return this.prisma.$transaction(async (tx) => {
       const payout = await tx.payout.findUnique({ where: { id } });
       if (!payout) throw new NotFoundException("Para çekme talebi bulunamadı.");
+      if (curatorRequest) {
+        if (payout.status === status) return payout;
+        if ([PayoutStatus.paid, PayoutStatus.failed, PayoutStatus.cancelled].includes(payout.status as "paid" | "failed" | "cancelled")) throw new BadRequestException("Sonuçlanan talep tekrar değiştirilemez.");
+        if (status === PayoutStatus.pending) throw new BadRequestException("İşlenen talep bekleyen duruma döndürülemez.");
+        const finished = status === PayoutStatus.paid || status === PayoutStatus.failed || status === PayoutStatus.cancelled;
+        const claimed = await tx.payout.updateMany({ where: { id, status: payout.status }, data: { status, processedAt: finished ? new Date() : null } });
+        if (!claimed.count) throw new BadRequestException("Talep başka bir işlemle değişti. Yeniden yükleyin.");
+        if (status === PayoutStatus.paid) await tx.curatorLedgerEntry.create({ data: { userId: payout.userId, kind: "payment", category: "payout", amount: -Number(payout.amount), currency: payout.currency, held: false, description: "Ödeme talebi ödendi", sourceKey: `payout:${payout.id}`, occurredAt: new Date() } });
+        return tx.payout.findUniqueOrThrow({ where: { id } });
+      }
       if (payout.status === status) return payout;
       if ([PayoutStatus.paid, PayoutStatus.failed, PayoutStatus.cancelled].includes(payout.status as "paid" | "failed" | "cancelled")) throw new BadRequestException("Sonuçlanan para çekme talebi tekrar değiştirilemez.");
       if (status === PayoutStatus.pending) throw new BadRequestException("İşlenen talep bekleyen duruma döndürülemez.");
