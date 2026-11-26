@@ -36,6 +36,7 @@ import { ReportDialog } from "../components/ReportDialog";
 import { EmbeddedMedia } from "../components/EmbeddedMedia";
 import { ComposerTips } from "../components/ComposerTips";
 import { DraftLeaveGuard } from "../components/DraftLeaveGuard";
+import { PushNotificationControl } from "../components/PushNotificationControl";
 import { useComposerDraft } from "../lib/composerDrafts";
 import type { PrivateChatMessage } from "@konnektora/shared";
 import {
@@ -227,7 +228,7 @@ export function MessagesPage() {
                   window.setTimeout(() => setRecipientFocused(false), 150)
                 }
                 onChange={(event) => setRecipientQuery(event.target.value)}
-                placeholder={t("Kullanıcı adı veya ad soyad yaz…", "Enter a username or name…")}
+                placeholder={t("Kullanıcı adı veya ad soyad yazarak seç", "Type a username or full name to select")}
               />
             </label> : null}
             {newOpen && recipientQuery.trim().length >= 2 ? (
@@ -317,6 +318,8 @@ export function MessagesPage() {
                 <p className="form-help">{t("Henüz konuşman yok.", "You have no conversations yet.")}</p>
               ) : null}
             </div>
+            {/* 26/11 #124 (mobil): mesaj kartlarının altında cihaz bildirimi banner'ı */}
+            <MessagesPushBanner className="messages-push-banner is-mobile" language={language} />
           </>
         )}
       </aside>
@@ -345,8 +348,23 @@ export function MessagesPage() {
             <p>{t("Mesajların burada görüntülenecek.", "Your messages will appear here.")}</p>
           </div>
         )}
+        {/* 26/11 #124 (desktop): boş konuşma alanının altında cihaz bildirimi banner'ı */}
+        {peer ? null : <MessagesPushBanner className="messages-push-banner is-desktop" language={language} />}
       </div>
     </section>
+  );
+}
+
+function MessagesPushBanner({ className, language }: { className: string; language: string }) {
+  const t = (tr: string, en: string) => (language === "tr" ? tr : en);
+  return (
+    <PushNotificationControl
+      className={className}
+      description={t("Diğer üyelerden mesaj geldiğinde gerçek zamanlı bildirim almayı bu cihazda etkinleştir.", "Enable real-time notifications on this device when other members message you.")}
+      enableLabel={t("Bu cihazda etkinleştir", "Enable on this device")}
+      title={t("Cihaz bildirimleri", "Device notifications")}
+      variant="banner"
+    />
   );
 }
 
@@ -719,7 +737,8 @@ function MessageThread({
           disabled={send.isPending || edit.isPending || messagingClosed}
         >
           <Send size={18} />
-          <span>{t("Gönder", "Send")}</span>
+          {/* 26/11 #105: yükleme/gönderim sürdükçe etiket "Gönderiliyor…" olur. */}
+          <span>{send.isPending || edit.isPending ? t("Gönderiliyor…", "Sending…") : t("Gönder", "Send")}</span>
         </button>
         <button
           className="message-media-action"

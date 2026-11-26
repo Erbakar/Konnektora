@@ -13,7 +13,6 @@ import {
   Mail,
   MessageCircle,
   MoreVertical,
-  Reply,
   Send,
   Share2,
   Trash2,
@@ -63,10 +62,13 @@ export function ContentComments({
   organizerId,
   canManage = false,
   shareContext,
+  onClose,
 }: {
   targetType: "event" | "place" | "tag_comment";
   targetId: string;
   title: string;
+  /** 26/11 #115: İlgi Alanı gönderi yorumlarında "Vazgeç" yorum alanını kapatır. */
+  onClose?: () => void;
   organizerId?: string | null;
   canManage?: boolean;
   shareContext?: { title: string; location?: string; date?: string; tags?: string[]; icon?: string; instagramCaption?: (post: { author: string; body: string }) => string };
@@ -140,12 +142,20 @@ export function ContentComments({
       await client.invalidateQueries({
         queryKey: ["content-comments", targetType, targetId],
       });
+      // İlgi Alanı kartındaki "N yorum" sayısı da güncellensin.
+      if (targetType === "tag_comment") void client.invalidateQueries({ queryKey: ["tag-comments"] });
       window.requestAnimationFrame(() => document.getElementById(`post-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
     },
   });
   const followingIds = new Set(
     (following.data ?? []).map((member) => member.id),
   );
+  // 26/11 #115: İlgi Alanı gönderi yorumları Etkinlik Detay'daki alt yorumlar gibi sade, eskiden yeniye listelenir.
+  const replyMode = targetType === "tag_comment";
+  const onChanged = () => {
+    void client.invalidateQueries({ queryKey: ["content-comments", targetType, targetId] });
+    if (replyMode) void client.invalidateQueries({ queryKey: ["tag-comments"] });
+  };
   const filteredComments = [...(comments.data ?? [])]
     .filter(
       (comment) =>
@@ -157,10 +167,74 @@ export function ContentComments({
         (filter === "media" && hasPostMedia(comment)),
     )
     .sort((a, b) =>
-      filter === "popular"
+      replyMode
+        ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        : filter === "popular"
         ? b.likeCount - a.likeCount
         : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
+  const renderReply = (reply: ContentThreadComment) => (
+    <article className="comment-reply" id={`post-${reply.id}`} key={reply.id}>
+      {reply.author ? (
+        <Link
+          aria-label={language === "tr" ? `${reply.author.name} profilini aç` : `Open ${reply.author.name}'s profile`}
+          className="comment-author-avatar-link"
+          to={userProfilePath(reply.author)}
+        >
+          {reply.author.avatarUrl ? (
+            <img className="comment-author-avatar" src={resolveMediaUrl(reply.author.avatarUrl)} alt="" />
+          ) : (
+            <span className="comment-author-avatar comment-author-fallback">{reply.author.name?.[0] ?? "?"}</span>
+          )}
+        </Link>
+      ) : (
+        <span className="comment-author-avatar comment-author-fallback">?</span>
+      )}
+      <div>
+        <header className="comment-author-line">{reply.author?<FollowStar id={reply.author.id}/>:null}<strong>
+          {reply.author ? (
+            <Link to={userProfilePath(reply.author)}>{reply.author.username ? `@${reply.author.username}` : reply.author.name}</Link>
+          ) : language === "tr" ? "Silinmiş kullanıcı" : "Deleted user"}
+        </strong><small className="comment-timestamp"><a href={`#post-${reply.id}`}>{formatPostDateTime(reply.createdAt, language)}</a></small></header>
+        <span className="post-copy"><RichText hideEmbeddableUrls text={reply.body} /></span>
+        <EmbeddedMedia text={reply.body} />
+        {reply.media?.length ? <MediaAlbum items={reply.media} owner={{ contentType: replyMode ? "tag_comment" : "comment_reply", contentId: reply.id, ownerId: reply.authorId, queryKeys: [["content-comments", targetType, targetId]] }}/> : null}
+        <CommentActions
+          shareContext={shareContext}
+          canManage={canManage}
+          organizerId={organizerId}
+          canAddGuest={canAddGuest}
+          comment={reply}
+          currentUserId={user?.id}
+          following={Boolean(reply.authorId && followingIds.has(reply.authorId))}
+          targetType={targetType}
+          onChanged={onChanged}
+        />
+      </div>
+    </article>
+  );
+  if (replyMode) {
+    return (
+      <div className="tag-post-replies">
+        {filteredComments.length ? <div className="comment-replies">{filteredComments.map(renderReply)}</div> : null}
+        {user ? (
+          <form className="comment-inline-editor" onSubmit={(event) => { event.preventDefault(); if (body.trim()) create.mutate(); }}>
+            <textarea aria-label={language === "tr" ? "Yanıtını yaz" : "Write your reply"} maxLength={3000} onChange={(event) => setBody(event.target.value)} value={body}/>
+            <div>
+              {onClose ? <button onClick={onClose} type="button">{language === "tr" ? "Vazgeç" : "Cancel"}</button> : null}
+              <button className="primary-action" disabled={!body.trim() || create.isPending} type="submit">{language === "tr" ? "Yanıtla" : "Reply"}</button>
+            </div>
+          </form>
+        ) : (
+          <p className="form-help">
+            <Link to="/login">{language === "tr" ? "Giriş yaparak" : "Log in"}</Link> {language === "tr" ? "yorum yazabilirsin." : "to write a comment."}
+          </p>
+        )}
+        {create.isError ? <p role="alert" className="form-error">{language === "tr" ? "Yanıt gönderilemedi. Yeniden deneyin." : "The reply could not be sent. Try again."}</p> : null}
+        {comments.isError ? <p className="form-error">{language === "tr" ? "Yorumlar yüklenemedi." : "Comments could not be loaded."}</p> : null}
+      </div>
+    );
+  }
   return (
     <section className="admin-form content-comments">
       <div className="section-header compact">
@@ -170,7 +244,7 @@ export function ContentComments({
         </h2>
         <span>{comments.data?.length ?? 0} {language === "tr" ? "yorum" : "comments"}</span>
       </div>
-      {targetType !== "tag_comment" ? <div
+      <div
         className="comment-filter-tabs"
         role="tablist"
         aria-label={`${title} ${language === "tr" ? "filtreleri" : "filters"}`}
@@ -200,7 +274,7 @@ export function ContentComments({
             {label}
           </button>
         ))}
-      </div> : null}
+      </div>
       {create.isError ? <p role="alert" className="form-error">{create.error instanceof Error ? create.error.message : language === "tr" ? "Yayın tamamlanamadı. Yeniden yayınlayarak kalan dosyaları yükleyebilirsiniz; gönderiniz çoğaltılmaz." : "Publishing could not finish. Publish again to retry remaining files without duplicating your post."}</p> : null}
       <div className="admin-list">
         {filteredComments.map((comment) => (
@@ -262,55 +336,12 @@ export function ContentComments({
                   comment.authorId && followingIds.has(comment.authorId),
                 )}
                 targetType={targetType}
-                onChanged={() =>
-                  void client.invalidateQueries({
-                    queryKey: ["content-comments", targetType, targetId],
-                  })
-                }
+                onChanged={onChanged}
               >
                 {/* 12/08 #31: önce mevcut alt yorumlar, altında alt yorum yazma alanı. */}
                 {comment.replies?.length ? (
                   <div className="comment-replies">
-                    {comment.replies.map((reply) => (
-                      <article className="comment-reply" id={`post-${reply.id}`} key={reply.id}>
-                        {reply.author ? (
-                          <Link
-                            aria-label={language === "tr" ? `${reply.author.name} profilini aç` : `Open ${reply.author.name}'s profile`}
-                            className="comment-author-avatar-link"
-                            to={userProfilePath(reply.author)}
-                          >
-                            {reply.author.avatarUrl ? (
-                              <img className="comment-author-avatar" src={resolveMediaUrl(reply.author.avatarUrl)} alt="" />
-                            ) : (
-                              <span className="comment-author-avatar comment-author-fallback">{reply.author.name?.[0] ?? "?"}</span>
-                            )}
-                          </Link>
-                        ) : (
-                          <span className="comment-author-avatar comment-author-fallback">?</span>
-                        )}
-                        <div>
-                          <header className="comment-author-line">{reply.author?<FollowStar id={reply.author.id}/>:null}<strong>
-                            {reply.author ? (
-                              <Link to={userProfilePath(reply.author)}>{reply.author.username ? `@${reply.author.username}` : reply.author.name}</Link>
-                            ) : language === "tr" ? "Silinmiş kullanıcı" : "Deleted user"}
-                          </strong><small className="comment-timestamp"><a href={`#post-${reply.id}`}>{formatPostDateTime(reply.createdAt, language)}</a></small></header>
-                          <span className="post-copy"><RichText hideEmbeddableUrls text={reply.body} /></span>
-                          <EmbeddedMedia text={reply.body} />
-                          {reply.media?.length ? <MediaAlbum items={reply.media} owner={{ contentType: "comment_reply", contentId: reply.id, ownerId: reply.authorId, queryKeys: [["content-comments", targetType, targetId]] }}/> : null}
-                          <CommentActions
-                            shareContext={shareContext}
-                            canManage={canManage}
-                  organizerId={organizerId}
-                            canAddGuest={canAddGuest}
-                            comment={reply}
-                            currentUserId={user?.id}
-                            following={Boolean(reply.authorId && followingIds.has(reply.authorId))}
-                            targetType={targetType}
-                            onChanged={() => void client.invalidateQueries({ queryKey: ["content-comments", targetType, targetId] })}
-                          />
-                        </div>
-                      </article>
-                    ))}
+                    {comment.replies.map(renderReply)}
                   </div>
                 ) : null}
               </CommentActions>
@@ -342,7 +373,8 @@ export function ContentComments({
             disabled={(!body.trim() && !media.length && !pollDraft) || create.isPending}
           >
             <Send size={17} />
-            {targetType === "tag_comment" ? language === "tr" ? "Yayınla" : "Publish" : language === "tr" ? "Gönder" : "Send"}
+            {/* 26/11 #104: "Gönder" yerine "Yayınla"; yükleme sürdükçe "Yayınlanıyor…" */}
+            {create.isPending ? language === "tr" ? "Yayınlanıyor…" : "Publishing…" : language === "tr" ? "Yayınla" : "Publish"}
           </button>
           <label className="comment-media-picker composer-link">
             <ImagePlus aria-hidden="true" size={20}/>
@@ -473,36 +505,40 @@ function CommentActions({
     <>
       <div className="comment-actions">
         <button
+          aria-label={language === "tr" ? `Beğen (${comment.likeCount})` : `Like (${comment.likeCount})`}
           aria-pressed={Boolean(comment.liked)}
           className={comment.liked ? "liked" : ""}
           disabled={like.isPending}
           onClick={() => like.mutate()}
           type="button"
         >
-          <Heart size={14} fill={comment.liked ? "currentColor" : "none"} />
-          {comment.likeCount || (language === "tr" ? "Beğen" : "Like")}
+          {/* 26/11 #111: beğeni / yorum / paylaş / ⋮ İlgi Alanı gönderileriyle aynı ikon ve yazı boyutunda */}
+          <Heart size={17} fill={comment.liked ? "currentColor" : "none"} />
+          {comment.likeCount}
         </button>
         {!comment.parentId && targetType !== "tag_comment" ? <button
           onClick={() => setReplying((current) => !current)}
           type="button"
         >
-          <Reply size={14} />
-          {comment.replies?.length ?? 0} {language === "tr" ? "yorum" : "replies"}
+          <MessageCircle size={17} />
+          {comment.replies?.length
+            ? language === "tr" ? `${comment.replies.length} yorum` : `${comment.replies.length} comments`
+            : language === "tr" ? "Yorum yap" : "Comment"}
         </button> : null}
         {isMobile ? null : <button className="post-share-inline" onClick={() => setShareOpen(true)} type="button">
-            <Share2 size={14} />
+            <Share2 size={17} />
             {language === "tr" ? "Paylaş" : "Share"}
           </button>}
         <details className="action-menu comment-action-menu">
           <summary aria-label={language === "tr" ? "Yorum aksiyonları" : "Comment actions"} role="button">
-            <MoreVertical size={16} />
+            <MoreVertical size={19} />
           </summary>
           <div>
             {/* 23/11 #56: mobilde Paylaş menünün en üstünde */}
-            {isMobile ? <button className="menu-share-mobile" onClick={() => setShareOpen(true)} type="button"><Share2 size={14}/>{language === "tr" ? "Paylaş" : "Share"}</button> : null}
+            {isMobile ? <button className="menu-share-mobile" onClick={() => setShareOpen(true)} type="button"><Share2 size={17}/>{language === "tr" ? "Paylaş" : "Share"}</button> : null}
             {comment.authorId && comment.authorId !== currentUserId ? (
               <Link to={`/messages?peer=${comment.authorId}`}>
-                <Mail size={14} />
+                <Mail size={17} />
                 {language === "tr" ? "Mesaj gönder" : "Send message"}
               </Link>
             ) : null}
@@ -512,7 +548,7 @@ function CommentActions({
                 onClick={() => follow.mutate()}
                 type="button"
               >
-                {following ? <UserMinus size={14} /> : <UserPlus size={14} />}
+                {following ? <UserMinus size={17} /> : <UserPlus size={17} />}
                 {following ? language === "tr" ? "Takibi bırak" : "Unfollow" : language === "tr" ? "Takip et" : "Follow"}
               </button>
             ) : null}
@@ -526,7 +562,7 @@ function CommentActions({
                   onClick={() => ban.mutate()}
                   type="button"
                 >
-                  <Ban size={14} />
+                  <Ban size={17} />
                   {banned
                     ? language === "tr" ? `${targetType === "place" ? "Mekâna" : "Etkinliğe"} affet` : `Allow in ${targetType === "place" ? "place" : "event"}`
                     : language === "tr" ? `${targetType === "place" ? "Mekâna" : "Etkinliğe"} yasakla` : `Ban from ${targetType === "place" ? "place" : "event"}`}
@@ -550,11 +586,11 @@ function CommentActions({
                 onClick={() => { setEditBody(comment.body); setEditing(true); }}
                 type="button"
               >
-                <Edit3 size={14} />
+                <Edit3 size={17} />
                 {language === "tr" ? "Düzenle" : "Edit"}
               </button>
             ) : (
-              <button onClick={() => setReportOpen(true)} type="button"><Flag size={14}/>
+              <button onClick={() => setReportOpen(true)} type="button"><Flag size={17}/>
                 {language === "tr" ? "Rapor et" : "Report"}
               </button>
             )}
@@ -564,7 +600,7 @@ function CommentActions({
                 onClick={() => setDeleteOpen(true)}
                 type="button"
               >
-                <Trash2 size={14} />
+                <Trash2 size={17} />
                 {language === "tr" ? "Sil" : "Delete"}
               </button>
             ) : null}

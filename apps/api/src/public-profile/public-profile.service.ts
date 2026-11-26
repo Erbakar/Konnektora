@@ -202,6 +202,8 @@ export class PublicProfileService {
       comments: authoredComments,
       messages: sentMessages,
       memberScans: scans,
+      // 26/11 #121: bu üye için bildirimlerini açmış kullanıcı sayısı.
+      notificationSubscribers: await this.prisma.contentNotificationSubscription.count({ where: { targetType: "user", targetId: profile.id, enabled: true } }),
       averageEventsPerMonth: Math.round(events.length / Math.max(1, (Date.now() - profile.createdAt.getTime()) / 2_629_800_000) * 10) / 10,
       averageFollowDurationDays,
       followersLast7d,

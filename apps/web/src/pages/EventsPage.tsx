@@ -92,8 +92,9 @@ export function EventsPage() {
     placeholderData: mockTags
   });
   const eventRequestParams = new URLSearchParams(searchParams);
-  eventRequestParams.set("page", String(selectedPage));
-  eventRequestParams.set("pageSize", "15");
+  // 26/11 #126: harita görünümünde sayfalama yok; haritaya tek seferde en fazla 50 etkinlik yüklenir.
+  eventRequestParams.set("page", mapOpen ? "1" : String(selectedPage));
+  eventRequestParams.set("pageSize", mapOpen ? "50" : "15");
   const { data: eventList, isLoading, isError, refetch } = useQuery({
     queryKey: ["events", eventRequestParams.toString()],
     queryFn: () => listEvents(eventRequestParams)
@@ -218,13 +219,14 @@ export function EventsPage() {
             const allParams = new URLSearchParams(definition.params);
             return <section className={`event-discovery-section event-discovery-${definition.key}`} key={definition.key}><header><h2>{definition.title}</h2>{items.length ? <Link to={`/events?${allParams.toString()}`}>{c.seeAll}</Link> : null}</header>{items.length ? <div className="event-grid">{items.map((event) => <EventCard event={event} key={event.id}/>)}</div> : <p className="empty-state">{c.myEmpty}</p>}</section>;
           }) : null}
-        </div> : mapOpen ? <LocationMap showLinks={false} items={events.map((event) => ({ id: event.id, title: event.title, latitude: event.latitude, longitude: event.longitude, location: [event.city, event.country].filter(Boolean).join(", ") || "Online" }))}/> : <div className="event-grid events-results-grid">
+        </div> : mapOpen ? <LocationMap locationPermissionLink showLinks={false} items={events.map((event) => ({ id: event.id, title: event.title, latitude: event.latitude, longitude: event.longitude, location: [event.city, event.country].filter(Boolean).join(", ") || "Online" }))}/> : <div className="event-grid events-results-grid">
           {events.map((event) => (
             <EventCard event={event} key={event.id} />
           ))}
         </div>}
         {!isLoading && !isError && events.length === 0 ? <p className="empty-state">{c.noResults}</p> : null}
-        {eventList ? (
+        {/* 26/11 #126: sayfalama yalnız liste görünümünde gösterilir. */}
+        {eventList && !mapOpen ? (
           <nav className="pagination-row" aria-label={c.page(eventList.page, eventList.pageSize)}>
             <button
               className="secondary-action"

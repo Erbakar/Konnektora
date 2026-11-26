@@ -281,6 +281,12 @@ export const discoveryItemSchema = z.object({
   organizer: z.boolean().optional(),
   startsAt: z.string().datetime().or(z.date()).optional(),
   endsAt: z.string().datetime().or(z.date()).nullable().optional(),
+  /** 26/11 #82: başlık aramasında etkinlik/mekân konum satırı için (Türkiye: city = ilçe, region = il). */
+  eventFormat: z.enum(["online", "offline", "hybrid"]).optional(),
+  venueName: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  region: z.string().nullable().optional(),
+  country: z.string().nullable().optional(),
 });
 export const discoveryActivitySchema = discoveryItemSchema.extend({
   activityId: z.string().optional(),

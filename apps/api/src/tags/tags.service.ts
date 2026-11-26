@@ -497,6 +497,8 @@ export class TagsService {
       stickBy_kendisi: interestDetails.length - stuckByOther,
       stickBy_bir_baskasi: stuckByOther,
       ...tagPrefix("suggestGender", suggestGender),
+      // 26/11 #121: bu ilgi alanı için bildirimlerini açmış kullanıcı sayısı.
+      notificationSubscribers: await this.prisma.contentNotificationSubscription.count({ where: { targetType: "tag", targetId: tagId, enabled: true } }),
       // 17/11 #117: bu etikete sahip etkinliklerde check-in gün × saat dağılımı.
       ...checkinHeatmapMetrics(taggedEvents.flatMap((item) => item.event.participants.map((participant) => ({ at: participant.checkedInAt, timezone: item.event.timezone })))),
     };

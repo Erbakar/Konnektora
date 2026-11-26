@@ -1,7 +1,9 @@
 import { PrismaService } from "../prisma/prisma.service";
 import { audienceAllows, audienceForViewer, privacyContext } from "../common/privacy-context";
 import { publicName } from "../common/public-name";
-import { ActivityContext, targetVisible } from "./activity-events";
+import { ActivityContext, comparableValue, targetVisible } from "./activity-events";
+/** Kart konum satırı: "Mekân, Beyoğlu, İstanbul, Türkiye" (ilçe, il/eyalet, ülke); tekrar eden parçalar bir kez yazılır. */
+export function locationLine(parts:(string|null|undefined)[]){const seen=new Set<string>();return parts.map(part=>part?.trim()).filter((part):part is string=>{if(!part)return false;const key=comparableValue(part);if(seen.has(key))return false;seen.add(key);return true;}).join(", ");}
 export async function notificationCards(db:PrismaService,viewerId:string,items:any[]) {
  const viewerContext=privacyContext.getStore()??await audienceForViewer(db,viewerId);
  const actorIds=[...new Set(items.map(item=>(item.context as ActivityContext|null)?.actorId).filter((id):id is string=>Boolean(id)))];
@@ -23,11 +25,11 @@ export async function notificationCards(db:PrismaService,viewerId:string,items:a
   const actor=data.actorId?actors.get(data.actorId):undefined;
   let entity:any=null;
   if(item.targetType==="event"){
-   const event=await db.event.findUnique({where:{id:item.targetId},select:{id:true,slug:true,title:true,coverImageUrl:true,locationName:true,city:true,country:true,startsAt:true,endsAt:true}});
-   if(event)entity={id:event.id,type:"event",title:event.title,imageUrl:event.coverImageUrl,location:[event.locationName,event.city,event.country].filter(Boolean).join(", "),startsAt:event.startsAt,endsAt:event.endsAt,url:`/events/${event.slug}`};
+   const event=await db.event.findUnique({where:{id:item.targetId},select:{id:true,slug:true,title:true,coverImageUrl:true,locationName:true,city:true,region:true,country:true,startsAt:true,endsAt:true}});
+   if(event)entity={id:event.id,type:"event",title:event.title,imageUrl:event.coverImageUrl,location:locationLine([event.locationName,event.city,event.region,event.country]),startsAt:event.startsAt,endsAt:event.endsAt,url:`/events/${event.slug}`};
   }else if(item.targetType==="place"){
-   const place=await db.place.findUnique({where:{id:item.targetId},select:{id:true,slug:true,name:true,coverImageUrl:true,city:true,country:true}});
-   if(place)entity={id:place.id,type:"place",title:place.name,imageUrl:place.coverImageUrl,location:[place.city,place.country].filter(Boolean).join(", "),url:`/places/${place.slug}`};
+   const place=await db.place.findUnique({where:{id:item.targetId},select:{id:true,slug:true,name:true,coverImageUrl:true,city:true,region:true,country:true}});
+   if(place)entity={id:place.id,type:"place",title:place.name,imageUrl:place.coverImageUrl,location:locationLine([place.city,place.region,place.country]),url:`/places/${place.slug}`};
   }
   let body=item.body;const label=actor?`${actor.name}${actor.username?` (@${actor.username})`:""}`:"Konnektora";
   if(item.type==="membership_invite")body=data.hiddenDiscovery?`${label} sizi aradı ve zaten üye olduğunuzu bilmediğinden sizi üyeliğe davet etmek istedi. Sizi göremedi çünkü “Arkadaşlarım beni aramada bulabilsin” gizlilik ayarınız kapalı.`:`${label} sizi Konnektora’ya davet etti.`;

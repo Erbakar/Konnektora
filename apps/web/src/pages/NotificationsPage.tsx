@@ -52,7 +52,7 @@ export function NotificationsPage() {
           {item.actors?.length ? <div className="notification-actors">{item.actors.map(actor=><div className="member-name-line" key={actor.id}><Link to={`/users/id/${actor.id}`}>{actor.avatarUrl?<img className="notification-avatar" src={resolveMediaUrl(actor.avatarUrl)} alt=""/>:<span className="notification-avatar notification-avatar-fallback">{(actor.username??actor.name).slice(0,1).toUpperCase()}</span>}</Link><FollowStar id={actor.id}/><Link to={`/users/id/${actor.id}`}>@{actor.username??actor.name}</Link>{actor.canMessage?<Link aria-label={t("Mesaj gönder","Send message")} to={`/messages?peer=${actor.id}`}><Mail size={17}/></Link>:null}</div>)}</div>:null}
           {item.entity ? <div className="notification-entity">{item.entity.imageUrl?<Link to={item.entity.url}><img src={resolveMediaUrl(item.entity.imageUrl)} alt=""/></Link>:null}<div><Link to={item.entity.url}><strong>{item.entity.title}</strong></Link><span>{item.entity.location}</span>{item.entity.startsAt?<time>{new Intl.DateTimeFormat(language==="tr"?"tr-TR":"en-GB",{dateStyle:"medium",timeStyle:"short"}).format(new Date(item.entity.startsAt))}</time>:null}</div></div>:null}
           {item.mediaUrl?(/\.(mp4|webm)(?:\?|$)/i.test(item.mediaUrl)?<video className="notification-media" controls preload="metadata" src={resolveMediaUrl(item.mediaUrl)}/>:<img className="notification-media" src={resolveMediaUrl(item.mediaUrl)} alt={t("İlgili medya","Related media")}/>):null}
-          <strong>{item.targetUrl ? <Link to={item.targetUrl}>{item.title}</Link> : item.title}</strong><span><NotificationBody text={item.body} label={item.targetLabel} url={item.targetUrl}/></span><small>{item.createdAt ? new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt)) : ""}</small></div>
+          <strong>{item.targetUrl ? <TargetLink url={item.targetUrl}>{item.title}</TargetLink> : item.title}</strong><span><NotificationBody text={item.body} label={item.targetLabel} url={item.targetUrl}/></span><small>{item.createdAt ? new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt)) : ""}</small></div>
         <div className="row-actions">{item.canRespond?<><button className="primary-action" disabled={respond.isPending} onClick={()=>respond.mutate({id:item.id,action:"accept"})}>{t("Kabul et","Accept")}</button><button className="danger-action" disabled={respond.isPending} onClick={()=>respond.mutate({id:item.id,action:"decline"})}>{t("Reddet","Decline")}</button></>:null}{decisionNotifications.some((decision) => decision.id === item.id) ? <button className="secondary-action" onClick={() => setDecisionId(item.id)}>{t("Sonucu aç", "Open result")}</button> : null}{!item.readAt ? <button className="secondary-action" onClick={() => read.mutate(item.id)}><Check size={16}/> {t("Okundu", "Mark as read")}</button> : null}</div>
       </article> })),
       ].sort((a, b) => b.at - a.at).map((entry) => entry.node)}
@@ -64,11 +64,16 @@ export function NotificationsPage() {
 
 const isoDateTime = /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})\b/g;
 
+/** 26/11 #98-#101: "Canlı yayın URL'si" gibi dış bağlantılar yeni sekmede açılır; site içi yollar Link ile kalır. */
+function TargetLink({ url, children }: { url: string; children: React.ReactNode }) {
+  return /^https?:\/\//i.test(url) ? <a href={url} target="_blank" rel="noopener noreferrer">{children}</a> : <Link to={url}>{children}</Link>;
+}
+
 function NotificationBody({ text: raw, label, url }: { text: string; label?: string | null; url?: string | null }) {
   const text = raw.replace(isoDateTime, (value) => formatShortDateTime(value) || value);
   if (!label || !url || !text.includes(label)) return <RichText text={text}/>;
   const parts = text.split(label);
-  return <>{parts.map((part, index) => <span key={index}>{index > 0 ? <Link to={url}>{label}</Link> : null}<RichText text={part}/></span>)}</>;
+  return <>{parts.map((part, index) => <span key={index}>{index > 0 ? <TargetLink url={url}>{label}</TargetLink> : null}<RichText text={part}/></span>)}</>;
 }
 
 /** 23/11 #68: "Profilinize etiket yapıştırıldı" kartında etiketteki gönderilere davet satırı. */

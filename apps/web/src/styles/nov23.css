@@ -185,7 +185,7 @@
 .header-search-panel { position: absolute; top: calc(100% + 6px); left: 0; width: min(540px, 70vw); max-height: 70vh; overflow-y: auto; background: #eef7f1; border: 1px solid #b9d6c4; border-radius: 12px; box-shadow: 0 18px 44px rgba(16, 35, 31, .16); padding: 10px 0 0; z-index: 40; }
 .header-search-caption { display: block; padding: 0 14px 6px; color: #66756d; }
 .header-search-empty { margin: 0; padding: 6px 14px 12px; color: #66756d; font-size: 14px; }
-.header-search-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 7px 14px; border: 0; background: transparent; text-align: left; color: #10231f; min-height: 0; }
+.header-search-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 7px 14px; border: 0; background: transparent; text-align: left; color: #10231f; min-height: 0; cursor: pointer; }
 .header-search-row:hover, .header-search-row:focus-visible { background: #dcefe3; }
 .header-search-row > span:last-child { display: grid; min-width: 0; }
 .header-search-row strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -201,3 +201,29 @@
 .corp-business-link { display: inline-flex; align-items: center; min-height: 38px; padding: 0 14px; border-radius: 10px; border: 1.5px solid #2f7d55; color: #1d6545; font-weight: 700; text-decoration: none; white-space: nowrap; }
 @media (min-width: 761px) and (max-width: 1100px) { .corp-topbar-actions > .corp-business-link { display: inline-flex !important; order: 2; } .corp-topbar-actions > .corp-header-search { order: 1; } }
 @media (max-width: 760px) { .corp-topbar-actions > .corp-business-link { display: none !important; } }
+
+/* 26/11 #83.1: lightbox açıklaması kalemin yerinde, medyanın hemen üstünde; arka plansız, medya numaralarıyla aynı yazı boyutunda */
+.album-media-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; overflow: hidden; }
+.album-media-stage > video { max-width: 100%; max-height: calc(min(800px, 92dvh) - 220px); }
+.album-image-frame > img { max-height: min(72vh, calc(min(800px, 92dvh) - 220px)); }
+.album-viewer .album-caption-edit { position: static; transform: none; flex: 0 0 auto; width: 32px; height: 32px; padding: 0; border-radius: 50%; background: rgba(255,255,255,.12); justify-content: center; }
+.album-caption, .album-caption-form { position: static; transform: none; flex: 0 0 auto; max-width: 100%; padding: 0; border-radius: 0; background: transparent; font-size: inherit; font-weight: 700; line-height: 1.3; }
+.album-viewer .album-caption > button, .album-viewer .album-caption-form > button { background: transparent; padding: 4px; }
+.album-caption-form > input { font-size: inherit; font-weight: 700; background: rgba(255,255,255,.1); border-bottom: 1px solid rgba(255,255,255,.5); border-radius: 4px; }
+/* 26/11 #83.2: kırpma karartması resmin dışına taşmaz; "Kırp" düğmesi belirgin */
+.album-image-frame.is-cropping { overflow: hidden; }
+.album-image-frame.is-cropping .album-crop-handle { right: -2px; bottom: -2px; }
+.album-crop-actions { position: relative; z-index: 4; flex-wrap: wrap; align-items: center; }
+.album-crop-actions > span { flex: 1 1 100%; text-align: center; font-size: 13px; color: rgba(255,255,255,.85); }
+.album-viewer .album-crop-actions > button { padding: 8px 14px; font-weight: 700; }
+.album-viewer .album-crop-actions > .album-crop-confirm { background: #fff; color: #10251b; }
+.album-viewer .album-crop-actions > .album-crop-confirm:hover { background: #e9f3ec; }
+
+/* 26/11 #111: Etkinlik / Mekân / İlgi Alanı gönderilerinde beğeni, yorum, paylaş ve ⋮ aynı ikon ve yazı boyutunda (İlgi Alanı kartı ölçüsü) */
+.comment-actions { gap: 0.6rem; }
+.comment-actions > :where(button, a),
+.comment-actions > .comment-action-menu > summary { font-size: inherit; color: inherit; gap: 0.3rem; padding: 0.35rem; }
+.comment-actions > .comment-action-menu > div > :where(button, a) { font-size: inherit; color: #263b32; gap: 9px; padding: 10px; }
+/* 26/11 #115: İlgi Alanı gönderi yorumları Etkinlik Detay alt yorumlarıyla aynı sade görünümde */
+.tag-post-replies { margin-top: 10px; }
+.tag-post-replies > .comment-replies { margin-top: 4px; }

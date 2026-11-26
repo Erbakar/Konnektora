@@ -25,10 +25,22 @@ import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 import { RequirePermissions } from "../auth/permissions";
 import { CreateTagCommentDto, CreateTagDto, MergeTagDto } from "./tags.dto";
 import { TagsService } from "./tags.service";
+import { TagSuggestionsService } from "./tag-suggestions.service";
 
 @Controller()
 export class TagsController {
-  constructor(private readonly tagsService: TagsService) {}
+  constructor(private readonly tagsService: TagsService, private readonly tagSuggestions: TagSuggestionsService) {}
+
+  // 26/11 #107, #108: etkinlik/mekân formlarında trend etiket önerileri.
+  @Get("tags/trending-suggestions")
+  trendingSuggestions(
+    @Query("target") target?: string,
+    @Query("format") format?: string,
+    @Query("startsAt") startsAt?: string,
+    @Query("placeType") placeType?: string,
+  ) {
+    return this.tagSuggestions.trendingTagIds({ target, format, startsAt, placeType });
+  }
 
   @Get("tags")
   @UseGuards(OptionalJwtAuthGuard)

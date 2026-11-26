@@ -333,8 +333,9 @@ export function EventInviteManagementPage() {
           <InviteForm
             method={inviteMethod as "username" | "email" | "phone"}
             pending={invite.isPending}
-            canAssignRole={canManage}
-            canAssignFounder={Boolean(event.data && user && (event.data.createdById === user.id || (["accepted", "attended", "not_attending"].includes(event.data.viewerParticipation?.status ?? "") && event.data.viewerParticipation!.role === "manager") || ["admin", "super_admin"].includes(user.role)))}
+            // 26/11 #117: "Yönetici" yalnız etkinliğin kurucu/yöneticilerine, "Kurucu" yalnız kurucularına gösterilir (platform rolü yetmez).
+            canAssignRole={Boolean(event.data && user && (event.data.createdById === user.id || (["accepted", "attended", "not_attending"].includes(event.data.viewerParticipation?.status ?? "") && ["manager", "organizer"].includes(event.data.viewerParticipation!.role))))}
+            canAssignFounder={Boolean(event.data && user && (event.data.createdById === user.id || (["accepted", "attended", "not_attending"].includes(event.data.viewerParticipation?.status ?? "") && event.data.viewerParticipation!.role === "manager")))}
             onSubmit={(form) =>
               invite.mutate({
                 username: form.username,
@@ -786,8 +787,9 @@ export function PlaceInviteManagementPage() {
           <InviteForm
             method={inviteMethod as "username" | "email" | "phone"}
             pending={invite.isPending}
-            canAssignRole={canManage}
-            canAssignFounder={Boolean(place.data && user && (place.data.createdById === user.id || (place.data.viewerMembership?.status === "accepted" && place.data.viewerMembership.role === "manager") || ["admin", "super_admin"].includes(user.role)))}
+            // 26/11 #116: "Yönetici" yalnız mekânın kurucu/yöneticilerine, "Kurucu" yalnız kurucularına gösterilir (platform rolü yetmez).
+            canAssignRole={Boolean(place.data && user && (place.data.createdById === user.id || (place.data.viewerMembership?.status === "accepted" && ["manager", "organizer"].includes(place.data.viewerMembership.role))))}
+            canAssignFounder={Boolean(place.data && user && (place.data.createdById === user.id || (place.data.viewerMembership?.status === "accepted" && place.data.viewerMembership.role === "manager")))}
             memberTarget
             onSubmit={(form) =>
               invite.mutate({

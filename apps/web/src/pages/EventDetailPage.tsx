@@ -32,6 +32,7 @@ import { CalendarDialog, NotificationDialog, ShareDialog } from "../components/C
 import { ReportDialog } from "../components/ReportDialog";
 import { formatEventDateRange, formatTimeZoneOffset, localizeCityName, localizeCountryName } from "../lib/formats";
 import { getServiceErrorMessage, getServiceErrorPresentation } from "../lib/serviceErrors";
+import { eventInviteOnlyAccess } from "../lib/inviteOnlyAccess";
 import { NotFoundPage } from "./NotFoundPage";
 import {
   archiveMyEvent,
@@ -215,6 +216,8 @@ export function EventDetailPage() {
     : new Date(event.startsAt).getTime() + 24 * 60 * 60 * 1000;
   const inviteAllowed = canManage || event.viewerParticipation?.status === "accepted" || event.viewerParticipation?.status === "attended" || event.viewerParticipation?.status === "invited";
   const canLeave = Boolean(event.viewerParticipation) && ["accepted", "attended", "requested"].includes(event.viewerParticipation!.status);
+  // 26/11 #102: "Sadece davetli" etkinliğe davet edilmemiş kullanıcıda katılım ve davet butonları pasif.
+  const inviteOnlyLocked = Boolean(user) && !canLeave && eventInviteOnlyAccess(event, user?.id) === "locked";
   const invitedPreviewCount = canManage
     ? participantsQuery.data?.filter((item) => item.status === "invited").length ?? 0
     : (relatedUsersQuery.data ?? []).filter((item) => item.status === "invited").length;
@@ -253,7 +256,8 @@ export function EventDetailPage() {
         {user ? (
           <button
             className="primary-action"
-            disabled={attendMutation.isPending || leaveMutation.isPending}
+            disabled={inviteOnlyLocked || attendMutation.isPending || leaveMutation.isPending}
+            title={inviteOnlyLocked ? language === "tr" ? "Bu etkinliğe yalnız davet edilen kullanıcılar katılabilir." : "Only invited people can join this event." : undefined}
             onClick={() => canLeave ? leaveMutation.mutate(event.id) : attendMutation.mutate(event.id)}
             type="button"
           >
@@ -266,6 +270,8 @@ export function EventDetailPage() {
                   : language === "tr" ? "Etkinlikten ayrıl" : "Leave event"
               : attendMutation.isPending
                 ? language === "tr" ? "Gönderiliyor" : "Sending"
+                : inviteOnlyLocked
+                  ? language === "tr" ? "Sadece davetliler" : "Invitees only"
                 : event.visibility === "invite_only" || event.visibility === "hidden"
                   ? language === "tr" ? "Daveti kabul et" : "Accept invitation"
                   : event.visibility === "approval_required"
@@ -278,7 +284,7 @@ export function EventDetailPage() {
             {language === "tr" ? "Katılmak için giriş yap" : "Log in to join"}
           </Link>
         ) : null}
-        {user ? <button className="secondary-action" onClick={() => {
+        {user ? <button className="secondary-action" disabled={inviteOnlyLocked && !canManage} onClick={() => {
           if (Date.now() > eventCutoff) {
             setActionNotice({ kind: "error", message: language === "tr" ? "Bitmiş bir etkinliğe başkasını davet edemezsiniz. Bunda bir sorun olduğunu düşünüyorsanız Etkinlik Düzenle sayfasındaki etkinlik bitiş zamanını güncelleyerek tekrar deneyin." : "You cannot invite someone to an event that has ended. If this is incorrect, update the event end time and try again." });
             return;

@@ -14,7 +14,7 @@ const ui = {
     navigation: "Ana navigasyon", mobileNavigation: "Mobil navigasyon",
     discover: "Keşfet", community: "Topluluk", founders: "Kurucular", investment: "Yatırım",
     organizerTools: "Organizatör araçları", adminLogin: "Yönetici girişi", contact: "İletişim",
-    help: "Destek merkezi", about: "Hakkımızda", privacy: "Gizlilik", terms: "Koşullar",
+    help: "Yardım merkezi", about: "Hakkımızda", privacy: "Gizlilik", terms: "Koşullar",
     cookies: "Çerezler", networking: "Networking", closedBeta: "Kapalı beta · AB MVP",
     notifications: "Bildirimler", members: "Üyeler", membersAndLists: "Üyeler ve Listeler",
     settingsCenter: "Ayarlar Merkezi", myTickets: "Biletlerim", findFriends: "Arkadaşlarımı Bul ve Davet Et",

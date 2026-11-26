@@ -86,6 +86,7 @@ import {
   listProfileMedia,
   listSocialAccounts,
   listTags,
+  getTrendingTagSuggestions,
   listTagComments,
   markMyNotificationRead,
   makeProfilePicture,
@@ -311,6 +312,14 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
     ]) ?? [],
   );
   const interestTags = tags.filter((tag) => interestTagIds.includes(tag.id));
+  // 26/11 #107: etkinlik etiket önerisi — seçili formattaki ve başlangıç zamanının 1 aylık dönemindeki trend ilk 10 etiket.
+  const eventStartDay = eventStartsAt.slice(0, 10);
+  const trendingEventTagsQuery = useQuery({
+    queryKey: ["trending-tag-suggestions", "event", eventFormat, eventStartDay],
+    queryFn: () => getTrendingTagSuggestions({ target: "event", format: eventFormat, startsAt: eventStartsAt && !Number.isNaN(new Date(eventStartsAt).getTime()) ? new Date(eventStartsAt).toISOString() : undefined }),
+    enabled: eventCreator,
+    staleTime: 5 * 60_000,
+  });
 
   const authMutation = useMutation({
     mutationFn: (input: RegistrationInput) =>
@@ -2215,7 +2224,7 @@ export function AccountPage({ initialMode = "register", eventCreator = false }: 
                     </select>
                   </label>
                 </div>
-                <TagPicker initialIds={formEvent?.tags.map((tag) => tag.id)} label={t("Etkinlik etiketleri", "Event tags")} optional recommendedIds={interestTagIds} tags={tags}/>
+                <TagPicker initialIds={formEvent?.tags.map((tag) => tag.id)} label={t("Etkinlik etiketleri", "Event tags")} optional recommendedIds={trendingEventTagsQuery.data ?? []} recommendationNote={t("Seçili formatta ve başlangıç tarihine yakın dönemde en çok kullanılan etiketler önce gösteriliyor; seçmeden etkinliğe eklenmez.", "The most used tags for the selected format around the start date appear first and are not added until you select them.")} tags={tags}/>
                 <div className="event-step-actions">
                   <button
                     className="primary-action"

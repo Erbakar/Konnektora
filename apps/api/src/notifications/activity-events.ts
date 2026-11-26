@@ -110,24 +110,74 @@ export function formatNotificationDateTime(value:Date,timeZone="Europe/Istanbul"
  const format=(zone:string)=>{const parts=Object.fromEntries(new Intl.DateTimeFormat("tr-TR",{timeZone:zone,day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(value).map(part=>[part.type,part.value]));return `${parts.day}.${parts.month}.${parts.year} ${parts.hour}:${parts.minute}`;};
  try{return format(timeZone);}catch{return format("Europe/Istanbul");}
 }
+/** 26/11 #96: "Istanbul" / "İstanbul", "Adıyaman Province" / "Adıyaman" gibi yalnızca yazım farkı olan değerler değişiklik sayılmaz. */
+export function comparableValue(value:unknown){
+ if(value instanceof Date)return value.toISOString();
+ return String(value??"").normalize("NFKD").replace(/\p{M}/gu,"").replace(/ı/g,"i").toLocaleLowerCase("en-US").replace(/\s+province$/,"").replace(/\s+/g," ").trim();
+}
+const isTurkey=(country:unknown)=>["tr","turkiye","turkey"].includes(comparableValue(country));
+type AddressRow={name?:string|null;address?:string|null;city?:string|null;region?:string|null;postalCode?:string|null;country?:string|null};
+/** Türkiye'de city=ilçe, region=il (Şehir); diğer ülkelerde city=şehir, region=eyalet. Sıra: Ad, Adres, İlçe, Şehir, Posta kodu, Eyalet ve Ülke. */
+export function formatNotificationAddress(row:AddressRow){
+ const clean=(value?:string|null)=>value?.trim()||null;
+ const tr=isTurkey(row.country);
+ const parts=[clean(row.name),clean(row.address),...(tr?[clean(row.city),clean(row.region),clean(row.postalCode)]:[clean(row.city),clean(row.postalCode),clean(row.region)])].filter((part):part is string=>Boolean(part));
+ const country=clean(row.country);
+ const text=country?(parts.length?`${parts.join(", ")} ve ${country}`:country):parts.join(", ");
+ return text||"Belirtilmemiş";
+}
+/** Adres bileşenleri alan yerinden bağımsız karşılaştırılır (eski kayıtlarda il "city" alanında durabiliyor). */
+const addressKey=(row:AddressRow)=>[row.name,row.address,row.city,row.region,row.postalCode,row.country].map(comparableValue).filter(Boolean).sort().join("|");
+const formatLabels:Record<string,string>={offline:"yüz yüze",online:"çevrim içi",hybrid:"hibrit"};
+/** 26/11 #98-#101: format değişikliği metinleri ve hedef kitlesi (subscribersOnly: yalnızca bildirimi açmış kullanıcılar). */
+export function formatChangeMessage(from:string,to:string):{body:string;live:boolean;subscribersOnly:boolean}|null{
+ const live="Dilerseniz etkinliğe “Canlı yayın URL'si” adresinden online da katılabilirsiniz.";
+ if(from==="offline"&&to==="hybrid")return {body:`Formatı yüz yüze iken etkinliğe canlı yayın da eklendi. ${live}`,live:true,subscribersOnly:true};
+ if(from==="offline"&&to==="online")return {body:"Formatı yüz yüze iken; fiziksel etkinlik iptal edilip çevrim içine dönüştürüldü. Dilerseniz etkinliğe “Canlı yayın URL'si” adresinden online katılabilirsiniz.",live:true,subscribersOnly:false};
+ if(from==="online"&&to==="offline")return {body:"Formatı çevrim içi olan etkinlik artık sadece yüz yüze düzenlenecek.",live:false,subscribersOnly:false};
+ if(from==="online"&&to==="hybrid")return {body:`Formatı çevrim içi olan etkinliğe artık yüz yüze de katılabilirsiniz. ${live}`,live:true,subscribersOnly:false};
+ return null;
+}
 export async function notifyEntityChanges(db:PrismaService,kind:"event"|"place",before:any,after:any) {
- const fields=kind==="event"?["title","placeId","locationName","locationAddress","city","region","country","startsAt","endsAt"]:["name","address","city","region","country"];
- const changes=fields.filter(field=>String(before[field]??"")!==String(after[field]??""));if(!changes.length)return;
+ const fields=kind==="event"?["title","startsAt","endsAt"]:["name"];
+ const changes=fields.filter(field=>comparableValue(before[field])!==comparableValue(after[field]));
+ const placeName=async(row:any)=>row.locationName||(row.placeId?(await db.place.findUnique({where:{id:row.placeId},select:{name:true}}))?.name:null);
+ const addressOf=async(row:any):Promise<AddressRow>=>kind==="event"?{name:await placeName(row),address:row.locationAddress,city:row.city,region:row.region,postalCode:row.postalCode,country:row.country}:{address:row.address,city:row.city,region:row.region,postalCode:row.postalCode,country:row.country};
+ const [oldAddress,newAddress]=await Promise.all([addressOf(before),addressOf(after)]);
+ const addressChanged=addressKey(oldAddress)!==addressKey(newAddress);
+ const format=kind==="event"&&before.format!==after.format&&before.format&&after.format?formatChangeMessage(before.format,after.format):null;
+ if(!changes.length&&!addressChanged&&!format)return;
  const participants=kind==="event"?await db.eventParticipant.findMany({where:{eventId:after.id,status:{in:["accepted","attended","not_attending"]}},select:{userId:true}}):await db.placeMember.findMany({where:{placeId:after.id,status:"accepted"},select:{userId:true}});
  const subs=await db.contentNotificationSubscription.findMany({where:{targetType:kind,targetId:after.id,enabled:true},select:{userId:true}});
  const tickets=kind==="event"?await db.ownedEventTicket.findMany({where:{eventId:after.id,status:{in:["active","used"]}},select:{ownerId:true}}):[];
  const recipients=new Set([...participants.map(row=>row.userId),...subs.map(row=>row.userId),...tickets.map(row=>row.ownerId),...(after.createdById?[after.createdById]:[])]);
- const labels:Record<string,string>={title:"Etkinlik adı",name:"Mekân adı",placeId:"Etkinlik mekânı",locationName:"Etkinlik yeri",locationAddress:"Etkinlik adresi",startsAt:"Etkinlik başlangıcı",endsAt:"Etkinlik bitişi",address:"Mekân adresi",city:"Şehir",region:"Eyalet",country:"Ülke"};
- for(const field of changes)for(const userId of recipients){
-  if(!await targetVisible(db,kind,after.id,userId))continue;
-  const zone=after.timezone??before.timezone??"Europe/Istanbul";
-  let oldValue=before[field] instanceof Date?formatNotificationDateTime(before[field],zone):String(before[field]??"Belirtilmemiş");let newValue=after[field] instanceof Date?formatNotificationDateTime(after[field],zone):String(after[field]??"Belirtilmemiş");
-  if(field==="placeId"){
-   const [oldPlace,newPlace]=await Promise.all([before.placeId?db.place.findUnique({where:{id:before.placeId},select:{name:true}}):null,after.placeId?db.place.findUnique({where:{id:after.placeId},select:{name:true}}):null]);
-   oldValue=oldPlace?.name??"Belirtilmemiş";newValue=newPlace?.name??"Belirtilmemiş";
+ const noun=kind==="event"?"etkinliğin":"mekânın";
+ const refundText=" Biletiniz var ve iade etmek isterseniz Biletlerim sayfasını ziyaret ediniz.";
+ const refundContext={targetLabel:"Biletlerim sayfası",targetUrl:"/tickets"};
+ const labels:Record<string,string>={title:"Etkinlik adı",name:"Mekân adı",startsAt:"Etkinlik başlangıcı",endsAt:"Etkinlik bitişi"};
+ const zone=after.timezone??before.timezone??"Europe/Istanbul";
+ const display=(value:unknown)=>value instanceof Date?formatNotificationDateTime(value,zone):String(value??"Belirtilmemiş");
+ const visible=new Map<string,boolean>();
+ const canSee=async(userId:string)=>{if(!visible.has(userId))visible.set(userId,await targetVisible(db,kind,after.id,userId));return visible.get(userId)!;};
+ for(const userId of recipients){
+  if(!await canSee(userId))continue;
+  for(const field of changes){
+   const oldValue=display(before[field]),newValue=display(after[field]);const refund=kind==="event"&&field!=="title";
+   await recordActivity(db,{userId,type:`${kind}_changed`,title:`${labels[field]} değiştirildi`,body:`Eski ${labels[field]!.toLowerCase()} “${oldValue}” olan ${noun} yeni bilgisi “${newValue}” olarak değiştirildi.${refund?refundText:""}`,targetType:kind,targetId:after.id,key:`change:${kind}:${after.id}:${field}:${String(after.updatedAt)}:${newValue}`,context:{...(refund?refundContext:{}),oldValue,newValue}});
   }
-  const refund=kind==="event"&&!["title"].includes(field);
-  await recordActivity(db,{userId,type:`${kind}_changed`,title:`${labels[field]} değiştirildi`,body:`Eski ${labels[field]!.toLowerCase()} “${oldValue}” olan ${kind==="event"?"etkinliğin":"mekânın"} yeni bilgisi “${newValue}” olarak değiştirildi.${refund?" Biletiniz var ve iade etmek isterseniz Biletlerim sayfasını ziyaret ediniz.":""}`,targetType:kind,targetId:after.id,key:`change:${kind}:${after.id}:${field}:${String(after.updatedAt)}:${newValue}`,context:{targetLabel:refund?"Biletlerim sayfası":undefined,targetUrl:refund?"/tickets":undefined,oldValue,newValue}});
+  if(addressChanged){
+   // 26/11 #97/#112: adres alanlarından biri ya da birkaçı değişse de tek bildirim gider.
+   const oldValue=formatNotificationAddress(oldAddress),newValue=formatNotificationAddress(newAddress);
+   await recordActivity(db,{userId,type:`${kind}_changed`,title:kind==="event"?"Etkinlik adresi değiştirildi":"Mekân adresi değiştirildi",body:`Eski adresi “${oldValue}” olan ${noun} yeni adresi “${newValue}” olarak değiştirildi.${kind==="event"?refundText:""}`,targetType:kind,targetId:after.id,key:`change:${kind}:${after.id}:address:${String(after.updatedAt)}:${addressKey(newAddress)}`,context:{...(kind==="event"?refundContext:{}),oldValue,newValue}});
+  }
+ }
+ if(format){
+  const audience=new Set([...subs.map(row=>row.userId),...(format.subscribersOnly?[]:[...participants.map(row=>row.userId),...tickets.map(row=>row.ownerId)])]);
+  const liveUrl=format.live?(after.liveUrl||`/events/${after.slug}`):undefined;
+  for(const userId of audience){
+   if(!await canSee(userId))continue;
+   await recordActivity(db,{userId,type:"event_changed",title:"Etkinlik formatı değiştirildi",body:format.body,targetType:"event",targetId:after.id,key:`change:event:${after.id}:format:${String(after.updatedAt)}:${after.format}`,context:{...(liveUrl?{targetLabel:"Canlı yayın URL'si",targetUrl:liveUrl}:{}),oldValue:formatLabels[before.format]??before.format,newValue:formatLabels[after.format]??after.format}});
+  }
  }
 }
 export async function notifyEventAvailability(db:PrismaService,now=new Date()) {

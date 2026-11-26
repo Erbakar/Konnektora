@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf } from "class-validator";
+import { IsEmail, IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength, ValidateIf } from "class-validator";
 
 const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/;
 
@@ -59,6 +59,11 @@ export class RegisterDto extends StrongPasswordDto {
   @ValidateIf((value: RegisterDto) => value.accountType === "corporate")
   @IsIn(["event_organizer", "restaurant_bar_cafe", "night_club", "university_club", "ngo", "brand", "tourism_company", "sports_club", "other"])
   businessCategory?: string;
+
+  /** 26/11 #118: "Davet bağlantısını kopyala" ile gelen üyeliklerde bağlantı sahibi davet eden olarak kaydedilir. */
+  @IsOptional()
+  @IsUUID()
+  inviterId?: string;
 }
 
 export class EmailDto {
@@ -173,4 +178,9 @@ export class SocialAuthDto {
   @MinLength(3)
   @MaxLength(4096)
   credential!: string;
+
+  /** 26/11 #118: davet bağlantısıyla sosyal hesapla üye olanlarda davet eden. */
+  @IsOptional()
+  @IsUUID()
+  inviterId?: string;
 }

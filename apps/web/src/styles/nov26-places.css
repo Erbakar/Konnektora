@@ -1,0 +1,28 @@
+/* 26/11 Grup G — Mekân Detay ve harita düzeltmeleri */
+
+/* #123: Leaflet panelleri (z-index 400–1000) kendi yığın bağlamında kalır; böylece Paylaş
+   penceresi gibi sayfa kökünde açılan pencereler haritanın altında kalmaz ve harita kararır. */
+.location-map,
+.location-map-canvas {
+  isolation: isolate;
+}
+.share-sheet-modal { z-index: 2000; }
+
+/* #119: "Güncel" / "Geçmiş" sekmeleri alt satıra kaymaz; dar ekranda sağa kaydırılır. */
+.place-event-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.place-event-tabs::-webkit-scrollbar { display: none; }
+.place-event-tabs > button { flex: 0 0 auto; white-space: nowrap; }
+
+/* #122: "Mekândaki etkinlikler" ile "Mekân yorumları" arasında boşluk. */
+.place-detail-page .place-events-section ~ .content-comments { margin-top: 24px; }
+@media (max-width: 760px) {
+  .place-detail-page .place-events-section ~ .content-comments { margin-top: 18px; }
+}

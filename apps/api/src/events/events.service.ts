@@ -570,6 +570,8 @@ export class EventsService {
       ...programInterests,
       ...prefixMetrics("ticketTypeKonnektora", Object.fromEntries(konnektoraTicketTypes.map((ticket) => [ticket.name, 1]))),
       ...dailyCountMetrics("viewsDay", recentViews.map((row) => row.createdAt), now),
+      // 26/11 #121: bu etkinlik için bildirimlerini açmış kullanıcı sayısı.
+      notificationSubscribers: await this.prisma.contentNotificationSubscription.count({ where: { targetType: "event", targetId: eventId, enabled: true } }),
       performanceScore: Math.min(100, Math.round(((detailViews ? acceptedTotal / detailViews : 0) * 40 + (acceptedTotal ? attended / acceptedTotal : 0) * 40 + (detailViews ? (comments + reactions) / detailViews : 0) * 20) * 100)),
     };
   }
@@ -1416,9 +1418,16 @@ export class EventsService {
     if (!event || event.status !== EventStatus.published) {
       throw new NotFoundException("Etkinlik bulunamadı.");
     }
-    // 23/11 #42: kurucu ("manager") davetini yalnız etkinliğin kurucuları gönderebilir.
-    if (canManage && input.role === EventParticipantRole.manager && !["admin", "super_admin"].includes(actor.role) && event.createdBy?.id !== actor.id && event.participants[0]?.role !== EventParticipantRole.manager) {
+    // 23/11 #42, 26/11 #117: kurucu ("manager") davetini yalnız etkinliğin kurucuları, yönetici ("organizer") davetini
+    // yalnız etkinliğin kurucu ve yöneticileri gönderebilir. Platform rolü (admin/küratör) bu yetkiyi tek başına vermez.
+    const actorTeamRole = ["accepted", "attended", "not_attending"].includes(event.participants[0]?.status ?? "") ? event.participants[0]!.role : null;
+    const actorIsEventFounder = event.createdBy?.id === actor.id || actorTeamRole === EventParticipantRole.manager;
+    const actorIsEventTeam = actorIsEventFounder || actorTeamRole === EventParticipantRole.organizer;
+    if (input.role === EventParticipantRole.manager && !actorIsEventFounder) {
       throw new ForbiddenException("Kurucu rolünü yalnız etkinlik kurucuları verebilir.");
+    }
+    if (input.role === EventParticipantRole.organizer && !actorIsEventTeam) {
+      throw new ForbiddenException("Yönetici rolünü yalnız etkinlik kurucuları ve yöneticileri verebilir.");
     }
     const cutoff = event.endsAt
       ? event.endsAt.getTime() + 12 * 60 * 60 * 1000
@@ -1575,6 +1584,23 @@ export class EventsService {
         },
       },
     });
+  }
+
+  /** 26/11 #93: "Etkinliğe affet" kaydı tamamen siler; kullanıcı sıfır duruma döner ve dilerse yeniden başvurur. */
+  async pardonParticipant(eventId: string, userId: string, actor: User) {
+    await this.ensureCanManageParticipants(eventId, actor);
+    const [participant, event] = await Promise.all([
+      this.prisma.eventParticipant.findUnique({ where: { eventId_userId: { eventId, userId } }, select: { status: true, role: true } }),
+      this.prisma.event.findUnique({ where: { id: eventId }, select: { createdById: true } }),
+    ]);
+    if (!participant || participant.status !== EventParticipantStatus.banned) throw new NotFoundException("Yasaklı katılımcı bulunamadı.");
+    if (participant.role === EventParticipantRole.manager && event?.createdById !== actor.id && !["admin", "super_admin"].includes(actor.role)) {
+      const actorParticipant = await this.prisma.eventParticipant.findUnique({ where: { eventId_userId: { eventId, userId: actor.id } }, select: { role: true, status: true } });
+      if (!(actorParticipant?.role === EventParticipantRole.manager && ["accepted", "attended", "not_attending"].includes(actorParticipant.status)))
+        throw new ForbiddenException("Etkinlik kurucusunu yalnız etkinlik kurucuları affedebilir.");
+    }
+    await this.prisma.eventParticipant.deleteMany({ where: { eventId, userId, status: EventParticipantStatus.banned } });
+    return { pardoned: true };
   }
 
   async updateParticipantStatus(eventId: string, userId: string, status: EventParticipantStatus, actor: User) {

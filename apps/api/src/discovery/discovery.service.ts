@@ -4,6 +4,7 @@ import { additionalActivities, activityRelations, eventActivityRelations } from 
 import { publicName } from "../common/public-name";
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { MEMBER_ROLES } from "../common/member-roles";
 import { DiscoveryFeedQueryDto } from "./discovery.dto";
 import { territoryNameVariants } from "../curator-finance/territory";
 
@@ -44,7 +45,7 @@ export class DiscoveryService {
     const country = query.country?.trim() || viewer?.country || undefined;
     const userWhere = {
       status: "active" as const,
-      role: "user" as const,
+      role: { in: MEMBER_ROLES },
       ...(blockedIds.filter(id => id !== userId).length ? { id: { notIn: blockedIds.filter(id => id !== userId) } } : {}),
     };
     const localWhere =
@@ -345,7 +346,7 @@ export class DiscoveryService {
       this.prisma.user.findMany({
         where: {
           status: "active",
-          role: "user",
+          role: { in: MEMBER_ROLES },
           ...(blockedIds.length ? { id: { notIn: blockedIds } } : {}),
           OR: [{ name: contains, OR: [{ privacySettings: null }, { privacySettings: { profileNameAudience: "everybody" } }] }, { username: contains }],
         },
@@ -388,8 +389,9 @@ export class DiscoveryService {
     const items = [
       ...users.map((item) => this.userItem(item)),
       ...tags.map((item) => this.tagItem(item)),
-      ...events.map((item) => this.eventItem(item)),
-      ...places.map((item) => this.placeItem(item)),
+      // 26/11 #82: başlık aramasında "Başlangıç @Mekân, İlçe, İl, Ülke" / "İlçe, İl, Ülke" satırı için konum alanları.
+      ...events.map((item) => ({ ...this.eventItem(item), eventFormat: item.format, venueName: item.place?.name?.trim() || item.locationName?.trim() || null, region: item.region ?? null, country: item.country ?? null })),
+      ...places.map((item) => ({ ...this.placeItem(item), region: item.region ?? null })),
     ];
     return { query, total: items.length, items };
   }

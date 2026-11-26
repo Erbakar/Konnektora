@@ -89,9 +89,9 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
     apiMocks.uploadContentMedia.mockResolvedValueOnce({ id: "first" }).mockRejectedValueOnce(new Error("Network failure")).mockResolvedValue({ id: "second" });
     const { container } = render(providers(<ContentComments targetId="place-1" targetType="place" title="Mekân postları"/>, "/places/demo"));
     fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [first, second] } });
-    await userEvent.click(screen.getByRole("button", { name: "Gönder" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yayınla" }));
     await screen.findByRole("alert");
-    await userEvent.click(screen.getByRole("button", { name: "Gönder" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yayınla" }));
     await waitFor(() => expect(apiMocks.uploadContentMedia).toHaveBeenCalledTimes(3));
     expect(apiMocks.createContentComment).toHaveBeenCalledTimes(1);
     expect(apiMocks.uploadContentMedia.mock.calls.map(call => call[2])).toEqual([first, second, second]);
@@ -177,8 +177,8 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     const image = new File(["image"], "mekan.webp", { type: "image/webp" });
     fireEvent.change(input, { target: { files: [image] } });
-    expect(screen.getByRole("button", { name: "Gönder" })).toBeEnabled();
-    await userEvent.click(screen.getByRole("button", { name: "Gönder" }));
+    expect(screen.getByRole("button", { name: "Yayınla" })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: "Yayınla" }));
 
     await waitFor(() => expect(apiMocks.createContentComment).toHaveBeenCalledWith("place", "place-1", ""));
     expect(apiMocks.uploadContentMedia).toHaveBeenCalledWith("place_comment", "post-1", image);

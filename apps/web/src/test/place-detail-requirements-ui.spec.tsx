@@ -100,7 +100,7 @@ describe("mekân detay gereksinimleri", () => {
     const events = screen.getByRole("heading", { name: "Mekândaki etkinlikler" }).closest("section")!;
     expect(within(events).getByRole("link", { name: "Gelecek Etkinlik" })).toBeVisible();
     expect(within(events).queryByRole("link", { name: "Geçmiş Etkinlik" })).not.toBeInTheDocument();
-    await userEvent.click(within(events).getByRole("button", { name: "Geçmiş etkinlikler" }));
+    await userEvent.click(within(events).getByRole("button", { name: "Geçmiş" }));
     expect(within(events).getByRole("link", { name: "Geçmiş Etkinlik" })).toBeVisible();
   });
 
@@ -120,7 +120,7 @@ describe("mekân detay gereksinimleri", () => {
     await waitFor(() => expect(apiMocks.followPlace).toHaveBeenCalledWith("place-1"));
 
     await userEvent.type(screen.getByPlaceholderText("Yorum yaz…"), "Harika mekân");
-    await userEvent.click(screen.getByRole("button", { name: "Gönder" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yayınla" }));
     await waitFor(() => expect(apiMocks.createContentComment).toHaveBeenCalledWith("place", "place-1", "Harika mekân"));
   });
 

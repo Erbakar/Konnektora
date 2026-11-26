@@ -10,6 +10,7 @@ import { CountryCityFields, normalizeCountry } from "../components/CountryCityFi
 import { checkAvailability, clearUserSession, completeOnboarding, confirmPhoneVerification, followUser, getDiscoveryFeed, getMyProfile, getOnboardingStatus, getProfileAffinities, getUserSession, listMemberSuggestions, listProfileMedia, listTags, registerUser, requestPhoneVerification, resolveMediaUrl, setUserSession, socialLogin, updateMyProfile, updateProfileAffinities, updateUserSession, uploadProfileMedia } from "../lib/api";
 import { normalizeEmail, normalizePhone } from "../lib/formats";
 import { useLanguage } from "../lib/i18n";
+import { captureSignupInviteRef } from "../lib/signupInviteRef";
 import { ThinkingIcon } from "../components/ThinkingIcon";
 import { UsernameField } from "../components/UsernameField";
 
@@ -91,6 +92,8 @@ export function OnboardingPage() {
     enabled: Boolean(session) && step === 5,
   });
 
+  // 26/11 #118: "Davet bağlantısını kopyala" ile açılan üyelik sayfasında davet eden saklanır.
+  useEffect(() => { if (!getUserSession()) captureSignupInviteRef(); }, []);
   useEffect(() => {
     if (onboarding.data && !onboarding.data.completed) {
       setStep(

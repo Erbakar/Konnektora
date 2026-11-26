@@ -523,7 +523,8 @@ export function TagsPage() {
             />
             <div>
               <button className="primary-action" disabled={post.isPending}>
-                {t("Yayınla", "Publish")}
+                {/* 26/11 #104: yükleme sürdükçe "Yayınlanıyor…" */}
+                {post.isPending ? t("Yayınlanıyor…", "Publishing…") : t("Yayınla", "Publish")}
               </button>
               <label className="secondary-action tag-composer-media">
                 <ImagePlus aria-label={t("Resim/video ekle", "Add image/video")} size={20}/>
@@ -668,6 +669,7 @@ export function TagsPage() {
                   targetType="tag_comment"
                   targetId={comment.id}
                   title={t("Gönderi yorumları", "Post comments")}
+                  onClose={() => setCommentPostId(null)}
                 />
               ) : null}
             </article>

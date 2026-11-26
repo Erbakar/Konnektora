@@ -1,4 +1,5 @@
 import { PushNotificationControl } from "../components/PushNotificationControl";
+import { ContentNotificationLists } from "../components/ContentNotificationLists";
 import { reorderProfileMedia } from "../lib/api";
 import { UsernameField } from "../components/UsernameField";
 import {
@@ -751,6 +752,7 @@ function NotificationSettings() {
       client.invalidateQueries({ queryKey: ["notification-preferences"] }),
   });
   return (
+    <>
     <form
       className="identity-panel settings-form"
       onSubmit={(event: FormEvent<HTMLFormElement>) => {
@@ -787,6 +789,9 @@ function NotificationSettings() {
         <p className="form-success">{t("Bildirim tercihleri kaydedildi.", "Notification preferences saved.")}</p>
       ) : null}
     </form>
+    {/* 26/11 #113: bildirimleri açık etiket, mekân, hesap ve etkinlik listeleri */}
+    <ContentNotificationLists />
+    </>
   );
 }
 

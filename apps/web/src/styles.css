@@ -14620,3 +14620,28 @@ button.follow-star { width: 25px; height: 25px; min-width: 25px; min-height: 25p
 .places-page .admin-form .form-grid > label { align-self: start; }
 .places-page .admin-form .form-grid > label select { height: auto; min-height: 44px; }
 .emotion-modal h2 { align-items: center; display: flex; gap: 8px; }
+
+/* 26/11 #84: Duyuru lightbox'ı mobil/tablet tab bar'ının üstünde ve ekranda dikey ortalı açılır. */
+.announcement-modal { z-index: 2200; }
+@media (max-width: 1100px) {
+  .announcement-modal { align-items: center; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+  .announcement-dialog { max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; }
+}
+
+/* 26/11 #124: Postane cihaz bildirimi banner'ı (desktop: boş konuşma alanının altında; mobil: mesaj kartlarının altında). */
+.messages-push-banner { margin: 0; }
+.messages-push-banner > div > span { line-height: 1.45; }
+.message-thread > .messages-push-banner { align-self: start; margin: 0 18px 18px; }
+.conversation-sidebar .messages-push-banner.is-mobile { display: none; }
+@media (max-width: 760px) {
+  .conversation-sidebar .messages-push-banner.is-mobile { display: grid; }
+}
+/* 26/11 #107: etkinlik formunda "Katılım tipi" ile "Etkinlik etiketleri" başlığı arasında boşluk. */
+[data-event-step] > .form-grid + .tag-fieldset.tag-picker { margin-top: 20px; }
+/* 26/11 #107, #108: etiket öneri açıklaması ve "- seç" eki. */
+.tag-picker > .tag-picker-note { color: #5f6b64; display: block; font-size: 13px; width: 100%; }
+.tag-picker-suggestions .tag-picker-select-hint { color: #5f6b64; font-weight: 500; }
+/* 26/11 #125, #126: harita altında konum izni bağlantısı. */
+.location-map-permission { display: grid; gap: 4px; margin: 0; }
+.location-map-permission > button { align-items: center; background: none; border: 0; color: #1d6545; cursor: pointer; display: inline-flex; font: inherit; font-weight: 700; gap: 6px; justify-self: start; padding: 0; text-decoration: underline; }
+.location-map-permission > small { color: #5f6b64; }

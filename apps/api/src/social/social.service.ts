@@ -5,6 +5,7 @@ import { memberCompatibility } from "../common/compatibility";
 import { publicName } from "../common/public-name";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { MEMBER_ROLES } from "../common/member-roles";
 
 const memberSelect = {
   id: true,
@@ -48,7 +49,7 @@ export class SocialService {
     const excluded = [userId, ...followingIds, ...ownBlocks.map((block) => block.targetId), ...blockedBy.map((block) => block.userId)];
     const ownTags = new Set(viewer.interestTags.map((item) => item.tagId));
     const candidates = await this.prisma.user.findMany({
-      where: { id: { notIn: excluded }, status: "active", role: "user" },
+      where: { id: { notIn: excluded }, status: "active", role: { in: MEMBER_ROLES } },
       select: memberSelect,
       orderBy: { followerCount: "desc" },
       take: 100
@@ -71,7 +72,7 @@ export class SocialService {
     const excluded = [userId, ...ownBlocks.map((block) => block.targetId), ...blockedBy.map((block) => block.userId)];
     const counts = await this.prisma.userInterestTag.groupBy({
       by: ["userId"],
-      where: { tagId: { in: tagIds }, userId: { notIn: excluded }, user: { status: "active", role: { in: ["user", "curator"] } } },
+      where: { tagId: { in: tagIds }, userId: { notIn: excluded }, user: { status: "active", role: { in: MEMBER_ROLES } } },
       _count: { _all: true },
       orderBy: { _count: { userId: "desc" } },
       take: 500,
@@ -110,7 +111,7 @@ export class SocialService {
     const followingIds = new Set(follows.map((item) => item.followingId));
     const excludedIds = [...ownBlocks.map((item) => item.targetId), ...blockedBy.map((item) => item.userId)];
     const members = await this.prisma.user.findMany({
-      where: { status: "active", role: "user", ...(excludedIds.length ? { id: { notIn: excludedIds } } : {}) },
+      where: { status: "active", role: { in: MEMBER_ROLES }, ...(excludedIds.length ? { id: { notIn: excludedIds } } : {}) },
       select: memberSelect,
       orderBy: { createdAt: "desc" },
       take: 200,
@@ -122,7 +123,7 @@ export class SocialService {
   async follow(userId: string, targetUserId: string) {
     if (userId === targetUserId) throw new BadRequestException("Kullanıcı kendisini takip edemez.");
     const [target, existing, blocked] = await Promise.all([
-      this.prisma.user.findFirst({ where: { id: targetUserId, status: "active", role: "user" }, select: { id: true } }),
+      this.prisma.user.findFirst({ where: { id: targetUserId, status: "active", role: { in: MEMBER_ROLES } }, select: { id: true } }),
       this.prisma.userFollow.findUnique({ where: { followerId_followingId: { followerId: userId, followingId: targetUserId } } }),
       this.prisma.userBlock.findFirst({
         where: {

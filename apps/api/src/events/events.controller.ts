@@ -249,6 +249,16 @@ export class EventsController {
     return this.eventsService.updateParticipant(id, participantUserId, body, user);
   }
 
+  @Delete("events/:id/participants/:userId/ban")
+  @UseGuards(JwtAuthGuard)
+  pardonParticipant(
+    @Param("id") id: string,
+    @Param("userId") participantUserId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.eventsService.pardonParticipant(id, participantUserId, user);
+  }
+
   @Post("events/:id/participants/:userId/check-in")
   @UseGuards(JwtAuthGuard)
   checkInParticipant(
