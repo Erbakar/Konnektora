@@ -19,7 +19,7 @@ import {
   UserPlus,
   UserMinus,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   createContentComment,
@@ -80,7 +80,11 @@ export function ContentComments({
   const draftScope = targetType === "event" || targetType === "place" ? targetType : null;
   const [body, setBody, clearBodyDraft] = useComposerDraft(draftScope ? user?.id : null, draftScope ?? "event", targetId);
   const [media, setMedia] = useState<File[]>([]);
-  const [uploadProgress, setUploadProgress] = useState<Record<number, number>>({});
+  // 26/11 #63 test dönüşü: yayın sürerken eklenen medyalar da sıraya girer; yüzde her dosyanın kendi küçük resminde.
+  const mediaRef = useRef<File[]>(media);
+  mediaRef.current = media;
+  const mediaInputId = useId();
+  const [uploadProgress, setUploadProgress] = useState<ReadonlyMap<File, number>>(new Map());
   const [pollDraft, setPollDraft] = useState<PollDraft | null>(null);
   const [pollError, setPollError] = useState("");
   const pollKind = targetType === "event" || targetType === "place" ? targetType : null;
@@ -105,7 +109,7 @@ export function ContentComments({
         ?.scrollIntoView({ block: "center" }),
     );
   }, [comments.data]);
-  const pendingUpload = useRef<{ key: string; id: string; body: string; files: File[]; pollPending: boolean } | null>(null);
+  const pendingUpload = useRef<{ key: string; id: string; body: string; uploaded: Set<File>; pollPending: boolean } | null>(null);
   const create = useMutation({
     mutationFn: async () => {
       const key = `${targetType}:${targetId}`;
@@ -113,7 +117,7 @@ export function ContentComments({
       let draft = pendingUpload.current?.key === key ? pendingUpload.current : null;
       if (!draft) {
         const comment = await createContentComment(targetType, targetId, text);
-        draft = { key, id: comment.id, body: text, files: [...media], pollPending: Boolean(pollDraft && pollKind) };
+        draft = { key, id: comment.id, body: text, uploaded: new Set(), pollPending: Boolean(pollDraft && pollKind) };
         pendingUpload.current = draft;
       } else if (draft.body !== text) {
         await updateContentComment(draft.id, text);
@@ -124,20 +128,23 @@ export function ContentComments({
         draft.pollPending = false;
       }
       const mediaType = targetType === "event" ? "event_comment" : targetType === "place" ? "place_comment" : "tag_comment";
-      // 23/11 #63: ortak seçicide her dosyanın yüklenme yüzdesi
-      const total = draft.files.length;
-      while (draft.files.length) {
-        const index = total - draft.files.length;
-        await uploadContentMediaWithProgress(mediaType, draft.id, draft.files[0]!, (percent) => setUploadProgress({ [index]: percent }));
-        draft.files.shift();
+      // 23/11 #63 — 26/11 test dönüşü: kuyruk her adımda güncel seçimden okunur (yeniden denemede ve yayın
+      // sürerken eklenen dosyalar dahil); yüklenenler 100 olarak işaretlenir ve yüzdeleri kaybolur.
+      const uploaded = draft.uploaded;
+      setUploadProgress(new Map([...uploaded].map((file) => [file, 100])));
+      for (let file = mediaRef.current.find((item) => !uploaded.has(item)); file; file = mediaRef.current.find((item) => !uploaded.has(item))) {
+        const current = file;
+        await uploadContentMediaWithProgress(mediaType, draft.id, current, (percent) => setUploadProgress((map) => new Map(map).set(current, percent)));
+        uploaded.add(current);
+        setUploadProgress((map) => new Map(map).set(current, 100));
       }
-      setUploadProgress({});
       pendingUpload.current = null;
-      return draft.id;
+      return { id: draft.id, uploaded };
     },
-    onSuccess: async (id) => {
+    onSettled: () => setUploadProgress(new Map()),
+    onSuccess: async ({ id, uploaded }) => {
       clearBodyDraft();
-      setMedia([]);
+      setMedia((current) => current.filter((file) => !uploaded.has(file)));
       setPollDraft(null);
       await client.invalidateQueries({
         queryKey: ["content-comments", targetType, targetId],
@@ -376,23 +383,17 @@ export function ContentComments({
             {/* 26/11 #104: "Gönder" yerine "Yayınla"; yükleme sürdükçe "Yayınlanıyor…" */}
             {create.isPending ? language === "tr" ? "Yayınlanıyor…" : "Publishing…" : language === "tr" ? "Yayınla" : "Publish"}
           </button>
-          <label className="comment-media-picker composer-link">
+          {/* 26/11 #63: düğme ortak medya seçicinin dosya girişini açar (tek denetim, aynı uyarılar). */}
+          <label className="comment-media-picker composer-link" htmlFor={mediaInputId}>
             <ImagePlus aria-hidden="true" size={20}/>
             <span>{language === "tr" ? "Resim / video ekle" : "Add photo / video"}</span>
-            <input
-              accept="image/*,video/mp4,video/webm"
-              hidden
-              multiple
-              onChange={(event) => { const picked = [...(event.target.files ?? [])]; event.target.value = ""; setMedia((current) => [...current, ...picked].slice(0, 50)); }}
-              type="file"
-            />
           </label>
           {pollKind ? <button type="button" className={`comment-poll-toggle composer-link${pollDraft ? " active" : ""}`} aria-pressed={Boolean(pollDraft)} onMouseDown={(event) => event.preventDefault()} onClick={() => { setPollDraft((current) => current ? null : emptyPollDraft()); setPollError(""); }}><BarChart3 size={18}/><span>{language === "tr" ? "Anket ekle" : "Add poll"}</span></button> : null}
           <ComposerTips />
           {pollKind && pollDraft ? <PollComposer draft={pollDraft} kind={pollKind} onChange={(next) => { setPollDraft(next); setPollError(""); }} onRemove={() => { setPollDraft(null); setPollError(""); }} tr={language === "tr"}/> : null}
           {pollError ? <p className="form-error" role="alert">{pollError}</p> : null}
 
-          <MediaPicker disabled={create.isPending} files={media} language={language} max={50} onChange={setMedia} progress={uploadProgress}/>
+          <MediaPicker files={media} inputId={mediaInputId} language={language} max={50} onChange={setMedia} progress={uploadProgress} uploading={create.isPending}/>
           {create.isPending ? <LoaderCircle className="spin" size={15} /> : null}
           {draftScope ? <DraftLeaveGuard active={Boolean(body.trim()) && !create.isPending} kind="post" onDiscard={clearBodyDraft} /> : null}
         </form>

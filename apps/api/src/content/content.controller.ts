@@ -1,4 +1,4 @@
-import { contentMediaExtensions, contentMediaHelp } from "../common/media-policy";
+import { composerMediaMaxBytes, contentMediaExtensions, contentMediaHelp } from "../common/media-policy";
 import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ReportTargetType, User } from "@prisma/client";
@@ -38,7 +38,8 @@ export class ContentController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor("file", {
     storage: durableStorage({ destination: resolve(process.cwd(), "uploads"), filename: (_request, file, callback) => callback(null, `${randomUUID()}${mediaExtensions[file.mimetype] ?? ""}`) }),
-    limits: { fileSize: 10 * 1024 * 1024 },
+    // 26/11 #63 test dönüşü: Gönderiler yazma alanındaki telefon videoları için ortak sınır.
+    limits: { fileSize: composerMediaMaxBytes },
     fileFilter: (_request, file, callback) => { const allowed = Boolean(mediaExtensions[file.mimetype]); callback(allowed ? null : new BadRequestException(contentMediaHelp), allowed); }
   }))
   async uploadContentMedia(@Param("targetType") targetType: ReportTargetType, @Param("targetId") targetId: string, @UploadedFile() file: Express.Multer.File | undefined, @CurrentUser() user: User) {

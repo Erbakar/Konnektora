@@ -101,8 +101,11 @@
 .community-card-body > .community-card-followers { color: var(--muted, #667085); }
 
 /* #33: e-posta alanının sağ üst köşesinde doğrulama uyarısı */
-.email-verify-hint { margin: 0 0 -4px; text-align: right; font-size: 13px; color: #9a3412; }
-.email-verify-hint .text-button { font-size: inherit; padding: 0; text-decoration: underline; color: var(--brand, #1d6545); }
+.email-verify-hint { margin: 0 0 -4px; text-align: right; font-size: 13px; color: #c62828; font-weight: 600; }
+/* 26/11 #33 test dönüşü: buton görünümü değil, standart yeşil bağlantı */
+.email-verify-hint .text-button { appearance: none; border: 0; background: transparent; box-shadow: none; min-height: 0; border-radius: 0; font: inherit; font-weight: 700; padding: 0; margin: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; color: var(--brand, #1d6545); }
+.email-verify-hint .text-button:hover:not(:disabled) { color: #14492f; background: transparent; }
+.email-verify-hint .text-button:disabled { opacity: .6; cursor: default; }
 
 /* #58: medya lightbox — açıklama, kaydırma, kırpma */
 .album-media-stage { position: relative; display: grid; place-items: center; min-height: 0; width: 100%; touch-action: pan-y; }
@@ -199,8 +202,10 @@
 @media (max-width: 1100px) { .header-search { display: none; } }
 /* "İşletmeler için" (giriş yapmamış) */
 .corp-business-link { display: inline-flex; align-items: center; min-height: 38px; padding: 0 14px; border-radius: 10px; border: 1.5px solid #2f7d55; color: #1d6545; font-weight: 700; text-decoration: none; white-space: nowrap; }
-@media (min-width: 761px) and (max-width: 1100px) { .corp-topbar-actions > .corp-business-link { display: inline-flex !important; order: 2; } .corp-topbar-actions > .corp-header-search { order: 1; } }
-@media (max-width: 760px) { .corp-topbar-actions > .corp-business-link { display: none !important; } }
+/* 26/11 #50 test dönüşü: 701–760px tabletler (ör. iPad mini dikey 744px) de tablet sayılır; buton yalnız telefonda (≤700px) gizlenir */
+@media (min-width: 701px) and (max-width: 1100px) { .corp-topbar-actions > .corp-business-link { display: inline-flex !important; order: 2; } .corp-topbar-actions > .corp-header-search { order: 1; } }
+@media (min-width: 701px) and (max-width: 760px) { .corp-topbar { grid-template-columns: 1fr auto auto; } .corp-topbar-actions { display: flex; align-items: center; gap: 10px; } .corp-topbar-actions > .corp-business-link { min-height: 36px; padding: 0 12px; font-size: 14px; } }
+@media (max-width: 700px) { .corp-topbar-actions > .corp-business-link { display: none !important; } }
 
 /* 26/11 #83.1: lightbox açıklaması kalemin yerinde, medyanın hemen üstünde; arka plansız, medya numaralarıyla aynı yazı boyutunda */
 .album-media-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; overflow: hidden; }
