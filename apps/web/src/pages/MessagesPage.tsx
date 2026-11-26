@@ -64,7 +64,7 @@ import {
   updateConversationPreference,
 } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
-import { MediaPicker, pickerAccept } from "../components/MediaPicker";
+import { MediaPicker, type MediaPickerHandle } from "../components/MediaPicker";
 import { MediaAlbum } from "../components/MediaAlbum";
 
 const emojis = ["❤️", "👍", "😂", "😮", "😢", "🎉"];
@@ -295,7 +295,8 @@ export function MessagesPage() {
                     <strong>
                       {conversation.peer.username ? `@${conversation.peer.username}` : conversation.peer.name}
                       {/* 23/11 #62.10: okunmamış sayısı kullanıcı adının sağında */}
-                      {conversation.unreadCount ? <b className="conversation-unread">{conversation.unreadCount}</b> : null}
+                      {/* 26/11 #62 test dönüşü: tam yuvarlak kırmızı daire; 99'dan fazlası "99+" */}
+                      {conversation.unreadCount ? <b aria-label={t(`${conversation.unreadCount} okunmamış mesaj`, `${conversation.unreadCount} unread messages`)} className={`conversation-unread${conversation.unreadCount > 99 ? " is-wide" : ""}`}>{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</b> : null}
                       {conversation.preference?.muted ? (
                         <VolumeX size={12} />
                       ) : null}
@@ -404,10 +405,16 @@ function MessageThread({
   const [editing, setEditing] = useState<PrivateChatMessage | null>(null);
   const body = editing ? editBody : draft;
   const setBody = editing ? setEditBody : setDraft;
-  const [attachments, setAttachments] = useState<File[]>([]);
-  const [uploadProgress, setUploadProgress] = useState<Record<number, number>>({});
+  const [attachments, setAttachmentState] = useState<File[]>([]);
+  // 26/11 #62.11 test dönüşü: gönderim sürerken eklenen dosyalar da aynı gönderimde sıraya girer.
+  const attachmentsRef = useRef<File[]>([]);
+  const setAttachments = (next: File[] | ((items: File[]) => File[])) => {
+    attachmentsRef.current = typeof next === "function" ? next(attachmentsRef.current) : next;
+    setAttachmentState(attachmentsRef.current);
+  };
+  const [uploadProgress, setUploadProgress] = useState<ReadonlyMap<File, number>>(new Map());
   const [menu, setMenu] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const pickerRef = useRef<MediaPickerHandle>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const streamRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -434,21 +441,22 @@ function MessageThread({
       if (!attachments.length)
         return sendPrivateMessage(peer.id, body, { replyToId: replyTo?.id });
       let last: PrivateChatMessage | undefined;
-      const queue = [...attachments];
-      for (const [index, attachment] of queue.entries()) {
-        // 23/11 #62.11.3: her dosyanın yüklenme yüzdesi küçük resmin üzerinde
-        last = await sendPrivateMessageWithProgress(peer.id, index === 0 ? body : "", { replyToId: index === 0 ? replyTo?.id : undefined, attachment }, (percent) => setUploadProgress({ 0: percent }));
-        setAttachments(items => items.filter(file => file !== attachment));
-        setUploadProgress({});
-        if (index === 0) { clearDraft(); setReplyTo(null); }
+      let first = true;
+      // 26/11 #62.11 test dönüşü: kuyruk her adımda güncel listeden okunur; gönderim sürerken eklenenler de gider.
+      // Her dosyanın yüzdesi kendi küçük resminin üzerinde (sıradakiler %0), gönderilen dosya listeden çıkar.
+      for (let attachment = attachmentsRef.current[0]; attachment; attachment = attachmentsRef.current[0]) {
+        const current = attachment;
+        last = await sendPrivateMessageWithProgress(peer.id, first ? body : "", { replyToId: first ? replyTo?.id : undefined, attachment: current }, (percent) => setUploadProgress(new Map([[current, percent]])));
+        setAttachments(items => items.filter(file => file !== current));
+        setUploadProgress(new Map());
+        if (first) { clearDraft(); setReplyTo(null); first = false; }
       }
       return last!;
     },
-    onError: () => { setUploadProgress({}); void permission.refetch(); },
+    onError: () => { setUploadProgress(new Map()); void permission.refetch(); },
     onSuccess: () => {
       clearDraft();
       setReplyTo(null);
-      setAttachments([]);
       stickToBottom.current = true;
       onChanged();
     },
@@ -701,27 +709,11 @@ function MessageThread({
           </button>
         </div>
       ) : null}
-      <MediaPicker disabled={send.isPending} files={attachments} language={language} onChange={setAttachments} progress={uploadProgress}/>
-      {send.isError || edit.isError ? <p className="form-error" role="alert">{t("Gönderim tamamlanamadı. Gönderilen mesajları kontrol edip kalan dosyalarla yeniden deneyin.", "Sending could not finish. Check sent messages and retry the remaining files.")}</p> : null}
+      <MediaPicker ref={pickerRef} disabled={messagingClosed || Boolean(editing)} files={attachments} language={language} onChange={setAttachments} progress={uploadProgress} uploading={send.isPending}/>
+      {/* 26/11 #62.11 test dönüşü: gönderim neden durduysa (tür, boyut, bağlantı…) kullanıcı görür. */}
+      {send.isError || edit.isError ? <p className="form-error" role="alert">{t("Gönderim tamamlanamadı.", "Sending could not finish.")} {(send.error ?? edit.error) instanceof Error && (send.error ?? edit.error)!.message ? `${(send.error ?? edit.error)!.message} ` : ""}{attachments.length ? t("Gönderilen mesajları kontrol edip kalan dosyalarla yeniden deneyin.", "Check sent messages and retry the remaining files.") : ""}</p> : null}
       {messagingClosed ? <p className="message-closed-notice" role="status"><Ban aria-hidden="true" size={17}/>{t("Bu kullanıcı özel mesaj almak istemiyor.", "This member does not want to receive private messages.")}</p> : null}
       <form aria-disabled={messagingClosed || undefined} className={`message-composer advanced-composer${messagingClosed ? " is-closed" : ""}`} onSubmit={submit}>
-        <input
-          ref={fileRef}
-          disabled={send.isPending || edit.isPending || messagingClosed}
-          hidden
-          multiple
-          type="file"
-          accept={pickerAccept}
-          onChange={(event) => {
-            const selected = [...(event.target.files ?? [])].filter(
-              (file) =>
-                file.type.startsWith("image/") ||
-                file.type.startsWith("video/"),
-            );
-            setAttachments((items) => [...items, ...selected].slice(0, 6));
-            event.target.value = "";
-          }}
-        />
         <textarea
           ref={textRef}
           aria-label={t("Mesaj", "Message")}
@@ -744,9 +736,9 @@ function MessageThread({
           className="message-media-action"
           type="button"
           aria-label={t("Fotoğraf/video ekle", "Add photo/video")}
-          disabled={messagingClosed}
+          disabled={messagingClosed || Boolean(editing)}
           title={t("Fotoğraf/video ekle", "Add photo/video")}
-          onClick={() => fileRef.current?.click()}
+          onClick={() => pickerRef.current?.open()}
         >
           <ImagePlus size={20} aria-hidden="true"/>
           <span className="composer-media-label">{t("Resim / video ekle", "Add photo / video")}</span>

@@ -26,7 +26,7 @@ import {
   Trash2,
   ThumbsDown,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { RichText } from "../components/RichText";
 import { ContentComments } from "../components/ContentComments";
@@ -97,7 +97,11 @@ export function TagsPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [sharedPost, setSharedPost] = useState<{ id: string; body: string; author: string; likes: number } | null>(null);
   const [selectedTagMedia, setSelectedTagMedia] = useState<File[]>([]);
-  const [tagUploadProgress, setTagUploadProgress] = useState<Record<number, number>>({});
+  // 26/11 #63 test dönüşü: yayın sürerken eklenen medyalar da sıraya girer; yüzde her dosyanın kendi küçük resminde.
+  const selectedTagMediaRef = useRef<File[]>(selectedTagMedia);
+  selectedTagMediaRef.current = selectedTagMedia;
+  const tagMediaInputId = useId();
+  const [tagUploadProgress, setTagUploadProgress] = useState<ReadonlyMap<File, number>>(new Map());
   // 17/10 #23: ilgi alanı gönderi taslağı kullanıcıya ve ilgi alanına özel saklanır.
   const [postDraft, setPostDraft, clearPostDraft] = useComposerDraft(user?.id, "tag", slug);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
@@ -167,32 +171,36 @@ export function TagsPage() {
       ]);
     },
   });
-  const pendingUpload = useRef<{ tagId: string; id: string; body: string; files: File[] } | null>(null);
+  const pendingUpload = useRef<{ tagId: string; id: string; body: string; uploaded: Set<File> } | null>(null);
   const post = useMutation({
-    mutationFn: async ({ body, files }: { body: string; files: File[] }) => {
+    mutationFn: async ({ body }: { body: string; files: File[] }) => {
       let draft = pendingUpload.current?.tagId === tag!.id ? pendingUpload.current : null;
       if (!draft) {
         const created = await createTagComment(tag!.id, body);
-        draft = { tagId: tag!.id, id: created.id, body, files: [...files] };
+        draft = { tagId: tag!.id, id: created.id, body, uploaded: new Set() };
         pendingUpload.current = draft;
       } else if (draft.body !== body) {
         await updateTagComment(draft.id, body);
         draft.body = body;
       }
-      // 23/11 #63: ortak seçicide her dosyanın yüklenme yüzdesi
-      const total = draft.files.length;
-      while (draft.files.length) {
-        const index = total - draft.files.length;
-        await uploadTagCommentMediaWithProgress(draft.id, draft.files[0]!, (percent) => setTagUploadProgress({ [index]: percent }));
-        draft.files.shift();
+      // 23/11 #63 — 26/11 test dönüşü: kuyruk her adımda güncel seçimden okunur (yeniden denemede ve yayın
+      // sürerken eklenen dosyalar dahil); yüklenenler 100 olarak işaretlenir ve yüzdeleri kaybolur.
+      const uploaded = draft.uploaded;
+      setTagUploadProgress(new Map([...uploaded].map((file) => [file, 100])));
+      for (let file = selectedTagMediaRef.current.find((item) => !uploaded.has(item)); file; file = selectedTagMediaRef.current.find((item) => !uploaded.has(item))) {
+        const current = file;
+        await uploadTagCommentMediaWithProgress(draft.id, current, (percent) => setTagUploadProgress((map) => new Map(map).set(current, percent)));
+        uploaded.add(current);
+        setTagUploadProgress((map) => new Map(map).set(current, 100));
       }
-      setTagUploadProgress({});
       pendingUpload.current = null;
+      return uploaded;
     },
-    onSuccess: () => {
+    onSettled: () => setTagUploadProgress(new Map()),
+    onSuccess: (uploaded) => {
       void client.invalidateQueries({ queryKey: ["tag-comments", tag?.id] });
       void client.invalidateQueries({ queryKey: ["tag-stats", tag?.id] });
-      setSelectedTagMedia([]);
+      setSelectedTagMedia((current) => current.filter((file) => !uploaded.has(file)));
       window.setTimeout(() => document.querySelector(".tag-post-card")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
     },
   });
@@ -526,25 +534,18 @@ export function TagsPage() {
                 {/* 26/11 #104: yükleme sürdükçe "Yayınlanıyor…" */}
                 {post.isPending ? t("Yayınlanıyor…", "Publishing…") : t("Yayınla", "Publish")}
               </button>
-              <label className="secondary-action tag-composer-media">
+              {/* 26/11 #63: düğme ortak medya seçicinin dosya girişini açar (tek denetim, aynı uyarılar). */}
+              <label className="secondary-action tag-composer-media" htmlFor={tagMediaInputId}>
                 <ImagePlus aria-label={t("Resim/video ekle", "Add image/video")} size={20}/>
                 <span aria-hidden="true" className="composer-media-label">{t("Resim / video ekle", "Add photo / video")}</span>
-                <input
-                  accept="image/*,video/mp4,video/webm"
-                  hidden
-                  multiple
-                  name="media"
-                  type="file"
-                  onChange={(event) => { const picked = [...(event.target.files ?? [])]; event.target.value = ""; setSelectedTagMedia((current) => [...current, ...picked].slice(0, 9)); }}
-                />
               </label>
               <ComposerTips/>
               <DraftLeaveGuard active={Boolean(postDraft.trim()) && !post.isPending} kind="post" onDiscard={clearPostDraft} />
-              <MediaPicker disabled={post.isPending} files={selectedTagMedia} language={language} max={9} onChange={setSelectedTagMedia} progress={tagUploadProgress}/>
+              <MediaPicker files={selectedTagMedia} inputId={tagMediaInputId} language={language} max={50} onChange={setSelectedTagMedia} progress={tagUploadProgress} uploading={post.isPending}/>
             </div>
           </form>
         ) : null}
-        {post.isError ? <p className="form-error" role="alert">{t("Yayın tamamlanamadı. Kalan dosyalar için yeniden yayınlayın; gönderiniz çoğaltılmaz.", "Publishing could not finish. Publish again to retry remaining files without duplicating your post.")}</p> : null}
+        {post.isError ? <p className="form-error" role="alert">{post.error instanceof Error && post.error.message ? `${post.error.message} ` : ""}{t("Yayın tamamlanamadı. Kalan dosyalar için yeniden yayınlayın; gönderiniz çoğaltılmaz.", "Publishing could not finish. Publish again to retry remaining files without duplicating your post.")}</p> : null}
         {authorNotice}
         <div className="tag-post-list">
           {visibleComments.map((comment) => (

@@ -1,4 +1,4 @@
-import { contentMediaExtensions, contentMediaHelp } from "../common/media-policy";
+import { composerMediaMaxBytes, contentMediaExtensions, contentMediaHelp } from "../common/media-policy";
 import {
   BadRequestException,
   Body,
@@ -129,7 +129,7 @@ export class TagsController {
             `${randomUUID()}${contentMediaExtensions[file.mimetype] ?? ""}`,
           ),
       }),
-      limits: { fileSize: 20 * 1024 * 1024 },
+      limits: { fileSize: composerMediaMaxBytes },
       fileFilter: (_request, file, callback) => {
         const allowed = Boolean(contentMediaExtensions[file.mimetype]);
         callback(

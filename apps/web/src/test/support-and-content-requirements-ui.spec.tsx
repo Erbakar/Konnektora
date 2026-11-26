@@ -173,7 +173,8 @@ describe("destek ve içerik gereksinimleri 125–141", () => {
     ));
 
     const picker = await screen.findByLabelText("Resim / video ekle");
-    expect(picker.closest("label")?.querySelector("svg")).toBeInTheDocument();
+    // 26/11 #63: etiket, ortak medya seçicinin dosya girişine bağlıdır (htmlFor).
+    expect((picker as HTMLInputElement).labels?.[0]?.querySelector("svg")).toBeInTheDocument();
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     const image = new File(["image"], "mekan.webp", { type: "image/webp" });
     fireEvent.change(input, { target: { files: [image] } });

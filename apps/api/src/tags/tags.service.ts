@@ -16,6 +16,8 @@ import { PrismaService } from "../prisma/prisma.service";
 import { consumeQuota, paidCorporateEvent } from "../common/usage-quota";
 import { CreateTagDto } from "./tags.dto";
 
+/** 26/11 #63: İlgi Alanı gönderisine eklenebilecek en fazla medya (Etkinlik/Mekân gönderileriyle aynı). */
+export const tagPostMediaLimit = 50;
 const tagAuthorSelect = {
   id: true,
   name: true,
@@ -590,9 +592,11 @@ export class TagsService {
         status: "active",
       },
     });
-    if (count >= 4)
+    // 26/11 #63 test dönüşü: yazma alanı 9+ medya seçtirirken sunucu 4'ten sonrasını reddediyordu;
+    // Etkinlik/Mekân gönderileriyle aynı sınır (50) uygulanır.
+    if (count >= tagPostMediaLimit)
       throw new ConflictException(
-        "Bir gönderiye en fazla 4 medya eklenebilir.",
+        `Bir gönderiye en fazla ${tagPostMediaLimit} medya eklenebilir.`,
       );
     return this.prisma.mediaFile.create({
       data: {

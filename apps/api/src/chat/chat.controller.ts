@@ -8,10 +8,12 @@ import { User } from "@prisma/client";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { ChatService } from "./chat.service";
+import { composerMediaMaxBytes, contentMediaExtensions } from "../common/media-policy";
 import { ConversationMessagesQueryDto, ConversationPreferenceDto, EditPrivateMessageDto, MessageReactionDto, SendPrivateMessageDto } from "./chat.dto";
 
 mkdirSync(resolve(process.cwd(), "uploads"), { recursive: true });
-const messageFileExtensions: Record<string, string> = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif", "video/mp4": ".mp4", "application/pdf": ".pdf", "text/plain": ".txt" };
+// 26/11 #62.11 test dönüşü: medya seçicinin kabul ettiği tüm türler (WebM, AVIF, BMP, iPhone MOV) mesajda da kabul edilir.
+const messageFileExtensions: Record<string, string> = { ...contentMediaExtensions, "application/pdf": ".pdf", "text/plain": ".txt" };
 
 @Controller("me")
 @UseGuards(JwtAuthGuard)
@@ -29,7 +31,7 @@ export class ChatController {
   }
 
   @Post("private-messages")
-  @UseInterceptors(FileInterceptor("attachment", { storage: durableStorage({ destination: resolve(process.cwd(), "uploads"), filename: (_request, file, callback) => callback(null, `${randomUUID()}${messageFileExtensions[file.mimetype] ?? ""}`) }), limits: { fileSize: 15 * 1024 * 1024 }, fileFilter: (_request, file, callback) => { const allowed = Boolean(messageFileExtensions[file.mimetype]); callback(allowed ? null : new BadRequestException("Yalnız görsel, MP4, PDF veya metin dosyası gönderilebilir."), allowed); } }))
+  @UseInterceptors(FileInterceptor("attachment", { storage: durableStorage({ destination: resolve(process.cwd(), "uploads"), filename: (_request, file, callback) => callback(null, `${randomUUID()}${messageFileExtensions[file.mimetype] ?? ""}`) }), limits: { fileSize: composerMediaMaxBytes }, fileFilter: (_request, file, callback) => { const allowed = Boolean(messageFileExtensions[file.mimetype]); callback(allowed ? null : new BadRequestException("Yalnız görsel (JPG, PNG, WebP, GIF, AVIF, BMP), video (MP4, WebM, MOV), PDF veya metin dosyası gönderilebilir."), allowed); } }))
   async send(@Body() body: SendPrivateMessageDto, @UploadedFile() file: Express.Multer.File | undefined, @CurrentUser() user: User) {
     try { return await this.chatService.send(user, body, file); }
     catch (error) { if (file) await removeDurableUpload(file.path).catch(() => undefined); throw error; }
