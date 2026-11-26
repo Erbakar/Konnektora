@@ -25,6 +25,7 @@ import "./styles/nov17-events.css";
 import "./styles/nov18-mobile.css";
 import "./styles/nov19.css";
 import "./styles/nov23.css";
+import "./styles/nov26-places.css";
 
 const chunkReloadKey = "konnektora:chunk-reload";
 const chunkLoadErrorPattern =

@@ -121,6 +121,25 @@ export class NotificationsService {
     return { enabled: subscription.enabled };
   }
 
+  /** 26/11 #113: Bildirim ayarları sayfası için bildirimleri açık etiket, mekân, hesap ve etkinlik listeleri. */
+  async listContentSubscriptions(userId: string) {
+    const rows = await this.prisma.contentNotificationSubscription.findMany({ where: { userId, enabled: true }, select: { targetType: true, targetId: true } });
+    const ids = (type: string) => rows.filter((row) => row.targetType === type).map((row) => row.targetId);
+    const [tags, places, users, events] = await Promise.all([
+      this.prisma.tag.findMany({ where: { id: { in: ids("tag") } }, select: { id: true, name: true, slug: true } }),
+      this.prisma.place.findMany({ where: { id: { in: ids("place") } }, select: { id: true, name: true, slug: true, region: true, city: true, country: true } }),
+      this.prisma.user.findMany({ where: { id: { in: ids("user") }, status: { not: "deleted" } }, select: { id: true, name: true, username: true } }),
+      this.prisma.event.findMany({ where: { id: { in: ids("event") } }, select: { id: true, title: true, slug: true, startsAt: true, endsAt: true }, orderBy: { startsAt: "asc" } })
+    ]);
+    const collator = new Intl.Collator("tr", { sensitivity: "base", numeric: true });
+    return {
+      tags: tags.sort((a, b) => collator.compare(a.name, b.name)),
+      places: places.sort((a, b) => collator.compare(a.name, b.name)),
+      users: users.sort((a, b) => collator.compare(a.username ?? a.name, b.username ?? b.name)),
+      events
+    };
+  }
+
   private assertContentTargetType(targetType: string) {
     if (!["tag", "event", "place", "user"].includes(targetType)) throw new BadRequestException("Bildirim hedef türü geçersiz.");
   }

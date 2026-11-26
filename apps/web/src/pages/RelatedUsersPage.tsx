@@ -6,6 +6,7 @@ import {
   Ban,
   UserMinus,
   UserPlus,
+  Check,
   CheckCircle2,
   Mail,
   MapPin,
@@ -14,6 +15,7 @@ import {
   BriefcaseBusiness,
   Search,
   Users,
+  X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
@@ -31,6 +33,8 @@ import {
   unfollowUser,
   updatePlaceMember,
   updateEventParticipant,
+  pardonPlaceMember,
+  pardonEventParticipant,
 } from "../lib/api";
 import { getUserSession } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
@@ -172,7 +176,7 @@ export function RelatedUsersPage({
           (filter === "pending" &&
             user.status === (kind === "place" ? "pending" : "requested")) ||
           (filter === "invited" && user.status === "invited") ||
-          (filter === "following" && followingIds.has(user.id)) ||
+          (filter === "following" && followingIds.has(user.id) && isActiveRelatedUser(user, kind)) ||
           (filter === "checked-in" && user.checkedIn) ||
           (filter === "organizers" &&
             /creator|owner|organizer|manager|sahip|yönetici/.test(relation)) ||
@@ -231,6 +235,17 @@ export function RelatedUsersPage({
         queryKey: [kind, target.data?.id, "related-users"],
       }),
   });
+
+  // 26/11 #87, #93: "affet" kaydı siler; kullanıcı hiçbir sekmede görünmez ve dilerse yeniden başvurur.
+  const pardonAction = useMutation({
+    mutationFn: (userId: string) => kind === "event" ? pardonEventParticipant(target.data!.id, userId) : pardonPlaceMember(target.data!.id, userId),
+    onSuccess: () =>
+      client.invalidateQueries({
+        queryKey: [kind, target.data?.id, "related-users"],
+      }),
+  });
+  const actionPending = eventParticipantAction.isPending || placeMemberAction.isPending || pardonAction.isPending;
+  const pendingStatus = kind === "place" ? "pending" : "requested";
 
   const roleAction = (userId: string, role: string) => kind === "event" ? eventParticipantAction.mutate({ userId, changes: { role } }) : placeMemberAction.mutate({ userId, changes: { role } });
   const statusAction = (userId: string, status: string) => kind === "event" ? eventParticipantAction.mutate({ userId, changes: { status } }) : placeMemberAction.mutate({ userId, changes: { status } });
@@ -417,7 +432,7 @@ export function RelatedUsersPage({
           >
             {t("Takip ettiklerim", "Following")} (
             {
-              (users.data ?? []).filter((item) => followingIds.has(item.id))
+              (users.data ?? []).filter((item) => followingIds.has(item.id) && isActiveRelatedUser(item, kind))
                 .length
             }
             )
@@ -487,7 +502,10 @@ export function RelatedUsersPage({
                   ? user.sentiment
                     ? `${user.sentiment === "like" ? t("Beğeniyorum", "Likes it") : user.sentiment === "dislike" ? t("Beğenmiyorum", "Dislikes it") : t("Nötrüm", "Feels neutral")} ${t("dedi", "")}${/paylaşım|post|yorum/i.test(user.relation) ? t(" · paylaşım yaptı", " · posted") : ""}`
                     : t("Paylaşım yaptı", "Posted")
-                  : <>{["creator", "manager"].includes(user.relation) ? <ShieldCheck size={15}/> : user.relation === "organizer" ? <BriefcaseBusiness size={15}/> : null}{localizeRelation(user.relation, language, kind)}</>}
+                  : user.relation !== "creator" && !isActiveRelatedUser(user, kind)
+                    // 26/11 #89, #94: yasaklı, bekleyen, davetli ve reddedilen kişiler "Üye"/"Katılımcı" olarak etiketlenmez.
+                    ? relatedStatusLabel(user.status, t)
+                    : <>{["creator", "manager"].includes(user.relation) ? <ShieldCheck size={15}/> : user.relation === "organizer" ? <BriefcaseBusiness size={15}/> : null}{localizeRelation(user.relation, language, kind)}</>}
               </span>
               {user.city || user.country ? (
                 <span className="related-user-location">
@@ -507,6 +525,26 @@ export function RelatedUsersPage({
               ) : null}
             </div>
             <div className="row-actions">
+              {/* 26/11 #86, #95: bekleyen başvurular kart üzerinden kabul edilir veya reddedilir. */}
+              {kind !== "tag" && target.data?.isTeam && user.status === pendingStatus ? (
+                <>
+                  <button
+                    className="primary-action"
+                    disabled={actionPending}
+                    onClick={() => statusAction(user.id, "accepted")}
+                    type="button"
+                  >
+                    <Check size={15} /> {t("Kabul et", "Accept")}
+                  </button>
+                  <button
+                    disabled={actionPending}
+                    onClick={() => statusAction(user.id, "declined")}
+                    type="button"
+                  >
+                    <X size={15} /> {t("Reddet", "Decline")}
+                  </button>
+                </>
+              ) : null}
               {session && session.id !== user.id ? (
                 <button
                   disabled={toggleFollow.isPending}
@@ -551,8 +589,8 @@ export function RelatedUsersPage({
                           </button>
                         ) : null}
                         <button
-                          disabled={eventParticipantAction.isPending || placeMemberAction.isPending}
-                          onClick={() => statusAction(user.id, user.status === "banned" ? "accepted" : "banned")}
+                          disabled={actionPending}
+                          onClick={() => user.status === "banned" ? pardonAction.mutate(user.id) : statusAction(user.id, "banned")}
                           type="button"
                         >
                           {user.status === "banned" ? <UserMinus size={15}/> : <Ban size={15}/>} {user.status === "banned"
@@ -572,8 +610,15 @@ export function RelatedUsersPage({
       {!users.isLoading && !visibleUsers.length ? (
         <section className="empty-state">
           <Users size={38} />
-          <h2>{t("Henüz ilgili kullanıcı yok", "No related people yet")}</h2>
-          <p>{relatedUsersEmptyText(kind, filter, t)}</p>
+          {filter === "invited" && kind !== "tag" ? (
+            // 26/11 #90, #91: Davetliler sekmesinde yalnız kısa metin gösterilir.
+            <h2>{t("Henüz gösterilecek kullanıcı yok", "No people to show yet")}</h2>
+          ) : (
+            <>
+              <h2>{t("Henüz ilgili kullanıcı yok", "No related people yet")}</h2>
+              <p>{relatedUsersEmptyText(kind, filter, t)}</p>
+            </>
+          )}
         </section>
       ) : null}
       {users.isError ? (
@@ -581,6 +626,21 @@ export function RelatedUsersPage({
       ) : null}
     </div>
   );
+}
+
+/** Mekânda kabul edilmiş üye ya da etkinlikte onaylı katılımcı mı? (kurucu/yönetici dahil) */
+function isActiveRelatedUser(user: { status?: string | null }, kind: "event" | "place" | "tag") {
+  const status = user.status ?? "accepted";
+  if (kind === "tag") return true;
+  return kind === "place" ? status === "accepted" : ["accepted", "attended"].includes(status);
+}
+
+function relatedStatusLabel(status: string | null | undefined, t: (tr: string, en: string) => string) {
+  if (status === "banned") return t("Yasaklı", "Banned");
+  if (status === "pending" || status === "requested") return t("Onay bekliyor", "Pending approval");
+  if (status === "invited") return t("Davetli", "Invited");
+  if (status === "declined") return t("Reddedildi", "Declined");
+  return t("Katılmıyor", "Not attending");
 }
 
 function ageFrom(value: string) {

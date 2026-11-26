@@ -150,6 +150,16 @@ export class PlacesController {
     return this.placesService.updateMember(id, userId, body, user);
   }
 
+  @Delete("places/:id/members/:userId/ban")
+  @UseGuards(JwtAuthGuard)
+  pardonMember(
+    @Param("id") id: string,
+    @Param("userId") userId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.placesService.pardonMember(id, userId, user);
+  }
+
   @Post("places/:id/members/:userId/check-in")
   @UseGuards(JwtAuthGuard)
   checkIn(

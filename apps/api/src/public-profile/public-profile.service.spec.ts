@@ -19,7 +19,8 @@ describe("PublicProfileService", () => {
   const postComment = { findMany: jest.fn() };
   const postLike = { findMany: jest.fn() };
   const paymentTransaction = { findMany: jest.fn() };
-  const service = new PublicProfileService({ user, userBlock, userFollow, userInterestTag, mediaFile, event, place, contentComment, contentReaction, contentView, contentShare, contentAction, privateMessage, memberScan, postComment, postLike, paymentTransaction } as never);
+  const contentNotificationSubscription = { count: jest.fn().mockResolvedValue(2) };
+  const service = new PublicProfileService({ user, userBlock, userFollow, userInterestTag, mediaFile, event, place, contentComment, contentReaction, contentView, contentShare, contentAction, privateMessage, memberScan, postComment, postLike, paymentTransaction, contentNotificationSubscription } as never);
   const ownerId = "11111111-1111-4111-8111-111111111111";
   const viewerId = "22222222-2222-4222-8222-222222222222";
   const tag = { id: "33333333-3333-4333-8333-333333333333", name: "AI", slug: "ai", description: null, categoryId: null, status: "active", usageCount: 2 };
@@ -71,6 +72,7 @@ describe("PublicProfileService", () => {
     expect(Object.keys(stats).filter((key) => key.startsWith("viewsDay_"))).toHaveLength(1);
     expect(stats).toMatchObject({ popularAttendees1m_acilis: 5, popularAttendees1m_caz_gecesi: 3, popularCapacity12m_caz_gecesi: 50, popularCapacity3m_acilis: 20 });
     expect(stats).toMatchObject({ checkinHeat_cum_20: 8, eventProgramInterest7d_daft_punk: 0, eventProgramInterest30d_elektronik: 0 });
+    expect(stats.notificationSubscribers).toBe(2); // 26/11 #121
     expect(Object.keys(stats).some((key) => key.startsWith("density_"))).toBe(true);
     expect(Object.values(stats).every((value) => typeof value === "number" && value >= 0)).toBe(true);
     userFollow.findMany.mockResolvedValue([]);

@@ -66,9 +66,11 @@ export class AuthService {
       throw new ConflictException("Bu e-posta adresi zaten kullanılıyor. Giriş, şifre sıfırlama veya davet bağlantısını kullanın.");
     }
 
+    const invitedById = await this.resolveInviter(input.inviterId);
     const user = await this.prisma.user.create({
       data: {
         email,
+        invitedById,
         name: input.name.trim(),
         phone: input.phone,
         phoneVerified: false,
@@ -126,9 +128,11 @@ export class AuthService {
       where: { email: identity.email },
     });
     if (existing) throw new ConflictException("Bu e-posta ile bir hesap mevcut. Önce mevcut hesabınıza giriş yapıp Ayarlar bölümünden sosyal hesabınızı bağlayın.");
+    const invitedById = await this.resolveInviter(input.inviterId);
     const user = await this.prisma.user.create({
       data: {
         email: identity.email,
+        invitedById,
         name: identity.name,
         accountType: input.accountType ?? "individual",
         passwordHash: await hash(randomBytes(32).toString("hex"), 10),
@@ -147,6 +151,16 @@ export class AuthService {
     });
     await notifyRegistration(this.prisma, user);
     return this.createLoginResponse(user);
+  }
+
+  /**
+   * 26/11 #118: davet bağlantısındaki "ref" yalnız etkin bir üyeye aitse davet eden olarak yazılır; kayıt sonrası
+   * bildirimler (davet edildiniz / davetiniz üzerine üye oldu) e-posta davetindeki gibi oluşur.
+   */
+  private async resolveInviter(inviterId?: string) {
+    if (!inviterId) return null;
+    const inviter = await this.prisma.user.findFirst({ where: { id: inviterId, status: "active" }, select: { id: true } });
+    return inviter?.id ?? null;
   }
 
   async listSocialAccounts(userId: string) {

@@ -1,0 +1,14 @@
+23-24/11 TEST TURU — EK MADDELER #82–#128 (Konnektora Testler › 23-24/11)
+
+Kök nedenler
+- Kürator hesapları üye araması, Üyeler listesi ve takip işleminde dışarıda bırakılıyordu (#82-5, #128).
+- "Affet" yasaklı kişiyi üye/katılımcı yapıyordu; artık kayıt siliniyor (#87, #93).
+- Davet sayfasında rol seçeneği, ekipte olmayan admin/küratöre de açıktı; sunucu da artık reddediyor (#116, #117).
+- Adres karşılaştırması harfi harfine yapılıyordu ("Istanbul"/"İstanbul" → yanlış bildirim) (#96).
+- "Sadece davetli" mekânlar sunucuda davetsizlerden gizleniyordu (#103).
+- Adımlı formlarda harita gizli adımda 0x0 boyutla kuruluyordu (#109, #110).
+- Harita katmanları Paylaş penceresinin üstündeydi (#123).
+
+Doğrulama (yerel): API 567 test, web 366 test geçti; typecheck, lint ve build temiz. Tarayıcıda görsel kontrol yapılmadı.
+
+Açık: #85 — sekme başlığı düzeltildi; testçi sayfa içindeki başka bir başlığı kastettiyse ekran görüntüsü gerekli.

@@ -62,6 +62,7 @@ import { getServiceErrorMessage } from "../lib/serviceErrors";
 import { useLanguage } from "../lib/i18n";
 import { profileInstagramCaption } from "../lib/shareCaptions";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
+import { defaultEventTab } from "../lib/defaultEventTab";
 
 function ageFrom(value: string | Date) {
   const birth = new Date(value);
@@ -109,9 +110,9 @@ export function PublicProfilePage() {
   const [selectedSentiment, setSelectedSentiment] = useState<
     "like" | "ok" | "dislike"
   >("like");
-  const [profileEventTab, setProfileEventTab] = useState<
-    "future" | "past" | "organizer"
-  >("future");
+  const [chosenProfileEventTab, setProfileEventTab] = useState<
+    "future" | "past" | "organizer" | null
+  >(null);
   const [profilePlaceTab, setProfilePlaceTab] = useState<"all" | "organizer">(
     "all",
   );
@@ -125,6 +126,8 @@ export function PublicProfilePage() {
   useEffect(() => {
     if (profile?.id) void recordContentView("user", profile.id);
   }, [profile?.id]);
+  // 26/11 #120: başka bir profile geçince sekme seçimi sıfırlanır; varsayılan yeniden hesaplanır.
+  useEffect(() => { setProfileEventTab(null); }, [username, userId]);
 
   useEffect(() => {
     if (profile?.id && (profile.city || profile.country || profile.address || profile.district)) void recordContentAction("user", profile.id, "location_view");
@@ -252,6 +255,8 @@ export function PublicProfilePage() {
         </Link>
       </section>
     );
+  // 26/11 #120: "Güncel" boş ama "Geçmiş" doluysa açılışta "Geçmiş" sekmesi seçili gelir.
+  const profileEventTab = chosenProfileEventTab ?? defaultEventTab(profile.events, (item) => isProfileEventFinished(item) === true);
   const profilePhoto =
     profile.media.find(
       (item) => item.isProfilePicture && item.type === "image",
@@ -852,11 +857,9 @@ export function PublicProfilePage() {
           {profile.events
             .filter((item) => {
               if (profileEventTab === "organizer") return item.organizer;
-              const date = item.endsAt ?? (item.startsAt ? new Date(new Date(item.startsAt).getTime() + 24 * 60 * 60_000).toISOString() : item.meta?.split(" · ").at(-1));
-              if (!date) return true;
-              return profileEventTab === "future"
-                ? new Date(date) >= new Date()
-                : new Date(date) < new Date();
+              const finished = isProfileEventFinished(item);
+              if (finished == null) return true;
+              return profileEventTab === "future" ? !finished : finished;
             })
             .sort((a, b) => (profileEventTab === "past" ? -1 : 1) * (new Date(a.startsAt ?? a.meta?.split(" · ").at(-1) ?? 0).getTime() - new Date(b.startsAt ?? b.meta?.split(" · ").at(-1) ?? 0).getTime()))
             .map((item) => (
@@ -910,4 +913,11 @@ export function PublicProfilePage() {
       </div>
     </section>
   );
+}
+
+/** Profil etkinlik kartının bitip bitmediği; tarih bilinmiyorsa null (her iki sekmede de görünür). */
+function isProfileEventFinished(item: { endsAt?: string | Date | null; startsAt?: string | Date | null; meta?: string | null }) {
+  const date = item.endsAt ?? (item.startsAt ? new Date(new Date(item.startsAt).getTime() + 24 * 60 * 60_000).toISOString() : item.meta?.split(" · ").at(-1));
+  if (!date) return null;
+  return new Date(date) < new Date();
 }

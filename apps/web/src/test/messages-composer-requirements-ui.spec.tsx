@@ -132,7 +132,7 @@ describe("özel mesaj medya gereksinimleri 139–141", () => {
 
     // 23/11 #62.1: başlığın sağındaki "+ yeni mesaj"
     await userEvent.click(await screen.findByRole("button", { name: /yeni mesaj/ }));
-    await userEvent.click(await screen.findByPlaceholderText("Kullanıcı adı veya ad soyad yaz…"));
+    await userEvent.click(await screen.findByPlaceholderText("Kullanıcı adı veya ad soyad yazarak seç"));
     expect(await screen.findByRole("button", { name: /@ece/ })).toBeVisible();
     expect(container.querySelector<HTMLImageElement>(".message-result-avatar img")?.src).toMatch(/\/uploads\/ece\.webp$/);
   });

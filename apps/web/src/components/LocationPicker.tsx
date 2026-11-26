@@ -2,6 +2,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useId, useRef, useState } from "react";
 import { geocodeAddress } from "../lib/api";
+import { keepMapSized } from "../lib/mapResize";
 import { useLanguage } from "../lib/i18n";
 
 type Props = {
@@ -38,7 +39,9 @@ export function LocationPicker({ addressName, latitudeName = "latitude", longitu
     map.on("click", (event) => update(event.latlng.lat, event.latlng.lng));
     mapRef.current = map;
     markerRef.current = marker;
-    return () => { map.remove(); mapRef.current = null; markerRef.current = null; };
+    // 26/11 #109, #110: harita gizli adımda kurulduğunda adım açılınca boyutu yeniden hesaplanır.
+    const stopResize = keepMapSized(map, mapElement.current, () => map.setView(marker.getLatLng(), map.getZoom(), { animate: false }));
+    return () => { stopResize(); map.remove(); mapRef.current = null; markerRef.current = null; };
   }, [initialLat, initialLon]);
 
   function move(lat: number, lon: number, zoom = 16) {

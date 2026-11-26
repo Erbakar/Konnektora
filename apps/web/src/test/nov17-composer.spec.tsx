@@ -259,7 +259,7 @@ describe("17/10 #23 gönderi taslağı", () => {
     renderRoutes([{ path: "/places/demo", element: <ContentComments targetId="place-1" targetType="place" title="Gönderiler" /> }], "/places/demo");
     await userEvent.type(await screen.findByPlaceholderText("Yorum yaz…"), "Kahvesi çok iyi");
     expect(readComposerDraft(composerDraftKey("member-1", "place", "place-1"))).toBe("Kahvesi çok iyi");
-    await userEvent.click(screen.getByRole("button", { name: "Gönder" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yayınla" }));
     await waitFor(() => expect(apiMocks.createContentComment).toHaveBeenCalledWith("place", "place-1", "Kahvesi çok iyi"));
     await waitFor(() => expect(readComposerDraft(composerDraftKey("member-1", "place", "place-1"))).toBe(""));
     await userEvent.click(screen.getByRole("link", { name: "Akışa git" }));
@@ -326,7 +326,8 @@ describe("17/10 #26 gönderi yaz kutusundaki düğmeler", () => {
 
   it("#26.1 diğer sayfalardaki (ilgi alanı gönderi yorumları) yazma alanı değişmez", async () => {
     render(shell(<MemoryRouter><ContentComments targetId="tag-post-1" targetType="tag_comment" title="Gönderi yorumları" /></MemoryRouter>));
-    const form = (await screen.findByPlaceholderText("Yorum yaz…")).closest("form")!;
+    // 26/11 #115: ilgi alanı gönderi yorumlarında Etkinlik Detay'daki sade yanıt kutusu kullanılır.
+    const form = (await screen.findByRole("textbox", { name: "Yanıtını yaz" })).closest("form")!;
     expect(form).not.toHaveClass("content-post-composer");
     expect(screen.queryByRole("button", { name: "Anket ekle" })).not.toBeInTheDocument();
   });

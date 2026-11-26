@@ -4,7 +4,7 @@ import { InviteUserCards } from "./InviteManagementPage";
 import { useGuestListEntitlement } from "../lib/useGuestListEntitlement";
 import type { Contact } from "@konnektora/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { BookUser, MailPlus, Search, Smartphone, UserPlus } from "lucide-react";
+import { BookUser, Clipboard, MailPlus, Search, Smartphone, UserPlus } from "lucide-react";
 import { Fragment, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ServiceFeedback } from "../components/ServiceFeedback";
@@ -25,6 +25,7 @@ import {
 import { getServiceErrorMessage } from "../lib/serviceErrors";
 import { pickGoogleContacts, pickPhoneContacts } from "../lib/socialProviders";
 import { useLanguage } from "../lib/i18n";
+import { signupInviteLink } from "../lib/signupInviteRef";
 
 export function ContactsPage({ inviteTarget }: { inviteTarget?: { type: "event" | "place"; id: string; source: "phone" | "google" } } = {}) {
   const { language } = useLanguage();
@@ -46,6 +47,7 @@ export function ContactsPage({ inviteTarget }: { inviteTarget?: { type: "event" 
   const [manualType, setManualType] = useState<"username" | "name" | "email" | "phone">(targetType ? "username" : "name");
   const [manualQuery, setManualQuery] = useState("");
   const [selectedInvitees, setSelectedInvitees] = useState<Set<number>>(new Set());
+  const [linkCopied, setLinkCopied] = useState(false);
   const sentInvitations = useQuery({
     queryKey: ["sent-target-invitations", targetType, targetId, user?.id],
     queryFn: () => targetType === "event"
@@ -146,6 +148,8 @@ export function ContactsPage({ inviteTarget }: { inviteTarget?: { type: "event" 
             {t("Yalnızca seçtiğin kişiler eşleştirilir; rehberin Konnektora’da saklanmaz.", "Only contacts you select are matched; your address book is not stored by Konnektora.")}
           </p>
           {user?.onboardingCompleted === false ? <p><Link className="text-link" to="/onboarding">{t("← Üyelik adımlarına geri dön", "← Back to sign-up steps")}</Link></p> : null}
+          {/* 26/11 #118: bu bağlantıyla üye olanlar, bağlantı sahibinden davet e-postası almış gibi kaydedilir. */}
+          {!targetType ? <button className="secondary-action" onClick={() => { void navigator.clipboard.writeText(signupInviteLink(user.id)).then(() => { setLinkCopied(true); window.setTimeout(() => setLinkCopied(false), 1800); }).catch(() => { setNoticeTone("error"); setNotice(t("Bağlantı kopyalanamadı.", "The link could not be copied.")); }); }} type="button"><Clipboard size={17}/>{linkCopied ? t("Bağlantı kopyalandı", "Link copied") : t("Davet bağlantısını kopyala", "Copy invite link")}</button> : null}
         </div>
         <BookUser size={42} />
       </header>

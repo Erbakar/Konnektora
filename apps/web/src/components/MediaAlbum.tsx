@@ -130,8 +130,6 @@ export function MediaViewer({ items, index, onChange, onClose, reportTargetType 
         </ul> : null}
       </div>
       <button ref={close} className="album-close" aria-label={tr ? "Kapat" : "Close"} onClick={onClose}><X/></button>
-      {/* 23/11 #58: yöneticiye medyanın üstünde ortalı kalem; açıklama en çok 30 karakter */}
-      {canCaption && !captionEditing && !cropping ? <button type="button" className="album-caption-edit" aria-label={tr ? "Açıklama yaz" : "Write caption"} onClick={() => { setCaptionDraft(caption ?? ""); setCaptionEditing(true); }}><Pencil size={16}/></button> : null}
       <div className="album-media-stage" onTouchStart={(event) => { const touch = event.touches[0]; touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null; }} onTouchEnd={(event) => {
         // 23/11 #58: mobilde sağa/sola kaydırarak sayfalama
         const start = touchStart.current; const touch = event.changedTouches[0]; touchStart.current = null;
@@ -139,13 +137,16 @@ export function MediaViewer({ items, index, onChange, onClose, reportTargetType 
         const dx = touch.clientX - start.x; const dy = touch.clientY - start.y;
         if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) onChange(dx < 0 ? (index + 1) % items.length : (index - 1 + items.length) % items.length);
       }}>
-        {item.type === "video" ? <video key={item.id} controls autoPlay src={currentUrl}/> : <div className="album-image-frame" ref={cropFrame}><img onClick={() => { if (!cropping && items.length > 1) onChange((index + 1) % items.length); }} style={{ cursor: !cropping && items.length > 1 ? "pointer" : undefined }} alt={alt || (tr ? `Medya ${index + 1} / ${items.length}` : `Media ${index + 1} of ${items.length}`)} src={currentUrl}/>
+        {/* 26/11 #83.1: açıklama alanı kalemin yerinde, medyanın hemen üstünde; resmin üzerine binmez */}
+        {captionEditing ? <form className="album-caption-form" onSubmit={(event) => { event.preventDefault(); saveCaption(); }}><input autoFocus maxLength={CAPTION_LIMIT} placeholder={tr ? "Açıklama giriniz..." : "Enter a caption..."} value={captionDraft} onChange={(event) => setCaptionDraft(event.target.value)}/><button type="submit" aria-label="OK" disabled={busy}><Check size={16}/></button></form>
+          : caption ? <div className="album-caption"><span>{caption}</span>{canCaption && !cropping ? <button type="button" aria-label={tr ? "Açıklamayı düzenle" : "Edit caption"} onClick={() => { setCaptionDraft(caption); setCaptionEditing(true); }}><Pencil size={14}/></button> : null}</div>
+          : canCaption && !cropping ? <button type="button" className="album-caption-edit" aria-label={tr ? "Açıklama yaz" : "Write caption"} onClick={() => { setCaptionDraft(""); setCaptionEditing(true); }}><Pencil size={16}/></button> : null}
+        {item.type === "video" ? <video key={item.id} controls autoPlay src={currentUrl}/> : <div className={cropping ? "album-image-frame is-cropping" : "album-image-frame"} ref={cropFrame}><img onClick={() => { if (!cropping && items.length > 1) onChange((index + 1) % items.length); }} style={{ cursor: !cropping && items.length > 1 ? "pointer" : undefined }} alt={alt || (tr ? `Medya ${index + 1} / ${items.length}` : `Media ${index + 1} of ${items.length}`)} src={currentUrl}/>
           {cropping ? <div className="album-crop-box" style={{ left: `${cropBox.x * 100}%`, top: `${cropBox.y * 100}%`, width: `${cropBox.width * 100}%`, height: `${cropBox.height * 100}%` }} onPointerDown={startCropDrag("move")}><span className="album-crop-handle" onPointerDown={startCropDrag("resize")}/></div> : null}
         </div>}
-        {captionEditing ? <form className="album-caption-form" onSubmit={(event) => { event.preventDefault(); saveCaption(); }}><input autoFocus maxLength={CAPTION_LIMIT} placeholder={tr ? "Açıklama giriniz..." : "Enter a caption..."} value={captionDraft} onChange={(event) => setCaptionDraft(event.target.value)}/><button type="submit" aria-label="OK" disabled={busy}><Check size={16}/></button></form>
-          : caption ? <div className="album-caption"><span>{caption}</span>{canCaption ? <button type="button" aria-label={tr ? "Açıklamayı düzenle" : "Edit caption"} onClick={() => { setCaptionDraft(caption); setCaptionEditing(true); }}><Pencil size={14}/></button> : null}</div> : null}
       </div>
-      {cropping ? <div className="album-crop-actions"><button type="button" onClick={() => setCropping(false)}>{tr ? "Vazgeç" : "Cancel"}</button><button type="button" className="primary-action" disabled={busy} onClick={() => void run(async () => { const file = await cropImage(currentUrl, cropBox); const updated = await replaceMediaFile(actions!.target!.type, actions!.target!.id, item.id, file); setVersions((map) => ({ ...map, [item.id]: updated.url })); setCropping(false); await actions?.onChanged?.(); })}>{tr ? "Kırp" : "Crop"}</button></div> : null}
+      {/* 26/11 #83.2: kırpma onayı belirgin; karartma katmanının altında kalmaz */}
+      {cropping ? <div className="album-crop-actions"><span>{tr ? "Kırpılacak alanı sürükleyip boyutlandırın." : "Drag and resize the area to keep."}</span><button type="button" onClick={() => setCropping(false)}>{tr ? "Vazgeç" : "Cancel"}</button><button type="button" className="album-crop-confirm" disabled={busy} onClick={() => void run(async () => { const file = await cropImage(currentUrl, cropBox); const updated = await replaceMediaFile(actions!.target!.type, actions!.target!.id, item.id, file); setVersions((map) => ({ ...map, [item.id]: updated.url })); setCropping(false); await actions?.onChanged?.(); })}><Crop size={16}/>{tr ? "Kırp" : "Crop"}</button></div> : null}
       <footer>
         <div className="album-footer-status">{busy ? <span role="status">{tr ? "İşleniyor…" : "Working…"}</span> : null}{error ? <span className="album-error" role="alert">{error}</span> : null}</div>
         <div>

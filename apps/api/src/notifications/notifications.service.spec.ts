@@ -73,4 +73,21 @@ describe("NotificationsService", () => {
     await service.dispatch({ userId: "user-1", topic: NotificationTopic.event_invite, type: "event_invite", title: "Davet", body: "Etkinliğe davetlisin", targetType: "event", targetId: "event-1" });
     expect(mail.sendNotificationEmail).toHaveBeenCalledWith(expect.objectContaining({ targetUrl: "/events/founder-night" }));
   });
+
+  it("lists enabled content subscriptions alphabetically for the notification settings page (26/11 #113)", async () => {
+    const local = {
+      contentNotificationSubscription: { findMany: jest.fn().mockResolvedValue([{ targetType: "tag", targetId: "t1" }, { targetType: "tag", targetId: "t2" }, { targetType: "place", targetId: "p1" }, { targetType: "user", targetId: "u1" }, { targetType: "user", targetId: "u2" }, { targetType: "event", targetId: "e1" }]) },
+      tag: { findMany: jest.fn().mockResolvedValue([{ id: "t1", name: "Yoga", slug: "yoga" }, { id: "t2", name: "çay", slug: "cay" }]) },
+      place: { findMany: jest.fn().mockResolvedValue([{ id: "p1", name: "Studio", slug: "studio", region: "İstanbul", city: "Kadıköy", country: "Türkiye" }]) },
+      user: { findMany: jest.fn().mockResolvedValue([{ id: "u1", name: "Zeynep", username: "zeynep" }, { id: "u2", name: "Ali", username: "ali" }]) },
+      event: { findMany: jest.fn().mockResolvedValue([{ id: "e1", title: "Gece", slug: "gece", startsAt: new Date(), endsAt: null }]) }
+    };
+    const result = await new NotificationsService(local as never, mail as never, push as never).listContentSubscriptions("user-1");
+    expect(local.contentNotificationSubscription.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: "user-1", enabled: true } }));
+    expect(local.tag.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ["t1", "t2"] } } }));
+    expect(result.tags.map((item) => item.name)).toEqual(["çay", "Yoga"]);
+    expect(result.users.map((item) => item.username)).toEqual(["ali", "zeynep"]);
+    expect(result.places).toHaveLength(1);
+    expect(result.events).toHaveLength(1);
+  });
 });

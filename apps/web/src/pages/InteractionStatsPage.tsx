@@ -33,6 +33,8 @@ function LinkedInsight({ text }: { text: string }) {
 
 
 const labels: Record<string, string> = {
+  // 26/11 #121: içerik için bildirimlerini açmış kullanıcı sayısı ("Diğer ölçümler" alanında).
+  notificationSubscribers: "Bildirimlerini açan kullanıcı",
   accepted: "Katılım kararı", attended: "Check-in", requested: "Bekleyen talep", invited: "Davet",
   comments: "Post ve yorum", reactions: "Etkileşim", views: "Görüntülenme", shares: "Paylaşım", detailViews: "Detay görüntülenmesi",
   ticketsSold: "Satılan bilet", ticketOrders: "Bilet siparişi", ticketCapacity: "Bilet kapasitesi",
@@ -77,6 +79,7 @@ const labels: Record<string, string> = {
 };
 
 const labelsEn: Record<string, string> = {
+  notificationSubscribers: "Members with notifications on",
   accepted: "Participation decisions", attended: "Check-ins", requested: "Pending requests", invited: "Invitations",
   comments: "Posts and comments", reactions: "Engagements", views: "Views", shares: "Shares", detailViews: "Detail views",
   ticketsSold: "Tickets sold", ticketOrders: "Ticket orders", ticketCapacity: "Ticket capacity", ticketsRemaining: "Tickets remaining",

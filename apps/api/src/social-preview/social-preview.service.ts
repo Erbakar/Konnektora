@@ -19,7 +19,7 @@ export class SocialPreviewService {
       return { title: event.title, description: [`📍 ${event.place?.name ?? [event.city, event.country].filter(Boolean).join(" · ")}`, `📅 ${event.startsAt.toISOString()}`, event.tags.map(item => `#${item.tag.name}`).join(" "), event.description ?? ""].join("\n"), image: image(event.coverImageUrl), path: `/events/${event.slug}` };
     }
     if (type === "place") {
-      const place = await this.prisma.place.findFirst({ where: { slug: identity, status: "active", visibility: { not: "invite_only" } }, select: { name: true, slug: true, description: true, city: true, country: true, coverImageUrl: true, followerCount: true, tags: { take: 4, select: { tag: { select: { name: true } } } } } });
+      const place = await this.prisma.place.findFirst({ where: { slug: identity, status: "active" }, select: { name: true, slug: true, description: true, city: true, country: true, coverImageUrl: true, followerCount: true, tags: { take: 4, select: { tag: { select: { name: true } } } } } });
       if (!place) throw new NotFoundException();
       return { title: place.name, description: [`📍 ${[place.city, place.country].filter(Boolean).join(" · ")}`, place.tags.map(item => `#${item.tag.name}`).join(" "), `✨ ${place.followerCount} takipçi`, place.description ?? ""].join("\n"), image: image(place.coverImageUrl), path: `/places/${place.slug}` };
     }

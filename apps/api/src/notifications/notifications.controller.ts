@@ -32,6 +32,13 @@ export class NotificationsController {
     return this.notifications.removePushSubscription(user.id, endpoint);
   }
 
+  // 26/11 #113: bildirimleri açık içerikler (Bildirim ayarları sayfası).
+  @Get("content")
+  @UseGuards(JwtAuthGuard)
+  contentSubscriptions(@CurrentUser() user: User) {
+    return this.notifications.listContentSubscriptions(user.id);
+  }
+
   @Get("content/:targetType/:targetId")
   @UseGuards(JwtAuthGuard)
   contentStatus(@CurrentUser() user: User, @Param("targetType") targetType: string, @Param("targetId") targetId: string) {

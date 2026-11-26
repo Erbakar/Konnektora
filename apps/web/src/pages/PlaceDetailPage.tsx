@@ -41,6 +41,7 @@ import {
   listPlaceRelatedUsers,
   listPlaces,
   listTags,
+  getTrendingTagSuggestions,
   respondPlaceInvite,
   recordContentView,
   setContentNotification,
@@ -54,6 +55,8 @@ import { useLanguage } from "../lib/i18n";
 import { useInviteLinkRef } from "../lib/useInviteLinkRef";
 import { placeInstagramCaption, placePostInstagramCaption } from "../lib/shareCaptions";
 import { localizeCityName, localizeCountryName, placeLocationLabel } from "../lib/formats";
+import { placeInviteOnlyAccess } from "../lib/inviteOnlyAccess";
+import { defaultEventTab } from "../lib/defaultEventTab";
 
 export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
   const { language } = useLanguage();
@@ -69,6 +72,8 @@ export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
   useEffect(() => { setEditOpen(editPage); setEditStep("details"); }, [editPage, slug]);
   const [showAllTags, setShowAllTags] = useState(false);
   const [chosenPlaceEventTab, setPlaceEventTab] = useState<"future" | "past" | null>(null);
+  // 26/11 #119: başka bir mekâna geçince sekme seçimi sıfırlanır; varsayılan yeniden hesaplanır.
+  useEffect(() => { setPlaceEventTab(null); }, [slug]);
   const [reportOpen, setReportOpen] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const placeQuery = useQuery({
@@ -80,6 +85,11 @@ export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
   const place = placeQuery.data;
   useInviteLinkRef("place", place?.id, slug);
   const tagsQuery = useQuery({ queryKey: ["tags"], queryFn: () => listTags(), enabled: editOpen });
+  // 26/11 #108: düzenlemede seçili mekân türündeki mekânların en çok kullanılan ilk 10 etiketi önerilir.
+  const [editPlaceType, setEditPlaceType] = useState<string | null>(null);
+  useEffect(() => { setEditPlaceType(null); }, [slug, editOpen]);
+  const suggestionPlaceType = editPlaceType ?? place?.placeType ?? "other";
+  const trendingPlaceTagsQuery = useQuery({ queryKey: ["trending-tag-suggestions", "place", suggestionPlaceType], queryFn: () => getTrendingTagSuggestions({ target: "place", placeType: suggestionPlaceType }), enabled: editOpen && Boolean(place), staleTime: 5 * 60_000 });
   // 23/11 #13: bekleyen kullanıcı sayısı yalnız mekânın kurucu ve yöneticilerine gösterilir.
   const isTeam = Boolean(user && place && (place.createdById === user.id || place.viewerMembership?.status === "accepted" && ["manager", "organizer"].includes(place.viewerMembership.role)));
   const canManage = Boolean((user && place?.createdById === user.id) || place?.viewerMembership?.status === "accepted" && ["manager", "organizer"].includes(place.viewerMembership.role) || ["admin", "super_admin", "curator"].includes(user?.role ?? ""));
@@ -122,8 +132,12 @@ export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
     },
   });
   const respondMutation = useMutation({
-    mutationFn: (status: "accepted" | "declined") =>
-      respondPlaceInvite(place!.id, status),
+    // 26/11 #103: daveti kabul eden kullanıcı mekânı takip etmeye de başlar ("Takibi bırak" görünür).
+    mutationFn: async (status: "accepted" | "declined") => {
+      const member = await respondPlaceInvite(place!.id, status);
+      if (status === "accepted" && !place!.isFollowing) await followPlace(place!.id);
+      return member;
+    },
     onSuccess: refresh,
   });
   const blockMutation = useMutation({
@@ -149,20 +163,23 @@ export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
   // 17/10 #4, #7: paylaşım şablonlarında mekân tipi ikonu ve en çok kullanılan 4 etiket.
   const placeTypeIcon = /^\P{L}/u.test(placeTypeLabels[place.placeType ?? ""] ?? "") ? (placeTypeLabels[place.placeType ?? ""] ?? "").split(" ")[0] : "";
   const placeTopTags = (place.tags ?? []).slice().sort((a, b) => b.usageCount - a.usageCount).slice(0, 4).map((tag) => tag.name);
-  const editor = <div className={editPage ? "page place-edit-page" : "dialog-backdrop"} role="presentation" onMouseDown={editPage ? undefined : closeEditor}><section className="content-dialog" role={editPage ? undefined : "dialog"} aria-modal={editPage ? undefined : true} aria-label={language === "tr" ? "Mekânı düzenle" : "Edit place"} onMouseDown={(e) => e.stopPropagation()}><h2>{language === "tr" ? "Mekânı düzenle" : "Edit place"}</h2><div className="feed-tabs"><button type="button" className={editStep === "details" ? "active" : ""} onClick={() => setEditStep("details")}>{language === "tr" ? "Mekân bilgileri" : "Place details"}</button><button type="button" className={editStep === "media" ? "active" : ""} onClick={() => setEditStep("media")}>{language === "tr" ? "Mekân medyaları" : "Place media"}</button></div><form className="admin-form" onInvalidCapture={() => setEditStep("details")} onSubmit={(e) => { e.preventDefault(); const form = new FormData(e.currentTarget); editMutation.mutate({ name: String(form.get("name")).trim(), description: String(form.get("description")).trim(), address: String(form.get("address")).trim(), latitude: form.get("latitude") ? Number(form.get("latitude")) : undefined, longitude: form.get("longitude") ? Number(form.get("longitude")) : undefined, placeType: String(form.get("placeType")), tagIds: form.getAll("tagIds").map(String), region: String(form.get("region") || ""), postalCode: String(form.get("postalCode") || ""), city: String(form.get("city")).trim(), country: String(form.get("country")).trim(), visibility: String(form.get("visibility")) as "open" | "approval_required" | "invite_only", managerUsernames: String(form.get("managerUsernames") || "").split(",").map((item) => item.trim().replace(/^@/, "")).filter(Boolean) }); }}><div style={{ display: editStep === "details" ? "grid" : "none", gap: 16 }}><label>{language === "tr" ? "Mekân adı" : "Place name"}<input name="name" defaultValue={place.name} required minLength={2} maxLength={160}/></label><label>{language === "tr" ? "Açıklama" : "Description"}<textarea name="description" defaultValue={place.description ?? ""} maxLength={2000}/></label><label>{language === "tr" ? "Mekân türü" : "Place type"}<select name="placeType" defaultValue={place.placeType ?? "other"}>{Object.entries(language === "tr" ? placeTypeLabelsTr : placeTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><TagPicker tags={tagsQuery.data ?? []} initialIds={place.tags?.map(tag => tag.id)} label={language === "tr" ? "Etiketler" : "Tags"}/><label>{language === "tr" ? "Yöneticiler: (opsiyonel)" : "Managers: (optional)"}<input name="managerUsernames" placeholder="@ayse, @mehmet"/><span className="form-help">{place.managers?.length ? <>{language === "tr" ? "Mevcut: " : "Current: "}{place.managers.map((manager, index) => <span key={manager.id}>{index ? ", " : ""}<Link to={userProfilePath(manager)}>@{manager.username ?? manager.name}</Link></span>)} · </> : null}{language === "tr" ? "Birden fazla kullanıcı adını virgülle ayır. " : "Separate multiple usernames with commas. "}<Link to={`/places/${place.slug}/users`}>{language === "tr" ? "Yönetici rollerini düzenle" : "Manage roles"}</Link></span></label><CountryCityFields addressFields defaultRegion={place.region} defaultPostalCode={place.postalCode} defaultCity={place.city} defaultCountry={place.country}/><LocationPicker addressName="address" defaultAddress={place.address ?? ""} defaultLatitude={place.latitude} defaultLongitude={place.longitude}/><label>{language === "tr" ? "Katılım" : "Access"}<select name="visibility" defaultValue={place.visibility}><option value="open">{language === "tr" ? "Herkese açık" : "Open to everyone"}</option><option value="approval_required">{language === "tr" ? "Onay gerekli" : "Approval required"}</option><option value="invite_only">{language === "tr" ? "Sadece davetli" : "Invite only"}</option></select></label></div><div hidden={editStep !== "media"}><ContentMediaGallery targetType="place" targetId={place.id} canManage coverImageUrl={place.coverImageUrl}/></div>{editMutation.isError ? <p className="form-error" role="alert">{language === "tr" ? "Değişiklikler kaydedilemedi." : "The changes could not be saved."}</p> : null}<div className="row-actions"><button className="secondary-action" type="button" onClick={closeEditor}>{language === "tr" ? "Vazgeç" : "Cancel"}</button><button className="primary-action" disabled={editMutation.isPending}>{language === "tr" ? "Kaydet" : "Save"}</button></div></form></section></div>;
+  const editor = <div className={editPage ? "page place-edit-page" : "dialog-backdrop"} role="presentation" onMouseDown={editPage ? undefined : closeEditor}><section className="content-dialog" role={editPage ? undefined : "dialog"} aria-modal={editPage ? undefined : true} aria-label={language === "tr" ? "Mekânı düzenle" : "Edit place"} onMouseDown={(e) => e.stopPropagation()}><h2>{language === "tr" ? "Mekânı düzenle" : "Edit place"}</h2><div className="feed-tabs"><button type="button" className={editStep === "details" ? "active" : ""} onClick={() => setEditStep("details")}>{language === "tr" ? "Mekân bilgileri" : "Place details"}</button><button type="button" className={editStep === "media" ? "active" : ""} onClick={() => setEditStep("media")}>{language === "tr" ? "Mekân medyaları" : "Place media"}</button></div><form className="admin-form" onInvalidCapture={() => setEditStep("details")} onSubmit={(e) => { e.preventDefault(); const form = new FormData(e.currentTarget); editMutation.mutate({ name: String(form.get("name")).trim(), description: String(form.get("description")).trim(), address: String(form.get("address")).trim(), latitude: form.get("latitude") ? Number(form.get("latitude")) : undefined, longitude: form.get("longitude") ? Number(form.get("longitude")) : undefined, placeType: String(form.get("placeType")), tagIds: form.getAll("tagIds").map(String), region: String(form.get("region") || ""), postalCode: String(form.get("postalCode") || ""), city: String(form.get("city")).trim(), country: String(form.get("country")).trim(), visibility: String(form.get("visibility")) as "open" | "approval_required" | "invite_only", managerUsernames: String(form.get("managerUsernames") || "").split(",").map((item) => item.trim().replace(/^@/, "")).filter(Boolean) }); }}><div style={{ display: editStep === "details" ? "grid" : "none", gap: 16 }}><label>{language === "tr" ? "Mekân adı" : "Place name"}<input name="name" defaultValue={place.name} required minLength={2} maxLength={160}/></label><label>{language === "tr" ? "Açıklama" : "Description"}<textarea name="description" defaultValue={place.description ?? ""} maxLength={2000}/></label><label>{language === "tr" ? "Mekân türü" : "Place type"}<select name="placeType" defaultValue={place.placeType ?? "other"} onChange={(e) => setEditPlaceType(e.target.value)}>{Object.entries(language === "tr" ? placeTypeLabelsTr : placeTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><TagPicker tags={tagsQuery.data ?? []} initialIds={place.tags?.map(tag => tag.id)} label={language === "tr" ? "Mekân etiketleri" : "Place tags"} recommendedIds={trendingPlaceTagsQuery.data ?? []} recommendationNote={language === "tr" ? "Mekân türüne göre önerilen etiketler önce gösteriliyor; seçmeden mekâna eklenmez." : "Tags suggested for the place type appear first and are not added until you select them."}/><label>{language === "tr" ? "Yöneticiler: (opsiyonel)" : "Managers: (optional)"}<input name="managerUsernames" placeholder="@ayse, @mehmet"/><span className="form-help">{place.managers?.length ? <>{language === "tr" ? "Mevcut: " : "Current: "}{place.managers.map((manager, index) => <span key={manager.id}>{index ? ", " : ""}<Link to={userProfilePath(manager)}>@{manager.username ?? manager.name}</Link></span>)} · </> : null}{language === "tr" ? "Birden fazla kullanıcı adını virgülle ayır. " : "Separate multiple usernames with commas. "}<Link to={`/places/${place.slug}/users`}>{language === "tr" ? "Yönetici rollerini düzenle" : "Manage roles"}</Link></span></label><CountryCityFields addressFields defaultRegion={place.region} defaultPostalCode={place.postalCode} defaultCity={place.city} defaultCountry={place.country}/><LocationPicker addressName="address" defaultAddress={place.address ?? ""} defaultLatitude={place.latitude} defaultLongitude={place.longitude}/><label>{language === "tr" ? "Katılım" : "Access"}<select name="visibility" defaultValue={place.visibility}><option value="open">{language === "tr" ? "Herkese açık" : "Open to everyone"}</option><option value="approval_required">{language === "tr" ? "Onay gerekli" : "Approval required"}</option><option value="invite_only">{language === "tr" ? "Sadece davetli" : "Invite only"}</option></select></label></div><div hidden={editStep !== "media"}><ContentMediaGallery targetType="place" targetId={place.id} canManage coverImageUrl={place.coverImageUrl}/></div>{editMutation.isError ? <p className="form-error" role="alert">{language === "tr" ? "Değişiklikler kaydedilemedi." : "The changes could not be saved."}</p> : null}<div className="row-actions"><button className="secondary-action" type="button" onClick={closeEditor}>{language === "tr" ? "Vazgeç" : "Cancel"}</button><button className="primary-action" disabled={editMutation.isPending}>{language === "tr" ? "Kaydet" : "Save"}</button></div></form></section></div>;
   if (editPage) return canManage ? editor : <section className="page"><p>{language === "tr" ? "Bu mekânı düzenleme yetkiniz yok." : "You cannot edit this place."}</p><Link to={`/places/${slug}`}>{language === "tr" ? "Mekâna dön" : "Back to place"}</Link></section>;
   const placeEvents = place.events ?? [];
   const isPlaceEventFinished = (event: (typeof placeEvents)[number]) => new Date(event.endsAt ?? event.startsAt).getTime() < Date.now();
   // Güncel etkinlik yok ama geçmiş varsa "Geçmiş etkinlikler" varsayılan seçilir; ikisi de yoksa "Güncel etkinlikler".
-  const placeEventTab = chosenPlaceEventTab ?? (!placeEvents.some((event) => !isPlaceEventFinished(event)) && placeEvents.some(isPlaceEventFinished) ? "past" : "future");
+  const placeEventTab = chosenPlaceEventTab ?? defaultEventTab(placeEvents, isPlaceEventFinished);
   const visiblePlaceEvents = placeEvents.filter((event) => {
     const eventFinished = new Date(event.endsAt ?? event.startsAt).getTime() < Date.now();
     return placeEventTab === "future" ? !eventFinished : eventFinished;
   }).slice(0, 8);
   const invitedPreviewCount = place.inviteCount ?? (relatedUsersQuery.data ?? []).filter((member) => member.status === "invited").length;
+  // 26/11 #103: "Sadece davetli" mekân herkese görünür; davetsiz kullanıcıda takip ve davet butonları pasif.
+  const inviteOnlyAccess = placeInviteOnlyAccess(place, user?.id);
+  const inviteOnlyLocked = Boolean(user) && inviteOnlyAccess === "locked" && !place.isFollowing;
 
   return (
-    <article className="page detail-page">
+    <article className="page detail-page place-detail-page">
       <ContentMediaGallery targetType="place" targetId={place.id} canManage={canManage} coverImageUrl={place.coverImageUrl} coverAlt={place.name} />
       <p className="eyebrow">{language === "tr" ? "MEKÂN" : "PLACE"} – {place.visibility === "invite_only" ? language === "tr" ? "SADECE DAVETLİ" : "INVITE ONLY" : place.visibility === "approval_required" ? language === "tr" ? "ONAY GEREKLİ" : "APPROVAL REQUIRED" : language === "tr" ? "HERKESE AÇIK" : "OPEN TO EVERYONE"}</p>
       <h1><a href={`/places/${place.slug}`}>{place.name}</a></h1>
@@ -185,12 +202,17 @@ export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
         {user ? (
           <button
             className="primary-action"
-            disabled={followMutation.isPending}
-            onClick={() => followMutation.mutate()}
+            disabled={inviteOnlyLocked || followMutation.isPending || respondMutation.isPending}
+            onClick={() => inviteOnlyAccess === "invited" ? respondMutation.mutate("accepted") : followMutation.mutate()}
+            title={inviteOnlyLocked ? language === "tr" ? "Bu mekânı yalnız davet edilen kullanıcılar takip edebilir." : "Only invited people can follow this place." : undefined}
             type="button"
           >
             {/* 23/11 #43: "onay gerekli" mekânlarda takip, üyelik isteği olarak adlandırılır. */}
-            {place.visibility === "approval_required" && place.createdById !== user.id && place.viewerMembership?.status !== "accepted"
+            {inviteOnlyLocked
+              ? language === "tr" ? "Sadece davetliler" : "Invitees only"
+              : inviteOnlyAccess === "invited"
+              ? language === "tr" ? "Daveti kabul et" : "Accept invitation"
+              : place.visibility === "approval_required" && place.createdById !== user.id && place.viewerMembership?.status !== "accepted"
               ? place.viewerMembership?.status === "pending" || place.isFollowing
                 ? language === "tr" ? "Üyelik isteğini geri çek" : "Withdraw membership request"
                 : language === "tr" ? "Üyelik isteği gönder" : "Send membership request"
@@ -201,7 +223,7 @@ export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
             {language === "tr" ? "Takip etmek için giriş yap" : "Log in to follow"}
           </Link>
         )}
-        {user ? <button className="secondary-action" onClick={() => {
+        {user ? <button className="secondary-action" disabled={inviteOnlyLocked && !canManage} onClick={() => {
           if (!canManage && place.viewerMembership?.status !== "accepted") {
             setActionNotice(language === "tr" ? "Sadece üyeler ve davetliler davet edebilir." : "Only members and invited people can send invitations.");
             return;
@@ -250,7 +272,7 @@ export function PlaceDetailPage({ editPage = false }: { editPage?: boolean }) {
       {place.latitude != null && place.longitude != null ? (
         <LocationMap items={[{ id: place.id, title: place.name, latitude: place.latitude, longitude: place.longitude, location: [place.address, localizeCityName(place.city, language), localizeCountryName(place.country, language)].filter(Boolean).join(", ") }]} />
       ) : null}
-      <section className="detail-section"><div className="section-header"><h2>{language === "tr" ? "Mekândaki etkinlikler" : "Events at this place"}</h2>{placeEvents.length ? <Link to={`/events?city=${encodeURIComponent(place.city ?? "")}`}>{language === "tr" ? "Tümünü gör" : "See all"}</Link> : null}</div><nav className="feed-tabs"><button className={placeEventTab === "future" ? "active" : ""} onClick={() => setPlaceEventTab("future")} type="button">{language === "tr" ? "Güncel etkinlikler" : "Current events"}</button><button className={placeEventTab === "past" ? "active" : ""} onClick={() => setPlaceEventTab("past")} type="button">{language === "tr" ? "Geçmiş etkinlikler" : "Past events"}</button></nav>{visiblePlaceEvents.length ? <div className="event-grid recommendation-carousel">{visiblePlaceEvents.map((event) => <EventCard event={event} key={event.id}/>)}</div> : <p className="empty-state">{placeEventTab === "future" ? language === "tr" ? "Bu mekânda güncel etkinlik bulunmuyor." : "There are no current events at this place." : language === "tr" ? "Bu mekânda geçmiş etkinlik bulunmuyor." : "There are no past events at this place."}</p>}</section>
+      <section className="detail-section place-events-section"><div className="section-header"><h2>{language === "tr" ? "Mekândaki etkinlikler" : "Events at this place"}</h2>{placeEvents.length ? <Link to={`/events?city=${encodeURIComponent(place.city ?? "")}`}>{language === "tr" ? "Tümünü gör" : "See all"}</Link> : null}</div><nav aria-label={language === "tr" ? "Mekândaki etkinlikler" : "Events at this place"} className="feed-tabs place-event-tabs"><button className={placeEventTab === "future" ? "active" : ""} onClick={() => setPlaceEventTab("future")} type="button">{language === "tr" ? "Güncel" : "Current"}</button><button className={placeEventTab === "past" ? "active" : ""} onClick={() => setPlaceEventTab("past")} type="button">{language === "tr" ? "Geçmiş" : "Past"}</button></nav>{visiblePlaceEvents.length ? <div className="event-grid recommendation-carousel">{visiblePlaceEvents.map((event) => <EventCard event={event} key={event.id}/>)}</div> : <p className="empty-state">{placeEventTab === "future" ? language === "tr" ? "Bu mekânda güncel etkinlik bulunmuyor." : "There are no current events at this place." : language === "tr" ? "Bu mekânda geçmiş etkinlik bulunmuyor." : "There are no past events at this place."}</p>}</section>
       <ReportDialog onClose={() => setReportOpen(false)} open={reportOpen} targetId={place.id} targetType="place"/>
       <ContentComments
         canManage={canManage}

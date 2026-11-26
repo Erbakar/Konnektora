@@ -1,4 +1,5 @@
 import { normalizeMediaFile } from "./mediaPolicy";
+import { clearSignupInviteRef, readSignupInviteRef } from "./signupInviteRef";
 import { walletHeader, setWalletGrant, clearWalletGrant } from "./wallet-session";
 import {
   adminBackofficeSummarySchema,
@@ -307,6 +308,8 @@ export type RegistrationInput = {
   tradeName?: string;
   companyType?: string;
   businessCategory?: string;
+  /** 26/11 #118: davet bağlantısının sahibi. */
+  inviterId?: string;
 };
 
 export const adminPermissionOptions: Array<{
@@ -8241,6 +8244,17 @@ export async function listTags(params = new URLSearchParams()): Promise<Tag[]> {
     : result;
 }
 
+// 26/11 #107, #108: etkinlik (format + başlangıç dönemi) ve mekân (mekân türü) için trend ilk 10 etiket.
+export async function getTrendingTagSuggestions(input: { target: "event"; format?: string; startsAt?: string } | { target: "place"; placeType?: string }): Promise<string[]> {
+  const params = new URLSearchParams(Object.entries(input).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== ""));
+  try {
+    const result = await requestJson(`/tags/trending-suggestions?${params}`, z.object({ tagIds: z.array(z.string()) }));
+    return result.tagIds;
+  } catch {
+    return [];
+  }
+}
+
 export function createUserTag(input: {
   name: string;
   description?: string;
@@ -8821,6 +8835,17 @@ export function setContentNotification(
     z.object({ enabled: z.boolean() }),
     { auth: "user", method: "POST", body: JSON.stringify({ enabled }) },
   );
+}
+// 26/11 #113: Bildirim ayarları sayfasındaki bildirimleri açık içerik listeleri.
+const contentNotificationListSchema = z.object({
+  tags: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() })),
+  places: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), region: z.string().nullable().optional(), city: z.string().nullable().optional(), country: z.string().nullable().optional() })),
+  users: z.array(z.object({ id: z.string(), name: z.string(), username: z.string().nullable().optional() })),
+  events: z.array(z.object({ id: z.string(), title: z.string(), slug: z.string(), startsAt: z.string(), endsAt: z.string().nullable().optional() })),
+});
+export type ContentNotificationList = z.infer<typeof contentNotificationListSchema>;
+export function listContentNotifications(): Promise<ContentNotificationList> {
+  return requestJson("/notifications/content", contentNotificationListSchema, { auth: "user" });
 }
 export function submitCuratorApplication(input: {
   name: string;
@@ -9473,9 +9498,10 @@ export function socialLogin(
   credential: string,
   accountType?: "individual" | "corporate",
 ): Promise<LoginResponse> {
+  const inviterId = readSignupInviteRef();
   return requestJson("/auth/social", loginResponseSchema, {
     method: "POST",
-    body: JSON.stringify({ provider, credential, accountType }),
+    body: JSON.stringify({ provider, credential, accountType, ...(inviterId ? { inviterId } : {}) }),
   });
 }
 export function listSocialAccounts(): Promise<SocialAccount[]> {
@@ -9532,10 +9558,12 @@ export function inviteContacts(
 }
 
 export function registerUser(input: RegistrationInput): Promise<LoginResponse> {
+  // 26/11 #118: davet bağlantısıyla gelindiyse bağlantı sahibi davet eden olarak gönderilir.
+  const inviterId = input.inviterId ?? readSignupInviteRef();
   return requestJson("/auth/register", loginResponseSchema, {
     method: "POST",
-    body: JSON.stringify(input),
-  });
+    body: JSON.stringify(inviterId ? { ...input, inviterId } : input),
+  }).then((response) => { clearSignupInviteRef(); return response; });
 }
 
 export function requestEmailVerification(
@@ -11120,6 +11148,16 @@ export function invitePlaceMember(
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+/** 26/11 #87: yasaklı üyeyi affeder; üyelik kaydı silinir ve kullanıcı sıfır duruma döner. */
+export function pardonPlaceMember(id: string, userId: string): Promise<{ pardoned: boolean }> {
+  return requestJson(`/places/${id}/members/${userId}/ban`, z.object({ pardoned: z.boolean() }), { auth: "user", method: "DELETE" });
+}
+
+/** 26/11 #93: yasaklı katılımcıyı affeder; katılım kaydı silinir ve kullanıcı sıfır duruma döner. */
+export function pardonEventParticipant(eventId: string, userId: string): Promise<{ pardoned: boolean }> {
+  return requestJson(`/events/${eventId}/participants/${userId}/ban`, z.object({ pardoned: z.boolean() }), { auth: "user", method: "DELETE" });
 }
 
 export function updatePlaceMember(

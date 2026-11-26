@@ -41,6 +41,16 @@ describe("SocialService", () => {
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
+  it("lets members follow curator accounts (26/11 #128)", async () => {
+    const { service, prisma } = createService();
+    prisma.user.findFirst.mockResolvedValue({ id: "curator-1" });
+    prisma.userFollow.findUnique.mockResolvedValue(null);
+    prisma.userBlock.findFirst.mockResolvedValue(null);
+
+    await expect(service.follow("user-1", "curator-1")).resolves.toEqual({ ok: true, following: true });
+    expect(prisma.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "curator-1", status: "active", role: { in: ["user", "curator"] } } }));
+  });
+
   it("does not allow following across a block", async () => {
     const { service, prisma } = createService();
     prisma.user.findFirst.mockResolvedValue({ id: "user-2" });
@@ -102,7 +112,7 @@ describe("SocialService", () => {
     expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
         status: "active",
-        role: "user",
+        role: { in: ["user", "curator"] },
         id: { notIn: ["blocked-user", "blocked-by-user"] },
       },
       orderBy: { createdAt: "desc" },

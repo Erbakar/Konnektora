@@ -30,11 +30,23 @@ export async function enableDevicePush(tr = true) {
   await registerPushSubscription({ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });
 }
 
-export function PushNotificationControl() {
+type PushNotificationControlProps = {
+  /** "banner": yalnızca bu cihazda bildirimleri henüz etkinleştirmemiş kullanıcıya gösterilir, kapatma düğmesi yoktur. */
+  variant?: "settings" | "banner";
+  title?: string;
+  description?: string;
+  enableLabel?: string;
+  className?: string;
+};
+
+export function PushNotificationControl({ variant = "settings", title, description, enableLabel, className }: PushNotificationControlProps = {}) {
   const { language } = useLanguage();
   const t = (tr: string, en: string) => language === "tr" ? tr : en;
   const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  const banner = variant === "banner";
   const [enabled, setEnabled] = useState(false);
+  // İzin verilmişse aboneliğin durumu asenkron okunur; banner bu kontrol bitmeden görünmez.
+  const [checked, setChecked] = useState(() => !supported || Notification.permission !== "granted");
   const [message, setMessage] = useState("");
   useEffect(() => {
     if (!supported || Notification.permission !== "granted") return;
@@ -45,7 +57,7 @@ export function PushNotificationControl() {
       if (!json?.endpoint || !json.keys?.p256dh || !json.keys.auth) return;
       await registerPushSubscription({ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });
       if (!cancelled) setEnabled(true);
-    }).catch(() => { if (!cancelled) setEnabled(false); });
+    }).catch(() => { if (!cancelled) setEnabled(false); }).finally(() => { if (!cancelled) setChecked(true); });
     return () => { cancelled = true; };
   }, [supported]);
   const publicKey = useQuery({ queryKey: ["push-public-key"], queryFn: getPushPublicKey, enabled: supported });
@@ -91,13 +103,19 @@ export function PushNotificationControl() {
       ),
   });
 
+  if (banner) {
+    // Desteklenmeyen, izni reddedilmiş, durumu henüz okunmamış veya zaten etkin cihazda banner gösterilmez.
+    if (!supported || Notification.permission === "denied" || !checked) return null;
+    if (enabled && !message) return null;
+  }
   if (!supported) return <p className="muted">{t("Bu tarayıcı Web Push bildirimlerini desteklemiyor.", "This browser does not support Web Push notifications.")}</p>;
+  const showButton = !(banner && enabled);
   return (
-    <div className="push-notification-control">
-      <div><strong>{t("Cihaz bildirimleri", "Device notifications")}</strong><span>{enabled ? t("Bu tarayıcı push bildirimlerini alabilir.", "This browser can receive push notifications.") : t("Gerçek zamanlı bildirim almak için bu cihazı etkinleştir.", "Enable this device to receive real-time notifications.")}</span></div>
-      <button className="secondary-action" disabled={enable.isPending || disable.isPending || publicKey.isLoading} onClick={() => enabled ? disable.mutate() : enable.mutate()} type="button">
-        {enabled ? <BellOff size={17} /> : <Bell size={17} />} {enabled ? t("Bu cihazda kapat", "Disable on this device") : t("Bu cihazda etkinleştir", "Enable on this device")}
-      </button>
+    <div className={`push-notification-control${banner ? " is-banner" : ""}${className ? ` ${className}` : ""}`}>
+      <div><strong>{title ?? t("Cihaz bildirimleri", "Device notifications")}</strong><span>{enabled ? t("Bu tarayıcı push bildirimlerini alabilir.", "This browser can receive push notifications.") : description ?? t("Gerçek zamanlı bildirim almak için bu cihazı etkinleştir.", "Enable this device to receive real-time notifications.")}</span></div>
+      {showButton ? <button className={banner ? "primary-action" : "secondary-action"} disabled={enable.isPending || disable.isPending || publicKey.isLoading} onClick={() => enabled ? disable.mutate() : enable.mutate()} type="button">
+        {enabled ? <BellOff size={17} /> : <Bell size={17} />} {enabled ? t("Bu cihazda kapat", "Disable on this device") : enableLabel ?? t("Bu cihazda etkinleştir", "Enable on this device")}
+      </button> : null}
       {publicKey.error && !message ? (
         <ServiceFeedback
           compact

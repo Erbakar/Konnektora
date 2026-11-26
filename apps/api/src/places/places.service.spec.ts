@@ -264,6 +264,35 @@ describe("PlacesService", () => {
     });
   });
 
+  it("rejects following an invite-only place without an invitation (26/11 #103)", async () => {
+    place.findFirst.mockResolvedValue({ id: "place-1", visibility: "invite_only", createdById: "owner-1" });
+    placeFollow.findUnique.mockResolvedValue(null);
+    placeMember.findUnique.mockResolvedValue(null);
+
+    await expect(service.follow("place-1", "user-1")).rejects.toBeInstanceOf(ForbiddenException);
+    expect(placeFollow.create).not.toHaveBeenCalled();
+  });
+
+  it("lets an invited user follow an invite-only place (26/11 #103)", async () => {
+    place.findFirst.mockResolvedValue({ id: "place-1", visibility: "invite_only", createdById: "owner-1" });
+    placeFollow.findUnique.mockResolvedValue(null);
+    placeMember.findUnique.mockResolvedValue({ status: "invited", role: "member" });
+    placeFollow.create.mockResolvedValue({});
+    place.update.mockResolvedValue({});
+
+    await expect(service.follow("place-1", "user-1")).resolves.toEqual({ following: true });
+    expect(placeFollow.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows invite-only place details to users who were not invited (26/11 #103)", async () => {
+    place.findFirst.mockResolvedValueOnce({ id: "place-1" }).mockResolvedValueOnce({ id: "place-1", slug: "gizli-kulup-123456", visibility: "invite_only", followers: [], members: [], tags: [], _count: { members: 0, events: 0 } });
+    userBlock.findUnique.mockResolvedValue(null);
+    placeMember.findMany.mockResolvedValue([]);
+
+    await expect(service.getBySlug("gizli-kulup-123456", "stranger-1")).resolves.toEqual(expect.objectContaining({ id: "place-1", visibility: "invite_only", viewerMembership: null }));
+    expect(JSON.stringify(place.findFirst.mock.calls[1][0].where)).not.toContain("invite_only");
+  });
+
   it("prevents a place manager (organizer) from making founders", async () => {
     place.findUnique.mockResolvedValue({
       id: "place-1",
@@ -493,7 +522,7 @@ describe("PlacesService", () => {
     expect(sms.sendPlaceInvite).toHaveBeenCalledWith("+905551112233", "Bir üye", "Hub", "hub", "accept-token");
   });
 
-  it("lets an accepted member invite another member without assigning a manager role", async () => {
+  it("lets an accepted member invite another member but rejects a manager role (26/11 #116)", async () => {
     const invitedUser = { id: "55555555-5555-4555-8555-555555555555", email: "peer@example.com", name: "Peer", role: "user", status: "active" };
     place.findUnique.mockResolvedValue({ id: "place-1", name: "Hub", slug: "hub", createdById: "owner-1", members: [{ role: "member" }] });
     user.findFirst.mockResolvedValue(invitedUser);
@@ -501,7 +530,9 @@ describe("PlacesService", () => {
     placeMember.upsert.mockResolvedValue({ placeId: "place-1", userId: invitedUser.id, status: "invited", role: "member" });
     place.update.mockResolvedValue({});
 
-    await service.invite("place-1", { userId: invitedUser.id, role: PlaceMemberRole.organizer }, actor);
+    await expect(service.invite("place-1", { userId: invitedUser.id, role: PlaceMemberRole.organizer }, actor)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(placeMember.upsert).not.toHaveBeenCalled();
+    await service.invite("place-1", { userId: invitedUser.id }, actor);
     expect(placeMember.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ role: PlaceMemberRole.member }) }));
   });
 

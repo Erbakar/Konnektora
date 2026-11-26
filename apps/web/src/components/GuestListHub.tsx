@@ -36,6 +36,7 @@ import {
   type GuestList,
 } from "../lib/api";
 import { useLanguage } from "../lib/i18n";
+import { formatDocumentTitle, useDocumentTitle } from "../lib/useDocumentTitle";
 import { UserIdentityLink, userProfilePath } from "./UserIdentityLink";
 
 export function GuestListHub() {
@@ -184,6 +185,8 @@ export function GuestListDetailPage() {
   const navigate = useNavigate();
   const client = useQueryClient();
   const list = useQuery({ queryKey: ["guest-lists", listId], queryFn: () => getGuestList(listId), enabled: Boolean(listId) });
+  // 26/11 #85: sekme başlığı genel site başlığı yerine listenin adını gösterir.
+  useDocumentTitle(list.data?.name ? formatDocumentTitle(list.data.name, "Guest List") : list.isError ? formatDocumentTitle(tr ? "Liste bulunamadı" : "List not found", "Guest List") : formatDocumentTitle("Guest List"));
   const [query, setQuery] = useState("");
   const [gender, setGender] = useState("");
   const [ageRange, setAgeRange] = useState("");

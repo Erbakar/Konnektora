@@ -114,6 +114,18 @@ describe("AuthService", () => {
     });
   });
 
+  it("26/11 #118: records the invite link owner as inviter only when that member is active", async () => {
+    const { service, prisma } = createService({ NODE_ENV: "test" });
+    const inviter = "22222222-2222-4222-8222-222222222222";
+    prisma.user.findFirst.mockResolvedValueOnce({ id: inviter }).mockResolvedValueOnce(null);
+    prisma.user.create.mockImplementation(({ data }) => Promise.resolve({ id: "invited", role: "user", ...data }));
+    await service.socialLogin({ provider: "google", credential: "demo-google", inviterId: inviter });
+    expect(prisma.user.findFirst).toHaveBeenCalledWith({ where: { id: inviter, status: "active" }, select: { id: true } });
+    expect(prisma.user.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ invitedById: inviter }) });
+    await service.socialLogin({ provider: "google", credential: "demo-google", inviterId: inviter });
+    expect(prisma.user.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ invitedById: null }) });
+  });
+
   it("preserves the corporate choice for social signup", async () => {
     const { service, prisma } = createService({ NODE_ENV: "test" });
     prisma.user.create.mockImplementation(({ data }) => Promise.resolve({ id: "corporate", role: "user", ...data }));

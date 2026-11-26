@@ -6,6 +6,7 @@ describe("TagsService comments", () => {
   const createService = () => {
     const prisma = {
       tag: { findFirst: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), count: jest.fn() },
+      contentNotificationSubscription: { count: jest.fn().mockResolvedValue(3) },
       userBlock: { findUnique: jest.fn(), findMany: jest.fn() },
       contentComment: {
         findMany: jest.fn(),
@@ -81,6 +82,7 @@ describe("TagsService comments", () => {
     await expect(service.getPublicStats("tag-1", { id: "curator-1", role: "curator" } as never)).resolves.toEqual(expect.objectContaining({
       events: 4,
       places: 2,
+      notificationSubscribers: 3,
       followers: 8,
       likes: 5,
       ok: 3,

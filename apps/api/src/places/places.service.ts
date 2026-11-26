@@ -83,10 +83,10 @@ export class PlacesService {
     }
     const where: Prisma.PlaceWhereInput = {
       status: "active",
-      AND: [{ OR: [
-          { visibility: { not: "invite_only" } },
-          ...(viewerId ? [{ members: { some: { userId: viewerId, status: { in: [PlaceMemberStatus.invited, PlaceMemberStatus.accepted] } } } } as Prisma.PlaceWhereInput] : []),
-        ] }, ...(query.scope === "for_you" && personalTagIds.length ? [{ tags: { some: { tagId: { in: personalTagIds } } } } as Prisma.PlaceWhereInput] : [])],
+      // 26/11 #103: "Sadece davetli" mekânlar gizli değildir; herkes görür, yalnız takip/katılım davetlilere açıktır.
+      AND: [...(query.scope === "for_you" && personalTagIds.length ? [{ tags: { some: { tagId: { in: personalTagIds } } } } as Prisma.PlaceWhereInput] : []),
+        // 26/11 #114: Şehir filtresi Türkiye adreslerinde il (region) alanıyla da eşleşir (ör. İstanbul → Kadıköy'deki mekânlar).
+        ...(query.city ? [{ OR: [{ city: { equals: query.city, mode: "insensitive" } }, { region: { equals: query.city, mode: "insensitive" } }] } as Prisma.PlaceWhereInput] : [])],
       id: { notIn: blocked.map((item) => item.targetId) },
       ...(query.q
         ? {
@@ -95,8 +95,8 @@ export class PlacesService {
             })),
           }
         : {}),
-      ...(query.city || popularCity
-        ? { city: { equals: query.city ?? popularCity, mode: "insensitive" } }
+      ...(!query.city && popularCity
+        ? { city: { equals: popularCity, mode: "insensitive" } }
         : {}),
       ...(query.country || popularCountry
         ? { country: { equals: query.country ?? popularCountry, mode: "insensitive" } }
@@ -177,7 +177,8 @@ export class PlacesService {
         : null;
     if (blocked) throw new NotFoundException("Mekân bulunamadı.");
     const place = await this.prisma.place.findFirst({
-      where: { AND: [slugWhere, { OR: [{ visibility: { not: "invite_only" } }, ...(viewerId ? [{ members: { some: { userId: viewerId, status: { in: [PlaceMemberStatus.invited, PlaceMemberStatus.accepted] } } } } as Prisma.PlaceWhereInput] : [])] }], status: "active" },
+      // 26/11 #103: "Sadece davetli" mekânın detayı herkese açıktır.
+      where: { AND: [slugWhere], status: "active" },
       include: { ...this.viewerInclude(viewerId, true), createdBy: { select: { id: true, name: true, username: true } } },
     });
     if (!place) throw new NotFoundException("Mekân bulunamadı.");
@@ -439,6 +440,8 @@ export class PlacesService {
       ...dailyCountMetrics("viewsDay", viewTimes.map((row) => row.createdAt), extraNow),
       // 17/11 #105: mekândaki etkinliklerde check-in gün × saat dağılımı.
       ...checkinHeatmapMetrics(eventDetails.flatMap((event) => event.participants.map((participant) => ({ at: participant.checkedInAt, timezone: event.timezone })))),
+      // 26/11 #121: bu mekân için bildirimlerini açmış kullanıcı sayısı.
+      notificationSubscribers: await this.prisma.contentNotificationSubscription.count({ where: { targetType: "place", targetId: placeId, enabled: true } }),
       performanceScore: Math.min(100, Math.round(((detailViews ? members / detailViews : 0) * 35 + (members ? totalVisitors / members : 0) * 35 + (capacity ? sold / capacity : 0) * 30) * 100)),
     };
   }
@@ -580,6 +583,9 @@ export class PlacesService {
     const [existing, existingMember] = await Promise.all([this.prisma.placeFollow.findUnique({
       where: { placeId_userId: { placeId, userId } },
     }), this.prisma.placeMember.findUnique({ where: { placeId_userId: { placeId, userId } } })]);
+    // 26/11 #103: "Sadece davetli" mekânı yalnız davetliler, üyeler ve kurucu takip edebilir.
+    if (!existing && place.visibility === "invite_only" && place.createdById !== userId && !["invited", "accepted"].includes(existingMember?.status ?? ""))
+      throw new ForbiddenException("Bu mekânı yalnız davet edilen kullanıcılar takip edebilir.");
     if (!existing) {
       try {
         await this.prisma.$transaction([
@@ -719,7 +725,13 @@ export class PlacesService {
 
   async invite(placeId: string, input: InvitePlaceMemberDto, actor: User) {
     const place = await this.ensureCanInvite(placeId, actor);
-    const canManage = actor.role !== "user" || place.createdById === actor.id || place.members.some((member) => member.role === PlaceMemberRole.manager || member.role === PlaceMemberRole.organizer);
+    // 26/11 #116: rol yetkisi yalnız mekânın kendi ekibine aittir (platform rolü veya sıradan üyelik yetmez).
+    const actorIsFounder = place.createdById === actor.id || place.members.some((member) => member.role === PlaceMemberRole.manager);
+    const actorIsTeam = actorIsFounder || place.members.some((member) => member.role === PlaceMemberRole.organizer);
+    if (input.role === PlaceMemberRole.manager && !actorIsFounder)
+      throw new ForbiddenException("Kurucu rolünü yalnız mekân kurucuları verebilir.");
+    if (input.role === PlaceMemberRole.organizer && !actorIsTeam)
+      throw new ForbiddenException("Yönetici rolünü yalnız mekân kurucuları ve yöneticileri verebilir.");
     if (!input.userId && !input.email && !input.username && !input.phone && !input.name)
       throw new BadRequestException(
         "Kullanıcı adı, telefon veya e-posta belirtilmelidir.",
@@ -764,18 +776,8 @@ export class PlacesService {
       if (existingInvitation) throw new ConflictException("Bu kullanıcıyı bu mekâna daha önce davet ettiniz.");
       await this.prisma.placeInvitation.create({ data: { placeId, inviterId: actor.id, inviteeId: user.id } });
     }
-    const role = canManage ? input.role ?? PlaceMemberRole.member : PlaceMemberRole.member;
-    // 23/11 #42: kurucu ("manager") davetini yalnız kurucular, yönetici ("organizer") davetini kurucu ve yöneticiler gönderebilir.
-    if (
-      role === PlaceMemberRole.manager &&
-      actor.role === "user" &&
-      place.createdById !== actor.id &&
-      (await this.prisma.placeMember.findUnique({ where: { placeId_userId: { placeId, userId: actor.id } } }))?.role !== PlaceMemberRole.manager
-    ) {
-      throw new ForbiddenException(
-        "Kurucu rolünü yalnız mekân kurucuları verebilir.",
-      );
-    }
+    // 23/11 #42, 26/11 #116: rol kontrolü yukarıda (kurucu → yalnız kurucular, yönetici → kurucu ve yöneticiler).
+    const role = input.role ?? PlaceMemberRole.member;
     const member = await this.prisma.$transaction(async (tx) => {
       const saved = await tx.placeMember.upsert({
         where: { placeId_userId: { placeId, userId: user.id } },
@@ -906,6 +908,22 @@ export class PlacesService {
       }
       return updated;
     });
+  }
+
+  /** 26/11 #87: "Mekâna affet" kaydı tamamen siler; kullanıcı sıfır duruma döner ve dilerse yeniden başvurur. */
+  async pardonMember(placeId: string, userId: string, actor: User) {
+    await this.ensureCanManage(placeId, actor);
+    const member = await this.prisma.placeMember.findUnique({
+      where: { placeId_userId: { placeId, userId } },
+      select: { status: true, role: true },
+    });
+    if (!member || member.status !== PlaceMemberStatus.banned)
+      throw new NotFoundException("Yasaklı mekân üyesi bulunamadı.");
+    const actorIsFounder = actor.role !== "user" || (await this.prisma.place.findFirst({ where: { id: placeId, OR: [{ createdById: actor.id }, { members: { some: { userId: actor.id, status: PlaceMemberStatus.accepted, role: PlaceMemberRole.manager } } }] }, select: { id: true } }));
+    if (member.role === PlaceMemberRole.manager && !actorIsFounder)
+      throw new ForbiddenException("Mekân kurucusunu yalnız mekân kurucuları affedebilir.");
+    await this.prisma.placeMember.deleteMany({ where: { placeId, userId, status: PlaceMemberStatus.banned } });
+    return { pardoned: true };
   }
 
   async checkInMember(placeId: string, userId: string, actor: User) {
@@ -1067,7 +1085,7 @@ export class PlacesService {
   private async ensureActive(id: string) {
     const place = await this.prisma.place.findFirst({
       where: { id, status: "active" },
-      select: { id: true, visibility: true },
+      select: { id: true, visibility: true, createdById: true },
     });
     if (!place) throw new NotFoundException("Mekân bulunamadı.");
     return place;

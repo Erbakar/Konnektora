@@ -83,6 +83,17 @@ describe("DiscoveryService", () => {
     expect(tag.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ OR: expect.any(Array) }) }));
   });
 
+  it("26/11 #82: finds curator members and returns location fields for events and places", async () => {
+    event.findMany.mockResolvedValue([{ id: "e1", title: "Caz", slug: "caz", summary: "", coverImageUrl: null, city: "Kadıköy", region: "İstanbul", country: "Türkiye", format: "hybrid", locationName: null, place: { name: "Moda Sahnesi", slug: "moda" }, startsAt: new Date(), tags: [] }]);
+    place.findMany.mockResolvedValue([{ id: "p1", name: "Moda Sahnesi", slug: "moda", description: null, coverImageUrl: null, city: "Kadıköy", region: "İstanbul", country: "Türkiye", followerCount: 1, tags: [] }]);
+    const result = await service.search("aylin");
+    expect(user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ role: { in: ["user", "curator"] } }) }));
+    expect(result.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "event", eventFormat: "hybrid", venueName: "Moda Sahnesi", city: "Kadıköy", region: "İstanbul", country: "Türkiye" }),
+      expect.objectContaining({ kind: "place", city: "Kadıköy", region: "İstanbul", country: "Türkiye" }),
+    ]));
+  });
+
   it("groups unregistered participants without leaking their phone, email or identity", async () => {
     const joinedAt = new Date();
     eventParticipant.findMany.mockResolvedValue([{ userId: "invited-1", createdAt: joinedAt, user: { status: "invited", name: "+905551234567" }, event: { id: "event-1", title: "Konser", slug: "konser", startsAt: joinedAt } }]);
